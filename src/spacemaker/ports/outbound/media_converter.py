@@ -3,8 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
+from spacemaker.domain.video_encode import HardwareVideoEncoder
+
 
 class MediaConverterPort(Protocol):
+	def library_video_encoder(self) -> HardwareVideoEncoder: ...
+
 	def encode_image_to_avif(self, source: str, destination: str) -> None: ...
 
 	def encode_video_to_av1(self, source: str, destination: str) -> None: ...

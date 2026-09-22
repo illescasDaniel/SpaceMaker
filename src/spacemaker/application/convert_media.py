@@ -11,6 +11,7 @@ from spacemaker.domain.conversion import (
 )
 from spacemaker.domain.library import JobProgress, LibraryFolder
 from spacemaker.domain.media import MediaKind, media_kind_for_extension, normalize_extension
+from spacemaker.domain.video_encode import HardwareVideoEncoder, video_h264_web_relative_path
 from spacemaker.domain.web_compat import VideoProbe, is_web_compatible_image_for_rollback, is_web_compatible_video
 from spacemaker.ports.outbound.filesystem import FileSystemPort
 from spacemaker.ports.outbound.media_converter import MediaConverterPort
@@ -59,6 +60,9 @@ class ConvertMedia:
 		if route is ConversionRoute.MOVE_AS_IS:
 			self._move_to_folder(library_root, relative, LibraryFolder.CONVERTED)
 			return
+		if kind is MediaKind.VIDEO and self._converter.library_video_encoder() is HardwareVideoEncoder.NONE:
+			self._move_to_folder(library_root, relative, LibraryFolder.CONVERTED)
+			return
 		if self._try_skip_existing_valid(library_root, relative):
 			return
 		self._encode_with_retry(library_root, relative, video_probe)
@@ -105,7 +109,14 @@ class ConvertMedia:
 				if video_probe is None:
 					self.last_failure = f"{relative}: could not probe video"
 					return False
-				self._converter.encode_video_to_av1(source, dest)
+				encoder = self._converter.library_video_encoder()
+				if encoder is HardwareVideoEncoder.AV1:
+					self._converter.encode_video_to_av1(source, dest)
+				elif encoder is HardwareVideoEncoder.H264:
+					self._converter.encode_video_to_h264_aac(source, dest)
+				else:
+					self.last_failure = f"{relative}: no hardware video encoder"
+					return False
 		except (OSError, RuntimeError) as exc:
 			self.last_failure = f"{relative}: {exc}"
 			if self._filesystem.exists(dest):
@@ -144,6 +155,9 @@ class ConvertMedia:
 				self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, stem_avif),
 			)
 			return image_avif_relative_path(relative, collision_avif_exists=collision)
+		encoder = self._converter.library_video_encoder()
+		if encoder is HardwareVideoEncoder.H264:
+			return video_h264_web_relative_path(relative)
 		return video_av1_relative_path(relative)
 
 	def _move_to_folder(self, library_root: str, relative: str, folder: LibraryFolder) -> None:

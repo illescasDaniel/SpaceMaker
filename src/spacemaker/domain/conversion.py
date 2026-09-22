@@ -73,7 +73,7 @@ def route_before_encode(
 		return ConversionRoute.ENCODE
 	# video
 	lower = relative_path.lower()
-	if lower.endswith(".av1.mp4"):
+	if lower.endswith(".av1.mp4") or lower.endswith(".h264.mp4"):
 		return ConversionRoute.MOVE_AS_IS
 	if video_probe is None:
 		return ConversionRoute.ENCODE

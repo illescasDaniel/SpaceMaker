@@ -11,6 +11,11 @@ class RecordingConverter:
 	def __init__(self) -> None:
 		self.destinations: list[str] = []
 
+	def library_video_encoder(self):
+		from spacemaker.domain.video_encode import HardwareVideoEncoder
+
+		return HardwareVideoEncoder.AV1
+
 	def encode_image_to_avif(self, source: str, destination: str) -> None:
 		self.destinations.append(destination)
 		Path(destination).write_bytes(b"fake-avif")

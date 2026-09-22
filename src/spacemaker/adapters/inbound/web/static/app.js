@@ -501,6 +501,26 @@
 		if (viewGalleryWrap) {
 			viewGalleryWrap.classList.toggle("panel-hidden", converted <= 0);
 		}
+		var importIssues = document.getElementById("easy-import-issues");
+		if (importIssues) {
+			var issues = next.image_import_issues || {};
+			var errN = issues.errors || 0;
+			var invN = issues.invalid || 0;
+			var parts = [];
+			if (errN > 0) {
+				parts.push(errN + (errN === 1 ? " image failed to convert" : " images failed to convert"));
+			}
+			if (invN > 0) {
+				parts.push(invN + (invN === 1 ? " unsupported image" : " unsupported images"));
+			}
+			if (parts.length) {
+				importIssues.textContent = parts.join(" · ");
+				importIssues.classList.remove("panel-hidden");
+			} else {
+				importIssues.textContent = "";
+				importIssues.classList.add("panel-hidden");
+			}
+		}
 	}
 
 	function applyState(next) {
@@ -999,14 +1019,20 @@
 					title.textContent = meta.filename || payload.relative_path;
 				}
 				if (payload.kind === "video") {
-					stage.innerHTML =
-						'<video controls preload="metadata" src="' +
-						mediaUrl +
-						'" aria-label="' +
-						(meta.filename || payload.relative_path) +
-						'"></video>';
+					if (payload.preview_in_browser) {
+						stage.innerHTML =
+							'<video controls preload="metadata" src="' +
+							mediaUrl +
+							'" aria-label="' +
+							(meta.filename || payload.relative_path) +
+							'"></video>';
+					} else {
+						stage.innerHTML =
+							'<p class="status-line gallery-no-preview">No in-browser preview for this codec (e.g. HEVC). Use <strong>Open</strong> on desktop or download the file.</p>';
+					}
 					if (friendly) {
-						friendly.hidden = false;
+						var mp4Ok = state && state.video_friendly_export_available;
+						friendly.hidden = !mp4Ok;
 						friendly.textContent = "Download as MP4";
 					}
 				} else {

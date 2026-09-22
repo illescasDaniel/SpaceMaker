@@ -110,11 +110,23 @@
 
 ### Scenario: Export friendly MP4 with progress
 
-- **Given** an AV1 `.av1.mp4` in `converted/`
+- **Given** an AV1 `.av1.mp4` in `converted/` and a **hardware** H.264 encoder available on the host
 - **When** user chooses **Download as MP4**
-- **Then** the server encodes H.264 + AAC MP4 (unless already H.264+AAC MP4)
+- **Then** the server encodes H.264 + AAC MP4 with hardware only (unless already H.264+AAC MP4)
 - **And** the UI shows export progress in an alert
 - **And** the browser downloads the MP4 when encoding completes
+
+### Scenario: No Download as MP4 without hardware encoder
+
+- **Given** the host has **no** hardware video encoder (no AV1 or H.264 HW)
+- **When** the user opens a gallery video item
+- **Then** **Download as MP4** is not shown
+
+### Scenario: Video without inline preview
+
+- **Given** a video in `converted/` whose codec is not inline-previewable in the gallery browser (e.g. HEVC)
+- **When** the user opens the item page
+- **Then** the UI shows metadata and actions but **no** `<video>` preview (message explains codec limitation)
 
 ### Scenario: Skip encode when already friendly
 

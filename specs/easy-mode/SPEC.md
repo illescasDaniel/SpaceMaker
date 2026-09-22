@@ -24,8 +24,9 @@
   2. Short instruction: scan with phone on same Wi‑Fi
   3. **Transfer** progress (files received this session; total unknown → count + optional indeterminate bar while receiving)
   4. **Convert** progress (same WebSocket convert job as Advanced). When idle with files already in `converted/`, status reads e.g. **1 file converted, waiting for more** (pluralized).
-  5. **View gallery** button — **only when** `converted/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
-  6. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
+  5. **Image import issues** (when any): total counts of **images** in library `error/` (failed convert) and `invalid/` (unsupported), e.g. *2 images failed to convert · 1 unsupported image*. Hidden when both are zero. No per-file list in Easy (see Advanced or folders).
+  6. **View gallery** button — **only when** `converted/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
+  7. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
 - No library picker, connection toggle, or extract/convert buttons on Easy.
 - Phone **upload** page (`/upload`): light, minimal; footer hint varies for **iPhone vs Android** (UA detection). **iPhone:** single **Choose** button (no folder picker). **Android:** **Choose files** + **Choose folder**.
 - Phone **gallery** (`/gallery` on device browser): dedicated mobile shell (no Easy/Advanced or Main/Gallery chrome); theme follows **system** light/dark via `shell-gallery.css`. Server serves `gallery_mobile.html` for **private LAN** hosts; loopback/desktop app keeps full `index.html`.
@@ -93,5 +94,5 @@
 ## Out of scope
 
 - Persisting `ui_mode` across app restarts
-- Easy-mode error/invalid bucket review UI (use Advanced or OS folders)
+- Easy-mode per-file error/invalid bucket review UI (counts only; use Advanced or OS folders for details)
 - Changing conversion flags in Easy

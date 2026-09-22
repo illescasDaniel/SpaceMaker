@@ -5,13 +5,21 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from spacemaker.adapters.outbound.media.ffmpeg_encoders import (
+	av1_encoder_ffmpeg_args,
+	h264_hw_encoder_ffmpeg_args,
+	hardware_video_encoder_from_ffmpeg_encoders,
+)
 from spacemaker.adapters.outbound.media.tool_runner import ToolExecutionError, ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
+from spacemaker.domain.video_encode import HardwareVideoEncoder
 
 
 class SubprocessMediaConverter:
 	def __init__(self, runner: ToolRunner | None = None) -> None:
 		self._runner = runner or ToolRunner()
+		self._encoder_text: str | None = None
+		self._library_encoder: HardwareVideoEncoder | None = None
 
 	def encode_image_to_avif(self, source: str, destination: str) -> None:
 		source_path = str(Path(source).resolve())
@@ -39,11 +47,25 @@ class SubprocessMediaConverter:
 		except FileNotFoundError:
 			pass
 
+	def library_video_encoder(self) -> HardwareVideoEncoder:
+		if self._library_encoder is None:
+			text = self._ffmpeg_encoders_text()
+			self._library_encoder = hardware_video_encoder_from_ffmpeg_encoders(
+				text,
+				vaapi_render_node=self._vaapi_render_node_available(),
+			)
+		return self._library_encoder
+
 	def encode_video_to_av1(self, source: str, destination: str) -> None:
 		source_path = str(Path(source).resolve())
 		dest_path = str(Path(destination).resolve())
 		Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
-		encoder = self._pick_video_encoder()
+		encoder = av1_encoder_ffmpeg_args(
+			self._ffmpeg_encoders_text(),
+			vaapi_render_node=self._vaapi_render_node_available(),
+		)
+		if encoder is None:
+			raise RuntimeError("no hardware AV1 encoder available")
 		args = ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", source_path]
 		args.extend(encoder)
 		args.extend(
@@ -89,6 +111,12 @@ class SubprocessMediaConverter:
 		dest_path = str(Path(destination).resolve())
 		Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
 		duration_ms = self._video_duration_ms(source_path)
+		video_encoder = h264_hw_encoder_ffmpeg_args(
+			self._ffmpeg_encoders_text(),
+			vaapi_render_node=self._vaapi_render_node_available(),
+		)
+		if video_encoder is None:
+			raise RuntimeError("no hardware H.264 encoder available")
 		args = [
 			"-nostdin",
 			"-hide_banner",
@@ -99,12 +127,7 @@ class SubprocessMediaConverter:
 			"pipe:1",
 			"-i",
 			source_path,
-			"-c:v",
-			"libx264",
-			"-crf",
-			"18",
-			"-pix_fmt",
-			"yuv420p",
+			*video_encoder,
 			"-c:a",
 			"aac",
 			"-b:a",
@@ -176,16 +199,16 @@ class SubprocessMediaConverter:
 			return 0
 		return int(seconds * 1000)
 
-	def _pick_video_encoder(self) -> list[str]:
+	def _ffmpeg_encoders_text(self) -> str:
+		if self._encoder_text is not None:
+			return self._encoder_text
 		try:
 			result = self._runner.run(BundledTool.FFMPEG, ["-encoders"], check=False)
 		except FileNotFoundError:
-			return ["-c:v", "libsvtav1", "-crf", "23", "-preset", "5", "-pix_fmt", "yuv420p10le"]
-		text = result.stdout + result.stderr
-		if "av1_nvenc" in text:
-			return ["-c:v", "av1_nvenc", "-preset", "p6", "-cq", "24", "-pix_fmt", "p010le"]
-		if "av1_qsv" in text:
-			return ["-c:v", "av1_qsv", "-global_quality", "24", "-preset", "medium", "-pix_fmt", "p010le"]
-		if "av1_vaapi" in text:
-			return ["-vf", "format=p010,hwupload", "-c:v", "av1_vaapi", "-rc_mode", "CQP", "-qp", "24"]
-		return ["-c:v", "libsvtav1", "-crf", "23", "-preset", "5", "-pix_fmt", "yuv420p10le"]
+			self._encoder_text = ""
+		else:
+			self._encoder_text = result.stdout + result.stderr
+		return self._encoder_text
+
+	def _vaapi_render_node_available(self) -> bool:
+		return Path("/dev/dri/renderD128").exists()

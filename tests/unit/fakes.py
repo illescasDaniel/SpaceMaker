@@ -7,6 +7,7 @@ from pathlib import Path
 from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.library import LibraryFolder
 from spacemaker.domain.library_paths import skip_library_relative_path
+from spacemaker.domain.video_encode import HardwareVideoEncoder
 from spacemaker.domain.web_compat import VideoProbe
 from spacemaker.ports.outbound.device_repository import DeviceInfo
 
@@ -163,12 +164,16 @@ class FakeMediaProbe:
 
 @dataclass
 class FakeMediaConverter:
+	library_encoder: HardwareVideoEncoder = HardwareVideoEncoder.AV1
 	encoded_images: list[tuple[str, str]] = field(default_factory=list)
 	encoded_jpegs: list[tuple[str, str]] = field(default_factory=list)
 	encoded_videos: list[tuple[str, str]] = field(default_factory=list)
 	encoded_h264: list[tuple[str, str]] = field(default_factory=list)
 	fail_destinations: set[str] = field(default_factory=set)
 	output_sizes: dict[str, int] = field(default_factory=dict)
+
+	def library_video_encoder(self) -> HardwareVideoEncoder:
+		return self.library_encoder
 
 	def encode_image_to_avif(self, source: str, destination: str) -> None:
 		if destination in self.fail_destinations:

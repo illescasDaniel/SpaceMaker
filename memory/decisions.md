@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-22 — GPU-only library video convert and gallery preview gating
+
+- **Context:** CPU AV1/x264 encodes are slow and HEVC library outputs do not preview in the web gallery; users on machines without HW encoders still need files in `converted/`.
+- **Decision:** Detect ffmpeg HW encoders once per process: AV1 (nvenc/qsv/vaapi) preferred, else H.264 HW → `{stem}.h264.mp4`; else move video to `converted/` unchanged. Friendly MP4 export uses the same HW H.264 path; UI hides **Download as MP4** when no HW encoder. Gallery item API exposes `preview_in_browser` (excludes HEVC). Easy mode shows image-only counts in `error/` and `invalid/`.
+- **Rationale:** Matches web playback constraints; avoids silent CPU transcodes; keeps Easy users informed without a full bucket browser.
+
 ## 2026-09-22 — Gallery item delete and Web Share export
 
 - **Context:** Item page needed host path visibility, safe removal from `converted/`, and phone-friendly sharing without manual download steps.

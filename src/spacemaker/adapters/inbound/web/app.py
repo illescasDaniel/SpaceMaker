@@ -422,6 +422,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			"absolute_path": detail.absolute_path,
 			"captured_at": detail.item.captured_at.isoformat(),
 			"kind": detail.item.kind.value,
+			"preview_in_browser": detail.preview_in_browser,
 			"metadata": _metadata_dict(detail.metadata),
 		}
 

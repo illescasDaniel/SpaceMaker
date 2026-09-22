@@ -103,7 +103,10 @@ If ImageMagick cannot read RAW: extract `PreviewImage`, else `JpgFromRaw` via Ex
 ## Video encode
 
 - **Output:** `{stem}.av1.mp4` under `converted/` (skip if input already ends with `.av1.mp4` case-insensitive — move-as-is path).
-- **Encoder priority:** av1_nvenc → av1_qsv → av1_vaapi (if render node present) → libsvtav1 with reference script flags.
+- **Hardware only:** no CPU encoders (no libsvtav1 / libx264) for library convert or friendly MP4 export.
+- **Encoder priority:** av1_nvenc → av1_qsv → av1_vaapi (if render node present) → **h264_nvenc → h264_qsv → h264_vaapi** (if render node present). Never encode to HEVC/H.265 for library output (no in-browser preview).
+- **No hardware encoder:** videos that would otherwise be re-encoded are **moved as-is** to `converted/` (same relative path). Gallery may omit inline preview for non-preview codecs (e.g. HEVC).
+- **H.264 hardware fallback output:** `{stem}.h264.mp4` under `converted/` when AV1 hardware is unavailable but H.264 hardware is.
 - **Audio:** libopus 256k; map metadata; movflags +faststart.
 - **Validation:** size > 0 and ffprobe reports readable duration.
 

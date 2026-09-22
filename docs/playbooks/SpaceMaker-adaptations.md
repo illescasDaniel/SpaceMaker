@@ -37,7 +37,7 @@ Authoritative compression flags: [convert_all_1_1.sh](../reference/convert_all_1
 
 **DNG + JPEG same stem:** RAW → `stem.avif`; JPEG → `stem_jpg.avif` or `stem_jpeg.avif`; both outputs required.
 
-**Encode videos** to `stem.av1.mp4`: encoder priority nvenc → qsv → vaapi → libsvtav1 (flags per reference script); Opus 256k; faststart.
+**Encode videos** to `stem.av1.mp4` when AV1 hardware is available; else `stem.h264.mp4` when H.264 hardware is available. Priority: av1_nvenc → av1_qsv → av1_vaapi → h264_nvenc → h264_qsv → h264_vaapi. **No CPU video encoders.** With no hardware encoder, move source video to `converted/` unchanged. Never library-encode to HEVC. Opus 256k for AV1 outputs; AAC for H.264 outputs; faststart.
 
 **Size rollback:** if output > original + 10% and source is web-compatible, discard output and move original to `converted/`. Otherwise keep encode and remove source from `originals/`.
 

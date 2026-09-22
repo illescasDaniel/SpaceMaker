@@ -25,6 +25,7 @@ from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.extract_media import ExtractMedia
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.application.get_gallery_item import GetGalleryItem
+from spacemaker.application.library_image_issues import count_image_files_in_library_folder
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.bundled_tools import missing_bundled_tools
@@ -43,6 +44,7 @@ from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode
 from spacemaker.domain.source_folders import SourceFolder, parse_source_folders
 from spacemaker.domain.ui_mode import UiMode
+from spacemaker.domain.video_encode import HardwareVideoEncoder
 
 
 class WebSocketLike(Protocol):
@@ -197,6 +199,24 @@ class AppServices:
 		base.update(actions)
 		counts = self.folder_counts(library_root) if library_root else {f.value: 0 for f in LibraryFolder}
 		base["library_counts"] = counts
+		if library_root:
+			base["image_import_issues"] = {
+				"errors": count_image_files_in_library_folder(
+					self.filesystem,
+					library_root,
+					LibraryFolder.ERROR,
+				),
+				"invalid": count_image_files_in_library_folder(
+					self.filesystem,
+					library_root,
+					LibraryFolder.INVALID,
+				),
+			}
+		else:
+			base["image_import_issues"] = {"errors": 0, "invalid": 0}
+		base["video_friendly_export_available"] = (
+			self.converter.library_video_encoder() is not HardwareVideoEncoder.NONE
+		)
 		base["missing_tools"] = missing_bundled_tools()
 		base["wifi_upload"] = self._wifi_upload_snapshot()
 		return base
