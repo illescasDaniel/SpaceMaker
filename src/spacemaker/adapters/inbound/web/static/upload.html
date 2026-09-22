@@ -6,16 +6,16 @@
 	<title>SpaceMaker — Upload</title>
 	<style>
 		:root {
-			--bg: #0f1419;
-			--surface: #1a2332;
-			--surface2: #243044;
-			--border: #3d4f6f;
-			--text: #e8eef7;
-			--muted: #8b9cb3;
-			--accent: #4dabf7;
-			--accent-dim: #228be6;
-			--warn: #fcc419;
-			--warn-bg: #3d3200;
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--warn: #e67700;
+			--warn-bg: #fff9db;
 			--radius: 12px;
 			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 		}
@@ -28,15 +28,15 @@
 			line-height: 1.5;
 		}
 		.page { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
-		.logo { font-size: 1.2rem; font-weight: 700; }
+		.logo { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.35rem; }
 		.logo span { color: var(--accent); }
-		.sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.25rem; }
+		.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
 		.card {
 			background: var(--surface);
 			border: 1px solid var(--border);
 			border-radius: var(--radius);
 			padding: 1rem;
-			margin-bottom: 1rem;
+			margin-bottom: 0.75rem;
 		}
 		.btn {
 			font: inherit;
@@ -44,14 +44,20 @@
 			width: 100%;
 			border: none;
 			border-radius: 8px;
-			padding: 0.75rem 1rem;
+			padding: 0.7rem 1rem;
 			cursor: pointer;
 			font-weight: 600;
-			margin-top: 0.5rem;
+			margin-top: 0.45rem;
 		}
 		.btn-primary { background: var(--accent-dim); color: #fff; }
 		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-		.hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.75rem; }
+		.hint { font-size: 0.8rem; color: var(--muted); margin: 0.85rem 0 0; }
+		.sent-count {
+			font-size: 0.9rem;
+			color: var(--text);
+			margin: 0 0 0.75rem;
+			font-weight: 600;
+		}
 		.alert {
 			background: var(--warn-bg);
 			border: 1px solid var(--warn);
@@ -67,15 +73,15 @@
 <body>
 	<div class="page">
 		<p class="logo">Space<span>Maker</span></p>
-		<p class="sub">Send photos and videos to your PC library (<code>originals/</code>).</p>
-		<div id="alert-paused" class="alert hidden">The PC paused this session. Resume extract on the desktop app to continue.</div>
+		<p class="sub">Send photos and videos to your PC.</p>
+		<p class="sent-count" id="upload-sent-count" hidden></p>
+		<div id="alert-paused" class="alert hidden">Uploads are paused on the PC. Resume there to continue.</div>
 		<div id="panel-ready" class="card">
-			<p><strong>Ready</strong> — choose what to send</p>
 			<button type="button" class="btn btn-primary" id="btn-pick-files">Choose files</button>
 			<button type="button" class="btn btn-secondary" id="btn-pick-folder">Choose folder</button>
 			<input type="file" id="file-input" multiple accept="image/*,video/*" />
 			<input type="file" id="folder-input" webkitdirectory directory multiple />
-			<p class="hint">Folder picker works on many Android browsers. On iPhone, use Files or Photos via the file picker.</p>
+			<p class="hint" id="device-hint"></p>
 		</div>
 		<div id="panel-uploading" class="card hidden">
 			<p id="upload-status"><strong>Uploading…</strong></p>
@@ -85,6 +91,65 @@
 	(function () {
 		var params = new URLSearchParams(window.location.search);
 		var token = params.get("t") || "";
+
+		function uploadDeviceKind() {
+			var ua = navigator.userAgent || "";
+			if (/iPhone|iPad|iPod/i.test(ua)) {
+				return "ios";
+			}
+			if (/Android/i.test(ua)) {
+				return "android";
+			}
+			return "other";
+		}
+
+		function renderFilesSent(body) {
+			var el = document.getElementById("upload-sent-count");
+			if (!el) {
+				return;
+			}
+			if (!body || !body.active) {
+				el.hidden = true;
+				return;
+			}
+			var count = body.files_sent || 0;
+			el.hidden = false;
+			el.textContent =
+				count === 1 ? "1 file sent to your PC" : count + " files sent to your PC";
+		}
+
+		function applyUploadUiForDevice() {
+			var kind = uploadDeviceKind();
+			var pickFiles = document.getElementById("btn-pick-files");
+			var pickFolder = document.getElementById("btn-pick-folder");
+			var hint = document.getElementById("device-hint");
+			if (kind === "ios") {
+				if (pickFiles) {
+					pickFiles.textContent = "Choose";
+				}
+				if (pickFolder) {
+					pickFolder.classList.add("hidden");
+				}
+				if (hint) {
+					hint.textContent = "Tap Choose, then pick from Photos or Files.";
+				}
+			} else {
+				if (pickFiles) {
+					pickFiles.textContent = "Choose files";
+				}
+				if (pickFolder) {
+					pickFolder.classList.remove("hidden");
+				}
+				if (hint) {
+					if (kind === "android") {
+						hint.textContent =
+							"On Android: folder upload works in Chrome; or choose files one batch at a time.";
+					} else {
+						hint.textContent = "Pick files or a folder from this device.";
+					}
+				}
+			}
+		}
 
 		function sessionUrl() {
 			return "/api/upload/session?t=" + encodeURIComponent(token);
@@ -107,6 +172,7 @@
 						paused.classList.add("hidden");
 						ready.classList.remove("hidden");
 					}
+					renderFilesSent(body);
 					return body;
 				});
 		}
@@ -164,6 +230,7 @@
 			ev.target.value = "";
 		});
 
+		applyUploadUiForDevice();
 		refreshSession();
 		setInterval(refreshSession, 5000);
 	})();

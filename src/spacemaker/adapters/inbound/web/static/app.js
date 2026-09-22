@@ -1,7 +1,23 @@
 (function () {
+	var clientShell = window.SPACEMAKER_SHELL || "desktop";
 	var lastMainView = "home";
 	var uiMode = "easy";
 	var state = null;
+
+	function isDesktopShell() {
+		return clientShell === "desktop";
+	}
+
+	function isMobileGalleryShell() {
+		return clientShell === "mobile_gallery";
+	}
+
+	function onClick(id, handler) {
+		var el = document.getElementById(id);
+		if (el) {
+			el.addEventListener("click", handler);
+		}
+	}
 	var deviceLabels = {};
 	var defaultLibraryRoot = "";
 	var formValidation = { ok: false, library: "", device: "", folders: "" };
@@ -32,7 +48,11 @@
 	}
 
 	function selectedConnectionMethod() {
-		if (document.getElementById("btn-conn-wifi").classList.contains("active")) {
+		var btnWifi = document.getElementById("btn-conn-wifi");
+		if (!btnWifi) {
+			return "wifi";
+		}
+		if (btnWifi.classList.contains("active")) {
 			return "wifi";
 		}
 		if (document.getElementById("btn-conn-adb").classList.contains("active")) {
@@ -117,6 +137,19 @@
 		return uiMode === "easy" ? "easy" : "wizard";
 	}
 
+	function refreshGalleryThemePolicy() {
+		if (isMobileGalleryShell()) {
+			return;
+		}
+	}
+
+	function easyFileCountLabel(count, singular, plural) {
+		if (count === 1) {
+			return "1 " + singular;
+		}
+		return count + " " + plural;
+	}
+
 	function setUiMode(mode, options) {
 		options = options || {};
 		uiMode = mode === "advanced" ? "advanced" : "easy";
@@ -164,6 +197,42 @@
 		return decodeURIComponent(location.pathname.slice(prefix.length));
 	}
 
+	function closeGalleryPhonePopup() {
+		var popup = document.getElementById("gallery-phone-popup");
+		var fab = document.getElementById("btn-gallery-phone-help");
+		if (popup) {
+			popup.classList.add("panel-hidden");
+		}
+		if (fab) {
+			fab.setAttribute("aria-expanded", "false");
+		}
+	}
+
+	function toggleGalleryPhonePopup() {
+		var popup = document.getElementById("gallery-phone-popup");
+		var fab = document.getElementById("btn-gallery-phone-help");
+		if (!popup || !fab) {
+			return;
+		}
+		var open = popup.classList.contains("panel-hidden");
+		popup.classList.toggle("panel-hidden", !open);
+		fab.setAttribute("aria-expanded", open ? "true" : "false");
+	}
+
+	function syncGalleryPhoneHelpVisibility(resolvedViewId) {
+		var fab = document.getElementById("btn-gallery-phone-help");
+		if (!fab || !isDesktopShell()) {
+			return;
+		}
+		var onGallery =
+			resolvedViewId === "gallery" ||
+			resolvedViewId === "gallery-item";
+		fab.hidden = !onGallery;
+		if (!onGallery) {
+			closeGalleryPhonePopup();
+		}
+	}
+
 	function showView(viewId, options) {
 		var path;
 		var itemPath;
@@ -176,6 +245,8 @@
 			s.classList.remove("active");
 		});
 		document.getElementById("view-" + resolved).classList.add("active");
+		syncGalleryPhoneHelpVisibility(resolved);
+		refreshGalleryThemePolicy();
 		if (resolved === "easy" || resolved === "wizard" || resolved === "gallery" || resolved === "gallery-item") {
 			document.querySelectorAll(".view-tabs button").forEach(function (b) {
 				var tab = b.getAttribute("data-view");
@@ -214,6 +285,7 @@
 	}
 
 	function routeFromPath() {
+		refreshGalleryThemePolicy();
 		var itemPath = galleryItemPathFromLocation();
 		if (itemPath) {
 			showGalleryItem(itemPath, { skipHistory: true });
@@ -371,7 +443,7 @@
 		var transferFill = document.getElementById("easy-transfer-fill");
 		var convertStatus = document.getElementById("easy-convert-status");
 		var convertFill = document.getElementById("easy-convert-fill");
-		var galleryBlock = document.getElementById("easy-gallery-block");
+		var viewGalleryWrap = document.getElementById("easy-view-gallery-wrap");
 		var converted = (next.library_counts || {}).converted || 0;
 		var ep = next.extract.progress || { completed: 0, percent: 0 };
 		var cp = next.convert.progress || { completed: 0, total: 0, percent: 0 };
@@ -396,7 +468,11 @@
 			}
 		}
 		if (transferStatus) {
-			transferStatus.textContent = ep.completed + " files received";
+			transferStatus.textContent = easyFileCountLabel(
+				ep.completed,
+				"file received",
+				"files received",
+			);
 		}
 		if (transferFill) {
 			var transferPct = ep.total > 0 ? ep.percent : ep.completed > 0 ? 100 : 0;
@@ -410,20 +486,29 @@
 				convertStatus.textContent = "Failed — " + (next.last_error || "see Advanced for details");
 			} else if (next.convert.phase === "done" && cp.total > 0) {
 				convertStatus.textContent = "Completed — " + cp.completed + " file(s)";
+			} else if (converted > 0) {
+				convertStatus.textContent = easyFileCountLabel(
+					converted,
+					"file converted, waiting for more",
+					"files converted, waiting for more",
+				);
 			} else {
-				convertStatus.textContent = ep.completed > 0 ? "Waiting for next file…" : "Waiting for files";
+				convertStatus.textContent = "Waiting for files";
 			}
 		}
 		if (convertFill) {
 			convertFill.style.width = (next.convert.phase === "running" ? cp.percent : 0) + "%";
 		}
-		if (galleryBlock) {
-			galleryBlock.classList.toggle("panel-hidden", converted <= 0);
+		if (viewGalleryWrap) {
+			viewGalleryWrap.classList.toggle("panel-hidden", converted <= 0);
 		}
 	}
 
 	function applyState(next) {
 		state = next;
+		if (isMobileGalleryShell()) {
+			return;
+		}
 		setUiModeFromState(next);
 		maybeShowMissingTools(next);
 		syncConnectionButtons(next.connection_method || "wifi");
@@ -1141,34 +1226,55 @@
 			});
 	}
 
+	function setGalleryQrPlaceholder(placeholderEl, qrUrl) {
+		var img;
+		if (!placeholderEl) {
+			return;
+		}
+		placeholderEl.innerHTML = "";
+		img = document.createElement("img");
+		img.src = qrUrl || "/api/gallery/qr.svg";
+		img.alt = "QR code for gallery URL";
+		placeholderEl.appendChild(img);
+	}
+
+	function applyGalleryFirewallHints(info, hintEl, fwWarnEl) {
+		var showHint;
+		var fw;
+		if (hintEl) {
+			showHint = info.lan_reachable === false;
+			hintEl.hidden = !showHint;
+		}
+		fw = info.firewall || {};
+		if (fwWarnEl) {
+			if (fw.port_open === false && fw.message) {
+				fwWarnEl.textContent = fw.message;
+				fwWarnEl.hidden = false;
+			} else if (fw.port_open === null && fw.message && info.lan_reachable) {
+				fwWarnEl.textContent = fw.message;
+				fwWarnEl.hidden = false;
+			} else {
+				fwWarnEl.hidden = true;
+				fwWarnEl.textContent = "";
+			}
+		}
+	}
+
 	function loadServerInfo() {
 		api("GET", "/api/server-info").then(function (info) {
 			var qr = document.getElementById("qr-placeholder");
 			var urlField = document.getElementById("gallery-url");
-			var hint = document.getElementById("gallery-lan-hint");
+			var popupUrl = document.getElementById("gallery-popup-url");
 			var portLabel = document.getElementById("gallery-lan-port");
-			var fwWarn = document.getElementById("gallery-firewall-warn");
-			var showHint;
-			var img;
-			var fw;
 			var portText;
-			if (qr) {
-				qr.innerHTML = "";
-				img = document.createElement("img");
-				img.src = info.qr_url || "/api/gallery/qr.svg";
-				img.alt = "QR code for gallery URL";
-				qr.appendChild(img);
-			}
+			var galleryUrl = info.gallery_url || "";
+			setGalleryQrPlaceholder(qr, info.qr_url);
+			setGalleryQrPlaceholder(document.getElementById("gallery-popup-qr"), info.qr_url);
 			if (urlField) {
-				urlField.textContent = info.gallery_url;
+				urlField.textContent = galleryUrl;
 			}
-			var easyGalleryQr = document.getElementById("easy-gallery-qr");
-			var easyGalleryUrl = document.getElementById("easy-gallery-url");
-			if (easyGalleryQr) {
-				easyGalleryQr.src = info.qr_url || "/api/gallery/qr.svg";
-			}
-			if (easyGalleryUrl) {
-				easyGalleryUrl.textContent = info.gallery_url || "";
+			if (popupUrl) {
+				popupUrl.textContent = galleryUrl;
 			}
 			portText = info.port ? String(info.port) : "8765";
 			if (portLabel) {
@@ -1177,23 +1283,12 @@
 			document.querySelectorAll(".lan-firewall-port").forEach(function (el) {
 				el.textContent = portText;
 			});
-			if (hint) {
-				showHint = info.lan_reachable === false;
-				hint.hidden = !showHint;
-			}
-			fw = info.firewall || {};
-			if (fwWarn) {
-				if (fw.port_open === false && fw.message) {
-					fwWarn.textContent = fw.message;
-					fwWarn.hidden = false;
-				} else if (fw.port_open === null && fw.message && info.lan_reachable) {
-					fwWarn.textContent = fw.message;
-					fwWarn.hidden = false;
-				} else {
-					fwWarn.hidden = true;
-					fwWarn.textContent = "";
-				}
-			}
+			applyGalleryFirewallHints(info, document.getElementById("gallery-lan-hint"), document.getElementById("gallery-firewall-warn"));
+			applyGalleryFirewallHints(
+				info,
+				document.getElementById("gallery-popup-lan-hint"),
+				document.getElementById("gallery-popup-firewall-warn"),
+			);
 		});
 	}
 
@@ -1218,6 +1313,58 @@
 		};
 	}
 
+	function bindGalleryUi() {
+		var btnTimeline = document.getElementById("btn-timeline");
+		var btnCalendar = document.getElementById("btn-calendar");
+		var timelineView = document.getElementById("timeline-view");
+		var calendarView = document.getElementById("calendar-view");
+		if (btnTimeline && btnCalendar && timelineView && calendarView) {
+			btnTimeline.addEventListener("click", function () {
+				btnTimeline.classList.add("active");
+				btnCalendar.classList.remove("active");
+				timelineView.style.display = "block";
+				calendarView.classList.remove("visible");
+				calendarView.setAttribute("aria-hidden", "true");
+			});
+			btnCalendar.addEventListener("click", function () {
+				btnCalendar.classList.add("active");
+				btnTimeline.classList.remove("active");
+				timelineView.style.display = "none";
+				calendarView.classList.add("visible");
+				calendarView.setAttribute("aria-hidden", "false");
+				loadCalendarMonth();
+			});
+		}
+		onClick("btn-cal-prev", function () {
+			shiftCalendarMonth(-1);
+		});
+		onClick("btn-cal-next", function () {
+			shiftCalendarMonth(1);
+		});
+		onClick("btn-gallery-item-back", function () {
+			showView("gallery");
+		});
+		onClick("btn-gallery-download", function () {
+			if (!galleryItemPath) {
+				return;
+			}
+			triggerFileDownload("/media/" + encodeURI(galleryItemPath) + "?download=1");
+		});
+		onClick("btn-gallery-friendly", function () {
+			if (!galleryItemPath) {
+				return;
+			}
+			startFriendlyExport();
+		});
+	}
+
+	function bootstrapMobileGalleryShell() {
+		bindGalleryUi();
+		routeFromPath();
+		connectWs();
+	}
+
+	function bootstrapDesktopShell() {
 	document.querySelectorAll(".view-tabs button").forEach(function (btn) {
 		btn.addEventListener("click", function () {
 			var v = btn.getAttribute("data-view");
@@ -1265,31 +1412,7 @@
 		showView(lastMainView === "gallery" ? "gallery" : "home");
 	});
 
-	var btnTimeline = document.getElementById("btn-timeline");
-	var btnCalendar = document.getElementById("btn-calendar");
-	var timelineView = document.getElementById("timeline-view");
-	var calendarView = document.getElementById("calendar-view");
-	btnTimeline.addEventListener("click", function () {
-		btnTimeline.classList.add("active");
-		btnCalendar.classList.remove("active");
-		timelineView.style.display = "block";
-		calendarView.classList.remove("visible");
-		calendarView.setAttribute("aria-hidden", "true");
-	});
-	btnCalendar.addEventListener("click", function () {
-		btnCalendar.classList.add("active");
-		btnTimeline.classList.remove("active");
-		timelineView.style.display = "none";
-		calendarView.classList.add("visible");
-		calendarView.setAttribute("aria-hidden", "false");
-		loadCalendarMonth();
-	});
-	document.getElementById("btn-cal-prev").addEventListener("click", function () {
-		shiftCalendarMonth(-1);
-	});
-	document.getElementById("btn-cal-next").addEventListener("click", function () {
-		shiftCalendarMonth(1);
-	});
+	bindGalleryUi();
 
 	document.getElementById("btn-lan-firewall-info").addEventListener("click", function () {
 		var panel = document.getElementById("lan-firewall-info-panel");
@@ -1466,23 +1589,29 @@
 			})
 			.then(applyState);
 	});
-	document.getElementById("btn-open-gallery").addEventListener("click", function () {
+	onClick("btn-open-gallery", function () {
 		showView("gallery");
 	});
-	document.getElementById("btn-gallery-item-back").addEventListener("click", function () {
+	onClick("btn-easy-view-gallery", function () {
 		showView("gallery");
 	});
-	document.getElementById("btn-gallery-download").addEventListener("click", function () {
-		if (!galleryItemPath) {
-			return;
-		}
-		triggerFileDownload("/media/" + encodeURI(galleryItemPath) + "?download=1");
+	onClick("btn-gallery-phone-help", function (ev) {
+		ev.stopPropagation();
+		toggleGalleryPhonePopup();
 	});
-	document.getElementById("btn-gallery-friendly").addEventListener("click", function () {
-		if (!galleryItemPath) {
+	onClick("btn-gallery-phone-popup-close", function () {
+		closeGalleryPhonePopup();
+	});
+	document.addEventListener("click", function (ev) {
+		var popup = document.getElementById("gallery-phone-popup");
+		var fab = document.getElementById("btn-gallery-phone-help");
+		if (!popup || popup.classList.contains("panel-hidden")) {
 			return;
 		}
-		startFriendlyExport();
+		if (popup.contains(ev.target) || (fab && fab.contains(ev.target))) {
+			return;
+		}
+		closeGalleryPhonePopup();
 	});
 
 	api("GET", "/api/defaults")
@@ -1537,4 +1666,11 @@
 			showFormBanner(err.message || "Failed to load settings.");
 		});
 	connectWs();
+	}
+
+	if (isMobileGalleryShell()) {
+		bootstrapMobileGalleryShell();
+	} else {
+		bootstrapDesktopShell();
+	}
 })();

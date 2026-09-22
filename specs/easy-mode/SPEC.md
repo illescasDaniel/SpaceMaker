@@ -2,8 +2,9 @@
 
 ## Metadata
 
-- **Feature:** Minimal default UI — Wi‑Fi upload QR, auto-receive, convert-as-received, gallery QR when ready
-- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-easy`, Easy | Advanced toggle
+- **Feature:** Minimal default UI — Wi‑Fi upload QR, auto-receive, convert-as-received, **View gallery** when ready; phone gallery help on Gallery tab
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-easy`, Easy | Advanced toggle; phone upload [wireframes/phone-upload.html](../../wireframes/phone-upload.html)
+- **UX approved:** 2026-09-22 (chat: wireframe approved)
 - **Related:** [main-wizard](../main-wizard/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
 
 ## Triggers & routing
@@ -22,10 +23,13 @@
   1. **Large upload QR** (active Wi‑Fi session)
   2. Short instruction: scan with phone on same Wi‑Fi
   3. **Transfer** progress (files received this session; total unknown → count + optional indeterminate bar while receiving)
-  4. **Convert** progress (same WebSocket convert job as Advanced)
-  5. **Gallery QR** + LAN URL — **only when** `converted/` count **> 0**
-  6. Note under gallery QR: *Please don't open this while uploading content.*
+  4. **Convert** progress (same WebSocket convert job as Advanced). When idle with files already in `converted/`, status reads e.g. **1 file converted, waiting for more** (pluralized).
+  5. **View gallery** button — **only when** `converted/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
+  6. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
 - No library picker, connection toggle, or extract/convert buttons on Easy.
+- Phone **upload** page (`/upload`): light, minimal; footer hint varies for **iPhone vs Android** (UA detection). **iPhone:** single **Choose** button (no folder picker). **Android:** **Choose files** + **Choose folder**.
+- Phone **gallery** (`/gallery` on device browser): dedicated mobile shell (no Easy/Advanced or Main/Gallery chrome); theme follows **system** light/dark via `shell-gallery.css`. Server serves `gallery_mobile.html` for **private LAN** hosts; loopback/desktop app keeps full `index.html`.
+- Phone **upload** page shows **files sent** count from `/api/upload/session` (`files_sent`).
 
 ### Advanced (dark)
 
@@ -53,18 +57,25 @@
 - **Then** convert starts while extract remains **running**
 - **And** Easy shows convert progress
 
-### Scenario: Gallery QR when converted has files
+### Scenario: View gallery when converted has files
 
 - **Given** `converted/` contains at least one file
 - **When** Easy mode is shown
-- **Then** gallery QR and URL are visible
-- **And** the upload-during-gallery note is shown
+- **Then** **View gallery** is visible
+- **When** the user activates it
+- **Then** the **Gallery** tab is shown
 
-### Scenario: Gallery QR hidden when empty
+### Scenario: View gallery hidden when empty
 
 - **Given** `converted/` is empty and convert is idle
 - **When** Easy mode is shown
-- **Then** gallery QR block is not shown
+- **Then** **View gallery** is not shown
+
+### Scenario: Gallery phone help on desktop
+
+- **Given** the desktop app on the **Gallery** tab
+- **When** the user taps the phone help control
+- **Then** a popup shows gallery QR, LAN URL, and the upload-during-gallery note
 
 ### Scenario: Switch to Advanced during receive
 

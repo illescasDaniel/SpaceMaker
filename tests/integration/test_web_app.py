@@ -276,3 +276,18 @@ def test_given_easy_bootstrap_when_post_then_wifi_extract_running(tmp_path) -> N
 	assert body["ui_mode"] == "easy"
 	assert body["extract"]["phase"] == "running"
 	assert body["wifi_upload"]["active"] is True
+
+
+def test_given_lan_host_when_get_gallery_then_mobile_shell() -> None:
+	client = TestClient(create_app())
+	response = client.get("/gallery", headers={"Host": "192.168.0.5:8765"})
+	assert response.status_code == 200
+	assert 'SPACEMAKER_SHELL = "mobile_gallery"' in response.text
+	assert "btn-ui-easy" not in response.text
+
+
+def test_given_lan_host_when_get_root_then_mobile_remote_landing() -> None:
+	client = TestClient(create_app())
+	response = client.get("/", headers={"Host": "192.168.0.5:8765"})
+	assert response.status_code == 200
+	assert "Use the QR codes on your PC" in response.text

@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import Annotated
 
 import segno
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
 from spacemaker.bootstrap.firewall import probe_gallery_port
 from spacemaker.bootstrap.lan import lan_ip
 from spacemaker.bootstrap.paths import (
@@ -100,11 +101,26 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	app = FastAPI(title="SpaceMaker", version="0.1.0")
 	app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
+	def _spa_file(entry: SpaEntry) -> Path:
+		if entry is SpaEntry.DESKTOP:
+			return _STATIC / "index.html"
+		if entry is SpaEntry.MOBILE_GALLERY:
+			return _STATIC / "gallery_mobile.html"
+		return _STATIC / "mobile_remote.html"
+
 	@app.get("/")
+	def root_page(request: Request) -> FileResponse:
+		host = normalize_host(request.headers.get("host", ""))
+		entry = spa_entry_for(host=host, path="/")
+		return FileResponse(_spa_file(entry))
+
 	@app.get("/gallery")
 	@app.get("/gallery/item/{relative_path:path}")
-	def index() -> FileResponse:
-		return FileResponse(_STATIC / "index.html")
+	def gallery_page(request: Request, relative_path: str = "") -> FileResponse:
+		_ = relative_path
+		host = normalize_host(request.headers.get("host", ""))
+		entry = spa_entry_for(host=host, path=request.url.path)
+		return FileResponse(_spa_file(entry))
 
 	@app.get("/upload")
 	def upload_page(t: str = "") -> FileResponse:
@@ -213,13 +229,15 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.get("/api/upload/session")
 	def upload_session_status(t: str = "") -> dict[str, object]:
 		if not services.wifi_token_valid(t):
-			return {"active": False, "accepts_uploads": False, "phase": "ended"}
+			return {"active": False, "accepts_uploads": False, "phase": "ended", "files_sent": 0}
 		with services.session._lock:
 			phase = services.session.extract_phase.value
+			files_sent = services.session.extract_progress.completed
 		return {
 			"active": True,
 			"accepts_uploads": services.wifi_session_accepts_uploads(),
 			"phase": phase,
+			"files_sent": files_sent,
 		}
 
 	@app.post("/api/upload")

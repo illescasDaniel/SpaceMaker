@@ -813,23 +813,23 @@
 		}
 
 		.easy-screen {
-			max-width: 28rem;
+			max-width: 32rem;
 			margin: 0 auto;
-			padding: 2rem 1.5rem 3rem;
+			padding: 1rem 1.25rem 2rem;
 			text-align: center;
 		}
 
 		.easy-qr-wrap {
 			background: var(--surface);
 			border: 1px solid var(--border);
-			border-radius: 16px;
-			padding: 1.5rem;
-			margin-bottom: 1.25rem;
+			border-radius: 12px;
+			padding: 0.5rem;
+			margin-bottom: 1rem;
 		}
 
 		.easy-qr-wrap .qr-placeholder {
-			width: min(280px, 72vw);
-			height: min(280px, 72vw);
+			width: min(268px, 82vw);
+			height: min(268px, 82vw);
 			margin: 0 auto;
 			border-radius: 8px;
 		}
@@ -860,15 +860,48 @@
 			margin: 0.25rem 0 0.5rem;
 		}
 
-		.easy-gallery-block {
+		.easy-view-gallery-wrap {
 			margin-top: 2rem;
 			padding-top: 1.5rem;
 			border-top: 1px solid var(--border);
 		}
 
-		.easy-gallery-block .qr-placeholder {
-			width: 160px;
-			height: 160px;
+		.btn-easy-view-gallery {
+			width: 100%;
+		}
+
+		.gallery-phone-fab {
+			position: fixed;
+			right: 1.25rem;
+			bottom: 1.25rem;
+			width: 3.25rem;
+			height: 3.25rem;
+			border-radius: 50%;
+			border: none;
+			background: var(--accent-dim);
+			color: #fff;
+			font-size: 1.35rem;
+			cursor: pointer;
+			box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+			z-index: 40;
+		}
+
+		.gallery-phone-popup {
+			position: fixed;
+			right: 1.25rem;
+			bottom: 5rem;
+			width: min(20rem, calc(100vw - 2.5rem));
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 1rem;
+			box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+			z-index: 41;
+		}
+
+		.gallery-phone-popup .qr-placeholder {
+			width: 140px;
+			height: 140px;
 			margin: 0 auto 0.75rem;
 		}
 
@@ -934,32 +967,22 @@
 			<p class="easy-lead">Scan this QR code with your phone camera. Stay on the same Wi‑Fi, then choose photos and videos to send.</p>
 			<div class="easy-progress-block">
 				<p class="label" style="margin: 0;">Transfer</p>
-				<p class="status-line" id="easy-transfer-status">12 files received</p>
+				<p class="status-line" id="easy-transfer-status">1 file received</p>
 				<div class="progress" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100">
 					<div class="progress-fill" id="easy-transfer-fill" style="width: 40%"></div>
 				</div>
 			</div>
 			<div class="easy-progress-block">
 				<p class="label" style="margin: 0;">Convert</p>
-				<p class="status-line" id="easy-convert-status">In progress: 65%</p>
+				<p class="status-line" id="easy-convert-status">1 file converted, waiting for more</p>
 				<div class="progress" role="progressbar" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100">
 					<div class="progress-fill" id="easy-convert-fill" style="width: 65%"></div>
 				</div>
 			</div>
-			<div class="easy-gallery-block panel-hidden" id="easy-gallery-block">
-				<p class="label" style="margin: 0;">View your gallery on phone</p>
-				<div class="qr-placeholder" role="img" aria-label="QR code for gallery">
-					<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-						<rect width="21" height="21" fill="#fff"/>
-						<rect x="1" y="1" width="7" height="7" fill="#111"/>
-						<rect x="13" y="1" width="7" height="7" fill="#111"/>
-						<rect x="1" y="13" width="7" height="7" fill="#111"/>
-					</svg>
-				</div>
-				<p class="folder-hint" style="margin: 0;">http://192.168.1.42:8765/gallery</p>
-				<p class="easy-note">Please don&apos;t open this while uploading content.</p>
+			<div class="easy-view-gallery-wrap panel-hidden" id="easy-view-gallery-wrap">
+				<button type="button" class="btn btn-primary btn-easy-view-gallery" id="btn-easy-view-gallery">View gallery</button>
 			</div>
-			<p class="wireframe-demo-row">Wireframe demo: <button type="button" id="btn-easy-toggle-gallery">Toggle gallery QR</button></p>
+			<p class="wireframe-demo-row">Wireframe demo: <button type="button" id="btn-easy-toggle-gallery">Toggle View gallery button</button></p>
 		</div>
 	</section>
 
@@ -1115,6 +1138,21 @@
 
 	<!-- GALLERY — single responsive column (320px+); no decorative phone frame -->
 	<section id="view-gallery" class="screen" aria-label="Gallery">
+		<button type="button" class="gallery-phone-fab" id="btn-gallery-phone-help" title="View gallery on your phone" aria-label="View gallery on your phone">📱</button>
+		<div class="gallery-phone-popup panel-hidden" id="gallery-phone-popup" role="dialog" aria-labelledby="gallery-phone-popup-title">
+			<h3 id="gallery-phone-popup-title" style="margin: 0 0 0.5rem; font-size: 1rem;">On your phone</h3>
+			<p class="folder-hint" style="margin: 0 0 0.75rem;">Scan the QR or open the URL on the same Wi‑Fi.</p>
+			<div class="qr-placeholder" role="img" aria-label="Gallery QR code">
+				<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<rect width="21" height="21" fill="#fff"/>
+					<rect x="1" y="1" width="7" height="7" fill="#111"/>
+					<rect x="13" y="1" width="7" height="7" fill="#111"/>
+					<rect x="1" y="13" width="7" height="7" fill="#111"/>
+				</svg>
+			</div>
+			<div class="field">http://192.168.1.42:8765/gallery</div>
+			<p class="easy-note">Please don&apos;t open this while uploading content.</p>
+		</div>
 		<div class="gallery-toolbar">
 			<h2 style="margin: 0; font-size: 1.2rem;">Gallery</h2>
 			<fieldset class="toggle-group">
@@ -1316,7 +1354,13 @@
 		document.getElementById('btn-ui-easy').addEventListener('click', function () { setUiMode('easy'); });
 		document.getElementById('btn-ui-advanced').addEventListener('click', function () { setUiMode('advanced'); });
 		document.getElementById('btn-easy-toggle-gallery').addEventListener('click', function () {
-			document.getElementById('easy-gallery-block').classList.toggle('panel-hidden');
+			document.getElementById('easy-view-gallery-wrap').classList.toggle('panel-hidden');
+		});
+		document.getElementById('btn-easy-view-gallery').addEventListener('click', function () {
+			showView('gallery');
+		});
+		document.getElementById('btn-gallery-phone-help').addEventListener('click', function () {
+			document.getElementById('gallery-phone-popup').classList.toggle('panel-hidden');
 		});
 
 		document.getElementById('btn-footer-legal').addEventListener('click', function () {

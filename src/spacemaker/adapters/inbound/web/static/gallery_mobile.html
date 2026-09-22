@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpaceMaker — Gallery</title>
+	<link rel="stylesheet" href="/static/shell-gallery.css">
+</head>
+<body>
+	<div class="mobile-gallery-shell">
+		<header class="mobile-gallery-header">
+			<div class="mobile-gallery-header-row">
+				<h1>Gallery</h1>
+				<fieldset class="toggle-group toggle-group-compact" aria-label="Gallery organization">
+					<button type="button" class="active" id="btn-timeline">Timeline</button>
+					<button type="button" id="btn-calendar">Calendar</button>
+				</fieldset>
+			</div>
+		</header>
+
+		<section id="view-gallery" class="screen active" aria-label="Gallery">
+			<div class="gallery-layout">
+				<div class="gallery-main">
+					<div id="timeline-view"></div>
+					<div id="calendar-view" class="calendar-panel" aria-hidden="true">
+						<div class="calendar-nav">
+							<button type="button" class="btn btn-ghost" id="btn-cal-prev" aria-label="Previous month">←</button>
+							<h3 id="calendar-title">Month</h3>
+							<button type="button" class="btn btn-ghost" id="btn-cal-next" aria-label="Next month">→</button>
+						</div>
+						<div class="calendar-grid" id="calendar-grid"></div>
+						<p class="month-label calendar-day-grid" id="calendar-day-label" hidden></p>
+						<div class="thumb-grid" id="calendar-day-thumbs"></div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section id="view-gallery-item" class="screen" aria-label="Gallery item">
+			<div class="gallery-item-layout">
+				<button type="button" class="btn btn-ghost gallery-item-back" id="btn-gallery-item-back">← Back to gallery</button>
+				<div class="gallery-item-stage" id="gallery-item-stage"></div>
+				<h2 class="gallery-item-title" id="gallery-item-title"></h2>
+				<dl class="gallery-meta" id="gallery-item-meta"></dl>
+				<div class="gallery-item-actions">
+					<button type="button" class="btn btn-primary" id="btn-gallery-download">Download</button>
+					<button type="button" class="btn btn-secondary" id="btn-gallery-friendly" hidden>Download as JPEG</button>
+				</div>
+				<div class="alert alert-info" id="gallery-export-alert" role="alert" hidden>
+					<span class="alert-icon" aria-hidden="true">⏳</span>
+					<div style="flex: 1;">
+						<strong id="gallery-export-label">Preparing download…</strong>
+						<div class="progress" id="gallery-export-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="margin-top: 0.5rem;">
+							<div class="progress-fill" id="gallery-export-fill" style="width: 0%"></div>
+						</div>
+						<p class="alert-detail" id="gallery-export-error" hidden></p>
+					</div>
+				</div>
+			</div>
+		</section>
+	</div>
+
+	<script>window.SPACEMAKER_SHELL = "mobile_gallery";</script>
+	<script src="/static/app.js"></script>
+</body>
+</html>

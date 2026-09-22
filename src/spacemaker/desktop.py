@@ -54,7 +54,14 @@ def main(argv: list[str] | None = None) -> None:
 		print("SpaceMaker: bundled tools missing:", ", ".join(missing))
 		print(bundled_tools_hint())
 	install_qt_webengine_shutdown_fix()
-	webview.create_window("SpaceMaker", url, js_api=DesktopApi())
+	webview.create_window(
+		"SpaceMaker",
+		url,
+		js_api=DesktopApi(),
+		width=980,
+		height=920,
+		min_size=(720, 680),
+	)
 	gui = None if args.gui == "auto" else args.gui
 	try:
 		webview.start(

@@ -874,25 +874,29 @@
 		}
 
 		.easy-screen {
-			max-width: 28rem;
+			max-width: 32rem;
 			margin: 0 auto;
-			padding: 2rem 1.5rem 3rem;
+			padding: 1rem 1.25rem 2rem;
 			text-align: center;
 		}
 
 		.easy-qr-wrap {
 			background: var(--surface);
 			border: 1px solid var(--border);
-			border-radius: 16px;
-			padding: 1.5rem;
-			margin-bottom: 1.25rem;
+			border-radius: 12px;
+			padding: 0.5rem;
+			margin-bottom: 1rem;
 		}
 
 		.easy-qr-wrap img {
-			width: min(280px, 72vw);
+			width: min(268px, 82vw);
 			height: auto;
 			display: block;
 			margin: 0 auto;
+		}
+
+		.easy-qr-wrap .folder-hint {
+			margin: 0.35rem 0 0;
 		}
 
 		.easy-lead {
@@ -916,23 +920,121 @@
 			margin: 0.25rem 0 0.5rem;
 		}
 
-		.easy-gallery-block {
+		.easy-view-gallery-wrap {
 			margin-top: 2rem;
 			padding-top: 1.5rem;
 			border-top: 1px solid var(--border);
 		}
 
-		.easy-gallery-block img {
-			width: 160px;
-			height: auto;
-			display: block;
+		.btn-easy-view-gallery {
+			width: 100%;
+			margin-top: 0;
+		}
+
+		.gallery-phone-fab {
+			position: fixed;
+			right: 1.25rem;
+			bottom: 1.25rem;
+			width: 3.25rem;
+			height: 3.25rem;
+			border-radius: 50%;
+			border: none;
+			background: var(--accent-dim);
+			color: #fff;
+			font-size: 1.35rem;
+			line-height: 1;
+			cursor: pointer;
+			box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+			z-index: 40;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.gallery-phone-fab:hover {
+			filter: brightness(1.05);
+		}
+
+		.gallery-phone-fab[hidden] {
+			display: none !important;
+		}
+
+		.gallery-phone-popup {
+			position: fixed;
+			right: 1.25rem;
+			bottom: 5rem;
+			width: min(20rem, calc(100vw - 2.5rem));
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 1rem;
+			box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+			z-index: 41;
+		}
+
+		.gallery-phone-popup .qr-placeholder {
+			width: 140px;
+			height: 140px;
 			margin: 0 auto 0.75rem;
+		}
+
+		.gallery-phone-popup-header {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: 0.5rem;
+			margin-bottom: 0.5rem;
+		}
+
+		.gallery-phone-popup-header h3 {
+			margin: 0;
+			font-size: 1rem;
+			font-weight: 600;
+		}
+
+		.gallery-phone-popup-close {
+			font: inherit;
+			border: none;
+			background: transparent;
+			color: var(--muted);
+			cursor: pointer;
+			padding: 0.15rem 0.35rem;
+			line-height: 1;
+			font-size: 1.25rem;
 		}
 
 		.easy-note {
 			font-size: 0.8rem;
 			color: var(--muted);
-			margin: 1rem 0 0;
+			margin: 0.75rem 0 0;
+		}
+
+		html.gallery-system-theme {
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--warn-bg: #fff9db;
+			--warn: #e67700;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			html.gallery-system-theme {
+				--bg: #0f1419;
+				--surface: #1a2332;
+				--surface2: #243044;
+				--border: #3d4f6f;
+				--text: #e8eef7;
+				--muted: #8b9cb3;
+				--accent: #4dabf7;
+				--accent-dim: #228be6;
+				--warn-bg: #3d3200;
+				--warn: #fcc419;
+			}
 		}
 	</style>
 </head>
@@ -975,11 +1077,10 @@
 					<div class="progress-fill" id="easy-convert-fill" style="width: 0%"></div>
 				</div>
 			</div>
-			<div class="easy-gallery-block panel-hidden" id="easy-gallery-block">
-				<p class="label" style="margin: 0;">View your gallery on phone</p>
-				<img id="easy-gallery-qr" alt="QR code for gallery" />
-				<p class="folder-hint" id="easy-gallery-url" style="margin: 0;"></p>
-				<p class="easy-note">Please don&apos;t open this while uploading content.</p>
+			<div class="easy-view-gallery-wrap panel-hidden" id="easy-view-gallery-wrap">
+				<button type="button" class="btn btn-primary btn-easy-view-gallery" id="btn-easy-view-gallery">
+					View gallery
+				</button>
 			</div>
 		</div>
 	</section>
@@ -1170,6 +1271,33 @@
 
 	<!-- GALLERY -->
 	<section id="view-gallery" class="screen" aria-label="Gallery">
+		<button
+			type="button"
+			class="gallery-phone-fab"
+			id="btn-gallery-phone-help"
+			hidden
+			title="View gallery on your phone"
+			aria-label="View gallery on your phone"
+			aria-expanded="false"
+			aria-controls="gallery-phone-popup"
+		>
+			📱
+		</button>
+		<div class="gallery-phone-popup panel-hidden" id="gallery-phone-popup" role="dialog" aria-labelledby="gallery-phone-popup-title" aria-modal="true">
+			<div class="gallery-phone-popup-header">
+				<h3 id="gallery-phone-popup-title">On your phone</h3>
+				<button type="button" class="gallery-phone-popup-close" id="btn-gallery-phone-popup-close" aria-label="Close">×</button>
+			</div>
+			<p class="folder-hint" style="margin: 0 0 0.75rem;">Scan the QR or open the URL on the same Wi‑Fi.</p>
+			<div class="qr-placeholder" id="gallery-popup-qr" role="img" aria-label="Gallery QR code"></div>
+			<div class="field" id="gallery-popup-url" data-gallery-url>…</div>
+			<p class="easy-note">Please don&apos;t open this while uploading content.</p>
+			<p class="folder-hint" id="gallery-popup-lan-hint" hidden>
+				Use your PC&apos;s LAN address (not localhost). Same Wi‑Fi; allow port
+				<span class="lan-firewall-port">8765</span> if the page never loads.
+			</p>
+			<p class="folder-hint firewall-warn" id="gallery-popup-firewall-warn" hidden></p>
+		</div>
 		<div class="gallery-toolbar">
 			<h2 style="margin: 0; font-size: 1.2rem;">Gallery</h2>
 			<fieldset class="toggle-group">
@@ -1253,6 +1381,7 @@
 		<button type="button" id="btn-footer-legal">About &amp; Legal</button>
 	</footer>
 
+	<script>window.SPACEMAKER_SHELL = "desktop";</script>
 	<script src="/static/app.js"></script>
 </body>
 </html>

@@ -6,17 +6,16 @@
 	<title>SpaceMaker — Phone upload (wireframe)</title>
 	<style>
 		:root {
-			--bg: #0f1419;
-			--surface: #1a2332;
-			--surface2: #243044;
-			--border: #3d4f6f;
-			--text: #e8eef7;
-			--muted: #8b9cb3;
-			--accent: #4dabf7;
-			--accent-dim: #228be6;
-			--success: #51cf66;
-			--warn: #fcc419;
-			--warn-bg: #3d3200;
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--warn: #e67700;
+			--warn-bg: #fff9db;
 			--radius: 12px;
 			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 		}
@@ -33,8 +32,8 @@
 		}
 
 		.wireframe-banner {
-			background: var(--warn-bg);
-			color: var(--warn);
+			background: #e7f5ff;
+			color: #1864ab;
 			text-align: center;
 			padding: 0.5rem 1rem;
 			font-size: 0.8rem;
@@ -48,9 +47,9 @@
 		}
 
 		.logo {
-			font-size: 1.2rem;
+			font-size: 1.15rem;
 			font-weight: 700;
-			margin-bottom: 0.25rem;
+			margin: 0 0 0.35rem;
 		}
 
 		.logo span { color: var(--accent); }
@@ -58,7 +57,7 @@
 		.sub {
 			color: var(--muted);
 			font-size: 0.9rem;
-			margin-bottom: 1.25rem;
+			margin: 0 0 1rem;
 		}
 
 		.card {
@@ -66,7 +65,7 @@
 			border: 1px solid var(--border);
 			border-radius: var(--radius);
 			padding: 1rem;
-			margin-bottom: 1rem;
+			margin-bottom: 0.75rem;
 		}
 
 		.btn {
@@ -75,10 +74,10 @@
 			width: 100%;
 			border: none;
 			border-radius: 8px;
-			padding: 0.75rem 1rem;
+			padding: 0.7rem 1rem;
 			cursor: pointer;
 			font-weight: 600;
-			margin-top: 0.5rem;
+			margin-top: 0.45rem;
 		}
 
 		.btn-primary { background: var(--accent-dim); color: #fff; }
@@ -91,25 +90,8 @@
 		.hint {
 			font-size: 0.8rem;
 			color: var(--muted);
-			margin-top: 0.75rem;
+			margin: 0.85rem 0 0;
 		}
-
-		.progress {
-			height: 8px;
-			background: var(--surface2);
-			border-radius: 4px;
-			overflow: hidden;
-			margin-top: 0.75rem;
-		}
-
-		.progress-fill {
-			height: 100%;
-			background: linear-gradient(90deg, var(--accent-dim), var(--accent));
-			width: 65%;
-		}
-
-		.status { font-size: 0.9rem; color: var(--muted); }
-		.status strong { color: var(--text); }
 
 		.alert {
 			background: var(--warn-bg);
@@ -148,42 +130,35 @@
 	</style>
 </head>
 <body>
-	<div class="wireframe-banner">Wireframe — phone upload page (opened from QR on Step 1). Toggle states below.</div>
+	<div class="wireframe-banner">Wireframe — light phone upload (Easy). Toggle states or device hint below.</div>
 
 	<div class="page">
 		<div class="state-tabs" role="group" aria-label="Wireframe state mock">
 			<button type="button" class="active" data-state="ready">Ready</button>
 			<button type="button" data-state="uploading">Uploading</button>
-			<button type="button" data-state="paused">Session paused</button>
-			<button type="button" data-state="ended">Session ended</button>
+			<button type="button" data-state="paused">Paused</button>
+		</div>
+		<div class="state-tabs" role="group" aria-label="Device hint mock">
+			<button type="button" class="active" data-device="android">Android hint</button>
+			<button type="button" data-device="ios">iPhone hint</button>
 		</div>
 
 		<p class="logo">Space<span>Maker</span></p>
-		<p class="sub">Send photos and videos to your PC library. Files go to <code style="color: var(--accent);">originals/</code>.</p>
+		<p class="sub">Send photos and videos to your PC.</p>
+		<p class="sent-count" style="font-size:0.9rem;font-weight:600;margin:0 0 0.75rem;" id="device-sent-mock">3 files sent to your PC</p>
 
 		<div id="panel-ready" class="card">
-			<p class="status"><strong>Ready</strong> — choose what to send</p>
-			<button type="button" class="btn btn-primary">Choose files</button>
-			<button type="button" class="btn btn-secondary">Choose folder</button>
-			<p class="hint">Folder picker works on many Android browsers. On iPhone, use Files or Photos via the file picker.</p>
+			<button type="button" class="btn btn-primary" id="btn-pick-files">Choose files</button>
+			<button type="button" class="btn btn-secondary" id="btn-pick-folder">Choose folder</button>
+			<p class="hint" id="device-hint">On Android: folder upload works in Chrome; or choose files one batch at a time.</p>
 		</div>
 
 		<div id="panel-uploading" class="card panel-hidden">
-			<p class="status"><strong>Uploading</strong> — 3 of 5 files</p>
-			<div class="progress" role="progressbar" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100">
-				<div class="progress-fill"></div>
-			</div>
-			<p class="hint">Stay on this page until uploads finish. You can pick more files when the batch completes.</p>
+			<p><strong>Uploading</strong> — 3 file(s)…</p>
 		</div>
 
 		<div id="panel-paused" class="card panel-hidden">
-			<div class="alert">The PC paused this session. New uploads are not accepted until you resume on the desktop app.</div>
-			<p class="status"><strong>Paused</strong></p>
-		</div>
-
-		<div id="panel-ended" class="card panel-hidden">
-			<div class="alert">This upload session has ended. Start extract again on the PC for a new QR code.</div>
-			<p class="status"><strong>Session ended</strong></p>
+			<div class="alert">Uploads are paused on the PC. Resume there to continue.</div>
 		</div>
 	</div>
 
@@ -191,13 +166,29 @@
 		var panels = {
 			ready: document.getElementById('panel-ready'),
 			uploading: document.getElementById('panel-uploading'),
-			paused: document.getElementById('panel-paused'),
-			ended: document.getElementById('panel-ended')
+			paused: document.getElementById('panel-paused')
+		};
+		var hints = {
+			android: 'On Android: folder upload works in Chrome; or choose files one batch at a time.',
+			ios: 'Tap Choose, then pick from Photos or Files.'
 		};
 
-		document.querySelectorAll('.state-tabs button').forEach(function (btn) {
+		function applyDeviceMock(device) {
+			var pickFiles = document.getElementById('btn-pick-files');
+			var pickFolder = document.getElementById('btn-pick-folder');
+			document.getElementById('device-hint').textContent = hints[device];
+			if (device === 'ios') {
+				pickFiles.textContent = 'Choose';
+				pickFolder.classList.add('panel-hidden');
+			} else {
+				pickFiles.textContent = 'Choose files';
+				pickFolder.classList.remove('panel-hidden');
+			}
+		}
+
+		document.querySelectorAll('.state-tabs button[data-state]').forEach(function (btn) {
 			btn.addEventListener('click', function () {
-				document.querySelectorAll('.state-tabs button').forEach(function (b) {
+				document.querySelectorAll('.state-tabs button[data-state]').forEach(function (b) {
 					b.classList.remove('active');
 				});
 				btn.classList.add('active');
@@ -205,6 +196,16 @@
 				Object.keys(panels).forEach(function (key) {
 					panels[key].classList.toggle('panel-hidden', key !== state);
 				});
+			});
+		});
+
+		document.querySelectorAll('.state-tabs button[data-device]').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				document.querySelectorAll('.state-tabs button[data-device]').forEach(function (b) {
+					b.classList.remove('active');
+				});
+				btn.classList.add('active');
+				applyDeviceMock(btn.getAttribute('data-device'));
 			});
 		});
 	</script>
