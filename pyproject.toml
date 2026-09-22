@@ -1,0 +1,104 @@
+[project]
+name = "spacemaker"
+version = "0.1.0"
+description = "Local backup, convert, and gallery for phone media"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Daniel Illescas Romero" }]
+dependencies = [
+	"adbutils>=2.12.0",
+	"fastapi>=0.141.1",
+	"httpx>=0.28",
+	"httpx2>=2.13.0",
+	"pydantic>=2.13.5",
+	"pyqt6>=6.11.0",
+	"pyqt6-webengine>=6.11.0",
+	"pywebview>=6.2.1",
+	"qtpy>=2.4.3",
+	"uvicorn>=0.53.0",
+	"websockets>=17.1",
+]
+
+[project.scripts]
+spacemaker = "spacemaker.desktop:main"
+
+[dependency-groups]
+dev = [
+	"pytest>=9.1",
+	"pytest-cov>=7.1",
+	"pytest-timeout>=2.4",
+	"pytest-xdist>=3.6",
+	"ruff>=0.15",
+	"taskipy>=1.14",
+	"ty>=0.0.75",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short -rs"
+filterwarnings = [
+	"ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]
+pythonpath = ["."]
+timeout = 60
+timeout_method = "thread"
+markers = [
+	"unit: fast isolated tests",
+	"integration: adapter tests with mocked subprocess",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.format]
+indent-style = "tab"
+
+[tool.ruff.lint]
+select = ["F", "I", "E", "S", "B"]
+fixable = ["ALL"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+lines-after-imports = 2
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**" = ["S603", "S607"]
+"tests/**" = ["S101"]
+"src/spacemaker/adapters/outbound/**" = ["S603", "S607"]
+"src/spacemaker/desktop.py" = ["S104"]
+
+[tool.ty.environment]
+python-version = "3.11"
+python = ".venv"
+python-platform = "all"
+root = ["./src", "."]
+
+[tool.ty.src]
+exclude = ["scripts/**", "wireframes/**"]
+
+[[tool.ty.overrides]]
+include = ["tests/**"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "ignore"
+invalid-assignment = "ignore"
+call-non-callable = "ignore"
+missing-argument = "ignore"
+
+[tool.taskipy.tasks]
+sync-dev = { cmd = "uv sync --group dev", help = "install Python dev dependencies" }
+checks = { cmd = "python scripts/quality/checks.py", help = "quality gate (pass flags after --)" }
+format = { cmd = "uv run ruff check --fix src tests && uv run ruff format src tests", help = "format Python" }
+spacemaker = { cmd = "uv run spacemaker", help = "launch SpaceMaker desktop (pywebview + server)" }
+spacemaker-server = { cmd = "uv run spacemaker --server-only", help = "run API/UI in browser only" }
+dev-tools = { cmd = "bash scripts/packaging/prepare-dev-tools.sh", help = "populate tools/ for local dev (-- --from-path)" }

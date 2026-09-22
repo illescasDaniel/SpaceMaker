@@ -1,0 +1,11 @@
+{
+	"name": "spacemaker-web",
+	"private": true,
+	"scripts": {
+		"check": "biome check .",
+		"fix": "biome check --write ."
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.0.0"
+	}
+}

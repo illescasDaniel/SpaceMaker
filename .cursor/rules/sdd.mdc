@@ -1,0 +1,15 @@
+---
+description: Spec-Driven Development phase gates (wireframe before spec before code)
+alwaysApply: true
+---
+
+# Spec-Driven Development
+
+Before implementing a user-facing feature or changing behavior:
+
+1. Create or update `wireframes/<screen>.html` for new/changed UI. Get UX approval before the spec.
+2. Read or create `specs/<feature>/SPEC.md` with BDD acceptance criteria and out-of-scope items. Get spec approval before ports or code.
+3. Write tests from the BDD scenarios before implementation.
+4. If implementation reveals a spec gap, update the spec (and wireframe if layout changed) first — do not silently change behavior.
+
+New features require wireframe + spec + tests + implementation. Refactors must keep existing specs green or update specs explicitly.

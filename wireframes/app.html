@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpaceMaker — Wireframe</title>
+	<style>
+		:root {
+			--bg: #0f1419;
+			--surface: #1a2332;
+			--surface2: #243044;
+			--border: #3d4f6f;
+			--text: #e8eef7;
+			--muted: #8b9cb3;
+			--accent: #4dabf7;
+			--accent-dim: #228be6;
+			--success: #51cf66;
+			--warn: #fcc419;
+			--warn-bg: #3d3200;
+			--error: #ff6b6b;
+			--disabled: #5c6b82;
+			--radius: 12px;
+			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		}
+
+		* { box-sizing: border-box; }
+
+		body {
+			margin: 0;
+			font-family: var(--font);
+			background: var(--bg);
+			color: var(--text);
+			line-height: 1.5;
+			min-height: 100vh;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.app-shell {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.wireframe-banner {
+			background: var(--warn-bg);
+			color: var(--warn);
+			text-align: center;
+			padding: 0.5rem 1rem;
+			font-size: 0.85rem;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.top-bar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 1rem 1.5rem;
+			border-bottom: 1px solid var(--border);
+			flex-wrap: wrap;
+			gap: 0.75rem;
+		}
+
+		.logo {
+			font-size: 1.35rem;
+			font-weight: 700;
+			letter-spacing: -0.02em;
+		}
+
+		.logo span { color: var(--accent); }
+
+		.view-tabs {
+			display: flex;
+			gap: 0.25rem;
+			background: var(--surface);
+			padding: 0.25rem;
+			border-radius: 8px;
+			border: 1px solid var(--border);
+		}
+
+		.view-tabs button {
+			font: inherit;
+			border: none;
+			background: transparent;
+			color: var(--muted);
+			padding: 0.4rem 0.9rem;
+			border-radius: 6px;
+			cursor: pointer;
+		}
+
+		.view-tabs button.active {
+			background: var(--accent-dim);
+			color: #fff;
+		}
+
+		.screen { display: none; padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+		.screen.active { display: block; }
+
+		/* Wizard */
+		.wizard-intro {
+			color: var(--muted);
+			margin-bottom: 1.5rem;
+			max-width: 42rem;
+		}
+
+		.steps {
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 1.25rem;
+		}
+
+		@media (min-width: 900px) {
+			.steps { grid-template-columns: repeat(3, 1fr); }
+		}
+
+		.step-card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 1.25rem;
+			display: flex;
+			flex-direction: column;
+			gap: 0.75rem;
+			min-height: 280px;
+		}
+
+		.step-card.disabled {
+			opacity: 0.55;
+			pointer-events: none;
+		}
+
+		.step-header {
+			display: flex;
+			align-items: center;
+			gap: 0.6rem;
+		}
+
+		.step-num {
+			width: 28px;
+			height: 28px;
+			border-radius: 50%;
+			background: var(--surface2);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-weight: 700;
+			font-size: 0.85rem;
+		}
+
+		.step-card.active-step .step-num {
+			background: var(--accent-dim);
+		}
+
+		.step-card.done .step-num {
+			background: var(--success);
+			color: #0f1419;
+		}
+
+		.step-title { font-weight: 600; font-size: 1.05rem; }
+
+		.label {
+			font-size: 0.75rem;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			color: var(--muted);
+		}
+
+		.field {
+			background: var(--surface2);
+			border: 1px dashed var(--border);
+			border-radius: 8px;
+			padding: 0.5rem 0.75rem;
+			font-size: 0.9rem;
+			color: var(--text);
+		}
+
+		select.field,
+		input.field {
+			font: inherit;
+			width: 100%;
+		}
+
+		.row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+		.chip {
+			padding: 0.35rem 0.75rem;
+			border-radius: 999px;
+			border: 1px solid var(--border);
+			font-size: 0.85rem;
+			background: var(--surface2);
+			color: var(--text);
+		}
+
+		button.chip {
+			font: inherit;
+			cursor: pointer;
+			color: var(--text);
+		}
+
+		button.chip.selected {
+			color: var(--text);
+		}
+
+		fieldset.connection-toggle {
+			display: flex;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			overflow: hidden;
+			width: 100%;
+			margin: 0;
+			padding: 0;
+			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+		}
+
+		fieldset.toggle-group {
+			border: none;
+			margin: 0;
+			padding: 0;
+		}
+
+		.device-status {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			color: var(--text);
+		}
+
+		.status-dot {
+			width: 0.55rem;
+			height: 0.55rem;
+			border-radius: 50%;
+			flex-shrink: 0;
+			background: var(--muted);
+		}
+
+		.device-status.connected .status-dot {
+			background: var(--success);
+			box-shadow: 0 0 6px rgba(81, 207, 102, 0.55);
+		}
+
+		.device-status.disconnected .status-dot {
+			background: var(--muted);
+		}
+
+		fieldset.folder-picker {
+			display: flex;
+			flex-direction: column;
+			gap: 0.4rem;
+			padding: 0.5rem 0.65rem;
+			margin: 0;
+			border: 1px dashed var(--border);
+			border-radius: 8px;
+			font-size: 0.88rem;
+			background: var(--surface2);
+		}
+
+		.folder-picker label {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			color: var(--text);
+			cursor: pointer;
+		}
+
+		.extract-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+			margin-top: 0.25rem;
+		}
+
+		legend.sr-only {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
+		}
+
+		.chip.selected {
+			border-color: var(--accent);
+			background: rgba(77, 171, 247, 0.15);
+		}
+
+		.btn {
+			font: inherit;
+			border: none;
+			border-radius: 8px;
+			padding: 0.55rem 1rem;
+			cursor: pointer;
+			font-weight: 600;
+			margin-top: auto;
+		}
+
+		.btn-primary { background: var(--accent-dim); color: #fff; }
+		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+		.btn-ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+
+		.extract-actions .btn {
+			margin-top: 0;
+		}
+
+		.status-line {
+			font-size: 0.9rem;
+			color: var(--muted);
+		}
+
+		.status-line strong { color: var(--text); }
+
+		.progress {
+			height: 8px;
+			background: var(--surface2);
+			border-radius: 4px;
+			overflow: hidden;
+		}
+
+		.progress-fill {
+			height: 100%;
+			background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+			border-radius: 4px;
+		}
+
+		.folder-hint {
+			font-size: 0.8rem;
+			color: var(--muted);
+		}
+
+		.folder-hint code {
+			background: var(--surface2);
+			padding: 0.1rem 0.35rem;
+			border-radius: 4px;
+			font-size: 0.75rem;
+		}
+
+		.alert {
+			display: flex;
+			align-items: flex-start;
+			gap: 0.6rem;
+			padding: 0.65rem 0.75rem;
+			border-radius: 8px;
+			font-size: 0.85rem;
+			margin-top: 0.5rem;
+		}
+
+		.alert-warn {
+			background: var(--warn-bg);
+			border: 1px solid var(--warn);
+			color: var(--text);
+		}
+
+		.alert-icon { font-size: 1.1rem; line-height: 1; }
+
+		.alert-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
+
+		.alert-actions .btn { margin-top: 0; padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+
+		.qr-block {
+			display: flex;
+			gap: 1rem;
+			align-items: center;
+			flex-wrap: wrap;
+		}
+
+		.qr-placeholder {
+			width: 88px;
+			height: 88px;
+			background: #fff;
+			border-radius: 8px;
+			display: grid;
+			place-items: center;
+			color: #333;
+			font-size: 0.65rem;
+			text-align: center;
+			padding: 4px;
+		}
+
+		/* Gallery screen */
+		.gallery-toolbar {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			flex-wrap: wrap;
+			gap: 1rem;
+			margin-bottom: 1.25rem;
+		}
+
+		.toggle-group {
+			display: flex;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			overflow: hidden;
+		}
+
+		.toggle-group button {
+			font: inherit;
+			border: none;
+			background: var(--surface);
+			color: var(--muted);
+			padding: 0.45rem 0.9rem;
+			cursor: pointer;
+		}
+
+		.toggle-group button.active {
+			background: var(--surface2);
+			color: var(--text);
+		}
+
+		.phone-frame-wrap {
+			display: flex;
+			gap: 2rem;
+			flex-wrap: wrap;
+			align-items: flex-start;
+		}
+
+		.gallery-main { flex: 1; min-width: 280px; }
+
+		.year-block { margin-bottom: 1.5rem; }
+
+		.year-title {
+			font-size: 1.25rem;
+			font-weight: 700;
+			margin-bottom: 0.75rem;
+			padding-bottom: 0.35rem;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.month-label {
+			font-size: 0.8rem;
+			color: var(--muted);
+			margin-bottom: 0.5rem;
+		}
+
+		.thumb-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+			gap: 0.5rem;
+		}
+
+		.thumb {
+			aspect-ratio: 1;
+			background: var(--surface2);
+			border-radius: 8px;
+			border: 1px solid var(--border);
+			display: flex;
+			align-items: flex-end;
+			padding: 0.35rem;
+			font-size: 0.65rem;
+			color: var(--muted);
+		}
+
+		.phone-frame {
+			width: 320px;
+			border: 3px solid var(--border);
+			border-radius: 24px;
+			padding: 12px 8px;
+			background: var(--surface);
+		}
+
+		.phone-notch {
+			width: 80px;
+			height: 6px;
+			background: var(--border);
+			border-radius: 3px;
+			margin: 0 auto 10px;
+		}
+
+		.phone-frame .thumb-grid {
+			grid-template-columns: repeat(3, 1fr);
+		}
+
+		.phone-frame .year-title { font-size: 1rem; }
+
+		.calendar-mock {
+			display: none;
+			grid-template-columns: repeat(7, 1fr);
+			gap: 4px;
+			max-width: 360px;
+		}
+
+		.calendar-mock.visible { display: grid; }
+
+		.cal-cell {
+			aspect-ratio: 1;
+			background: var(--surface2);
+			border-radius: 4px;
+			font-size: 0.7rem;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: var(--muted);
+		}
+
+		.cal-cell.has-media { background: rgba(77, 171, 247, 0.25); color: var(--accent); }
+
+		.label-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+		}
+
+		.info-btn {
+			font: inherit;
+			width: 28px;
+			height: 28px;
+			border-radius: 50%;
+			border: 1px solid var(--border);
+			background: var(--surface2);
+			color: var(--accent);
+			cursor: pointer;
+			font-size: 0.85rem;
+			font-weight: 700;
+			line-height: 1;
+		}
+
+		.info-panel {
+			display: none;
+			font-size: 0.82rem;
+			color: var(--muted);
+			background: var(--surface2);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 0.65rem 0.75rem;
+			margin-top: 0.35rem;
+		}
+
+		.info-panel.visible { display: block; }
+
+		.info-panel h4 {
+			margin: 0.5rem 0 0.25rem;
+			font-size: 0.8rem;
+			color: var(--text);
+		}
+
+		.info-panel h4:first-child { margin-top: 0; }
+
+		.connection-toggle button {
+			flex: 1;
+			font: inherit;
+			border: none;
+			background: var(--surface);
+			color: var(--muted);
+			padding: 0.5rem 0.6rem;
+			cursor: pointer;
+			font-size: 0.85rem;
+		}
+
+		.connection-toggle button.active {
+			background: var(--accent-dim);
+			color: #fff;
+			font-weight: 600;
+		}
+
+		.connection-toggle button .rec {
+			display: block;
+			font-size: 0.65rem;
+			font-weight: 400;
+			opacity: 0.9;
+		}
+
+		.app-footer {
+			border-top: 1px solid var(--border);
+			padding: 0.75rem 1.5rem;
+			text-align: center;
+			font-size: 0.85rem;
+			color: var(--muted);
+			background: var(--surface);
+		}
+
+		.app-footer button {
+			font: inherit;
+			background: none;
+			border: none;
+			color: var(--accent);
+			cursor: pointer;
+			text-decoration: underline;
+			padding: 0;
+		}
+
+		.legal-page {
+			max-width: 42rem;
+		}
+
+		.legal-page h2 {
+			margin-top: 0;
+			font-size: 1.35rem;
+		}
+
+		.legal-page h3 {
+			font-size: 1rem;
+			margin: 1.25rem 0 0.4rem;
+			color: var(--text);
+		}
+
+		.legal-page p,
+		.legal-page ul {
+			color: var(--muted);
+			font-size: 0.9rem;
+		}
+
+		.legal-page a {
+			color: var(--accent);
+		}
+
+		.legal-page ul {
+			padding-left: 1.2rem;
+		}
+
+		.legal-back {
+			margin-bottom: 1rem;
+		}
+	</style>
+</head>
+<body>
+	<div class="wireframe-banner">Wireframe only — layout mock. Main tabs: wizard / gallery. Footer: About &amp; Legal.</div>
+
+	<div class="app-shell">
+	<header class="top-bar">
+		<div class="logo">Space<span>Maker</span></div>
+		<nav class="view-tabs" aria-label="Wireframe views">
+			<button type="button" class="active" data-view="wizard">Main wizard</button>
+			<button type="button" data-view="gallery">Gallery</button>
+		</nav>
+	</header>
+
+	<!-- MAIN WIZARD -->
+	<section id="view-wizard" class="screen active" aria-label="Three-step wizard">
+		<p class="wizard-intro">
+			Backup, convert, and browse phone media locally. Three sequential steps; each card has its own status.
+		</p>
+
+		<div class="steps">
+			<!-- Step 1: Extract -->
+			<article class="step-card active-step" aria-labelledby="step1-title">
+				<div class="step-header">
+					<div class="step-num">1</div>
+					<h2 class="step-title" id="step1-title">Extract</h2>
+				</div>
+				<div class="label-row">
+					<p class="label" style="margin: 0;">Connection</p>
+					<button type="button" class="info-btn" id="btn-connection-info" title="How to enable MTP or ADB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
+				</div>
+				<fieldset class="connection-toggle">
+					<legend class="sr-only">Device connection method</legend>
+					<button type="button" class="active" id="btn-conn-mtp">MTP</button>
+					<button type="button" id="btn-conn-adb">ADB<span class="rec">recommended</span></button>
+				</fieldset>
+				<div class="info-panel" id="connection-info-panel" aria-hidden="true">
+					<h4>MTP (default)</h4>
+					<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
+					<h4>ADB (recommended)</h4>
+					<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install.</p>
+				</div>
+				<p class="label">Device</p>
+				<select class="field" id="select-device" aria-label="Connected device">
+					<option>Samsung Galaxy S24</option>
+				</select>
+				<div class="field device-status connected" id="device-status">
+					<span class="status-dot" aria-hidden="true"></span>
+					<span>Samsung Galaxy S24 · Connected via MTP</span>
+				</div>
+				<p class="label">Folders to back up</p>
+				<fieldset class="folder-picker">
+					<legend class="sr-only">Device folders</legend>
+					<label><input type="checkbox" checked /> Camera (DCIM)</label>
+					<label><input type="checkbox" checked /> Pictures</label>
+					<label><input type="checkbox" checked /> Movies</label>
+				</fieldset>
+				<p class="label">Library root</p>
+				<input class="field" type="text" value="/home/user/Pictures/SpaceMakerLibrary" aria-label="Library root" />
+				<p class="folder-hint">Creates <code>originals/</code> <code>converted/</code> <code>error/</code> <code>invalid/</code></p>
+				<p class="label">Mode</p>
+				<div class="row">
+					<button type="button" class="chip selected">Copy</button>
+					<button type="button" class="chip">Move</button>
+				</div>
+				<p class="status-line"><strong>Status:</strong> In progress — 45%</p>
+				<div class="progress" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100">
+					<div class="progress-fill" style="width: 45%"></div>
+				</div>
+				<p class="status-line">137 / 304 files</p>
+				<div class="extract-actions">
+					<button type="button" class="btn btn-primary" disabled>Start extract</button>
+					<button type="button" class="btn btn-secondary">Pause extract</button>
+					<button type="button" class="btn btn-ghost">Stop extract</button>
+				</div>
+				<p class="folder-hint" style="margin-top: 0.5rem;">While running: Pause finishes the current file; Stop ends the queue after the current file.</p>
+			</article>
+
+			<!-- Step 2: Convert -->
+			<article class="step-card" aria-labelledby="step2-title">
+				<div class="step-header">
+					<div class="step-num">2</div>
+					<h2 class="step-title" id="step2-title">Convert</h2>
+				</div>
+				<p class="status-line">
+					Images → AVIF, videos → AV1 in <code style="color: var(--accent)">converted/</code>.
+					Each finished file leaves <code>originals/</code>.
+				</p>
+				<p class="status-line"><strong>Status:</strong> Waiting — extract in progress (Step 1)</p>
+				<div class="progress">
+					<div class="progress-fill" style="width: 0%"></div>
+				</div>
+				<button type="button" class="btn btn-primary" disabled title="Available after extract finishes">Start convert</button>
+				<p class="folder-hint">Warnings for <code>error/</code> and <code>invalid/</code> appear only when those folders contain files (hidden at zero).</p>
+			</article>
+
+			<!-- Step 3: Visualize -->
+			<article class="step-card disabled" aria-labelledby="step3-title">
+				<div class="step-header">
+					<div class="step-num">3</div>
+					<h2 class="step-title" id="step3-title">Visualize</h2>
+				</div>
+				<p class="status-line">Open the gallery from <code>converted/</code> only.</p>
+				<p class="status-line"><strong>Status:</strong> Not started</p>
+				<div class="qr-block">
+					<p class="qr-placeholder" role="img" aria-label="QR code placeholder">QR<br>192.168.1.42:8765</p>
+					<div>
+						<p class="label">On your phone</p>
+						<div class="field">http://192.168.1.42:8765/gallery</div>
+					</div>
+				</div>
+				<button type="button" class="btn btn-primary">Open gallery</button>
+			</article>
+		</div>
+	</section>
+
+	<!-- GALLERY -->
+	<section id="view-gallery" class="screen" aria-label="Gallery wireframe">
+		<div class="gallery-toolbar">
+			<h2 style="margin: 0; font-size: 1.2rem;">Gallery</h2>
+			<fieldset class="toggle-group">
+				<legend class="sr-only">Gallery organization</legend>
+				<button type="button" class="active" id="btn-timeline">Timeline</button>
+				<button type="button" id="btn-calendar">Calendar</button>
+			</fieldset>
+		</div>
+
+		<div class="phone-frame-wrap">
+			<div class="gallery-main">
+				<div id="timeline-view">
+					<div class="year-block">
+						<h3 class="year-title">2025</h3>
+						<p class="month-label">September</p>
+						<div class="thumb-grid">
+							<div class="thumb">IMG_001</div>
+							<div class="thumb">IMG_002</div>
+							<div class="thumb">VID_003</div>
+							<div class="thumb">IMG_004</div>
+							<div class="thumb">IMG_005</div>
+							<div class="thumb">IMG_006</div>
+						</div>
+					</div>
+					<div class="year-block">
+						<h3 class="year-title">2024</h3>
+						<p class="month-label">December</p>
+						<div class="thumb-grid">
+							<div class="thumb">…</div>
+							<div class="thumb">…</div>
+							<div class="thumb">…</div>
+							<div class="thumb">…</div>
+						</div>
+					</div>
+				</div>
+				<div id="calendar-view" class="calendar-mock" aria-hidden="true">
+					<div class="cal-cell">M</div><div class="cal-cell">T</div><div class="cal-cell">W</div><div class="cal-cell">T</div><div class="cal-cell">F</div><div class="cal-cell">S</div><div class="cal-cell">S</div>
+					<div class="cal-cell"></div><div class="cal-cell"></div><div class="cal-cell">1</div><div class="cal-cell has-media">2</div><div class="cal-cell">3</div><div class="cal-cell has-media">4</div><div class="cal-cell">5</div>
+					<div class="cal-cell">6</div><div class="cal-cell has-media">7</div><div class="cal-cell">8</div><div class="cal-cell">9</div><div class="cal-cell has-media">10</div><div class="cal-cell">11</div><div class="cal-cell">12</div>
+				</div>
+			</div>
+
+			<aside class="phone-frame" aria-label="Mobile preview">
+				<div class="phone-notch"></div>
+				<h3 class="year-title">2025 · Sep</h3>
+				<div class="thumb-grid">
+					<div class="thumb"></div>
+					<div class="thumb"></div>
+					<div class="thumb"></div>
+					<div class="thumb"></div>
+					<div class="thumb"></div>
+					<div class="thumb"></div>
+				</div>
+			</aside>
+		</div>
+	</section>
+
+	<!-- ABOUT & LEGAL (footer; not a top tab) -->
+	<section id="view-legal" class="screen" aria-label="About and legal">
+		<div class="legal-page">
+			<button type="button" class="btn btn-ghost legal-back" id="btn-legal-back">← Back</button>
+			<h2>About &amp; Legal</h2>
+			<p>SpaceMaker runs on your computer. Your media stays local unless you use the optional LAN gallery on your network.</p>
+
+			<h3>Privacy</h3>
+			<p>We do not operate a cloud that stores your photos or videos. Device access and conversion logs stay on your machine. v1: no analytics telemetry.</p>
+			<p><strong>Contact:</strong> <a href="mailto:contact@daniel-ir.eu">contact@daniel-ir.eu</a></p>
+
+			<h3>Third-party tools</h3>
+			<p>Release builds bundle these programs (you do not install them separately):</p>
+			<ul>
+				<li><a href="https://ffmpeg.org/" target="_blank" rel="noopener">FFmpeg</a> / ffprobe — video</li>
+				<li><a href="https://imagemagick.org/" target="_blank" rel="noopener">ImageMagick</a> — AVIF</li>
+				<li><a href="https://exiftool.org/" target="_blank" rel="noopener">ExifTool</a> — metadata</li>
+				<li><a href="https://libmtp.sourceforge.net/" target="_blank" rel="noopener">libmtp</a> — MTP</li>
+				<li><a href="https://developer.android.com/tools/releases/platform-tools" target="_blank" rel="noopener">Android platform-tools (adb)</a></li>
+			</ul>
+			<p>Production app loads full text from bundled <code>docs/legal/</code> files.</p>
+
+			<h3>Disclaimer</h3>
+			<p>You are responsible for backups. Copy, Move, and convert may delete or move files. The authors are not liable for lost or corrupted media. Use Copy mode first if you are unsure.</p>
+		</div>
+	</section>
+
+	</div>
+
+	<footer class="app-footer">
+		SpaceMaker · local backup &amp; convert ·
+		<button type="button" id="btn-footer-legal">About &amp; Legal</button>
+	</footer>
+
+	<script>
+		var lastMainView = 'wizard';
+
+		function showView(viewId) {
+			document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+			document.getElementById('view-' + viewId).classList.add('active');
+			if (viewId === 'wizard' || viewId === 'gallery') {
+				document.querySelectorAll('.view-tabs button').forEach(function (b) {
+					b.classList.toggle('active', b.getAttribute('data-view') === viewId);
+				});
+				lastMainView = viewId;
+			}
+		}
+
+		document.querySelectorAll('.view-tabs button').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				showView(btn.getAttribute('data-view'));
+			});
+		});
+
+		document.getElementById('btn-footer-legal').addEventListener('click', function () {
+			var active = document.querySelector('.screen.active');
+			if (active && (active.id === 'view-wizard' || active.id === 'view-gallery')) {
+				lastMainView = active.id.replace('view-', '');
+			}
+			showView('legal');
+		});
+		document.getElementById('btn-legal-back').addEventListener('click', function () {
+			showView(lastMainView);
+		});
+
+		var btnTimeline = document.getElementById('btn-timeline');
+		var btnCalendar = document.getElementById('btn-calendar');
+		var timelineView = document.getElementById('timeline-view');
+		var calendarView = document.getElementById('calendar-view');
+
+		btnTimeline.addEventListener('click', function () {
+			btnTimeline.classList.add('active');
+			btnCalendar.classList.remove('active');
+			timelineView.style.display = 'block';
+			calendarView.classList.remove('visible');
+		});
+		btnCalendar.addEventListener('click', function () {
+			btnCalendar.classList.add('active');
+			btnTimeline.classList.remove('active');
+			timelineView.style.display = 'none';
+			calendarView.classList.add('visible');
+		});
+
+		var btnConnInfo = document.getElementById('btn-connection-info');
+		var connInfoPanel = document.getElementById('connection-info-panel');
+		var btnMtp = document.getElementById('btn-conn-mtp');
+		var btnAdb = document.getElementById('btn-conn-adb');
+		var deviceStatus = document.getElementById('device-status');
+
+		btnConnInfo.addEventListener('click', function () {
+			var open = connInfoPanel.classList.toggle('visible');
+			btnConnInfo.setAttribute('aria-expanded', open ? 'true' : 'false');
+			connInfoPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+		});
+
+		btnMtp.addEventListener('click', function () {
+			btnMtp.classList.add('active');
+			btnAdb.classList.remove('active');
+			deviceStatus.textContent = 'Samsung Galaxy — connected (MTP)';
+		});
+		btnAdb.addEventListener('click', function () {
+			btnAdb.classList.add('active');
+			btnMtp.classList.remove('active');
+			deviceStatus.textContent = 'Pixel 8 — connected (ADB, authorized)';
+		});
+	</script>
+</body>
+</html>

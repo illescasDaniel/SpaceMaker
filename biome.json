@@ -1,0 +1,45 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"includes": [
+			"wireframes/**/*.html",
+			"wireframes/**/*.js",
+			"src/spacemaker/adapters/inbound/web/static/**/*.js",
+			"src/spacemaker/adapters/inbound/web/static/**/*.html"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 120
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"suspicious": {
+				"noAssignInExpressions": "warn"
+			},
+			"a11y": {
+				"useAriaPropsSupportedByRole": "warn",
+				"useSemanticElements": "warn"
+			},
+			"complexity": {
+				"useArrowFunction": "off"
+			},
+			"style": {
+				"useTemplate": "off"
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double"
+		}
+	}
+}

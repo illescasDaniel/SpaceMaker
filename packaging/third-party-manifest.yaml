@@ -1,0 +1,38 @@
+# Source of truth for bundled CLI tools shipped with SpaceMaker releases.
+# Must stay in sync with spacemaker.bootstrap.bundled_tools.BundledTool and docs/legal/THIRD_PARTY_TOOLS.md
+
+tools:
+  - id: adb
+    purpose: Android device extract (ADB connection method)
+    homepage: https://developer.android.com/tools/releases/platform-tools
+    license_note: Android Software Development Kit License Agreement
+
+  - id: mtp-detect
+    purpose: Detect MTP devices
+    homepage: https://libmtp.sourceforge.net/
+    license_note: LGPL-2.1+
+
+  - id: mtp-getfile
+    purpose: Read files from MTP devices
+    homepage: https://libmtp.sourceforge.net/
+    license_note: LGPL-2.1+
+
+  - id: ffmpeg
+    purpose: Video transcode to AV1
+    homepage: https://ffmpeg.org/
+    license_note: FFmpeg is licensed under LGPL/GPL; build flags documented per release
+
+  - id: ffprobe
+    purpose: Validate video outputs and read metadata
+    homepage: https://ffmpeg.org/
+    license_note: Same as ffmpeg
+
+  - id: magick
+    purpose: Image transcode to AVIF
+    homepage: https://imagemagick.org/
+    license_note: ImageMagick License (Apache 2.0 style)
+
+  - id: exiftool
+    purpose: Preserve EXIF/metadata on converted images
+    homepage: https://exiftool.org/
+    license_note: Artistic License or GPL (bundle variant documented per release)

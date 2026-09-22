@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+*.egg-info/
+node_modules/
+.spacemaker-quality-gate.lock
+
+# Local dev tool symlinks (see tools/README.md); release CI ships real binaries.
+tools/*
+!tools/README.md
