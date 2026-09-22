@@ -20,5 +20,5 @@ description: Read SpaceMaker playbooks for architecture, SDD, and testing. Use w
 ## Do not
 
 - Put FFmpeg flag details only in adapters without matching spec/adaptations doc
-- Skip wireframe gate for new UI
+- Skip wireframe gate for new UI or implement in `src/` before explicit design + spec approval (see `AGENTS.md` Phase Gate Protocol)
 - Import adapters from domain/application

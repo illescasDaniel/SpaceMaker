@@ -6,19 +6,17 @@ _Last updated: 2026-09-22_
 
 ## Current focus
 
-**Gallery / Visualize shipped** — full SDD increment on `main`. LAN gallery UX: firewall probe, larger QR, responsive layout.
+**Gallery item page + SDD gate policy** — committed locally; no git remote configured.
 
 ## Just changed (session)
 
-- Gallery: Step 3 `visualize` state, `/gallery` routing, thumbs, calendar, EXIF, segno QR
-- LAN: `lan_ip` fallback, skip device reconcile on settings, gallery-only init path
-- Firewall: `probe_gallery_port`, Step 3 ⓘ panel, `scripts/firewall/allow-spacemaker-port.sh`, `uv run task firewall-allow`
-- Agent skills: `save-changes`, `apply-worktree`, `delete-worktree` under `.cursor/skills/`
+- Gallery: item page, metadata, Download / JPEG / MP4 export (`.exports` cache, WS progress)
+- Governance: explicit design + spec chat approval before `src/` (AGENTS.md, sdd.mdc, sdd-feature skill, playbooks)
 
 ## Next steps
 
-1. User: `sudo uv run task firewall-allow` if phone gallery still blocked (UFW enabled on CachyOS)
-2. Phase 4 packaging: PyInstaller + pinned binaries in `tools/`
+1. Phase 4 packaging: PyInstaller + pinned binaries in `tools/`
+2. Optional: LAN phone smoke test of gallery item + export
 
 ## Run
 

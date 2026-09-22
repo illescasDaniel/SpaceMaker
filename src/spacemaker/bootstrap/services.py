@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -16,13 +17,17 @@ from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessT
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.error_recovery import ErrorRecovery
+from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.extract_media import ExtractMedia
 from spacemaker.application.generate_gallery import GenerateGallery
+from spacemaker.application.get_gallery_item import GetGalleryItem
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.bundled_tools import missing_bundled_tools
 from spacemaker.bootstrap.paths import default_library_root, normalize_library_root
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.extract_control import ExtractJobControl
+from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase
+from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode
 from spacemaker.domain.source_folders import SourceFolder, parse_source_folders
@@ -49,8 +54,12 @@ class AppServices:
 		self.converter = SubprocessMediaConverter(self.runner)
 		self.error_recovery = ErrorRecovery(self.filesystem)
 		self.gallery = GenerateGallery(self.filesystem)
+		self.get_gallery_item = GetGalleryItem(self.filesystem, self.probe)
+		self.export_friendly = ExportFriendlyMedia(self.filesystem, self.converter, self.probe)
 		self.thumbnails = SubprocessThumbnailGenerator(self.runner)
 		self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spacemaker-job")
+		self._export_jobs: dict[str, GalleryExportJob] = {}
+		self._export_lock = threading.Lock()
 		self._ws_clients: set[WebSocketLike] = set()
 		self._ws_lock = threading.Lock()
 		self._event_loop: asyncio.AbstractEventLoop | None = None
@@ -161,6 +170,75 @@ class AppServices:
 
 	def push_state(self) -> None:
 		self.broadcast({"type": "state", "state": self.enriched_snapshot()})
+
+	def push_gallery_export(self, job: GalleryExportJob) -> None:
+		self.broadcast({"type": "gallery_export", "export": job.to_dict()})
+
+	def get_export_job(self, job_id: str) -> GalleryExportJob | None:
+		with self._export_lock:
+			return self._export_jobs.get(job_id)
+
+	def start_gallery_export(
+		self, library_root: str, relative_path: str, export_format: ExportFormat
+	) -> GalleryExportJob:
+		job_id = uuid.uuid4().hex
+		job = GalleryExportJob(
+			job_id=job_id,
+			relative_path=relative_path,
+			export_format=export_format,
+			phase=ExportJobPhase.RUNNING,
+			percent=0,
+			download_path="",
+			error="",
+			skipped_encode=False,
+		)
+		with self._export_lock:
+			self._export_jobs[job_id] = job
+		self.push_gallery_export(job)
+		self._executor.submit(self._run_gallery_export, library_root, job_id, relative_path, export_format)
+		return job
+
+	def _run_gallery_export(
+		self,
+		library_root: str,
+		job_id: str,
+		relative_path: str,
+		export_format: ExportFormat,
+	) -> None:
+		def on_progress(percent: int) -> None:
+			with self._export_lock:
+				job = self._export_jobs.get(job_id)
+				if job is None:
+					return
+				job.percent = percent
+				job.phase = ExportJobPhase.RUNNING
+			self.push_gallery_export(self._export_jobs[job_id])
+
+		try:
+			result = self.export_friendly.run(
+				library_root,
+				relative_path,
+				export_format,
+				on_progress=on_progress,
+			)
+			with self._export_lock:
+				job = self._export_jobs.get(job_id)
+				if job is None:
+					return
+				job.phase = ExportJobPhase.DONE
+				job.percent = 100
+				job.download_path = result.download_path
+				job.skipped_encode = result.skipped_encode
+				job.error = ""
+			self.push_gallery_export(self._export_jobs[job_id])
+		except Exception as exc:
+			with self._export_lock:
+				job = self._export_jobs.get(job_id)
+				if job is None:
+					return
+				job.phase = ExportJobPhase.ERROR
+				job.error = str(exc)
+			self.push_gallery_export(self._export_jobs[job_id])
 
 	def start_extract(self) -> None:
 		with self.session._lock:

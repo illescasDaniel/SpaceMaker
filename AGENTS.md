@@ -22,13 +22,30 @@ How the files work and how to reset them on a new branch: [memory/README.md](mem
 
 ## Phase Gate Protocol
 
-1. **Phase 0 — Wireframe:** Create or update `wireframes/<screen>.html` (self-contained HTML/CSS). Stop and ask for human UX approval before proceeding.
-2. **Phase 1 — Spec:** Read or write the relevant `specs/<feature>/SPEC.md`. Stop and ask for human approval before proceeding.
-3. **Phase 2 — Architecture:** Write or update domain types and ports in `src/spacemaker/domain/` and `src/spacemaker/ports/`. Stop and ask for approval.
-4. **Phase 3 — Tests:** Write unit tests from the BDD acceptance criteria. Tests must run; implementations may be stubs.
-5. **Phase 4 — Implementation:** Write adapters, application use cases, FastAPI/Web UI, and desktop wrapper until tests pass.
+Follow phases in order. **Two hard stops** require **explicit human confirmation in chat** before any later phase — do not infer approval from a broad “implement the plan” message, from an attached plan file alone, or from continuing the same thread.
 
-If Phase 4 reveals a flaw in the spec, **rewrite the spec** (Phase 1), then update ports and tests. Do not patch around a bad spec.
+| Phase | Deliverable | Gate |
+|-------|-------------|------|
+| **0 — Design (wireframe)** | Create or update `wireframes/<screen>.html` (self-contained HTML/CSS) | **Stop.** Ask for UX/design approval. Do not write or change `specs/` until approved. |
+| **1 — Spec** | Create or update `specs/<feature>/SPEC.md` (BDD, out of scope, aligned with approved wireframe) | **Stop.** Ask for spec approval. Do not touch production source until approved. |
+| **2 — Architecture** | Domain types and ports in `src/spacemaker/domain/` and `src/spacemaker/ports/` | **Stop.** Ask for approval before tests and adapters. |
+| **3 — Tests** | Unit tests from BDD (`tests/unit/`); implementations may be stubs | Run tests; fix test code as needed. |
+| **4 — Implementation** | Application use cases, adapters, FastAPI/Web UI, desktop | Until tests pass. Production UI must match approved wireframe unless spec is updated and re-approved. |
+
+### What counts as “production source” (Phases 2–4)
+
+Requires prior **design + spec** approvals (and architecture approval before Phase 3–4):
+
+- `src/spacemaker/` (domain, ports, application, adapters, bootstrap)
+- `src/spacemaker/adapters/inbound/web/static/` (production HTML/JS/CSS)
+
+Allowed **before** spec approval: `wireframes/`, `specs/`, and edits to `docs/` / `memory/` that support the gate (e.g. playbook notes). Do not “pre-implement” in `src/` while waiting for approval.
+
+### After approval
+
+When the user explicitly approves the wireframe, proceed to Phase 1 only. When they explicitly approve the spec, proceed to Phase 2. If Phase 4 reveals a spec flaw, **rewrite the spec** (Phase 1), get **re-approval**, then update ports and tests. Do not patch around a bad spec.
+
+Skill: `.cursor/skills/sdd-feature/SKILL.md` for the same workflow.
 
 ## Code style
 

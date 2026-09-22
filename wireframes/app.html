@@ -542,6 +542,83 @@
 			border-radius: var(--radius);
 		}
 
+		.thumb-link {
+			cursor: pointer;
+			padding: 0;
+			font: inherit;
+			text-align: left;
+		}
+
+		.thumb-link:focus-visible {
+			outline: 2px solid var(--accent);
+			outline-offset: 2px;
+		}
+
+		.gallery-item-layout {
+			max-width: 960px;
+		}
+
+		.gallery-item-back {
+			margin-bottom: 1rem;
+		}
+
+		.gallery-item-stage {
+			background: var(--surface2);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 200px;
+			max-height: 70vh;
+			overflow: hidden;
+			margin-bottom: 1rem;
+		}
+
+		.gallery-item-stage img,
+		.gallery-item-stage video {
+			max-width: 100%;
+			max-height: 70vh;
+			object-fit: contain;
+			display: block;
+		}
+
+		.gallery-item-title {
+			margin: 0 0 0.75rem;
+			font-size: 1.1rem;
+			word-break: break-word;
+		}
+
+		.gallery-meta {
+			display: grid;
+			grid-template-columns: minmax(7rem, auto) 1fr;
+			gap: 0.35rem 1rem;
+			font-size: 0.85rem;
+			margin: 0 0 1.25rem;
+		}
+
+		.gallery-meta dt {
+			margin: 0;
+			color: var(--muted);
+		}
+
+		.gallery-meta dd {
+			margin: 0;
+		}
+
+		.gallery-item-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+			margin-bottom: 1rem;
+		}
+
+		.alert-info {
+			background: rgba(77, 171, 247, 0.12);
+			border: 1px solid var(--accent);
+			color: var(--text);
+		}
+
 		.label-row {
 			display: flex;
 			align-items: center;
@@ -808,9 +885,9 @@
 						<h3 class="year-title">2025</h3>
 						<p class="month-label">September</p>
 						<div class="thumb-grid">
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span><span class="thumb-badge">Video</span></div>
+							<button type="button" class="thumb thumb-link" data-item-demo="image"><span class="thumb-fill" aria-hidden="true"></span></button>
+							<button type="button" class="thumb thumb-link" data-item-demo="image"><span class="thumb-fill" aria-hidden="true"></span></button>
+							<button type="button" class="thumb thumb-link" data-item-demo="video"><span class="thumb-fill" aria-hidden="true"></span><span class="thumb-badge">Video</span></button>
 							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
 							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
 							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
@@ -847,6 +924,37 @@
 			</div>
 			<!-- Empty state (shown when converted/ has no files): -->
 			<p class="gallery-empty-hint" hidden>No media in converted/ yet. Finish convert on the wizard, then return here.</p>
+		</div>
+	</section>
+
+	<!-- GALLERY ITEM — /gallery/item/{relative_path} -->
+	<section id="view-gallery-item" class="screen" aria-label="Gallery item">
+		<div class="gallery-item-layout">
+			<button type="button" class="btn btn-ghost gallery-item-back" id="btn-gallery-item-back">← Back to gallery</button>
+			<div class="gallery-item-stage" id="gallery-item-stage">
+				<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%232a3440' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='24' text-anchor='middle' dominant-baseline='middle'%3EPreview%3C/text%3E%3C/svg%3E" alt="2025/September/IMG_0042.avif" />
+			</div>
+			<h2 class="gallery-item-title">2025/September/IMG_0042.avif</h2>
+			<dl class="gallery-meta">
+				<dt>Captured</dt><dd>September 4, 2025, 14:32</dd>
+				<dt>Camera</dt><dd>Samsung · SM-S921B</dd>
+				<dt>Dimensions</dt><dd>4032 × 3024</dd>
+				<dt>File size</dt><dd>1.2 MB</dd>
+				<dt>Location</dt><dd>52.5200° N, 13.4050° E</dd>
+			</dl>
+			<div class="gallery-item-actions">
+				<button type="button" class="btn btn-primary">Download</button>
+				<button type="button" class="btn btn-secondary" id="btn-wireframe-friendly">Download as JPEG</button>
+			</div>
+			<div class="alert alert-info" id="wireframe-export-alert" hidden>
+				<span class="alert-icon" aria-hidden="true">⏳</span>
+				<div>
+					<strong>Preparing download…</strong>
+					<div class="progress" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100" style="margin-top: 0.5rem;">
+						<div class="progress-fill" style="width: 45%"></div>
+					</div>
+				</div>
+			</div>
 		</div>
 	</section>
 
@@ -890,13 +998,43 @@
 		function showView(viewId) {
 			document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
 			document.getElementById('view-' + viewId).classList.add('active');
-			if (viewId === 'wizard' || viewId === 'gallery') {
+			if (viewId === 'wizard' || viewId === 'gallery' || viewId === 'gallery-item') {
 				document.querySelectorAll('.view-tabs button').forEach(function (b) {
-					b.classList.toggle('active', b.getAttribute('data-view') === viewId);
+					b.classList.toggle('active', b.getAttribute('data-view') === 'gallery' && viewId.indexOf('gallery') === 0 || b.getAttribute('data-view') === viewId);
 				});
-				lastMainView = viewId;
+				if (viewId === 'wizard' || viewId === 'gallery') {
+					lastMainView = viewId;
+				}
 			}
 		}
+
+		document.querySelectorAll('.thumb-link[data-item-demo]').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				var stage = document.getElementById('gallery-item-stage');
+				var friendly = document.getElementById('btn-wireframe-friendly');
+				if (btn.getAttribute('data-item-demo') === 'video') {
+					stage.innerHTML = '<video controls poster="" aria-label="Sample video"><source type="video/mp4" /></video>';
+					if (friendly) {
+						friendly.textContent = 'Download as MP4';
+					}
+				} else {
+					stage.innerHTML = '<img src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'800\' height=\'600\'%3E%3Crect fill=\'%232a3440\' width=\'800\' height=\'600\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' fill=\'%238b9cb3\' font-size=\'24\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3EPreview%3C/text%3E%3C/svg%3E" alt="Sample image" />';
+					if (friendly) {
+						friendly.textContent = 'Download as JPEG';
+					}
+				}
+				showView('gallery-item');
+			});
+		});
+		document.getElementById('btn-gallery-item-back').addEventListener('click', function () {
+			showView('gallery');
+		});
+		document.getElementById('btn-wireframe-friendly').addEventListener('click', function () {
+			var alertEl = document.getElementById('wireframe-export-alert');
+			if (alertEl) {
+				alertEl.hidden = false;
+			}
+		});
 
 		document.querySelectorAll('.view-tabs button').forEach(function (btn) {
 			btn.addEventListener('click', function () {

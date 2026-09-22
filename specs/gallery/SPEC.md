@@ -9,7 +9,7 @@
 
 ## Triggers & routing
 
-- **Entry:** Wizard tab “Gallery”, Step 3 **Open gallery**, or direct URL `/gallery` on LAN.
+- **Entry:** Wizard tab “Gallery”, Step 3 **Open gallery**, or direct URL `/gallery` on LAN. Thumbnail click → `/gallery/item/{relative_path}`.
 - **Data source:** Only files under library `converted/` (images avif/jpeg/png/webp/gif as present; videos including `.av1.mp4`).
 - **Exclude:** `originals/`, `error/`, `invalid/` never appear in gallery index.
 
@@ -23,6 +23,7 @@
 - **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`.
 - **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
 - **Performance:** cached thumbs; perceived fast scroll on 1k+ items target.
+- **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, max ~70vh). Metadata block under preview. **Download** (stored file) plus **Download as JPEG** (images) or **Download as MP4** (videos). Export progress in an on-page alert with progress bar; download starts when ready.
 
 ## Metadata for grouping
 
@@ -75,6 +76,43 @@
 - **When** gallery displays the item
 - **Then** a video indicator or poster frame is shown on the tile
 
+### Scenario: Open gallery item page
+
+- **Given** a file in `converted/` listed in the gallery
+- **When** user opens `/gallery/item/{relative_path}` or clicks its thumbnail
+- **Then** a large preview is shown (image or video with controls)
+- **And** metadata appears below the preview
+- **And** Download and format-friendly download actions are visible
+
+### Scenario: Download stored file
+
+- **Given** the gallery item page for a converted file
+- **When** user chooses **Download**
+- **Then** the browser receives the file from `converted/` with `Content-Disposition: attachment`
+
+### Scenario: Export friendly JPEG with progress
+
+- **Given** an AVIF image in `converted/`
+- **When** user chooses **Download as JPEG**
+- **Then** the server encodes to high-quality JPEG (unless already JPEG)
+- **And** the UI shows export progress in an alert
+- **And** the browser downloads the JPEG when encoding completes
+
+### Scenario: Export friendly MP4 with progress
+
+- **Given** an AV1 `.av1.mp4` in `converted/`
+- **When** user chooses **Download as MP4**
+- **Then** the server encodes H.264 + AAC MP4 (unless already H.264+AAC MP4)
+- **And** the UI shows export progress in an alert
+- **And** the browser downloads the MP4 when encoding completes
+
+### Scenario: Skip encode when already friendly
+
+- **Given** a JPEG or H.264+AAC MP4 already in `converted/`
+- **When** user chooses the matching friendly download
+- **Then** no re-encode runs
+- **And** download begins immediately
+
 ## Failure scenarios
 
 | Case | Behavior |
@@ -97,12 +135,14 @@
 | Unit | Calendar mark algorithm for day sets |
 | Integration | HTTP GET `/gallery` returns 200 with fixture tree in `tmp_path` |
 | Integration | GET `/api/gallery/calendar` returns month + days-with-media; GET `/thumbs/…` returns JPEG after first request |
+| Integration | GET `/gallery/item/…` SPA 200; GET `/api/gallery/item`; export POST + download |
+| Unit | Path safety; friendly-format skip; export cache naming |
 | Unit | SPA path helper / snapshot includes `visualize` step state (see main-wizard spec) |
 | Out of scope | Visual snapshot tests until UI stable |
 
 ## Out of scope
 
-- Full-screen swipe viewer with pinch-zoom (follow-up feature)
+- Full-screen swipe viewer with pinch-zoom (follow-up feature; item page is not a pinch lightbox)
 - Sharing albums publicly outside LAN
 - Editing/deleting media from gallery (delete: future spec)
 - Face recognition or search

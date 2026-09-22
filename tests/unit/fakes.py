@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
+from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.library import LibraryFolder
 from spacemaker.domain.library_paths import skip_library_relative_path
 from spacemaker.domain.web_compat import VideoProbe
@@ -126,11 +128,33 @@ class FakeMediaProbe:
 	def captured_at(self, path: str) -> datetime | None:
 		return None
 
+	def display_metadata(self, path: str) -> GalleryDisplayMetadata:
+		p = Path(path)
+		size = self._fs.files.get(path, 0) if hasattr(self, "_fs") else 0
+		return GalleryDisplayMetadata(
+			filename=p.name,
+			captured_at=None,
+			camera_make="",
+			camera_model="",
+			width=None,
+			height=None,
+			duration_seconds=None,
+			file_size_bytes=size,
+			gps="",
+		)
+
+	_fs: FakeFileSystem = field(default_factory=FakeFileSystem)
+
+	def bind_filesystem(self, fs: FakeFileSystem) -> None:
+		self._fs = fs
+
 
 @dataclass
 class FakeMediaConverter:
 	encoded_images: list[tuple[str, str]] = field(default_factory=list)
+	encoded_jpegs: list[tuple[str, str]] = field(default_factory=list)
 	encoded_videos: list[tuple[str, str]] = field(default_factory=list)
+	encoded_h264: list[tuple[str, str]] = field(default_factory=list)
 	fail_destinations: set[str] = field(default_factory=set)
 	output_sizes: dict[str, int] = field(default_factory=dict)
 
@@ -145,6 +169,26 @@ class FakeMediaConverter:
 			raise RuntimeError("encode failed")
 		self.encoded_videos.append((source, destination))
 		self._fs.files[destination] = self.output_sizes.get(destination, 50)
+
+	def encode_image_to_jpeg(self, source: str, destination: str) -> None:
+		if destination in self.fail_destinations:
+			raise RuntimeError("encode failed")
+		self.encoded_jpegs.append((source, destination))
+		size = self.output_sizes.get(destination, 50)
+		self._fs.files[destination] = size
+		dest = Path(destination)
+		dest.parent.mkdir(parents=True, exist_ok=True)
+		dest.write_bytes(b"x" * size)
+
+	def encode_video_to_h264_aac(self, source: str, destination: str, *, on_progress=None) -> None:
+		if destination in self.fail_destinations:
+			raise RuntimeError("encode failed")
+		if on_progress:
+			on_progress(50)
+		self.encoded_h264.append((source, destination))
+		self._fs.files[destination] = self.output_sizes.get(destination, 50)
+		if on_progress:
+			on_progress(100)
 
 	_fs: FakeFileSystem = field(default_factory=FakeFileSystem)
 

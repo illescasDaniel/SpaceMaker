@@ -20,11 +20,15 @@ Spec → ports → tests → implementation. If implementation exposes a spec fl
 
 ## Phase gates (see AGENTS.md)
 
-0. Wireframe UX approval  
-1. Spec approval  
-2. Domain + ports approval  
-3. Unit tests from BDD  
-4. Adapters + implementation  
+Each gate needs **explicit human confirmation in chat** before the next phase. Plans and todos do not replace wireframe or spec approval.
+
+0. **Design** — wireframe in `wireframes/` → stop for UX/design approval  
+1. **Spec** — `specs/<feature>/SPEC.md` → stop for spec approval (no `src/` or production UI yet)  
+2. **Architecture** — domain + ports → stop for approval  
+3. **Tests** — unit tests from BDD  
+4. **Implementation** — adapters + production UI until green  
+
+If layout or behavior changes during implementation, update wireframe and/or spec and **re-approve** before continuing.
 
 ## Tests
 

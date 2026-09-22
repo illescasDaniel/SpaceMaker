@@ -23,5 +23,6 @@
 - [x] Convert reliability: nested output dirs, failure surfacing, skip `.thumbnails` (extract + convert)
 - [x] Device detection: stale MTP/GVFS + session reconcile; API errors as JSON
 - [x] **Gallery / Step 3 Visualize** — status, routing, QR, timeline/calendar, EXIF, thumbs
+- [x] **Gallery item page** — preview, metadata, Download + JPEG/MP4 export (server-side, WS progress)
 - [ ] Phase 4 (packaging): PyInstaller, bundled `tools/` in installer, legal assets in bundle
 - [x] Specs/docs: bundled third-party tools + legal (privacy, disclaimer, manifest)

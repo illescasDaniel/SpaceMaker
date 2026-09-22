@@ -8,7 +8,7 @@ Use `src/spacemaker/` with `domain/`, `ports/inbound|outbound/`, `application/`,
 
 ## Wireframe gate
 
-GamesLibrary has no wireframe folder. SpaceMaker requires `wireframes/*.html` **before** `specs/<feature>/SPEC.md` for UI changes. Production static UI must match approved wireframes.
+GamesLibrary has no wireframe folder. SpaceMaker requires `wireframes/*.html` **before** `specs/<feature>/SPEC.md` for UI changes. Agents must **stop for explicit human design approval** after wireframe updates and **explicit spec approval** before any changes under `src/spacemaker/` or production static UI. Production static UI must match approved wireframes.
 
 ## Library root folders
 
@@ -44,6 +44,18 @@ Authoritative compression flags: [convert_all_1_1.sh](../reference/convert_all_1
 **Failures:** unsupported/broken → `invalid/`. Encode fail → delete partial, retry once; still fail → `error/`. Successful encode → output in `converted/`, source removed from `originals/`.
 
 **UI:** warning when `error/` or `invalid/` non-empty — Review; for errors, also Move to converted (unchanged files).
+
+## Gallery export (download-friendly formats)
+
+Separate from library convert. On-demand when the user chooses **Download as JPEG** or **Download as MP4** on a gallery item page. Outputs are cached under `{library_root}/.exports/` (skipped by extract/convert scans, like `.thumbnails/`).
+
+**Image → JPEG:** ImageMagick `-quality 95`; ExifTool copy all tags from source. No size rollback — quality first.
+
+**Video → MP4:** `libx264` CRF 18, `yuv420p`, AAC 256k, `-map_metadata 0`, `+faststart`. No size rollback.
+
+**Skip encode:** if the stored file is already JPEG (image action) or already H.264 + AAC in MP4 (video action), serve the stored file as the download.
+
+Progress: WebSocket `gallery_export` events while encoding; UI alert on the item page.
 
 ## Desktop shell
 

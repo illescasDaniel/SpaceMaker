@@ -2,6 +2,18 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-22 — SDD: explicit design + spec approval before src
+
+- **Context:** Agents sometimes ran wireframe → spec → full implementation in one pass when the user attached a plan or said “implement the plan.”
+- **Decision:** Phase gates in `AGENTS.md`, `sdd.mdc`, and `sdd-feature` skill require **explicit chat confirmation** after wireframe (design) and after spec before production source (`src/spacemaker/`, production static UI). Attached plans/todos are not substitutes for those approvals.
+- **Rationale:** Keeps UX and behavioral truth in human-reviewed artifacts; reduces silent drift from wireframe/spec.
+
+## 2026-09-22 — Gallery export separate from library convert
+
+- **Context:** Users need Download-as-JPEG/MP4 on the item page without changing AVIF/AV1 library policy or size rollback.
+- **Decision:** On-demand `ExportFriendlyMedia` (Magick q95 JPEG, ffmpeg libx264 CRF 18 + AAC); cache under `{library}/.exports/`; skip encode when already JPEG or H.264+AAC MP4; progress via WebSocket `gallery_export` events.
+- **Rationale:** Keeps convert pipeline unchanged; quality-first exports; same skip rules as `.thumbnails` for scans.
+
 ## 2026-09-22 — LAN firewall probe in bootstrap
 
 - **Context:** Phone gallery failed when UFW blocked TCP 8765; users need in-app hints without guessing.

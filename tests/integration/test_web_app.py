@@ -110,6 +110,59 @@ def test_given_app_when_get_qr_svg_then_svg() -> None:
 	assert "svg" in response.headers.get("content-type", "")
 
 
+def test_given_gallery_item_route_when_get_then_html_200() -> None:
+	client = TestClient(create_app())
+	response = client.get("/gallery/item/photo.avif")
+	assert response.status_code == 200
+	assert "text/html" in response.headers.get("content-type", "")
+
+
+def test_given_converted_file_when_gallery_item_api_then_metadata(tmp_path) -> None:
+	library = tmp_path / "lib"
+	converted = library / "converted"
+	converted.mkdir(parents=True)
+	(converted / "photo.avif").write_bytes(b"x")
+
+	client = TestClient(create_app())
+	client.put(
+		"/api/settings",
+		json={
+			"library_root": str(library),
+			"connection_method": "mtp",
+			"transfer_mode": "copy",
+			"device_id": "",
+			"source_folders": ["dcim"],
+		},
+	)
+	response = client.get("/api/gallery/item", params={"path": "photo.avif"})
+	assert response.status_code == 200
+	body = response.json()
+	assert body["relative_path"] == "photo.avif"
+	assert body["metadata"]["filename"] == "photo.avif"
+
+
+def test_given_media_download_flag_when_get_then_attachment(tmp_path) -> None:
+	library = tmp_path / "lib"
+	converted = library / "converted"
+	converted.mkdir(parents=True)
+	(converted / "photo.avif").write_bytes(b"x")
+
+	client = TestClient(create_app())
+	client.put(
+		"/api/settings",
+		json={
+			"library_root": str(library),
+			"connection_method": "mtp",
+			"transfer_mode": "copy",
+			"device_id": "",
+			"source_folders": ["dcim"],
+		},
+	)
+	response = client.get("/media/photo.avif", params={"download": 1})
+	assert response.status_code == 200
+	assert "attachment" in response.headers.get("content-disposition", "")
+
+
 def test_given_converted_fixture_when_calendar_then_days(tmp_path) -> None:
 	library = tmp_path / "lib"
 	converted = library / "converted"

@@ -21,6 +21,8 @@ from spacemaker.bootstrap.paths import (
 from spacemaker.bootstrap.services import AppServices, repo_root
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.gallery import GalleryItem
+from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase, is_safe_gallery_relative_path
+from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import LibraryFolder, TransferMode
 
@@ -31,6 +33,45 @@ def _gallery_item_dict(item: GalleryItem) -> dict[str, str]:
 		"captured_at": item.captured_at.isoformat(),
 		"kind": item.kind.value,
 	}
+
+
+def _metadata_dict(meta: GalleryDisplayMetadata) -> dict[str, object]:
+	return {
+		"filename": meta.filename,
+		"captured_at": meta.captured_at.isoformat() if meta.captured_at else None,
+		"camera_make": meta.camera_make,
+		"camera_model": meta.camera_model,
+		"width": meta.width,
+		"height": meta.height,
+		"duration_seconds": meta.duration_seconds,
+		"file_size_bytes": meta.file_size_bytes,
+		"gps": meta.gps,
+	}
+
+
+def _resolve_converted_file(services: AppServices, relative_path: str) -> Path:
+	if not is_safe_gallery_relative_path(relative_path):
+		raise HTTPException(status_code=403, detail="invalid path")
+	root = services.session.library_root
+	if not root:
+		raise HTTPException(status_code=404)
+	base = Path(services.filesystem.library_path(root, LibraryFolder.CONVERTED, "")).resolve()
+	target = (base / relative_path).resolve()
+	if not str(target).startswith(str(base)):
+		raise HTTPException(status_code=403, detail="invalid path")
+	if not target.is_file():
+		raise HTTPException(status_code=404)
+	return target
+
+
+def _attachment_filename(path: Path) -> str:
+	name = path.name.replace('"', "")
+	return f'attachment; filename="{name}"'
+
+
+class GalleryExportBody(BaseModel):
+	relative_path: str
+	format: str
 
 
 _STATIC = Path(__file__).resolve().parent / "static"
@@ -56,6 +97,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 
 	@app.get("/")
 	@app.get("/gallery")
+	@app.get("/gallery/item/{relative_path:path}")
 	def index() -> FileResponse:
 		return FileResponse(_STATIC / "index.html")
 
@@ -233,6 +275,55 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		)
 		return {"year": year, "month": month, "days_with_media": days}
 
+	@app.get("/api/gallery/item")
+	def gallery_item_detail(path: str, library_root: str = "") -> dict[str, object]:
+		root = library_root or services.session.library_root
+		if not root:
+			raise HTTPException(status_code=404, detail="library not configured")
+		if not is_safe_gallery_relative_path(path):
+			raise HTTPException(status_code=403, detail="invalid path")
+		captured_map = services.captured_at_map(root)
+		detail = services.get_gallery_item.get(
+			root,
+			path,
+			captured_at=captured_map.get(path),
+		)
+		if detail is None:
+			raise HTTPException(status_code=404, detail="not found")
+		return {
+			"relative_path": detail.item.relative_path,
+			"captured_at": detail.item.captured_at.isoformat(),
+			"kind": detail.item.kind.value,
+			"metadata": _metadata_dict(detail.metadata),
+		}
+
+	@app.post("/api/gallery/export")
+	def gallery_export_start(body: GalleryExportBody) -> dict[str, object]:
+		root = services.session.library_root
+		if not root:
+			raise HTTPException(status_code=400, detail="library not configured")
+		if not is_safe_gallery_relative_path(body.relative_path):
+			raise HTTPException(status_code=403, detail="invalid path")
+		try:
+			export_format = ExportFormat(body.format)
+		except ValueError as exc:
+			raise HTTPException(status_code=400, detail="unknown export format") from exc
+		_resolve_converted_file(services, body.relative_path)
+		job = services.start_gallery_export(root, body.relative_path, export_format)
+		return job.to_dict()
+
+	@app.get("/api/gallery/export/{job_id}/file")
+	def gallery_export_file(job_id: str) -> FileResponse:
+		job = services.get_export_job(job_id)
+		if job is None:
+			raise HTTPException(status_code=404, detail="unknown job")
+		if job.phase is not ExportJobPhase.DONE:
+			raise HTTPException(status_code=409, detail="export not ready")
+		path = Path(job.download_path)
+		if not path.is_file():
+			raise HTTPException(status_code=404, detail="export file missing")
+		return FileResponse(path, headers={"Content-Disposition": _attachment_filename(path)})
+
 	@app.get("/api/gallery/day")
 	def gallery_day(year: int, month: int, day: int, library_root: str = "") -> dict[str, object]:
 		root = library_root or services.session.library_root
@@ -279,17 +370,12 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"id": doc_id, "markdown": path.read_text(encoding="utf-8")}
 
 	@app.get("/media/{relative_path:path}")
-	def media_file(relative_path: str) -> FileResponse:
-		root = services.session.library_root
-		if not root:
-			raise HTTPException(status_code=404)
-		base = Path(services.filesystem.library_path(root, LibraryFolder.CONVERTED, "")).resolve()
-		target = (base / relative_path).resolve()
-		if not str(target).startswith(str(base)):
-			raise HTTPException(status_code=403, detail="invalid path")
-		if not target.is_file():
-			raise HTTPException(status_code=404)
-		return FileResponse(target)
+	def media_file(relative_path: str, download: int = 0) -> FileResponse:
+		target = _resolve_converted_file(services, relative_path)
+		headers: dict[str, str] | None = None
+		if download:
+			headers = {"Content-Disposition": _attachment_filename(target)}
+		return FileResponse(target, headers=headers)
 
 	@app.websocket("/ws")
 	async def websocket_endpoint(websocket: WebSocket) -> None:

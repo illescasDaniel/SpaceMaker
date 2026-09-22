@@ -5,14 +5,29 @@ description: Run Spec-Driven Development for SpaceMaker features. Use when addin
 
 # SDD Feature Workflow
 
-## Phase 0 — Wireframe
+## Mandatory gates (explicit human confirmation)
+
+Do **not** skip or batch gates. After each gate deliverable, **stop the turn** and ask the user to approve before the next phase.
+
+| User says | Agent may do |
+|-----------|----------------|
+| “Add feature X” / “implement the plan” | Phase 0 only (wireframe), then stop for **design approval** |
+| User approves wireframe / design | Phase 1 only (spec), then stop for **spec approval** |
+| User approves spec | Phase 2 (ports/domain), then stop for **architecture approval** |
+| User approves architecture | Phases 3–4 (tests, then adapters + production UI) |
+
+An attached plan file or todo list is **not** wireframe or spec approval. The user must confirm design and spec in chat (e.g. “wireframe LGTM”, “spec approved”).
+
+**Forbidden before spec approval:** changes under `src/spacemaker/` or production `static/` except as part of an already-approved spec (refactors must keep specs green or update spec + re-approve).
+
+## Phase 0 — Wireframe (design)
 
 Create or update `wireframes/<screen>.html` (self-contained HTML/CSS).
 
 - Wizard steps, gallery, warning banners for error/invalid folders
 - Desktop and mobile-width checks where relevant
 
-**Stop for UX approval.**
+**Stop.** Ask: “Please review the wireframe at … — approve design so I can write the spec?”
 
 ## Phase 1 — Spec
 
@@ -24,7 +39,7 @@ Create or update `specs/<feature>/SPEC.md` with:
 - Acceptance criteria (Given/When/Then)
 - Out of scope
 
-**Stop for approval.**
+**Stop.** Ask: “Please review `specs/<feature>/SPEC.md` — approve so I can add ports and implementation?”
 
 ## Phase 2 — Architecture
 
@@ -34,7 +49,7 @@ Add or update in `src/spacemaker/`:
 - Inbound port(s) for the use case
 - Outbound port(s) as needed
 
-**Stop for approval.**
+**Stop for architecture approval** before Phase 3.
 
 ## Phase 3 — Tests
 
@@ -46,7 +61,7 @@ Target use cases and domain — not FastAPI routes in unit tests.
 
 ## Phase 4 — Implementation
 
-Adapters and UI until tests pass. Update `memory/` at milestones (see `agent-memory` skill).
+Adapters and production UI until tests pass. Update `memory/` at milestones (see `agent-memory` skill).
 
 ## Spec template
 

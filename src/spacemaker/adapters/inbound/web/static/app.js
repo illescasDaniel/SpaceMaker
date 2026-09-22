@@ -7,6 +7,8 @@
 	var calendarYear = new Date().getFullYear();
 	var calendarMonth = new Date().getMonth() + 1;
 	var calendarSelectedDay = null;
+	var galleryItemPath = "";
+	var galleryItemKind = "image";
 
 	function isAbsolutePath(path) {
 		if (!path) {
@@ -106,31 +108,64 @@
 		return null;
 	}
 
+	function galleryItemPathFromLocation() {
+		var prefix = "/gallery/item/";
+		if (location.pathname.indexOf(prefix) !== 0) {
+			return "";
+		}
+		return decodeURIComponent(location.pathname.slice(prefix.length));
+	}
+
 	function showView(viewId, options) {
 		var path;
+		var itemPath;
 		options = options || {};
 		document.querySelectorAll(".screen").forEach(function (s) {
 			s.classList.remove("active");
 		});
 		document.getElementById("view-" + viewId).classList.add("active");
-		if (viewId === "wizard" || viewId === "gallery") {
+		if (viewId === "wizard" || viewId === "gallery" || viewId === "gallery-item") {
 			document.querySelectorAll(".view-tabs button").forEach(function (b) {
-				b.classList.toggle("active", b.getAttribute("data-view") === viewId);
+				var tab = b.getAttribute("data-view");
+				b.classList.toggle(
+					"active",
+					tab === viewId || (viewId === "gallery-item" && tab === "gallery"),
+				);
 			});
-			lastMainView = viewId;
-			if (viewId === "gallery") {
-				loadGallery();
+			if (viewId === "wizard" || viewId === "gallery") {
+				lastMainView = viewId;
+				if (viewId === "gallery") {
+					loadGallery();
+				}
 			}
 			if (!options.skipHistory) {
-				path = pathForMainView(viewId);
-				if (path !== null && location.pathname !== path) {
-					history.pushState({ view: viewId }, "", path);
+				if (viewId === "gallery-item" && galleryItemPath) {
+					itemPath = "/gallery/item/" + encodeURI(galleryItemPath);
+					if (location.pathname !== itemPath) {
+						history.pushState({ view: "gallery-item", path: galleryItemPath }, "", itemPath);
+					}
+				} else {
+					path = pathForMainView(viewId);
+					if (path !== null && location.pathname !== path) {
+						history.pushState({ view: viewId }, "", path);
+					}
 				}
 			}
 		}
 	}
 
+	function showGalleryItem(relativePath, options) {
+		galleryItemPath = relativePath;
+		showView("gallery-item", options || {});
+		loadGalleryItemDetail();
+	}
+
 	function routeFromPath() {
+		var itemPath = galleryItemPathFromLocation();
+		if (itemPath) {
+			showGalleryItem(itemPath, { skipHistory: true });
+			return;
+		}
 		if (location.pathname === "/gallery") {
 			showView("gallery", { skipHistory: true });
 			return;
@@ -512,10 +547,11 @@
 	}
 
 	function appendThumbCell(grid, item) {
-		var cell = document.createElement("div");
+		var cell = document.createElement("button");
 		var img = document.createElement("img");
 		var badge;
-		cell.className = "thumb";
+		cell.type = "button";
+		cell.className = "thumb thumb-link";
 		img.src = "/thumbs/" + encodeURI(item.relative_path);
 		img.alt = item.relative_path;
 		img.loading = "lazy";
@@ -526,7 +562,212 @@
 			badge.textContent = "Video";
 			cell.appendChild(badge);
 		}
+		cell.addEventListener("click", function () {
+			showGalleryItem(item.relative_path);
+		});
 		grid.appendChild(cell);
+	}
+
+	function formatFileSize(bytes) {
+		if (!bytes && bytes !== 0) {
+			return "—";
+		}
+		if (bytes < 1024) {
+			return bytes + " B";
+		}
+		if (bytes < 1024 * 1024) {
+			return (bytes / 1024).toFixed(1) + " KB";
+		}
+		return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+	}
+
+	function formatDuration(seconds) {
+		if (seconds === null || seconds === undefined) {
+			return "—";
+		}
+		var total = Math.round(seconds);
+		var mins = Math.floor(total / 60);
+		var secs = total % 60;
+		if (mins > 0) {
+			return mins + "m " + secs + "s";
+		}
+		return secs + "s";
+	}
+
+	function formatCaptured(iso) {
+		if (!iso) {
+			return "—";
+		}
+		var d = new Date(iso);
+		if (Number.isNaN(d.getTime())) {
+			return iso;
+		}
+		return d.toLocaleString();
+	}
+
+	function setGalleryExportProgress(percent, label) {
+		var bar = document.getElementById("gallery-export-progress");
+		var fill = document.getElementById("gallery-export-fill");
+		var labelEl = document.getElementById("gallery-export-label");
+		if (labelEl && label) {
+			labelEl.textContent = label;
+		}
+		if (bar) {
+			bar.setAttribute("aria-valuenow", String(percent));
+		}
+		if (fill) {
+			fill.style.width = String(percent) + "%";
+		}
+	}
+
+	function hideGalleryExportAlert() {
+		var alertEl = document.getElementById("gallery-export-alert");
+		var err = document.getElementById("gallery-export-error");
+		if (alertEl) {
+			alertEl.hidden = true;
+		}
+		if (err) {
+			err.hidden = true;
+			err.textContent = "";
+		}
+		setGalleryExportProgress(0, "Preparing download…");
+	}
+
+	function triggerFileDownload(url) {
+		var a = document.createElement("a");
+		a.href = url;
+		a.rel = "noopener";
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+	}
+
+	function applyGalleryExport(exp) {
+		var alertEl;
+		var err;
+		if (!exp || exp.relative_path !== galleryItemPath) {
+			return;
+		}
+		alertEl = document.getElementById("gallery-export-alert");
+		err = document.getElementById("gallery-export-error");
+		if (alertEl) {
+			alertEl.hidden = false;
+		}
+		if (exp.phase === "error") {
+			setGalleryExportProgress(exp.percent || 0, "Export failed");
+			if (err) {
+				err.hidden = false;
+				err.textContent = exp.error || "Export failed.";
+			}
+			return;
+		}
+		if (exp.phase === "running") {
+			setGalleryExportProgress(exp.percent || 0, "Preparing download…");
+			return;
+		}
+		if (exp.phase === "done") {
+			setGalleryExportProgress(100, "Download starting…");
+			if (exp.download_url) {
+				triggerFileDownload(exp.download_url);
+			}
+			setTimeout(hideGalleryExportAlert, 1500);
+		}
+	}
+
+	function startFriendlyExport() {
+		var fmt = galleryItemKind === "video" ? "h264_aac" : "jpeg";
+		hideGalleryExportAlert();
+		setGalleryExportProgress(0, "Preparing download…");
+		document.getElementById("gallery-export-alert").hidden = false;
+		api("POST", "/api/gallery/export", { relative_path: galleryItemPath, format: fmt })
+			.then(applyGalleryExport)
+			.catch(function (exportErr) {
+				applyGalleryExport({
+					relative_path: galleryItemPath,
+					phase: "error",
+					percent: 0,
+					error: exportErr.message || "Export failed.",
+				});
+			});
+	}
+
+	function loadGalleryItemDetail() {
+		var stage = document.getElementById("gallery-item-stage");
+		var title = document.getElementById("gallery-item-title");
+		var metaHost = document.getElementById("gallery-item-meta");
+		var friendly = document.getElementById("btn-gallery-friendly");
+		if (!stage || !galleryItemPath) {
+			return;
+		}
+		hideGalleryExportAlert();
+		stage.innerHTML = '<p class="status-line">Loading…</p>';
+		api("GET", "/api/gallery/item?path=" + encodeURIComponent(galleryItemPath))
+			.then(function (payload) {
+				var meta = payload.metadata || {};
+				var mediaUrl = "/media/" + encodeURI(payload.relative_path);
+				var rows;
+				galleryItemKind = payload.kind === "video" ? "video" : "image";
+				if (title) {
+					title.textContent = meta.filename || payload.relative_path;
+				}
+				if (payload.kind === "video") {
+					stage.innerHTML =
+						'<video controls preload="metadata" src="' +
+						mediaUrl +
+						'" aria-label="' +
+						(meta.filename || payload.relative_path) +
+						'"></video>';
+					if (friendly) {
+						friendly.hidden = false;
+						friendly.textContent = "Download as MP4";
+					}
+				} else {
+					stage.innerHTML =
+						'<img src="' +
+						mediaUrl +
+						'" alt="' +
+						(meta.filename || payload.relative_path) +
+						'" />';
+					if (friendly) {
+						friendly.hidden = false;
+						friendly.textContent = "Download as JPEG";
+					}
+				}
+				if (metaHost) {
+					rows = [
+						["Captured", formatCaptured(meta.captured_at || payload.captured_at)],
+						[
+							"Camera",
+							meta.camera_make || meta.camera_model
+								? [meta.camera_make, meta.camera_model].filter(Boolean).join(" · ")
+								: "—",
+						],
+						[
+							"Dimensions",
+							meta.width && meta.height ? meta.width + " × " + meta.height : "—",
+						],
+						["File size", formatFileSize(meta.file_size_bytes)],
+					];
+					if (payload.kind === "video") {
+						rows.push(["Duration", formatDuration(meta.duration_seconds)]);
+					}
+					if (meta.gps) {
+						rows.push(["Location", meta.gps]);
+					}
+					metaHost.innerHTML = "";
+					rows.forEach(function (row) {
+						var dt = document.createElement("dt");
+						var dd = document.createElement("dd");
+						dt.textContent = row[0];
+						dd.textContent = row[1];
+						metaHost.appendChild(dt);
+						metaHost.appendChild(dd);
+					});
+				}
+			})
+			.catch(function () {
+				stage.innerHTML = '<p class="status-line">Could not load this item.</p>';
+			});
 	}
 
 	function loadGallery() {
@@ -754,7 +995,7 @@
 	}
 
 	function isGalleryEntryPath() {
-		return location.pathname === "/gallery";
+		return location.pathname === "/gallery" || location.pathname.indexOf("/gallery/item/") === 0;
 	}
 
 	function connectWs() {
@@ -764,6 +1005,9 @@
 			var msg = JSON.parse(ev.data);
 			if (msg.type === "state") {
 				applyState(msg.state);
+			}
+			if (msg.type === "gallery_export") {
+				applyGalleryExport(msg.export);
 			}
 		};
 		ws.onclose = function () {
@@ -779,8 +1023,13 @@
 
 	document.getElementById("btn-footer-legal").addEventListener("click", function () {
 		var active = document.querySelector(".screen.active");
-		if (active && (active.id === "view-wizard" || active.id === "view-gallery")) {
-			lastMainView = active.id.replace("view-", "");
+		if (
+			active &&
+			(active.id === "view-wizard" ||
+				active.id === "view-gallery" ||
+				active.id === "view-gallery-item")
+		) {
+			lastMainView = active.id === "view-gallery-item" ? "gallery" : active.id.replace("view-", "");
 		}
 		showView("legal");
 	});
@@ -980,6 +1229,21 @@
 	});
 	document.getElementById("btn-open-gallery").addEventListener("click", function () {
 		showView("gallery");
+	});
+	document.getElementById("btn-gallery-item-back").addEventListener("click", function () {
+		showView("gallery");
+	});
+	document.getElementById("btn-gallery-download").addEventListener("click", function () {
+		if (!galleryItemPath) {
+			return;
+		}
+		triggerFileDownload("/media/" + encodeURI(galleryItemPath) + "?download=1");
+	});
+	document.getElementById("btn-gallery-friendly").addEventListener("click", function () {
+		if (!galleryItemPath) {
+			return;
+		}
+		startFriendlyExport();
 	});
 
 	api("GET", "/api/defaults")
