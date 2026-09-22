@@ -685,6 +685,29 @@
 			opacity: 0.9;
 		}
 
+		.chip.disabled,
+		button.chip:disabled {
+			opacity: 0.45;
+			cursor: not-allowed;
+			pointer-events: none;
+		}
+
+		.panel-hidden { display: none; }
+
+		.wifi-receive-block {
+			background: var(--surface2);
+			border: 1px dashed var(--border);
+			border-radius: 8px;
+			padding: 0.75rem;
+		}
+
+		.wifi-receive-block .qr-block { margin-top: 0.35rem; }
+
+		.wifi-placeholder {
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+
 		.app-footer {
 			border-top: 1px solid var(--border);
 			padding: 0.75rem 1.5rem;
@@ -769,49 +792,82 @@
 				</div>
 				<fieldset class="connection-toggle">
 					<legend class="sr-only">Device connection method</legend>
-					<button type="button" class="active" id="btn-conn-mtp">MTP</button>
-					<button type="button" id="btn-conn-adb">ADB<span class="rec">recommended</span></button>
+					<button type="button" class="active" id="btn-conn-wifi">Wi‑Fi</button>
+					<button type="button" id="btn-conn-mtp">MTP</button>
+					<button type="button" id="btn-conn-adb">ADB<span class="rec">cable</span></button>
 				</fieldset>
 				<div class="info-panel" id="connection-info-panel" aria-hidden="true">
-					<h4>MTP (default)</h4>
+					<h4>Wi‑Fi (default)</h4>
+					<p>Phone and PC on the <strong>same Wi‑Fi</strong>. Click <strong>Start extract</strong>, scan the QR (or open the URL), then pick files or folders on the phone. No USB cable. <strong>Move</strong> is not available — uploads are always copy into <code>originals/</code>. Allow inbound TCP on the PC firewall if prompted.</p>
+					<h4>MTP</h4>
 					<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
-					<h4>ADB (recommended)</h4>
+					<h4>ADB (cable)</h4>
 					<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install.</p>
 				</div>
-				<p class="label">Device</p>
-				<select class="field" id="select-device" aria-label="Connected device">
-					<option>Samsung Galaxy S24</option>
-				</select>
-				<div class="field device-status connected" id="device-status">
-					<span class="status-dot" aria-hidden="true"></span>
-					<span>Samsung Galaxy S24 · Connected via MTP</span>
+				<div id="panel-usb">
+					<p class="label">Device</p>
+					<select class="field" id="select-device" aria-label="Connected device">
+						<option>Samsung Galaxy S24</option>
+					</select>
+					<div class="field device-status connected" id="device-status">
+						<span class="status-dot" aria-hidden="true"></span>
+						<span id="device-status-text">Samsung Galaxy S24 · Connected via MTP</span>
+					</div>
+					<p class="label">Folders to back up</p>
+					<fieldset class="folder-picker">
+						<legend class="sr-only">Device folders</legend>
+						<label><input type="checkbox" checked /> Camera (DCIM)</label>
+						<label><input type="checkbox" checked /> Pictures</label>
+						<label><input type="checkbox" checked /> Movies</label>
+					</fieldset>
 				</div>
-				<p class="label">Folders to back up</p>
-				<fieldset class="folder-picker">
-					<legend class="sr-only">Device folders</legend>
-					<label><input type="checkbox" checked /> Camera (DCIM)</label>
-					<label><input type="checkbox" checked /> Pictures</label>
-					<label><input type="checkbox" checked /> Movies</label>
-				</fieldset>
+				<div id="panel-wifi" class="wifi-receive-block">
+					<p class="label" style="margin: 0;">Phone upload</p>
+					<div id="wifi-idle-hint" class="wifi-placeholder">
+						Start extract to show a QR code and URL. Your phone opens a simple upload page (iPhone or Android).
+					</div>
+					<div id="wifi-live-receive" class="panel-hidden">
+						<div class="qr-block">
+							<div class="qr-placeholder" role="img" aria-label="QR code for upload URL">
+								<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+									<rect width="21" height="21" fill="#fff"/>
+									<rect x="1" y="1" width="7" height="7" fill="#111"/>
+									<rect x="13" y="1" width="7" height="7" fill="#111"/>
+									<rect x="1" y="13" width="7" height="7" fill="#111"/>
+									<rect x="3" y="3" width="3" height="3" fill="#fff"/>
+									<rect x="15" y="3" width="3" height="3" fill="#fff"/>
+									<rect x="3" y="15" width="3" height="3" fill="#fff"/>
+									<rect x="10" y="10" width="1" height="1" fill="#111"/>
+								</svg>
+							</div>
+							<div>
+								<p class="folder-hint" style="margin: 0;">Upload page (same Wi‑Fi)</p>
+								<input class="field" type="text" readonly value="http://192.168.1.42:8765/upload?t=…" aria-label="Upload URL" style="margin-top: 0.35rem;" />
+							</div>
+						</div>
+					</div>
+				</div>
 				<p class="label">Library root</p>
 				<input class="field" type="text" value="/home/user/Pictures/SpaceMakerLibrary" aria-label="Library root" />
 				<p class="folder-hint">Creates <code>originals/</code> <code>converted/</code> <code>error/</code> <code>invalid/</code></p>
 				<p class="label">Mode</p>
 				<div class="row">
-					<button type="button" class="chip selected">Copy</button>
-					<button type="button" class="chip">Move</button>
+					<button type="button" class="chip selected" id="chip-copy">Copy</button>
+					<button type="button" class="chip disabled" id="chip-move" disabled title="Not available for Wi‑Fi upload">Move</button>
 				</div>
-				<p class="status-line"><strong>Status:</strong> In progress — 45%</p>
-				<div class="progress" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100">
-					<div class="progress-fill" style="width: 45%"></div>
+				<p class="folder-hint" id="move-wifi-hint">Move is unavailable for Wi‑Fi — files are copied into <code>originals/</code> only.</p>
+				<p class="status-line" id="extract-status-line"><strong>Status:</strong> <span id="extract-status-text">Not started</span></p>
+				<div class="progress" id="extract-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" hidden>
+					<div class="progress-fill" id="extract-progress-fill" style="width: 0%"></div>
 				</div>
-				<p class="status-line">137 / 304 files</p>
+				<p class="status-line" id="extract-count-line" hidden><span id="extract-count-text">0 files received</span></p>
 				<div class="extract-actions">
-					<button type="button" class="btn btn-primary" disabled>Start extract</button>
-					<button type="button" class="btn btn-secondary">Pause extract</button>
-					<button type="button" class="btn btn-ghost">Stop extract</button>
+					<button type="button" class="btn btn-primary" id="btn-start-extract">Start extract</button>
+					<button type="button" class="btn btn-secondary" id="btn-pause-extract" disabled>Pause extract</button>
+					<button type="button" class="btn btn-ghost" id="btn-stop-extract" disabled>Stop extract</button>
 				</div>
-				<p class="folder-hint" style="margin-top: 0.5rem;">While running: Pause finishes the current file; Stop ends the queue after the current file.</p>
+				<p class="folder-hint" style="margin-top: 0.5rem;" id="extract-hint-wifi">Wi‑Fi: Pause stops accepting new uploads after the current file; Stop ends the session and invalidates the QR.</p>
+				<p class="folder-hint panel-hidden" style="margin-top: 0.5rem;" id="extract-hint-usb">USB: Pause finishes the current file; Stop ends the queue after the current file.</p>
 			</article>
 
 			<!-- Step 2: Convert -->
@@ -1075,9 +1131,20 @@
 
 		var btnConnInfo = document.getElementById('btn-connection-info');
 		var connInfoPanel = document.getElementById('connection-info-panel');
+		var btnWifi = document.getElementById('btn-conn-wifi');
 		var btnMtp = document.getElementById('btn-conn-mtp');
 		var btnAdb = document.getElementById('btn-conn-adb');
-		var deviceStatus = document.getElementById('device-status');
+		var panelUsb = document.getElementById('panel-usb');
+		var panelWifi = document.getElementById('panel-wifi');
+		var deviceStatusText = document.getElementById('device-status-text');
+		var chipCopy = document.getElementById('chip-copy');
+		var chipMove = document.getElementById('chip-move');
+		var moveWifiHint = document.getElementById('move-wifi-hint');
+		var hintWifi = document.getElementById('extract-hint-wifi');
+		var hintUsb = document.getElementById('extract-hint-usb');
+		var wifiIdle = document.getElementById('wifi-idle-hint');
+		var wifiLive = document.getElementById('wifi-live-receive');
+		var extractPhase = 'idle';
 
 		btnConnInfo.addEventListener('click', function () {
 			var open = connInfoPanel.classList.toggle('visible');
@@ -1085,15 +1152,107 @@
 			connInfoPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
 		});
 
-		btnMtp.addEventListener('click', function () {
-			btnMtp.classList.add('active');
-			btnAdb.classList.remove('active');
-			deviceStatus.textContent = 'Samsung Galaxy — connected (MTP)';
+		function setConnectionMethod(method) {
+			btnWifi.classList.toggle('active', method === 'wifi');
+			btnMtp.classList.toggle('active', method === 'mtp');
+			btnAdb.classList.toggle('active', method === 'adb');
+			panelUsb.classList.toggle('panel-hidden', method === 'wifi');
+			panelWifi.classList.toggle('panel-hidden', method !== 'wifi');
+			hintWifi.classList.toggle('panel-hidden', method !== 'wifi');
+			hintUsb.classList.toggle('panel-hidden', method === 'wifi');
+			if (method === 'wifi') {
+				chipMove.classList.add('disabled');
+				chipMove.disabled = true;
+				chipCopy.classList.add('selected');
+				chipMove.classList.remove('selected');
+				moveWifiHint.hidden = false;
+			} else {
+				chipMove.classList.remove('disabled');
+				chipMove.disabled = false;
+				moveWifiHint.hidden = true;
+				if (method === 'mtp') {
+					deviceStatusText.textContent = 'Samsung Galaxy S24 · Connected via MTP';
+				} else {
+					deviceStatusText.textContent = 'Pixel 8 · Connected via ADB';
+				}
+			}
+		}
+
+		btnWifi.addEventListener('click', function () { setConnectionMethod('wifi'); });
+		btnMtp.addEventListener('click', function () { setConnectionMethod('mtp'); });
+		btnAdb.addEventListener('click', function () { setConnectionMethod('adb'); });
+		setConnectionMethod('wifi');
+
+		chipCopy.addEventListener('click', function () {
+			if (btnWifi.classList.contains('active')) {
+				return;
+			}
+			chipCopy.classList.add('selected');
+			chipMove.classList.remove('selected');
 		});
-		btnAdb.addEventListener('click', function () {
-			btnAdb.classList.add('active');
-			btnMtp.classList.remove('active');
-			deviceStatus.textContent = 'Pixel 8 — connected (ADB, authorized)';
+		chipMove.addEventListener('click', function () {
+			if (chipMove.disabled) {
+				return;
+			}
+			chipMove.classList.add('selected');
+			chipCopy.classList.remove('selected');
+		});
+
+		var btnStart = document.getElementById('btn-start-extract');
+		var btnPause = document.getElementById('btn-pause-extract');
+		var btnStop = document.getElementById('btn-stop-extract');
+		var statusText = document.getElementById('extract-status-text');
+		var progressBar = document.getElementById('extract-progress');
+		var progressFill = document.getElementById('extract-progress-fill');
+		var countLine = document.getElementById('extract-count-line');
+		var countText = document.getElementById('extract-count-text');
+
+		function setExtractUi(phase) {
+			extractPhase = phase;
+			btnStart.disabled = phase === 'running' || phase === 'paused';
+			btnPause.disabled = phase !== 'running';
+			btnStop.disabled = phase !== 'running' && phase !== 'paused';
+			if (phase === 'idle') {
+				statusText.textContent = 'Not started';
+				progressBar.hidden = true;
+				countLine.hidden = true;
+				if (btnWifi.classList.contains('active')) {
+					wifiIdle.classList.remove('panel-hidden');
+					wifiLive.classList.add('panel-hidden');
+				}
+			} else if (phase === 'running') {
+				statusText.textContent = 'Receiving uploads…';
+				progressBar.hidden = false;
+				countLine.hidden = false;
+				countText.textContent = '12 files received';
+				progressFill.style.width = '40%';
+				progressBar.setAttribute('aria-valuenow', '40');
+				if (btnWifi.classList.contains('active')) {
+					wifiIdle.classList.add('panel-hidden');
+					wifiLive.classList.remove('panel-hidden');
+				}
+			} else if (phase === 'paused') {
+				statusText.textContent = 'Paused — not accepting uploads';
+			} else if (phase === 'stopped') {
+				statusText.textContent = 'Stopped: 12 files';
+				btnStart.disabled = false;
+			}
+		}
+
+		btnStart.addEventListener('click', function () {
+			if (extractPhase === 'idle' || extractPhase === 'stopped') {
+				setExtractUi('running');
+			}
+		});
+		btnPause.addEventListener('click', function () {
+			if (extractPhase === 'running') {
+				setExtractUi('paused');
+			}
+		});
+		btnStop.addEventListener('click', function () {
+			if (extractPhase === 'running' || extractPhase === 'paused') {
+				setExtractUi('stopped');
+			}
 		});
 	</script>
 </body>

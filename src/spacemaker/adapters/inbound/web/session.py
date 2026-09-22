@@ -11,7 +11,7 @@ from spacemaker.domain.library import JobProgress, TransferMode
 @dataclass
 class AppSession:
 	library_root: str = ""
-	connection_method: ConnectionMethod = ConnectionMethod.MTP
+	connection_method: ConnectionMethod = ConnectionMethod.WIFI
 	transfer_mode: TransferMode = TransferMode.COPY
 	device_id: str = ""
 	device_label: str = ""

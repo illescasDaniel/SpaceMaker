@@ -6,17 +6,17 @@ _Last updated: 2026-09-22_
 
 ## Current focus
 
-**Gallery item page + SDD gate policy** — committed locally; no git remote configured.
+**Wi‑Fi QR extract + convert during extract** — committed locally; push skipped per user request.
 
 ## Just changed (session)
 
-- Gallery: item page, metadata, Download / JPEG / MP4 export (`.exports` cache, WS progress)
-- Governance: explicit design + spec chat approval before `src/` (AGENTS.md, sdd.mdc, sdd-feature skill, playbooks)
+- Wi‑Fi default extract: QR upload session, phone pages, specs/docs, tests
+- **Start convert** during active extract: graceful stop + wait, then convert `originals/`
 
 ## Next steps
 
 1. Phase 4 packaging: PyInstaller + pinned binaries in `tools/`
-2. Optional: LAN phone smoke test of gallery item + export
+2. Manual smoke: Wi‑Fi upload on LAN phone; convert while extract still running
 
 ## Run
 

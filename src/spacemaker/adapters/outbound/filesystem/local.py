@@ -25,6 +25,10 @@ class LocalFileSystem:
 		self.ensure_parent_directory(destination)
 		shutil.move(source, destination)
 
+	def copy_file(self, source: str, destination: str) -> None:
+		self.ensure_parent_directory(destination)
+		shutil.copy2(source, destination)
+
 	def ensure_parent_directory(self, file_path: str) -> None:
 		Path(file_path).parent.mkdir(parents=True, exist_ok=True)
 

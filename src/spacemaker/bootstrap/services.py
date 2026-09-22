@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 import threading
+import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Protocol
@@ -21,6 +23,7 @@ from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.extract_media import ExtractMedia
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.application.get_gallery_item import GetGalleryItem
+from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.bundled_tools import missing_bundled_tools
 from spacemaker.bootstrap.paths import default_library_root, normalize_library_root
@@ -64,8 +67,15 @@ class AppServices:
 		self._ws_lock = threading.Lock()
 		self._event_loop: asyncio.AbstractEventLoop | None = None
 		self._extract_control: ExtractJobControl | None = None
+		self._wifi_upload_token: str = ""
+		self._wifi_token_lock = threading.Lock()
+		self._wifi_uploads_in_flight = 0
+		self._extract_future: Future[None] | None = None
+		self.receive_uploaded = ReceiveUploadedMedia(self.filesystem)
 
 	def devices_for(self, method: ConnectionMethod):
+		if method is ConnectionMethod.WIFI:
+			raise ValueError("Wi-Fi extract does not use DeviceRepository")
 		return device_repository_for(method, runner=self.runner)
 
 	def extract_use_case(self, method: ConnectionMethod) -> ExtractMedia:
@@ -126,6 +136,8 @@ class AppServices:
 
 	def reconcile_device_selection(self, connection_method: ConnectionMethod | None = None) -> bool:
 		method = connection_method or self.session.connection_method
+		if method is ConnectionMethod.WIFI:
+			return False
 		try:
 			known = {d.device_id: d.label for d in self.devices_for(method).list_devices()}
 		except FileNotFoundError:
@@ -153,6 +165,8 @@ class AppServices:
 			convert_phase = self.session.convert_phase
 			convert_percent = self.session.convert_progress.percent
 			library_root = self.session.library_root
+		with self.session._lock:
+			connection_method = self.session.connection_method
 		actions = wizard_actions(
 			extract_phase=extract_phase,
 			convert_phase=convert_phase,
@@ -161,12 +175,93 @@ class AppServices:
 			count_in_folder=self.filesystem.count_files_in_folder,
 			has_device=has_device,
 			has_source_folders=has_folders,
+			connection_method=connection_method,
 		)
 		base.update(actions)
 		counts = self.folder_counts(library_root) if library_root else {f.value: 0 for f in LibraryFolder}
 		base["library_counts"] = counts
 		base["missing_tools"] = missing_bundled_tools()
+		base["wifi_upload"] = self._wifi_upload_snapshot()
 		return base
+
+	def _wifi_upload_snapshot(self) -> dict[str, object]:
+		from spacemaker.bootstrap.lan import lan_ip
+
+		with self._wifi_token_lock:
+			token = self._wifi_upload_token
+		with self.session._lock:
+			phase = self.session.extract_phase
+			method = self.session.connection_method
+		active = method is ConnectionMethod.WIFI and bool(token) and phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+		if not active:
+			return {"active": False, "upload_url": "", "qr_url": ""}
+		host = lan_ip()
+		upload_url = f"http://{host}:{self.port}/upload?t={token}"
+		return {
+			"active": True,
+			"upload_url": upload_url,
+			"qr_url": f"/api/extract/upload-qr.svg?t={token}",
+		}
+
+	def _clear_wifi_token(self) -> None:
+		with self._wifi_token_lock:
+			self._wifi_upload_token = ""
+
+	def _mint_wifi_token(self) -> str:
+		token = secrets.token_urlsafe(24)
+		with self._wifi_token_lock:
+			self._wifi_upload_token = token
+		return token
+
+	def wifi_token_valid(self, token: str) -> bool:
+		if not token:
+			return False
+		with self._wifi_token_lock:
+			return bool(self._wifi_upload_token) and secrets.compare_digest(self._wifi_upload_token, token)
+
+	def wifi_session_accepts_uploads(self) -> bool:
+		with self.session._lock:
+			if self.session.connection_method is not ConnectionMethod.WIFI:
+				return False
+			if self.session.extract_phase not in {JobPhase.RUNNING, JobPhase.PAUSED}:
+				return False
+		control = self._extract_control
+		if control is None:
+			return False
+		if self.session.extract_phase is JobPhase.PAUSED:
+			return False
+		return control.accepts_new_file()
+
+	def record_wifi_upload_progress(self) -> None:
+		with self.session._lock:
+			completed = self.session.extract_progress.completed + 1
+			self.session.extract_progress = JobProgress(completed=completed, total=completed)
+		self.push_state()
+
+	def handle_wifi_upload(self, token: str, raw_relative: str, temp_path: str, incoming_size: int) -> None:
+		if not self.wifi_token_valid(token):
+			raise PermissionError("upload session ended")
+		control = self._extract_control
+		if control is None or not control.accepts_new_file():
+			raise PermissionError("upload session paused or stopped")
+		with self.session._lock:
+			library_root = self.session.library_root
+		if not library_root:
+			raise ValueError("library root not set")
+		self._wifi_uploads_in_flight += 1
+		try:
+			outcome = self.receive_uploaded.ingest(
+				library_root,
+				raw_relative,
+				temp_path=temp_path,
+				incoming_size=incoming_size,
+			)
+		finally:
+			self._wifi_uploads_in_flight = max(0, self._wifi_uploads_in_flight - 1)
+			if control is not None:
+				control.after_file()
+		if outcome.disposition.value in {"saved", "skipped"}:
+			self.record_wifi_upload_progress()
 
 	def push_state(self) -> None:
 		self.broadcast({"type": "state", "state": self.enriched_snapshot()})
@@ -244,18 +339,39 @@ class AppServices:
 		with self.session._lock:
 			if self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
 				return
-			if not self.session.source_folders:
-				return
-			library_root = self.session.library_root
-			device_id = self.session.device_id
 			method = self.session.connection_method
-			mode = self.session.transfer_mode
-			folders = parse_source_folders(self.session.source_folders)
-			self.session.extract_phase = JobPhase.RUNNING
-			self.session.last_error = ""
+			if method is ConnectionMethod.WIFI:
+				if not self.session.library_root:
+					return
+				self.session.transfer_mode = TransferMode.COPY
+				self.session.extract_phase = JobPhase.RUNNING
+				self.session.extract_progress = JobProgress(0, 0)
+				self.session.last_error = ""
+				library_root = self.session.library_root
+				self.filesystem.ensure_library_folders(library_root)
+			else:
+				if not self.session.source_folders:
+					return
+				library_root = self.session.library_root
+				device_id = self.session.device_id
+				mode = self.session.transfer_mode
+				folders = parse_source_folders(self.session.source_folders)
+				self.session.extract_phase = JobPhase.RUNNING
+				self.session.last_error = ""
 		self._extract_control = ExtractJobControl(on_paused=self._on_extract_paused)
+		if method is ConnectionMethod.WIFI:
+			self._mint_wifi_token()
+			self.push_state()
+			return
 		self.push_state()
-		self._executor.submit(self._run_extract, library_root, device_id, method, mode, folders)
+		self._extract_future = self._executor.submit(
+			self._run_extract,
+			library_root,
+			device_id,
+			method,
+			mode,
+			folders,
+		)
 
 	def _on_extract_paused(self) -> None:
 		with self.session._lock:
@@ -263,8 +379,13 @@ class AppServices:
 		self.push_state()
 
 	def pause_extract(self) -> None:
+		with self.session._lock:
+			is_wifi = self.session.connection_method is ConnectionMethod.WIFI
 		if self._extract_control is not None:
-			self._extract_control.request_pause()
+			if is_wifi and self._wifi_uploads_in_flight == 0:
+				self._extract_control.pause_immediately()
+			else:
+				self._extract_control.request_pause()
 
 	def resume_extract(self) -> None:
 		with self.session._lock:
@@ -278,10 +399,29 @@ class AppServices:
 	def stop_extract(self) -> None:
 		if self._extract_control is not None:
 			self._extract_control.request_stop()
+		was_wifi = False
 		with self.session._lock:
+			was_wifi = self.session.connection_method is ConnectionMethod.WIFI
 			if self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
 				self.session.extract_phase = JobPhase.STOPPED
+		if was_wifi:
+			self._clear_wifi_token()
 		self.push_state()
+
+	def stop_extract_and_wait(self, *, timeout_seconds: float = 300.0) -> None:
+		with self.session._lock:
+			active = self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+		if not active:
+			return
+		self.stop_extract()
+		deadline = time.monotonic() + timeout_seconds
+		while self._wifi_uploads_in_flight > 0 and time.monotonic() < deadline:
+			time.sleep(0.05)
+		future = self._extract_future
+		if future is not None:
+			remaining = deadline - time.monotonic()
+			if remaining > 0:
+				future.result(timeout=remaining)
 
 	def _run_extract(
 		self,
@@ -319,12 +459,19 @@ class AppServices:
 			with self.session._lock:
 				self.session.extract_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)
+		finally:
+			self._extract_future = None
 		self.push_state()
 
 	def start_convert(self) -> None:
 		with self.session._lock:
 			if self.session.convert_phase is JobPhase.RUNNING:
 				return
+			library_root = self.session.library_root
+		if not library_root:
+			return
+		self.stop_extract_and_wait()
+		with self.session._lock:
 			originals = self.filesystem.count_files_in_folder(
 				self.session.library_root,
 				LibraryFolder.ORIGINALS,

@@ -17,6 +17,14 @@ class ExtractJobControl:
 		with self._cond:
 			self._pause_after_current = True
 
+	def pause_immediately(self) -> None:
+		with self._cond:
+			self._pause_after_current = False
+			self._paused = True
+			if self._on_paused is not None:
+				self._on_paused()
+			self._cond.notify_all()
+
 	def request_stop(self) -> None:
 		with self._cond:
 			self._stop_after_current = True
@@ -38,6 +46,12 @@ class ExtractJobControl:
 	def is_paused(self) -> bool:
 		with self._cond:
 			return self._paused
+
+	def accepts_new_file(self) -> bool:
+		with self._cond:
+			if self._stop_queue:
+				return False
+			return not self._paused
 
 	def before_next_file(self) -> bool:
 		with self._cond:

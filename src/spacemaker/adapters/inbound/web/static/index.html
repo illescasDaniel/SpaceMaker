@@ -752,6 +752,29 @@
 			opacity: 0.9;
 		}
 
+		.chip.disabled,
+		button.chip:disabled {
+			opacity: 0.45;
+			cursor: not-allowed;
+			pointer-events: none;
+		}
+
+		.panel-hidden { display: none; }
+
+		.wifi-receive-block {
+			background: var(--surface2);
+			border: 1px dashed var(--border);
+			border-radius: 8px;
+			padding: 0.75rem;
+		}
+
+		.wifi-receive-block .qr-block { margin-top: 0.35rem; }
+
+		.wifi-placeholder {
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+
 		.app-footer {
 			border-top: 1px solid var(--border);
 			padding: 0.75rem 1.5rem;
@@ -832,34 +855,54 @@
 				</div>
 				<div class="label-row">
 					<p class="label" style="margin: 0;">Connection</p>
-					<button type="button" class="info-btn" id="btn-connection-info" title="How to enable MTP or ADB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
+					<button type="button" class="info-btn" id="btn-connection-info" title="How to transfer via Wi‑Fi, MTP, or ADB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
 				</div>
 				<fieldset class="connection-toggle">
 					<legend class="sr-only">Device connection method</legend>
-					<button type="button" class="active" id="btn-conn-mtp">MTP</button>
-					<button type="button" id="btn-conn-adb">ADB<span class="rec">recommended</span></button>
+					<button type="button" class="active" id="btn-conn-wifi">Wi‑Fi</button>
+					<button type="button" id="btn-conn-mtp">MTP</button>
+					<button type="button" id="btn-conn-adb">ADB<span class="rec">cable</span></button>
 				</fieldset>
 				<div class="info-panel" id="connection-info-panel" aria-hidden="true">
-					<h4>MTP (default)</h4>
+					<h4>Wi‑Fi (default)</h4>
+					<p>Phone and PC on the <strong>same Wi‑Fi</strong>. Click <strong>Start extract</strong>, scan the QR (or open the URL), then pick files or folders on the phone. No USB cable. <strong>Move</strong> is not available.</p>
+					<h4>MTP</h4>
 					<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
-					<h4>ADB (recommended)</h4>
+					<h4>ADB (cable)</h4>
 					<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install.</p>
 				</div>
-				<p class="label">Device</p>
-				<select class="field" id="select-device" aria-label="Connected device">
-					<option>Samsung Galaxy S24</option>
-				</select>
-				<div class="field device-status" id="device-status">
-					<span class="status-dot" aria-hidden="true"></span>
-					<span id="device-status-text">Scanning for device…</span>
+				<div id="panel-usb" class="panel-hidden">
+					<p class="label">Device</p>
+					<select class="field" id="select-device" aria-label="Connected device">
+						<option value="">No device</option>
+					</select>
+					<div class="field device-status" id="device-status">
+						<span class="status-dot" aria-hidden="true"></span>
+						<span id="device-status-text">Scanning for device…</span>
+					</div>
+					<p class="label">Folders to back up</p>
+					<fieldset class="folder-picker" id="folder-picker">
+						<legend class="sr-only">Device folders</legend>
+						<label><input type="checkbox" data-folder="dcim" checked /> Camera (DCIM)</label>
+						<label><input type="checkbox" data-folder="pictures" checked /> Pictures</label>
+						<label><input type="checkbox" data-folder="movies" checked /> Movies</label>
+					</fieldset>
 				</div>
-				<p class="label">Folders to back up</p>
-				<fieldset class="folder-picker" id="folder-picker">
-					<legend class="sr-only">Device folders</legend>
-					<label><input type="checkbox" data-folder="dcim" checked /> Camera (DCIM)</label>
-					<label><input type="checkbox" data-folder="pictures" checked /> Pictures</label>
-					<label><input type="checkbox" data-folder="movies" checked /> Movies</label>
-				</fieldset>
+				<div id="panel-wifi" class="wifi-receive-block">
+					<p class="label" style="margin: 0;">Phone upload</p>
+					<div id="wifi-idle-hint" class="wifi-placeholder">
+						Start extract to show a QR code and URL. Your phone opens a simple upload page (iPhone or Android).
+					</div>
+					<div id="wifi-live-receive" class="panel-hidden">
+						<div class="qr-block">
+							<img id="wifi-upload-qr" class="qr-placeholder" width="88" height="88" alt="QR code for upload URL" />
+							<div>
+								<p class="folder-hint" style="margin: 0;">Upload page (same Wi‑Fi)</p>
+								<input class="field" type="text" id="wifi-upload-url" readonly aria-label="Upload URL" style="margin-top: 0.35rem;" />
+							</div>
+						</div>
+					</div>
+				</div>
 				<p class="label">Library root</p>
 				<div class="library-row">
 					<input class="field" type="text" id="input-library-root" placeholder="" aria-label="Library root" aria-describedby="library-root-error" />
@@ -870,8 +913,9 @@
 				<p class="label">Mode</p>
 				<div class="row">
 					<button type="button" class="chip selected" id="chip-copy">Copy</button>
-					<button type="button" class="chip" id="chip-move">Move</button>
+					<button type="button" class="chip disabled" id="chip-move" disabled title="Not available for Wi‑Fi upload">Move</button>
 				</div>
+				<p class="folder-hint" id="move-wifi-hint">Move is unavailable for Wi‑Fi — files are copied into <code>originals/</code> only.</p>
 				<p class="status-line" id="extract-status"><strong>Status:</strong> Ready</p>
 				<div class="progress" id="extract-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
 					<div class="progress-fill" id="extract-progress-fill" style="width: 0%"></div>

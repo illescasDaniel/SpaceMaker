@@ -2,23 +2,39 @@
 
 ## Metadata
 
-- **Feature:** Copy or move photos/videos from connected Android device into library `originals/`
+- **Feature:** Copy or move photos/videos into library `originals/` via **Wi‑Fi phone upload** (default), **MTP**, or **ADB**
+- **Wireframes:** [wireframes/app.html](../../wireframes/app.html) Step 1; phone page [wireframes/phone-upload.html](../../wireframes/phone-upload.html)
 - **Use case:** `ExtractMedia`
 - **Ports:** `DeviceRepository` (outbound), `FileSystem` (outbound)
 - **UI:** [main-wizard](../main-wizard/SPEC.md) Step 1
 - **Packaging:** Bundled native tools — [packaging/SPEC.md](../packaging/SPEC.md)
 
-## Connection method (MTP vs ADB)
+## Connection method (Wi‑Fi, MTP, ADB)
 
 | Method | UI label | Default | Notes |
 |--------|----------|---------|--------|
-| **MTP** | `MTP` | **Yes** | USB file transfer mode; no USB debugging required. Easiest for most users. |
-| **ADB** | `ADB (recommended)` | No | Faster/reliable for power users; requires USB debugging + authorized device. |
+| **Wi‑Fi** | `Wi‑Fi` | **Yes** | No cable. Phone browser on same LAN uploads files during an extract **session**. Does not use `DeviceRepository`. |
+| **MTP** | `MTP` | No | USB file transfer mode; no USB debugging required. |
+| **ADB** | `ADB (cable)` | No | USB; requires USB debugging + authorized device. |
 
-- User selects exactly one method via a **simple control** (segmented toggle or radio group) on Step 1.
-- Selection is persisted for the session (optional: last choice in local settings file — v1 session-only is OK).
-- Changing method while idle **re-runs device detection** for that backend.
-- Extract must not start if the chosen backend reports no device (unless user explicitly picks a mounted MTP volume — see detection).
+- User selects exactly one method via a **segmented toggle** on Step 1.
+- Selection is persisted for the session (v1 session-only is OK).
+- Changing method while idle **re-runs device detection** for USB backends only.
+- **USB extract** must not start if the chosen backend reports no device (unless user explicitly picks a mounted MTP volume — see detection).
+- **Wi‑Fi extract** starts a **receive session** (token in upload URL); no device picker or source-folder checklist.
+
+### Wi‑Fi receive session
+
+- **Start extract** mints a cryptographically random **session token** (URL query param). Token is valid until **Stop extract** or app shutdown.
+- Phone opens `GET /upload?t={token}` (mobile-first HTML). User picks **files** and optionally **folders** (where the browser supports directory upload).
+- Uploads are **multipart POST** to an endpoint scoped to the active token and library root.
+- Files land under `{library_root}/originals/` with relative path from browser when provided (`webkitRelativePath` / filename); sanitize path segments (no `..`, no absolute paths).
+- **Transfer mode is always Copy** for Wi‑Fi; **Move** is disabled in UI and rejected by API.
+- **Pause:** finish in-flight upload, then reject new uploads with a clear message on the phone page until **Resume**.
+- **Stop:** finish in-flight upload, invalidate token, end session.
+- **Progress:** count each completed upload (and size-match skip) toward extract progress over WebSocket (same Step 1 UX as USB).
+- **Platforms:** Android and iPhone browsers in scope for Wi‑Fi only; folder picker is best-effort (required on Android Chrome; optional on iOS).
+- **Security:** uploads require valid session token; no open LAN ingest without an active extract session.
 
 ### Platform tooling (adapters)
 
@@ -41,8 +57,9 @@
 
 An **info** control (ⓘ) beside the connection method opens a panel or modal with:
 
-1. **MTP:** plug phone → unlock → choose **File transfer / MTP** (not “charge only”). No extra desktop install on Windows/Linux for typical use; on macOS, USB MTP is less automatic — troubleshooting may mention libmtp if the app reports a missing bundled tool.
-2. **ADB (recommended):** Developer options → USB debugging → accept RSA prompt on phone. **No separate adb install** in packaged SpaceMaker (adb is bundled); dev builds may use system `adb` on PATH.
+1. **Wi‑Fi:** PC and phone on the **same Wi‑Fi**; click **Start extract**; scan QR or open URL; pick files/folders on the phone. Allow firewall for the app port if prompted. Move is not available.
+2. **MTP:** plug phone → unlock → choose **File transfer / MTP** (not “charge only”). No extra desktop install on Windows/Linux for typical use; on macOS, USB MTP is less automatic — troubleshooting may mention libmtp if the app reports a missing bundled tool.
+3. **ADB (cable):** Developer options → USB debugging → accept RSA prompt on phone. **No separate adb install** in packaged SpaceMaker (adb is bundled); dev builds may use system `adb` on PATH.
 
 Copy is concise; link to future docs page optional.
 
@@ -64,7 +81,8 @@ Users choose **which device folders** to include before extract. v1 uses a **mul
 
 ## Triggers & routing
 
-- **Start:** User selects library root, **connection method**, **source folders**, Copy or Move mode, connected device, clicks **Start extract**.
+- **Start (USB):** User selects library root, **MTP or ADB**, **source folders**, Copy or Move mode, connected device, clicks **Start extract**.
+- **Start (Wi‑Fi):** User selects library root, **Wi‑Fi**, clicks **Start extract** — receive session opens (QR/URL).
 - **Pause:** User clicks **Pause extract** — finish the **current file** transfer, then enter **`paused`**; no new files start until **Resume**.
 - **Resume:** From **`paused`**, continue the same queue from the next pending file.
 - **Stop:** User clicks **Stop extract** — finish the **current file** if one is in flight, then **abort** the queue; state becomes **`stopped`**; completed/skipped files remain in `originals/`; user may **Start extract** again (idempotent skip rules apply).
@@ -103,12 +121,44 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 
 ## Acceptance criteria (BDD)
 
-### Scenario: Default connection method is MTP
+### Scenario: Default connection method is Wi‑Fi
 
 - **Given** the user opens Step 1 for the first time in a session
 - **When** the extract form is shown
-- **Then** **MTP** is selected
-- **And** **ADB (recommended)** is available as the alternate option
+- **Then** **Wi‑Fi** is selected
+- **And** **MTP** and **ADB (cable)** are available as alternates
+
+### Scenario: Wi‑Fi upload saves to originals
+
+- **Given** a Wi‑Fi receive session is **running** with valid token
+- **When** the phone uploads a media file
+- **Then** the file appears under `originals/` with expected relative path
+- **And** the file is not deleted from the phone by SpaceMaker
+
+### Scenario: Wi‑Fi rejects Move mode
+
+- **Given** **Wi‑Fi** is selected
+- **When** settings or extract start request includes **Move**
+- **Then** the server forces **Copy** or returns validation error (implementation: force Copy in session)
+
+### Scenario: Wi‑Fi pause rejects new uploads
+
+- **Given** a Wi‑Fi receive session is **paused**
+- **When** the phone attempts a new upload
+- **Then** the upload is rejected with a paused message
+- **And** uploads already in flight may complete
+
+### Scenario: Wi‑Fi stop invalidates token
+
+- **Given** a Wi‑Fi receive session was **stopped**
+- **When** the phone uses the previous upload URL
+- **Then** the upload page or API indicates the session has ended
+
+### Scenario: Wi‑Fi skip duplicate by size
+
+- **Given** a file already exists in `originals/` with the same relative path and size
+- **When** the phone uploads the same file again during a session
+- **Then** the upload is skipped (counted as completed)
 
 ### Scenario: User switches to ADB and refreshes detection
 
@@ -173,6 +223,12 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 - **Then** extract does not start
 - **And** user sees a clear error naming the active method (MTP or ADB)
 
+### Scenario: Wi‑Fi start without USB device
+
+- **Given** **Wi‑Fi** is selected and library root is valid
+- **When** the user clicks **Start extract**
+- **Then** extract enters **running** receive mode without a USB device
+
 ### Scenario: Copy file to originals
 
 - **Given** Copy mode and a device file not yet in `originals/`
@@ -221,8 +277,10 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 ## Validation rules
 
 - Library root must be writable.
-- Connection method must be `mtp` or `adb` (internal enum); UI labels as above.
-- Extract uses the repository implementation matching the selected method for the whole job (no mixing backends mid-run).
+- Connection method must be `wifi`, `mtp`, or `adb` (internal enum); UI labels as above.
+- USB extract uses the repository implementation matching the selected method for the whole job (no mixing backends mid-run).
+- Wi‑Fi extract uses upload receive use case + `FileSystem` only (no `DeviceRepository`).
+- **Wi‑Fi:** Move mode must not be applied; at least one source folder is not required.
 - **Source folders:** at least one selected; enum keys stable for API (`dcim`, `pictures`, `movies` — exact names in ports/UI DTO).
 - **Job control:** only one extract job active; Pause/Resume/Stop apply to the active job; Stop is idempotent if already stopped.
 
@@ -241,7 +299,8 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 
 ## Out of scope
 
-- iPhone / iOS extract
+- iPhone / iOS **USB** extract
 - Wi‑Fi ADB (follow-up)
+- Cloud relay or TLS for LAN upload (plain HTTP on LAN v1)
 - Per-album or arbitrary path picker (beyond the v1 folder checklist)
 - Encrypting `originals/` at rest

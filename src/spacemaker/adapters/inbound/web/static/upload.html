@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpaceMaker — Upload</title>
+	<style>
+		:root {
+			--bg: #0f1419;
+			--surface: #1a2332;
+			--surface2: #243044;
+			--border: #3d4f6f;
+			--text: #e8eef7;
+			--muted: #8b9cb3;
+			--accent: #4dabf7;
+			--accent-dim: #228be6;
+			--warn: #fcc419;
+			--warn-bg: #3d3200;
+			--radius: 12px;
+			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: var(--font);
+			background: var(--bg);
+			color: var(--text);
+			line-height: 1.5;
+		}
+		.page { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+		.logo { font-size: 1.2rem; font-weight: 700; }
+		.logo span { color: var(--accent); }
+		.sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.25rem; }
+		.card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 1rem;
+			margin-bottom: 1rem;
+		}
+		.btn {
+			font: inherit;
+			display: block;
+			width: 100%;
+			border: none;
+			border-radius: 8px;
+			padding: 0.75rem 1rem;
+			cursor: pointer;
+			font-weight: 600;
+			margin-top: 0.5rem;
+		}
+		.btn-primary { background: var(--accent-dim); color: #fff; }
+		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+		.hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.75rem; }
+		.alert {
+			background: var(--warn-bg);
+			border: 1px solid var(--warn);
+			border-radius: 8px;
+			padding: 0.65rem 0.75rem;
+			font-size: 0.85rem;
+			margin-bottom: 1rem;
+		}
+		.hidden { display: none; }
+		#file-input, #folder-input { display: none; }
+	</style>
+</head>
+<body>
+	<div class="page">
+		<p class="logo">Space<span>Maker</span></p>
+		<p class="sub">Send photos and videos to your PC library (<code>originals/</code>).</p>
+		<div id="alert-paused" class="alert hidden">The PC paused this session. Resume extract on the desktop app to continue.</div>
+		<div id="panel-ready" class="card">
+			<p><strong>Ready</strong> — choose what to send</p>
+			<button type="button" class="btn btn-primary" id="btn-pick-files">Choose files</button>
+			<button type="button" class="btn btn-secondary" id="btn-pick-folder">Choose folder</button>
+			<input type="file" id="file-input" multiple accept="image/*,video/*" />
+			<input type="file" id="folder-input" webkitdirectory directory multiple />
+			<p class="hint">Folder picker works on many Android browsers. On iPhone, use Files or Photos via the file picker.</p>
+		</div>
+		<div id="panel-uploading" class="card hidden">
+			<p id="upload-status"><strong>Uploading…</strong></p>
+		</div>
+	</div>
+	<script>
+	(function () {
+		var params = new URLSearchParams(window.location.search);
+		var token = params.get("t") || "";
+
+		function sessionUrl() {
+			return "/api/upload/session?t=" + encodeURIComponent(token);
+		}
+
+		function refreshSession() {
+			return fetch(sessionUrl(), { headers: { Accept: "application/json" } })
+				.then(function (r) { return r.json(); })
+				.then(function (body) {
+					var paused = document.getElementById("alert-paused");
+					var ready = document.getElementById("panel-ready");
+					if (!body.active) {
+						window.location.replace("/upload?t=" + encodeURIComponent(token));
+						return body;
+					}
+					if (!body.accepts_uploads) {
+						paused.classList.remove("hidden");
+						ready.classList.add("hidden");
+					} else {
+						paused.classList.add("hidden");
+						ready.classList.remove("hidden");
+					}
+					return body;
+				});
+		}
+
+		function uploadFiles(fileList) {
+			if (!fileList?.length) {
+				return;
+			}
+			var form = new FormData();
+			var i = 0;
+			var file;
+			var rel;
+			for (i = 0; i < fileList.length; i++) {
+				file = fileList[i];
+				rel = file.webkitRelativePath || file.name;
+				form.append("files", file, rel);
+			}
+			document.getElementById("panel-ready").classList.add("hidden");
+			document.getElementById("panel-uploading").classList.remove("hidden");
+			document.getElementById("upload-status").textContent = "Uploading " + fileList.length + " file(s)…";
+			return fetch("/api/upload?t=" + encodeURIComponent(token), {
+				method: "POST",
+				body: form,
+			})
+				.then(function (r) {
+					if (!r.ok) {
+						return r.text().then(function (t) {
+							throw new Error(t || "Upload failed");
+						});
+					}
+					return r.json();
+				})
+				.then(function () {
+					document.getElementById("panel-uploading").classList.add("hidden");
+					return refreshSession();
+				})
+				.catch(function (err) {
+					document.getElementById("upload-status").textContent = err.message || "Upload failed";
+					return refreshSession();
+				});
+		}
+
+		document.getElementById("btn-pick-files").addEventListener("click", function () {
+			document.getElementById("file-input").click();
+		});
+		document.getElementById("btn-pick-folder").addEventListener("click", function () {
+			document.getElementById("folder-input").click();
+		});
+		document.getElementById("file-input").addEventListener("change", function (ev) {
+			uploadFiles(ev.target.files);
+			ev.target.value = "";
+		});
+		document.getElementById("folder-input").addEventListener("change", function (ev) {
+			uploadFiles(ev.target.files);
+			ev.target.value = "";
+		});
+
+		refreshSession();
+		setInterval(refreshSession, 5000);
+	})();
+	</script>
+</body>
+</html>

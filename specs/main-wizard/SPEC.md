@@ -12,8 +12,9 @@
 - **Entry:** User launches SpaceMaker (`desktop.py` opens pywebview → local FastAPI origin).
 - **Default view:** Three-step wizard (cards 1–3). Gallery is a separate view (top tab or route `/gallery`; wireframe uses tabs).
 - **Step gating (UX):**
-  - **Start convert** is **disabled** when extract is **`running`** or **`paused`**, or when **`originals/` has zero files** (recursive count).
-  - **Start convert** is **enabled** when extract is **not** active (`idle`, `completed`, `stopped`, or `error`) **and** `originals/` has at least one file (including after a partial extract or a previous run).
+  - **Start convert** is **disabled** when **`originals/` has zero files** (recursive count) or convert is already **running**.
+  - **Start convert** is **enabled** when `originals/` has at least one file, **including while extract is `running` or `paused`**.
+  - When the user clicks **Start convert** during an active extract, the server **gracefully stops extract** (same rules as **Stop extract**: finish in-flight file/upload, then end the session/queue), **waits** for extract to finish stopping, then **starts convert** on files already in `originals/`.
   - Step 3 **Visualize** card is **disabled** only when `converted/` is empty **and** convert is not running (no gallery to show yet).
   - Step 3 is **enabled** when `converted/` file count **> 0** (including media from a previous session before this launch) **or** convert is **running** / **completed**.
   - **Open gallery**, LAN URL, and QR are available whenever Step 3 is enabled.
@@ -24,7 +25,9 @@
 
 - Match wireframe structure: header **SpaceMaker**, three cards on wide viewports, stacked on narrow.
 - Each card shows: step number, title, **status line** (`Not started` | `In progress: N%` | `Completed: N files` | `Waiting for …` | `Failed`), progress bar when applicable.
-- **Step 1 — Extract:** **connection method** segmented control (**MTP** default, **ADB (recommended)**) with a **visible container border** (see wireframe), **info (ⓘ)** button, **device picker** + **status line** (friendly copy + connection indicator — never raw `libmtp:0`-style ids as the main message), **source folder** checklist, library root picker, Copy/Move mode chips (**label text uses `--text`**, readable on dark background), **Start extract**, **Pause extract**, **Resume extract** (while paused), **Stop extract**, file counts.
+- **Step 1 — Extract:** **connection method** segmented control (**Wi‑Fi** default, **MTP**, **ADB (cable)**) with a **visible container border** (see wireframe), **info (ⓘ)** button, library root picker, Copy/Move mode chips (**label text uses `--text`**, readable on dark background), **Start extract**, **Pause extract**, **Resume extract** (while paused), **Stop extract**, file counts.
+- **Step 1 — Wi‑Fi:** hide USB **device picker**, **device status**, and **source folder** checklist. Show **phone upload** block: idle hint until extract starts; while **running** or **paused**, show LAN **URL + QR** for the **upload page** (not the gallery URL). **Move** chip is **disabled**; only **Copy** applies (uploads always copy into `originals/`).
+- **Step 1 — USB (MTP/ADB):** **device picker** + **status line** (friendly copy + connection indicator — never raw `libmtp:0`-style ids as the main message), **source folder** checklist, Copy/Move chips (Move enabled when cable method selected).
 - **Step 1 — Extract controls (enabled/disabled):**
   | Extract phase | Start | Pause | Resume | Stop |
   |---------------|-------|-------|--------|------|
@@ -33,7 +36,7 @@
   | Paused | disabled | hidden/disabled | enabled | enabled |
   | Stopped / completed / error | enabled | disabled | hidden/disabled | disabled |
 - **Step 1 — Accessibility:** form controls (`select`, `input`) use **`--text`** on **`--surface2`** backgrounds (readable contrast on dark theme).
-- **Step 2 — Convert:** one-line policy summary (AVIF/AV1, files leave `originals/`), **Start convert** button (disabled while Step 1 extract is **running** or **paused** — see step gating above), progress bar.
+- **Step 2 — Convert:** one-line policy summary (AVIF/AV1, files leave `originals/`), **Start convert** button (enabled when `originals/` non-empty — see step gating), progress bar.
 - **Warnings (Step 2 area):**
   - **Error bucket:** rendered **only** when `error/` file count **> 0**. When count is **0**, the warning block is **not in the DOM** or is **hidden** with no placeholder — users must not see an empty warning.
   - **Invalid bucket:** same rule for `invalid/` count **> 0** only.
@@ -54,7 +57,7 @@
 - **Given** SpaceMaker has just started and no jobs ran yet
 - **When** the main wizard is shown
 - **Then** Step 1 shows device detection state (connected or “No device”)
-- **And** connection method defaults to **MTP**
+- **And** connection method defaults to **Wi‑Fi**
 - **And** Step 1 status is `Not started`
 - **And** Step 2 shows `Waiting for extract to finish` or equivalent when extract not complete
 - **And** Step 3 shows `Not started` when `converted/` is empty
@@ -79,7 +82,8 @@
 
 - **Given** the user is on Step 1
 - **When** the user opens the connection method info control
-- **Then** instructions for MTP and ADB (recommended) are visible
+- **Then** instructions for Wi‑Fi, MTP, and ADB (cable) are visible
+- **And** Wi‑Fi help covers same network, Start extract, QR scan, and that Move is unavailable
 - **And** MTP help focuses on phone USB mode, not installing libmtp on Windows/Linux
 
 ### Scenario: Extract progress updates over WebSocket
@@ -96,12 +100,14 @@
 - **Then** Step 1 status is `Completed: N files`
 - **And** Step 2 **Start convert** is enabled
 
-### Scenario: Convert stays disabled during extract
+### Scenario: Convert during active extract stops extract first
 
-- **Given** extract is **running** or **paused**
+- **Given** extract is **running** or **paused** and `originals/` contains at least one file
 - **When** the wizard refreshes step state
-- **Then** Step 2 **Start convert** is disabled
-- **And** status explains waiting for extract (or equivalent)
+- **Then** Step 2 **Start convert** is enabled
+- **When** the user clicks **Start convert**
+- **Then** extract enters **stopped** (Wi‑Fi upload session invalidated; USB queue aborted after current file)
+- **And** convert starts on files in `originals/`
 
 ### Scenario: Convert disabled when originals empty
 
@@ -114,6 +120,7 @@
 - **Given** a device is connected for the selected method
 - **When** Step 1 is shown
 - **Then** status shows a readable name and **Connected via MTP** or **Connected via ADB**
+- **And** device status is hidden when **Wi‑Fi** is selected
 - **And** a green (or success) indicator is shown
 - **And** internal backend identifiers are not used as the primary status string
 
@@ -127,7 +134,22 @@
 
 - **Given** extract is **idle**
 - **Then** **Pause extract** is disabled
-- **And** **Start extract** is enabled (when device and folders are valid)
+- **And** **Start extract** is enabled (when library root is valid and, for USB, device and folders are valid)
+
+### Scenario: Wi‑Fi extract shows upload QR while receiving
+
+- **Given** **Wi‑Fi** is selected and the user clicked **Start extract**
+- **When** extract is **running**
+- **Then** Step 1 shows a scannable QR and URL for the phone **upload** page
+- **And** the URL includes a session token valid until **Stop extract**
+- **And** **Move** is disabled
+
+### Scenario: Wi‑Fi idle before Start
+
+- **Given** **Wi‑Fi** is selected and extract is **idle**
+- **When** Step 1 is shown
+- **Then** the upload QR is not active (placeholder or hidden)
+- **And** **Start extract** is enabled when library root is valid
 
 - **Given** extract is running
 - **Then** **Start extract** is disabled
@@ -192,7 +214,8 @@
 
 | Condition | Expected UI |
 |-----------|-------------|
-| No device for selected method | Step 1 shows not connected (muted indicator + setup hint); Start disabled or clear error on attempt |
+| No device for selected USB method | Step 1 shows not connected (muted indicator + setup hint); Start disabled or clear error on attempt |
+| Wi‑Fi session ended or invalid token on phone | Upload page shows session ended; user must Start extract again on PC |
 | Missing host dependency (adb, libmtp) | Step 1 banner with install hint from info panel |
 | Library root not writable | Error message on Step 1; no silent failure |
 | WebSocket disconnect during job | Status shows reconnecting or last known progress; job continues server-side |
@@ -202,7 +225,8 @@
 
 - Library root must be an absolute path chosen by user (folder picker).
 - Copy/Move mode is exclusive; default **Copy**.
-- Connection method: default **MTP**; only one active per extract job.
+- Connection method: default **Wi‑Fi**; only one active per extract job.
+- **Wi‑Fi:** Move mode is not offered; API rejects Move if method is Wi‑Fi.
 - Warning counts must reflect live filesystem scans or cached counts updated after convert/extract completes.
 
 ## Testing strategy
@@ -212,7 +236,7 @@
 | Unit | Step state machine: given extract/convert phase + folder counts → enabled buttons and status strings |
 | Unit | Visualize step: given `converted` count + convert phase → status text and card enabled flag |
 | Unit | Warning visibility from `FileSystem` port listing `error/` / `invalid/` (zero → hidden) |
-| Unit | Convert button: disabled when extract active or `originals/` empty |
+| Unit | Convert button: disabled when `originals/` empty; start convert stops active extract first |
 | Integration | WebSocket handler emits progress DTOs; one client receives ordered updates (mock use case) |
 | Integration | HTTP tests use **`httpx2`** (not legacy `httpx` + Starlette TestClient) so pytest emits **no** Starlette/anyio deprecation warnings |
 | Out of scope v1 | Automated browser/E2E; visual regression |
@@ -220,7 +244,7 @@
 ## Out of scope
 
 - Cloud backup or accounts
-- iOS device extract (Android-first; connection details in extract spec)
+- iOS **USB** extract (Android-first cable path; **Wi‑Fi upload** supports iPhone browser — see extract spec)
 - Editing conversion settings in UI (flags fixed per reference script)
 - **taskipy** `spacemaker` run task (dev ergonomics — tracked in `pyproject.toml`, not a product spec)
 - In-app media viewer on wizard screen

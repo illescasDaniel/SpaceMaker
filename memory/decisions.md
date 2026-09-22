@@ -2,6 +2,18 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-22 — Start convert stops active extract
+
+- **Context:** Users may want to convert files already in `originals/` without manually stopping extract first (common during Wi‑Fi receive).
+- **Decision:** `can_start_convert` depends only on `originals/` count. `start_convert` calls `stop_extract_and_wait()` (graceful stop + USB thread join + Wi‑Fi in-flight drain) before starting convert.
+- **Rationale:** One-click flow; avoids racing extract writes against convert reads.
+
+## 2026-09-22 — Wi‑Fi extract as default (tokenized LAN upload)
+
+- **Context:** USB MTP/ADB friction; users want cable-free transfer from any phone browser on the same LAN.
+- **Decision:** `ConnectionMethod.WIFI` default on Step 1; **Start extract** mints a session token in the upload QR/URL; multipart POST to `/api/upload` writes to `originals/` via `ReceiveUploadedMedia` + `FileSystemPort.copy_file`. Move disabled for Wi‑Fi. USB paths unchanged. Dependency: `python-multipart`.
+- **Rationale:** Reuses existing LAN bind and segno QR pattern; no open LAN ingest without an active session; hexagonal split (no `DeviceRepository` for Wi‑Fi).
+
 ## 2026-09-22 — SDD: explicit design + spec approval before src
 
 - **Context:** Agents sometimes ran wireframe → spec → full implementation in one pass when the user attached a plan or said “implement the plan.”

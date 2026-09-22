@@ -32,6 +32,17 @@ class FakeFileSystem:
 		self.ensure_parent_directory(destination)
 		self.files[destination] = self.files.pop(source)
 
+	def copy_file(self, source: str, destination: str) -> None:
+		self.ensure_parent_directory(destination)
+		if source in self.files:
+			self.files[destination] = self.files[source]
+			return
+		src = Path(source)
+		if src.is_file():
+			self.files[destination] = src.stat().st_size
+			return
+		raise FileNotFoundError(source)
+
 	def ensure_parent_directory(self, file_path: str) -> None:
 		parent = file_path.rpartition("/")[0]
 		if parent:
@@ -39,6 +50,7 @@ class FakeFileSystem:
 
 	def delete_file(self, path: str) -> None:
 		self.files.pop(path, None)
+		Path(path).unlink(missing_ok=True)
 
 	def list_files_recursive(self, folder: str) -> list[str]:
 		prefix = folder.rstrip("/") + "/"

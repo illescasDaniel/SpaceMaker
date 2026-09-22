@@ -13,8 +13,7 @@ class JobPhase(StrEnum):
 
 
 def can_start_convert(*, extract_phase: JobPhase, originals_count: int) -> bool:
-	if extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
-		return False
+	_ = extract_phase
 	return originals_count > 0
 
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 from io import BytesIO
 from pathlib import Path
+from typing import Annotated
 
 import segno
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -84,7 +86,7 @@ _LEGAL = {
 
 class SettingsBody(BaseModel):
 	library_root: str = ""
-	connection_method: ConnectionMethod = ConnectionMethod.MTP
+	connection_method: ConnectionMethod = ConnectionMethod.WIFI
 	transfer_mode: TransferMode = TransferMode.COPY
 	device_id: str = ""
 	device_label: str = ""
@@ -100,6 +102,12 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.get("/gallery/item/{relative_path:path}")
 	def index() -> FileResponse:
 		return FileResponse(_STATIC / "index.html")
+
+	@app.get("/upload")
+	def upload_page(t: str = "") -> FileResponse:
+		if not services.wifi_token_valid(t):
+			return FileResponse(_STATIC / "upload-ended.html")
+		return FileResponse(_STATIC / "upload.html")
 
 	@app.get("/api/server-info")
 	def server_info() -> dict[str, object]:
@@ -153,19 +161,26 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			previous_method = services.session.connection_method
 			services.session.library_root = library_root
 			services.session.connection_method = body.connection_method
-			services.session.transfer_mode = body.transfer_mode
+			if body.connection_method is ConnectionMethod.WIFI:
+				services.session.transfer_mode = TransferMode.COPY
+			else:
+				services.session.transfer_mode = body.transfer_mode
 			if body.connection_method is not previous_method:
 				services.session.device_id = ""
 				services.session.device_label = ""
 			device_id = body.device_id.strip()
-			repo = services.devices_for(body.connection_method)
-			known = {d.device_id: d.label for d in repo.list_devices()}
-			if device_id and device_id in known:
-				services.session.device_id = device_id
-				services.session.device_label = known[device_id]
-			else:
+			if body.connection_method is ConnectionMethod.WIFI:
 				services.session.device_id = ""
 				services.session.device_label = ""
+			else:
+				repo = services.devices_for(body.connection_method)
+				known = {d.device_id: d.label for d in repo.list_devices()}
+				if device_id and device_id in known:
+					services.session.device_id = device_id
+					services.session.device_label = known[device_id]
+				else:
+					services.session.device_id = ""
+					services.session.device_label = ""
 			if body.source_folders is not None:
 				services.session.source_folders = [f.lower() for f in body.source_folders]
 			if services.session.library_root:
@@ -173,8 +188,69 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		services.push_state()
 		return services.enriched_snapshot()
 
+	@app.get("/api/extract/upload-qr.svg")
+	def extract_upload_qr(t: str = "") -> Response:
+		if not services.wifi_token_valid(t):
+			raise HTTPException(status_code=404, detail="upload session not active")
+		upload_url = f"http://{lan_ip()}:{services.port}/upload?t={t}"
+		buffer = BytesIO()
+		segno.make(upload_url).save(buffer, kind="svg", scale=8)
+		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
+
+	@app.get("/api/upload/session")
+	def upload_session_status(t: str = "") -> dict[str, object]:
+		if not services.wifi_token_valid(t):
+			return {"active": False, "accepts_uploads": False, "phase": "ended"}
+		with services.session._lock:
+			phase = services.session.extract_phase.value
+		return {
+			"active": True,
+			"accepts_uploads": services.wifi_session_accepts_uploads(),
+			"phase": phase,
+		}
+
+	@app.post("/api/upload")
+	async def upload_files(
+		files: Annotated[list[UploadFile], File()],
+		t: Annotated[str, Query()] = "",
+	) -> dict[str, object]:
+		if not services.wifi_token_valid(t):
+			raise HTTPException(status_code=403, detail="upload session ended")
+		if not services.wifi_session_accepts_uploads():
+			raise HTTPException(status_code=409, detail="upload session paused or stopped")
+		if not files:
+			raise HTTPException(status_code=400, detail="no files")
+		results: list[dict[str, str]] = []
+		for upload in files:
+			raw_name = upload.filename or "upload.bin"
+			suffix = Path(raw_name).suffix
+			with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+				temp_path = tmp.name
+				size = 0
+				while True:
+					chunk = await upload.read(1024 * 1024)
+					if not chunk:
+						break
+					tmp.write(chunk)
+					size += len(chunk)
+			try:
+				services.handle_wifi_upload(t, raw_name, temp_path, size)
+				results.append({"file": raw_name, "status": "ok"})
+			except PermissionError as exc:
+				services.filesystem.delete_file(temp_path)
+				raise HTTPException(status_code=409, detail=str(exc)) from exc
+			except ValueError as exc:
+				services.filesystem.delete_file(temp_path)
+				raise HTTPException(status_code=400, detail=str(exc)) from exc
+			except Exception:
+				services.filesystem.delete_file(temp_path)
+				raise
+		return {"uploaded": len(results), "files": results}
+
 	@app.get("/api/devices")
-	def list_devices(connection_method: ConnectionMethod = ConnectionMethod.MTP) -> list[dict[str, str]]:
+	def list_devices(connection_method: ConnectionMethod = ConnectionMethod.WIFI) -> list[dict[str, str]]:
+		if connection_method is ConnectionMethod.WIFI:
+			return []
 		try:
 			repo = services.devices_for(connection_method)
 			devices = repo.list_devices()
@@ -193,6 +269,10 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	def extract_start() -> dict[str, object]:
 		if not services.session.library_root or not is_absolute_library_path(services.session.library_root):
 			raise HTTPException(status_code=400, detail="choose a valid library folder")
+		method = services.session.connection_method
+		if method is ConnectionMethod.WIFI:
+			services.start_extract()
+			return services.enriched_snapshot()
 		if not services.session.device_id:
 			raise HTTPException(status_code=400, detail="select a device")
 		if not services.session.source_folders:
@@ -227,11 +307,13 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			services.session.library_root,
 			LibraryFolder.ORIGINALS,
 		)
-		extract_phase = services.session.extract_phase
-		if not can_start_convert(extract_phase=extract_phase, originals_count=originals):
+		if not can_start_convert(
+			extract_phase=services.session.extract_phase,
+			originals_count=originals,
+		):
 			raise HTTPException(
 				status_code=409,
-				detail=(f"convert not available (extract={extract_phase.value}, originals={originals})"),
+				detail=f"convert not available (originals={originals})",
 			)
 		if services.session.convert_phase is JobPhase.RUNNING:
 			raise HTTPException(status_code=409, detail="convert already running")

@@ -9,6 +9,7 @@ authors = [{ name = "Daniel Illescas Romero" }]
 dependencies = [
 	"adbutils>=2.12.0",
 	"fastapi>=0.141.1",
+	"python-multipart>=0.0.20",
 	"httpx>=0.28",
 	"httpx2>=2.13.0",
 	"pydantic>=2.13.5",

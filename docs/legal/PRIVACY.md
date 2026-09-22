@@ -17,6 +17,7 @@ SpaceMaker runs on your computer. It is designed to **backup, convert, and brows
 ## Network use
 
 - **LAN gallery (optional):** If you open Step 3 “Visualize”, SpaceMaker may bind a web server on your local network so your phone can view the gallery. Traffic stays on your LAN; no account is required.
+- **LAN upload (optional):** If you use Step 1 **Wi‑Fi** extract, SpaceMaker shows a QR code so your phone can **send** files to your PC library while an extract session is active. Uploads require the session token from that QR/URL; traffic stays on your LAN.
 - **Updates (future):** If auto-update is added later, the spec will require explicit opt-in and an updated policy.
 
 ## Third-party programs

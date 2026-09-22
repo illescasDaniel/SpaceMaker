@@ -61,9 +61,10 @@ Progress: WebSocket `gallery_export` events while encoding; UI alert on the item
 
 Local FastAPI + static UI in pywebview; no cloud dependency. Gallery may expose LAN URL + QR (spec/wireframe).
 
-## Device extract (MTP default, ADB recommended)
+## Device extract (Wi‑Fi default, MTP/ADB cable)
 
-- UI default: **MTP**. Alternate: **ADB (recommended)** with info (ⓘ) for setup steps.
+- UI default: **Wi‑Fi** (QR + phone browser upload into `originals/` during a receive session; **Move** disabled).
+- Alternates: **MTP** and **ADB (cable)** with info (ⓘ) for setup steps.
 - Hexagonal: `DeviceRepository` port; adapters `MtpDeviceRepository`, `AdbDeviceRepository` (adbutils on all OSes for ADB).
 - **MTP:** One **libmtp** adapter on all OSes; **bundle** libmtp CLI in release artifacts.
 - **ADB:** **adbutils** + **bundled** `adb` per OS/CPU.

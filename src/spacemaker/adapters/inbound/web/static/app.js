@@ -30,14 +30,28 @@
 		showFormBanner("");
 	}
 
+	function selectedConnectionMethod() {
+		if (document.getElementById("btn-conn-wifi").classList.contains("active")) {
+			return "wifi";
+		}
+		if (document.getElementById("btn-conn-adb").classList.contains("active")) {
+			return "adb";
+		}
+		return "mtp";
+	}
+
 	function validateStep1Form(showFieldErrors) {
 		var lib = document.getElementById("input-library-root");
 		var sel = document.getElementById("select-device");
 		var libraryPath = lib ? lib.value.trim() : "";
+		if (!libraryPath && state && state.library_root) {
+			libraryPath = state.library_root;
+		}
 		var folders = selectedFolders();
-		var deviceOk = !!(sel && sel.value);
+		var method = selectedConnectionMethod();
+		var deviceOk = method === "wifi" || !!(sel && sel.value);
 		var libraryOk = isAbsolutePath(libraryPath);
-		var foldersOk = folders.length > 0;
+		var foldersOk = method === "wifi" || folders.length > 0;
 		var libErr = document.getElementById("library-root-error");
 		if (showFieldErrors && lib) {
 			lib.classList.toggle("field-invalid", !libraryOk);
@@ -197,7 +211,65 @@
 	}
 
 	function connectionLabel(method) {
+		if (method === "wifi") {
+			return "Wi‑Fi";
+		}
 		return method === "adb" ? "ADB" : "MTP";
+	}
+
+	function applyConnectionPanels(method) {
+		var isWifi = method === "wifi";
+		document.getElementById("panel-usb").classList.toggle("panel-hidden", isWifi);
+		document.getElementById("panel-wifi").classList.toggle("panel-hidden", !isWifi);
+		var chipMove = document.getElementById("chip-move");
+		var chipCopy = document.getElementById("chip-copy");
+		var moveHint = document.getElementById("move-wifi-hint");
+		if (isWifi) {
+			chipMove.classList.add("disabled");
+			chipMove.disabled = true;
+			chipCopy.classList.add("selected");
+			chipMove.classList.remove("selected");
+			if (moveHint) {
+				moveHint.hidden = false;
+			}
+		} else {
+			chipMove.classList.remove("disabled");
+			chipMove.disabled = false;
+			if (moveHint) {
+				moveHint.hidden = true;
+			}
+		}
+	}
+
+	function syncConnectionButtons(method) {
+		document.getElementById("btn-conn-wifi").classList.toggle("active", method === "wifi");
+		document.getElementById("btn-conn-mtp").classList.toggle("active", method === "mtp");
+		document.getElementById("btn-conn-adb").classList.toggle("active", method === "adb");
+		applyConnectionPanels(method);
+	}
+
+	function updateWifiUploadPanel(next) {
+		var wifi = next.wifi_upload || {};
+		var idle = document.getElementById("wifi-idle-hint");
+		var live = document.getElementById("wifi-live-receive");
+		var urlInput = document.getElementById("wifi-upload-url");
+		var qrImg = document.getElementById("wifi-upload-qr");
+		if (!idle || !live) {
+			return;
+		}
+		if (wifi.active) {
+			idle.classList.add("panel-hidden");
+			live.classList.remove("panel-hidden");
+			if (urlInput) {
+				urlInput.value = wifi.upload_url || "";
+			}
+			if (qrImg && wifi.qr_url) {
+				qrImg.src = wifi.qr_url + "&_=" + Date.now();
+			}
+		} else {
+			idle.classList.remove("panel-hidden");
+			live.classList.add("panel-hidden");
+		}
 	}
 
 	function selectedFolders() {
@@ -255,12 +327,16 @@
 	function applyState(next) {
 		state = next;
 		maybeShowMissingTools(next);
+		syncConnectionButtons(next.connection_method || "wifi");
 		var lib = document.getElementById("input-library-root");
 		if (lib && document.activeElement !== lib) {
 			lib.value = next.library_root || "";
 		}
 		syncFolderCheckboxes(next.source_folders);
-		updateDeviceStatus(next);
+		if ((next.connection_method || "wifi") !== "wifi") {
+			updateDeviceStatus(next);
+		}
+		updateWifiUploadPanel(next);
 		updateExtractUi(next);
 		updateConvertUi(next);
 		updateVisualizeUi(next);
@@ -287,7 +363,11 @@
 			bar.setAttribute("aria-valuenow", String(p.percent));
 		}
 		if (counts) {
-			counts.textContent = p.completed + " / " + p.total + " files";
+			if ((next.connection_method || "") === "wifi" && (phase === "running" || phase === "paused" || phase === "stopped" || phase === "done")) {
+				counts.textContent = p.completed + " files received";
+			} else {
+				counts.textContent = p.completed + " / " + p.total + " files";
+			}
 		}
 		var extractActive = phase === "running" || phase === "paused";
 		document
@@ -295,11 +375,20 @@
 			.forEach(function (el) {
 				el.disabled = extractActive;
 			});
+		document.getElementById("btn-conn-wifi").disabled = extractActive;
 		document.getElementById("btn-conn-mtp").disabled = extractActive;
 		document.getElementById("btn-conn-adb").disabled = extractActive;
+		updateWifiUploadPanel(next);
 	}
 
 	function extractPhaseLabel(phase, progress) {
+		var method = state && state.connection_method;
+		if (method === "wifi" && phase === "running") {
+			return "Receiving uploads…";
+		}
+		if (method === "wifi" && phase === "paused") {
+			return "Paused — not accepting uploads";
+		}
 		if (phase === "running") {
 			return "In progress — " + progress.percent + "%";
 		}
@@ -324,9 +413,6 @@
 	}
 
 	function canStartConvert(next) {
-		if (extractIsActive(next)) {
-			return false;
-		}
 		if (next.can_start_convert) {
 			return true;
 		}
@@ -403,8 +489,13 @@
 			} else {
 				status.innerHTML = "<strong>Status:</strong> Completed — " + p.completed + " file(s) processed";
 			}
+		} else if ((extractPhase === "running" || extractPhase === "paused") && ready) {
+			status.innerHTML =
+				"<strong>Status:</strong> Extract active — " +
+				originals +
+				" file(s) in originals/; Start convert will stop extract and convert them";
 		} else if (extractPhase === "running" || extractPhase === "paused") {
-			status.innerHTML = "<strong>Status:</strong> Waiting — extract in progress (Step 1)";
+			status.innerHTML = "<strong>Status:</strong> Waiting — add files to originals/ to convert during extract";
 		} else if (extractPhase === "stopped") {
 			status.innerHTML = "<strong>Status:</strong> Extract stopped — you can convert files already in originals/";
 		} else if (!ready) {
@@ -462,7 +553,10 @@
 	}
 
 	function loadDevices() {
-		var method = document.getElementById("btn-conn-adb").classList.contains("active") ? "adb" : "mtp";
+		var method = selectedConnectionMethod();
+		if (method === "wifi") {
+			return Promise.resolve([]);
+		}
 		return api("GET", "/api/devices?connection_method=" + method)
 			.then(function (devices) {
 				deviceLabels = {};
@@ -528,7 +622,7 @@
 		var deviceId = sel ? sel.value : "";
 		var body = {
 			library_root: libraryRootForSave(),
-			connection_method: document.getElementById("btn-conn-adb").classList.contains("active") ? "adb" : "mtp",
+			connection_method: selectedConnectionMethod(),
 			transfer_mode: modeCopy?.classList.contains("selected") ? "copy" : "move",
 			device_id: deviceId,
 			device_label: deviceLabels[deviceId] || "",
@@ -1078,19 +1172,24 @@
 	});
 
 	function switchConnectionMethod(method) {
-		var isAdb = method === "adb";
-		document.getElementById("btn-conn-mtp").classList.toggle("active", !isAdb);
-		document.getElementById("btn-conn-adb").classList.toggle("active", isAdb);
+		syncConnectionButtons(method);
 		deviceLabels = {};
 		var sel = document.getElementById("select-device");
 		if (sel) {
 			sel.innerHTML = "";
+		}
+		if (method === "wifi") {
+			validateStep1Form(true);
+			return pushSettings();
 		}
 		return loadDevices().then(function () {
 			return pushSettings();
 		});
 	}
 
+	document.getElementById("btn-conn-wifi").addEventListener("click", function () {
+		switchConnectionMethod("wifi");
+	});
 	document.getElementById("btn-conn-mtp").addEventListener("click", function () {
 		switchConnectionMethod("mtp");
 	});
@@ -1101,11 +1200,17 @@
 	var chipCopy = document.getElementById("chip-copy");
 	var chipMove = document.getElementById("chip-move");
 	chipCopy.addEventListener("click", function () {
+		if (selectedConnectionMethod() === "wifi") {
+			return;
+		}
 		chipCopy.classList.add("selected");
 		chipMove.classList.remove("selected");
 		pushSettings();
 	});
 	chipMove.addEventListener("click", function () {
+		if (chipMove.disabled) {
+			return;
+		}
 		chipMove.classList.add("selected");
 		chipCopy.classList.remove("selected");
 		pushSettings();
@@ -1273,6 +1378,9 @@
 		.then(function () {
 			routeFromPath();
 			if (isGalleryEntryPath()) {
+				return null;
+			}
+			if (selectedConnectionMethod() === "wifi") {
 				return null;
 			}
 			return loadDevices();
