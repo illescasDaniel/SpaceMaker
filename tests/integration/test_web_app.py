@@ -72,3 +72,63 @@ def test_given_originals_on_disk_when_convert_start_then_running(tmp_path) -> No
 	assert response.status_code == 200
 	body = response.json()
 	assert body["convert"]["phase"] in {"running", "done"}
+
+
+def test_given_converted_files_when_get_settings_then_visualize_ready(tmp_path) -> None:
+	library = tmp_path / "lib"
+	converted = library / "converted"
+	converted.mkdir(parents=True)
+	(converted / "photo.avif").write_bytes(b"x")
+
+	client = TestClient(create_app())
+	client.put(
+		"/api/settings",
+		json={
+			"library_root": str(library),
+			"connection_method": "mtp",
+			"transfer_mode": "copy",
+			"device_id": "",
+			"source_folders": ["dcim"],
+		},
+	)
+	response = client.get("/api/settings")
+	body = response.json()
+	assert body["visualize"]["enabled"] is True
+	assert "1" in body["visualize"]["status_text"]
+
+
+def test_given_gallery_route_when_get_then_html_200() -> None:
+	client = TestClient(create_app())
+	response = client.get("/gallery")
+	assert response.status_code == 200
+
+
+def test_given_app_when_get_qr_svg_then_svg() -> None:
+	client = TestClient(create_app())
+	response = client.get("/api/gallery/qr.svg")
+	assert response.status_code == 200
+	assert "svg" in response.headers.get("content-type", "")
+
+
+def test_given_converted_fixture_when_calendar_then_days(tmp_path) -> None:
+	library = tmp_path / "lib"
+	converted = library / "converted"
+	converted.mkdir(parents=True)
+	(converted / "a.avif").write_bytes(b"x")
+
+	client = TestClient(create_app())
+	client.put(
+		"/api/settings",
+		json={
+			"library_root": str(library),
+			"connection_method": "mtp",
+			"transfer_mode": "copy",
+			"device_id": "",
+			"source_folders": ["dcim"],
+		},
+	)
+	response = client.get("/api/gallery/calendar", params={"year": 1970, "month": 1})
+	assert response.status_code == 200
+	body = response.json()
+	assert body["year"] == 1970
+	assert isinstance(body["days_with_media"], list)

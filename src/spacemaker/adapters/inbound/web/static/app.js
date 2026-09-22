@@ -4,6 +4,9 @@
 	var deviceLabels = {};
 	var defaultLibraryRoot = "";
 	var formValidation = { ok: false, library: "", device: "", folders: "" };
+	var calendarYear = new Date().getFullYear();
+	var calendarMonth = new Date().getMonth() + 1;
+	var calendarSelectedDay = null;
 
 	function isAbsolutePath(path) {
 		if (!path) {
@@ -67,9 +70,10 @@
 			if (!r.ok) {
 				return r.text().then(function (text) {
 					var message = r.statusText;
+					var j;
 					if (text) {
 						try {
-							var j = JSON.parse(text);
+							j = JSON.parse(text);
 							if (typeof j.detail === "string") {
 								message = j.detail;
 							} else if (Array.isArray(j.detail)) {
@@ -92,7 +96,19 @@
 		});
 	}
 
-	function showView(viewId) {
+	function pathForMainView(viewId) {
+		if (viewId === "gallery") {
+			return "/gallery";
+		}
+		if (viewId === "wizard") {
+			return "/";
+		}
+		return null;
+	}
+
+	function showView(viewId, options) {
+		var path;
+		options = options || {};
 		document.querySelectorAll(".screen").forEach(function (s) {
 			s.classList.remove("active");
 		});
@@ -105,8 +121,28 @@
 			if (viewId === "gallery") {
 				loadGallery();
 			}
+			if (!options.skipHistory) {
+				path = pathForMainView(viewId);
+				if (path !== null && location.pathname !== path) {
+					history.pushState({ view: viewId }, "", path);
+				}
+			}
 		}
 	}
+
+	function routeFromPath() {
+		if (location.pathname === "/gallery") {
+			showView("gallery", { skipHistory: true });
+			return;
+		}
+		if (location.pathname === "/" || location.pathname === "") {
+			showView("wizard", { skipHistory: true });
+		}
+	}
+
+	window.addEventListener("popstate", function () {
+		routeFromPath();
+	});
 
 	function monthName(n) {
 		return [
@@ -178,11 +214,7 @@
 		if (banner && !banner.hidden) {
 			return;
 		}
-		showFormBanner(
-			"Bundled tools missing (" +
-				missing.join(", ") +
-				"). Run: uv run task dev-tools -- --from-path",
-		);
+		showFormBanner("Bundled tools missing (" + missing.join(", ") + "). Run: uv run task dev-tools -- --from-path");
 	}
 
 	function applyState(next) {
@@ -196,6 +228,7 @@
 		updateDeviceStatus(next);
 		updateExtractUi(next);
 		updateConvertUi(next);
+		updateVisualizeUi(next);
 		updateWarnings(next);
 		validateStep1Form(false);
 		updateExtractButtons(next);
@@ -292,6 +325,23 @@
 		}
 	}
 
+	function updateVisualizeUi(next) {
+		var card = document.getElementById("step3-card");
+		var status = document.getElementById("visualize-status");
+		var btn = document.getElementById("btn-open-gallery");
+		if (!card || !status) {
+			return;
+		}
+		var viz = next.visualize || {};
+		var enabled = !!viz.enabled;
+		card.classList.toggle("disabled", !enabled);
+		card.classList.toggle("done", enabled && viz.phase === "completed");
+		status.innerHTML = "<strong>Status:</strong> " + (viz.status_text || "Not started");
+		if (btn) {
+			btn.disabled = !enabled;
+		}
+	}
+
 	function updateConvertUi(next) {
 		var status = document.getElementById("convert-status");
 		var fill = document.getElementById("convert-progress-fill");
@@ -307,16 +357,9 @@
 		var bucketInvalidCount = (next.library_counts || {}).invalid || 0;
 		if (next.convert.phase === "running") {
 			status.innerHTML =
-				"<strong>Status:</strong> In progress — " +
-				p.completed +
-				" / " +
-				p.total +
-				" (" +
-				p.percent +
-				"%)";
+				"<strong>Status:</strong> In progress — " + p.completed + " / " + p.total + " (" + p.percent + "%)";
 		} else if (next.convert.phase === "error") {
-			status.innerHTML =
-				"<strong>Status:</strong> Failed — " + (next.last_error || "Convert stopped unexpectedly.");
+			status.innerHTML = "<strong>Status:</strong> Failed — " + (next.last_error || "Convert stopped unexpectedly.");
 		} else if (next.convert.phase === "done" && p.total > 0) {
 			if (bucketErrorCount > 0 || bucketInvalidCount > 0) {
 				status.innerHTML =
@@ -468,63 +511,250 @@
 			});
 	}
 
+	function appendThumbCell(grid, item) {
+		var cell = document.createElement("div");
+		var img = document.createElement("img");
+		var badge;
+		cell.className = "thumb";
+		img.src = "/thumbs/" + encodeURI(item.relative_path);
+		img.alt = item.relative_path;
+		img.loading = "lazy";
+		cell.appendChild(img);
+		if (item.kind === "video") {
+			badge = document.createElement("span");
+			badge.className = "thumb-badge";
+			badge.textContent = "Video";
+			cell.appendChild(badge);
+		}
+		grid.appendChild(cell);
+	}
+
 	function loadGallery() {
-		api("GET", "/api/gallery/timeline").then(function (groups) {
-			var host = document.getElementById("timeline-view");
-			if (!host) {
-				return;
-			}
-			host.innerHTML = "";
-			if (!groups.length) {
-				host.innerHTML = '<p class="status-line">No media in converted/ yet.</p>';
-				return;
-			}
-			var currentYear = null;
-			var yearBlock = null;
-			var yTitle = null;
-			groups.forEach(function (g) {
-				if (g.year !== currentYear) {
-					currentYear = g.year;
-					yearBlock = document.createElement("div");
-					yearBlock.className = "year-block";
-					yTitle = document.createElement("h3");
-					yTitle.className = "year-title";
-					yTitle.textContent = String(g.year);
-					yearBlock.appendChild(yTitle);
-					host.appendChild(yearBlock);
+		api("GET", "/api/gallery/timeline")
+			.then(function (groups) {
+				var host = document.getElementById("timeline-view");
+				var currentYear = null;
+				var yearBlock = null;
+				var yTitle;
+				if (!host) {
+					return;
 				}
-				var mLabel = document.createElement("p");
-				mLabel.className = "month-label";
-				mLabel.textContent = monthName(g.month);
-				yearBlock.appendChild(mLabel);
-				var grid = document.createElement("div");
-				grid.className = "thumb-grid";
-				g.items.forEach(function (item) {
-					var cell = document.createElement("div");
-					cell.className = "thumb";
-					var img = document.createElement("img");
-					img.src = "/media/" + encodeURI(item.relative_path);
-					img.alt = item.relative_path;
-					img.loading = "lazy";
-					cell.appendChild(img);
-					grid.appendChild(cell);
+				host.innerHTML = "";
+				if (!groups.length) {
+					host.innerHTML = '<p class="status-line">No media in converted/ yet.</p>';
+					return;
+				}
+				groups.forEach(function (g) {
+					if (g.year !== currentYear) {
+						currentYear = g.year;
+						yearBlock = document.createElement("div");
+						yearBlock.className = "year-block";
+						yTitle = document.createElement("h3");
+						yTitle.className = "year-title";
+						yTitle.textContent = String(g.year);
+						yearBlock.appendChild(yTitle);
+						host.appendChild(yearBlock);
+					}
+					var mLabel = document.createElement("p");
+					mLabel.className = "month-label";
+					mLabel.textContent = monthName(g.month);
+					yearBlock.appendChild(mLabel);
+					var grid = document.createElement("div");
+					grid.className = "thumb-grid";
+					g.items.forEach(function (item) {
+						appendThumbCell(grid, item);
+					});
+					yearBlock.appendChild(grid);
 				});
-				yearBlock.appendChild(grid);
+			})
+			.catch(function () {
+				var host = document.getElementById("timeline-view");
+				if (host) {
+					host.innerHTML = '<p class="status-line">Could not load gallery.</p>';
+				}
 			});
+	}
+
+	function daysInMonth(year, month) {
+		return new Date(year, month, 0).getDate();
+	}
+
+	function shiftCalendarMonth(delta) {
+		calendarMonth += delta;
+		if (calendarMonth > 12) {
+			calendarMonth = 1;
+			calendarYear += 1;
+		} else if (calendarMonth < 1) {
+			calendarMonth = 12;
+			calendarYear -= 1;
+		}
+		calendarSelectedDay = null;
+		loadCalendarMonth();
+	}
+
+	function renderCalendarGrid(daysWithMedia) {
+		var grid = document.getElementById("calendar-grid");
+		var title = document.getElementById("calendar-title");
+		var firstDow;
+		var lead;
+		var i;
+		var blank;
+		var total;
+		var mediaSet = {};
+		var day;
+		var cell;
+		if (!grid || !title) {
+			return;
+		}
+		title.textContent = monthName(calendarMonth) + " " + calendarYear;
+		grid.innerHTML = "";
+		["M", "T", "W", "T", "F", "S", "S"].forEach(function (label) {
+			var wd = document.createElement("span");
+			wd.className = "cal-cell weekday";
+			wd.textContent = label;
+			grid.appendChild(wd);
 		});
+		firstDow = new Date(calendarYear, calendarMonth - 1, 1).getDay();
+		lead = (firstDow + 6) % 7;
+		for (i = 0; i < lead; i += 1) {
+			blank = document.createElement("span");
+			blank.className = "cal-cell";
+			grid.appendChild(blank);
+		}
+		total = daysInMonth(calendarYear, calendarMonth);
+		daysWithMedia.forEach(function (d) {
+			mediaSet[d] = true;
+		});
+		for (day = 1; day <= total; day += 1) {
+			if (mediaSet[day]) {
+				cell = document.createElement("button");
+				cell.type = "button";
+				cell.className = "cal-cell has-media";
+				if (calendarSelectedDay === day) {
+					cell.classList.add("selected");
+				}
+				cell.textContent = String(day);
+				cell.addEventListener(
+					"click",
+					(function (d) {
+						return function () {
+							selectCalendarDay(d);
+						};
+					})(day),
+				);
+			} else {
+				cell = document.createElement("span");
+				cell.className = "cal-cell";
+				cell.textContent = String(day);
+			}
+			grid.appendChild(cell);
+		}
+	}
+
+	function selectCalendarDay(day) {
+		calendarSelectedDay = day;
+		loadCalendarMonth();
+		api("GET", "/api/gallery/day?year=" + calendarYear + "&month=" + calendarMonth + "&day=" + day)
+			.then(function (payload) {
+				var label = document.getElementById("calendar-day-label");
+				var thumbs = document.getElementById("calendar-day-thumbs");
+				if (!label || !thumbs) {
+					return;
+				}
+				label.hidden = false;
+				label.textContent = monthName(calendarMonth) + " " + day + ", " + calendarYear;
+				thumbs.innerHTML = "";
+				if (!payload.items || !payload.items.length) {
+					thumbs.innerHTML = '<p class="status-line">No items for this day.</p>';
+					return;
+				}
+				payload.items.forEach(function (item) {
+					appendThumbCell(thumbs, item);
+				});
+			})
+			.catch(function () {
+				var thumbs = document.getElementById("calendar-day-thumbs");
+				if (thumbs) {
+					thumbs.innerHTML = '<p class="status-line">Could not load day.</p>';
+				}
+			});
+	}
+
+	function loadCalendarMonth() {
+		api("GET", "/api/gallery/calendar?year=" + calendarYear + "&month=" + calendarMonth)
+			.then(function (payload) {
+				var label;
+				var thumbs;
+				renderCalendarGrid(payload.days_with_media || []);
+				if (calendarSelectedDay === null) {
+					label = document.getElementById("calendar-day-label");
+					thumbs = document.getElementById("calendar-day-thumbs");
+					if (label) {
+						label.hidden = true;
+					}
+					if (thumbs) {
+						thumbs.innerHTML = "";
+					}
+				}
+			})
+			.catch(function () {
+				var grid = document.getElementById("calendar-grid");
+				if (grid) {
+					grid.innerHTML = '<p class="status-line">Could not load calendar.</p>';
+				}
+			});
 	}
 
 	function loadServerInfo() {
 		api("GET", "/api/server-info").then(function (info) {
 			var qr = document.getElementById("qr-placeholder");
 			var urlField = document.getElementById("gallery-url");
+			var hint = document.getElementById("gallery-lan-hint");
+			var portLabel = document.getElementById("gallery-lan-port");
+			var fwWarn = document.getElementById("gallery-firewall-warn");
+			var showHint;
+			var img;
+			var fw;
+			var portText;
 			if (qr) {
-				qr.innerHTML = "QR<br>" + info.host + ":" + info.port;
+				qr.innerHTML = "";
+				img = document.createElement("img");
+				img.src = info.qr_url || "/api/gallery/qr.svg";
+				img.alt = "QR code for gallery URL";
+				qr.appendChild(img);
 			}
 			if (urlField) {
 				urlField.textContent = info.gallery_url;
 			}
+			portText = info.port ? String(info.port) : "8765";
+			if (portLabel) {
+				portLabel.textContent = portText;
+			}
+			document.querySelectorAll(".lan-firewall-port").forEach(function (el) {
+				el.textContent = portText;
+			});
+			if (hint) {
+				showHint = info.lan_reachable === false;
+				hint.hidden = !showHint;
+			}
+			fw = info.firewall || {};
+			if (fwWarn) {
+				if (fw.port_open === false && fw.message) {
+					fwWarn.textContent = fw.message;
+					fwWarn.hidden = false;
+				} else if (fw.port_open === null && fw.message && info.lan_reachable) {
+					fwWarn.textContent = fw.message;
+					fwWarn.hidden = false;
+				} else {
+					fwWarn.hidden = true;
+					fwWarn.textContent = "";
+				}
+			}
 		});
+	}
+
+	function isGalleryEntryPath() {
+		return location.pathname === "/gallery";
 	}
 
 	function connectWs() {
@@ -567,12 +797,28 @@
 		btnCalendar.classList.remove("active");
 		timelineView.style.display = "block";
 		calendarView.classList.remove("visible");
+		calendarView.setAttribute("aria-hidden", "true");
 	});
 	btnCalendar.addEventListener("click", function () {
 		btnCalendar.classList.add("active");
 		btnTimeline.classList.remove("active");
 		timelineView.style.display = "none";
 		calendarView.classList.add("visible");
+		calendarView.setAttribute("aria-hidden", "false");
+		loadCalendarMonth();
+	});
+	document.getElementById("btn-cal-prev").addEventListener("click", function () {
+		shiftCalendarMonth(-1);
+	});
+	document.getElementById("btn-cal-next").addEventListener("click", function () {
+		shiftCalendarMonth(1);
+	});
+
+	document.getElementById("btn-lan-firewall-info").addEventListener("click", function () {
+		var panel = document.getElementById("lan-firewall-info-panel");
+		var open = panel.classList.toggle("visible");
+		panel.setAttribute("aria-hidden", open ? "false" : "true");
+		this.setAttribute("aria-expanded", open ? "true" : "false");
 	});
 
 	document.getElementById("btn-connection-info").addEventListener("click", function () {
@@ -760,8 +1006,17 @@
 			return settings;
 		})
 		.then(applyState)
-		.then(loadDevices)
 		.then(function () {
+			routeFromPath();
+			if (isGalleryEntryPath()) {
+				return null;
+			}
+			return loadDevices();
+		})
+		.then(function () {
+			if (isGalleryEntryPath()) {
+				return null;
+			}
 			validateStep1Form(true);
 			if (state) {
 				updateExtractButtons(state);

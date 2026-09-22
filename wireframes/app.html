@@ -370,12 +370,14 @@
 			height: 88px;
 			background: #fff;
 			border-radius: 8px;
-			display: grid;
-			place-items: center;
-			color: #333;
-			font-size: 0.65rem;
-			text-align: center;
-			padding: 4px;
+			display: block;
+			flex-shrink: 0;
+		}
+
+		.qr-placeholder svg {
+			width: 100%;
+			height: 100%;
+			display: block;
 		}
 
 		/* Gallery screen */
@@ -409,14 +411,11 @@
 			color: var(--text);
 		}
 
-		.phone-frame-wrap {
-			display: flex;
-			gap: 2rem;
-			flex-wrap: wrap;
-			align-items: flex-start;
+		.gallery-layout {
+			max-width: 960px;
 		}
 
-		.gallery-main { flex: 1; min-width: 280px; }
+		.gallery-main { width: 100%; }
 
 		.year-block { margin-bottom: 1.5rem; }
 
@@ -441,60 +440,107 @@
 		}
 
 		.thumb {
+			position: relative;
 			aspect-ratio: 1;
 			background: var(--surface2);
 			border-radius: 8px;
 			border: 1px solid var(--border);
-			display: flex;
-			align-items: flex-end;
-			padding: 0.35rem;
-			font-size: 0.65rem;
-			color: var(--muted);
+			overflow: hidden;
 		}
 
-		.phone-frame {
-			width: 320px;
-			border: 3px solid var(--border);
-			border-radius: 24px;
-			padding: 12px 8px;
-			background: var(--surface);
+		.thumb-fill {
+			background: linear-gradient(135deg, var(--surface2), var(--border));
 		}
 
-		.phone-notch {
-			width: 80px;
-			height: 6px;
-			background: var(--border);
-			border-radius: 3px;
-			margin: 0 auto 10px;
+		.thumb img,
+		.thumb .thumb-fill {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
 		}
 
-		.phone-frame .thumb-grid {
-			grid-template-columns: repeat(3, 1fr);
+		.thumb-badge {
+			position: absolute;
+			bottom: 4px;
+			right: 4px;
+			background: rgba(15, 20, 25, 0.85);
+			color: var(--text);
+			font-size: 0.6rem;
+			padding: 0.15rem 0.35rem;
+			border-radius: 4px;
 		}
 
-		.phone-frame .year-title { font-size: 1rem; }
-
-		.calendar-mock {
+		.calendar-panel {
 			display: none;
+			max-width: 420px;
+		}
+
+		.calendar-panel.visible { display: block; }
+
+		.calendar-nav {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 0.75rem;
+			gap: 0.5rem;
+		}
+
+		.calendar-nav h3 {
+			margin: 0;
+			font-size: 1rem;
+			font-weight: 600;
+		}
+
+		.calendar-grid {
+			display: grid;
 			grid-template-columns: repeat(7, 1fr);
 			gap: 4px;
-			max-width: 360px;
 		}
-
-		.calendar-mock.visible { display: grid; }
 
 		.cal-cell {
 			aspect-ratio: 1;
 			background: var(--surface2);
 			border-radius: 4px;
+			font: inherit;
 			font-size: 0.7rem;
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			color: var(--muted);
+			border: none;
+			cursor: default;
 		}
 
-		.cal-cell.has-media { background: rgba(77, 171, 247, 0.25); color: var(--accent); }
+		.cal-cell.weekday {
+			background: transparent;
+			font-size: 0.65rem;
+			text-transform: uppercase;
+			cursor: default;
+		}
+
+		.cal-cell.has-media {
+			background: rgba(77, 171, 247, 0.25);
+			color: var(--accent);
+			cursor: pointer;
+		}
+
+		.cal-cell.selected {
+			outline: 2px solid var(--accent);
+		}
+
+		.calendar-day-grid {
+			margin-top: 1.25rem;
+		}
+
+		.gallery-empty-hint {
+			font-size: 0.8rem;
+			color: var(--muted);
+			margin-top: 2rem;
+			padding: 1rem;
+			border: 1px dashed var(--border);
+			border-radius: var(--radius);
+		}
 
 		.label-row {
 			display: flex;
@@ -709,16 +755,31 @@
 				<p class="folder-hint">Warnings for <code>error/</code> and <code>invalid/</code> appear only when those folders contain files (hidden at zero).</p>
 			</article>
 
-			<!-- Step 3: Visualize -->
-			<article class="step-card disabled" aria-labelledby="step3-title">
+			<!-- Step 3: Visualize (enabled when converted/ has media) -->
+			<article class="step-card done" aria-labelledby="step3-title">
 				<div class="step-header">
 					<div class="step-num">3</div>
 					<h2 class="step-title" id="step3-title">Visualize</h2>
 				</div>
 				<p class="status-line">Open the gallery from <code>converted/</code> only.</p>
-				<p class="status-line"><strong>Status:</strong> Not started</p>
+				<p class="status-line"><strong>Status:</strong> Ready: 42 files</p>
 				<div class="qr-block">
-					<p class="qr-placeholder" role="img" aria-label="QR code placeholder">QR<br>192.168.1.42:8765</p>
+					<div class="qr-placeholder" role="img" aria-label="QR code for gallery URL">
+						<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+							<rect width="21" height="21" fill="#fff"/>
+							<rect x="1" y="1" width="7" height="7" fill="#111"/>
+							<rect x="13" y="1" width="7" height="7" fill="#111"/>
+							<rect x="1" y="13" width="7" height="7" fill="#111"/>
+							<rect x="3" y="3" width="3" height="3" fill="#fff"/>
+							<rect x="15" y="3" width="3" height="3" fill="#fff"/>
+							<rect x="3" y="15" width="3" height="3" fill="#fff"/>
+							<rect x="10" y="10" width="1" height="1" fill="#111"/>
+							<rect x="12" y="8" width="1" height="1" fill="#111"/>
+							<rect x="8" y="12" width="1" height="1" fill="#111"/>
+							<rect x="14" y="14" width="2" height="2" fill="#111"/>
+							<rect x="17" y="11" width="1" height="1" fill="#111"/>
+						</svg>
+					</div>
 					<div>
 						<p class="label">On your phone</p>
 						<div class="field">http://192.168.1.42:8765/gallery</div>
@@ -729,8 +790,8 @@
 		</div>
 	</section>
 
-	<!-- GALLERY -->
-	<section id="view-gallery" class="screen" aria-label="Gallery wireframe">
+	<!-- GALLERY — single responsive column (320px+); no decorative phone frame -->
+	<section id="view-gallery" class="screen" aria-label="Gallery">
 		<div class="gallery-toolbar">
 			<h2 style="margin: 0; font-size: 1.2rem;">Gallery</h2>
 			<fieldset class="toggle-group">
@@ -740,51 +801,52 @@
 			</fieldset>
 		</div>
 
-		<div class="phone-frame-wrap">
+		<div class="gallery-layout">
 			<div class="gallery-main">
 				<div id="timeline-view">
 					<div class="year-block">
 						<h3 class="year-title">2025</h3>
 						<p class="month-label">September</p>
 						<div class="thumb-grid">
-							<div class="thumb">IMG_001</div>
-							<div class="thumb">IMG_002</div>
-							<div class="thumb">VID_003</div>
-							<div class="thumb">IMG_004</div>
-							<div class="thumb">IMG_005</div>
-							<div class="thumb">IMG_006</div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span><span class="thumb-badge">Video</span></div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
 						</div>
 					</div>
 					<div class="year-block">
 						<h3 class="year-title">2024</h3>
 						<p class="month-label">December</p>
 						<div class="thumb-grid">
-							<div class="thumb">…</div>
-							<div class="thumb">…</div>
-							<div class="thumb">…</div>
-							<div class="thumb">…</div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
 						</div>
 					</div>
 				</div>
-				<div id="calendar-view" class="calendar-mock" aria-hidden="true">
-					<div class="cal-cell">M</div><div class="cal-cell">T</div><div class="cal-cell">W</div><div class="cal-cell">T</div><div class="cal-cell">F</div><div class="cal-cell">S</div><div class="cal-cell">S</div>
-					<div class="cal-cell"></div><div class="cal-cell"></div><div class="cal-cell">1</div><div class="cal-cell has-media">2</div><div class="cal-cell">3</div><div class="cal-cell has-media">4</div><div class="cal-cell">5</div>
-					<div class="cal-cell">6</div><div class="cal-cell has-media">7</div><div class="cal-cell">8</div><div class="cal-cell">9</div><div class="cal-cell has-media">10</div><div class="cal-cell">11</div><div class="cal-cell">12</div>
+				<div id="calendar-view" class="calendar-panel" aria-hidden="true">
+					<div class="calendar-nav">
+						<button type="button" class="btn btn-ghost" aria-label="Previous month">←</button>
+						<h3>September 2025</h3>
+						<button type="button" class="btn btn-ghost" aria-label="Next month">→</button>
+					</div>
+					<div class="calendar-grid">
+						<span class="cal-cell weekday">M</span><span class="cal-cell weekday">T</span><span class="cal-cell weekday">W</span><span class="cal-cell weekday">T</span><span class="cal-cell weekday">F</span><span class="cal-cell weekday">S</span><span class="cal-cell weekday">S</span>
+						<span class="cal-cell"></span><span class="cal-cell"></span><span class="cal-cell">1</span><button type="button" class="cal-cell has-media">2</button><span class="cal-cell">3</span><button type="button" class="cal-cell has-media selected">4</button><span class="cal-cell">5</span>
+						<span class="cal-cell">6</span><button type="button" class="cal-cell has-media">7</button><span class="cal-cell">8</span><span class="cal-cell">9</span><button type="button" class="cal-cell has-media">10</button><span class="cal-cell">11</span><span class="cal-cell">12</span>
+					</div>
+					<p class="month-label calendar-day-grid">September 4, 2025</p>
+					<div class="thumb-grid">
+						<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+						<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+					</div>
 				</div>
 			</div>
-
-			<aside class="phone-frame" aria-label="Mobile preview">
-				<div class="phone-notch"></div>
-				<h3 class="year-title">2025 · Sep</h3>
-				<div class="thumb-grid">
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-				</div>
-			</aside>
+			<!-- Empty state (shown when converted/ has no files): -->
+			<p class="gallery-empty-hint" hidden>No media in converted/ yet. Finish convert on the wizard, then return here.</p>
 		</div>
 	</section>
 
@@ -863,12 +925,14 @@
 			btnCalendar.classList.remove('active');
 			timelineView.style.display = 'block';
 			calendarView.classList.remove('visible');
+			calendarView.setAttribute('aria-hidden', 'true');
 		});
 		btnCalendar.addEventListener('click', function () {
 			btnCalendar.classList.add('active');
 			btnTimeline.classList.remove('active');
 			timelineView.style.display = 'none';
 			calendarView.classList.add('visible');
+			calendarView.setAttribute('aria-hidden', 'false');
 		});
 
 		var btnConnInfo = document.getElementById('btn-connection-info');

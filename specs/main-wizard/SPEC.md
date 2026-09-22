@@ -14,7 +14,10 @@
 - **Step gating (UX):**
   - **Start convert** is **disabled** when extract is **`running`** or **`paused`**, or when **`originals/` has zero files** (recursive count).
   - **Start convert** is **enabled** when extract is **not** active (`idle`, `completed`, `stopped`, or `error`) **and** `originals/` has at least one file (including after a partial extract or a previous run).
-  - Step 3 disabled until convert has run at least once to completion **or** user opens gallery when `converted/` is non-empty (manual “Open gallery” always allowed if `converted/` has media).
+  - Step 3 **Visualize** card is **disabled** only when `converted/` is empty **and** convert is not running (no gallery to show yet).
+  - Step 3 is **enabled** when `converted/` file count **> 0** (including media from a previous session before this launch) **or** convert is **running** / **completed**.
+  - **Open gallery**, LAN URL, and QR are available whenever Step 3 is enabled.
+  - SPA routing: `GET /gallery` loads the app and **activates the Gallery view** (not the wizard). Tab switches and **Open gallery** update the browser path (`/` vs `/gallery`) via History API.
 - **Exit:** User closes desktop window; background jobs should honor pause/cancel where implemented (pause: extract first; convert pause: out of scope v1 unless noted in extract spec).
 
 ## Visual & UI rules
@@ -35,7 +38,11 @@
   - **Error bucket:** rendered **only** when `error/` file count **> 0**. When count is **0**, the warning block is **not in the DOM** or is **hidden** with no placeholder — users must not see an empty warning.
   - **Invalid bucket:** same rule for `invalid/` count **> 0** only.
   - When visible: warning styling; error — **Review**, **Move to converted**; invalid — **Review** only.
-- **Step 3 — Visualize:** LAN URL field, QR code for same URL, **Open gallery** button.
+- **Step 3 — Visualize:** status line (`Not started` | `In progress: N%` | `Ready: N files`), LAN URL field, **scannable QR** encoding the same URL, **Open gallery** button.
+- **Step 3 status rules:**
+  - `Not started` — `converted/` count is 0 and convert is idle.
+  - `In progress: N%` — convert job is running (same percent as Step 2).
+  - `Ready: N files` — `converted/` count **> 0** (N = recursive file count).
 - Real-time progress: WebSocket messages update percent and counts without full page reload.
 - **Global footer:** on every main view, a persistent footer with link **About & Legal** opens a **mini page** (scrollable in-app route, e.g. `/about` or overlay — not a top-level wizard tab). Wireframe: [wireframes/app.html](../../wireframes/app.html) footer + `#view-legal`. **UX approved** (2026-09-22).
 - **About & Legal page content:** Privacy summary + contact email, third-party tool names with **external home page links**, disclaimer summary (backups, no liability). Production loads full markdown from bundled `docs/legal/` (same sections).
@@ -51,6 +58,22 @@
 - **And** Step 1 status is `Not started`
 - **And** Step 2 shows `Waiting for extract to finish` or equivalent when extract not complete
 - **And** Step 3 shows `Not started` when `converted/` is empty
+- **And** Step 3 card is disabled when `converted/` is empty and convert is idle
+
+### Scenario: Visualize ready when converted already has files
+
+- **Given** SpaceMaker starts and `converted/` already contains at least one file (e.g. from a previous session)
+- **When** the main wizard is shown
+- **Then** Step 3 status is `Ready: N files` (N > 0)
+- **And** Step 3 card is not disabled
+- **And** **Open gallery** is enabled
+
+### Scenario: Gallery URL route
+
+- **Given** the local server is running
+- **When** the user navigates to `/gallery` (desktop or phone on LAN)
+- **Then** the Gallery view is shown (timeline or last-selected organization mode)
+- **And** the Main wizard tab is not the active view
 
 ### Scenario: Connection method info
 
@@ -150,7 +173,7 @@
 - **Given** the local server is bound to a LAN interface
 - **When** Step 3 is visible
 - **Then** a gallery URL with host IP and port is shown
-- **And** a QR code encodes that URL
+- **And** a scannable QR code encodes that URL (not plain host:port text)
 
 ### Scenario: Footer opens About and Legal
 
@@ -187,6 +210,7 @@
 | Layer | Focus |
 |-------|--------|
 | Unit | Step state machine: given extract/convert phase + folder counts → enabled buttons and status strings |
+| Unit | Visualize step: given `converted` count + convert phase → status text and card enabled flag |
 | Unit | Warning visibility from `FileSystem` port listing `error/` / `invalid/` (zero → hidden) |
 | Unit | Convert button: disabled when extract active or `originals/` empty |
 | Integration | WebSocket handler emits progress DTOs; one client receives ordered updates (mock use case) |

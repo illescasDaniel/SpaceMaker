@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from spacemaker.domain.library import LibraryFolder
 from spacemaker.domain.library_paths import skip_library_relative_path
@@ -121,6 +122,9 @@ class FakeMediaProbe:
 
 	def output_valid_video(self, path: str) -> bool:
 		return path in self.valid_videos
+
+	def captured_at(self, path: str) -> datetime | None:
+		return None
 
 
 @dataclass

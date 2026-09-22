@@ -22,6 +22,6 @@
 - [x] Bundled tools dev workflow (`tools/README.md`, `dev-tools`, no silent PATH in normal dev)
 - [x] Convert reliability: nested output dirs, failure surfacing, skip `.thumbnails` (extract + convert)
 - [x] Device detection: stale MTP/GVFS + session reconcile; API errors as JSON
-- [ ] **Gallery / Step 3 Visualize** — known UI issues (hand off to next agent)
+- [x] **Gallery / Step 3 Visualize** — status, routing, QR, timeline/calendar, EXIF, thumbs
 - [ ] Phase 4 (packaging): PyInstaller, bundled `tools/` in installer, legal assets in bundle
 - [x] Specs/docs: bundled third-party tools + legal (privacy, disclaimer, manifest)

@@ -6,18 +6,18 @@ _Last updated: 2026-09-22_
 
 ## Current focus
 
-**Phase 4 wizard + convert path stable** — bundled tools policy, extract/convert UX, device detection. **Gallery / Step 3 Visualize** has known issues; another agent owns that next.
+**Gallery / Visualize shipped** — full SDD increment on `main`. LAN gallery UX: firewall probe, larger QR, responsive layout.
 
 ## Just changed (session)
 
-- Bundled-only `tools/` resolution, `dev-tools` task, README; graceful `/api/devices` 503 + UI errors
-- Convert: nested `converted/` mkdir, failure messages, skip `.thumbnails` on extract + library scan
-- Device: GVFS usability, reconcile stale `device_id`, status only when device in current scan
-- Library root normalization; Qt WebEngine shutdown helper
+- Gallery: Step 3 `visualize` state, `/gallery` routing, thumbs, calendar, EXIF, segno QR
+- LAN: `lan_ip` fallback, skip device reconcile on settings, gallery-only init path
+- Firewall: `probe_gallery_port`, Step 3 ⓘ panel, `scripts/firewall/allow-spacemaker-port.sh`, `uv run task firewall-allow`
+- Agent skills: `save-changes`, `apply-worktree`, `delete-worktree` under `.cursor/skills/`
 
-## Next steps (other agent)
+## Next steps
 
-1. Fix **Visualize** column and **gallery** view (timeline/QR/routing)
+1. User: `sudo uv run task firewall-allow` if phone gallery still blocked (UFW enabled on CachyOS)
 2. Phase 4 packaging: PyInstaller + pinned binaries in `tools/`
 
 ## Run

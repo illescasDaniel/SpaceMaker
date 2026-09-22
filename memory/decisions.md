@@ -2,6 +2,18 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-22 — LAN firewall probe in bootstrap
+
+- **Context:** Phone gallery failed when UFW blocked TCP 8765; users need in-app hints without guessing.
+- **Decision:** `bootstrap/firewall.py` probes firewalld/UFW rules and a LAN TCP self-test; expose via `/api/server-info.firewall`. Shell helper `scripts/firewall/allow-spacemaker-port.sh` + task `firewall-allow`. Do not run MTP reconcile on every settings snapshot (blocks gallery clients).
+- **Rationale:** Detection is best-effort but actionable; device scans stay on `/api/devices` only.
+
+## 2026-09-22 — Gallery QR via segno (adapter-only)
+
+- **Context:** Step 3 and LAN sharing need a scannable QR for `/gallery`; domain must stay free of QR libraries.
+- **Decision:** Add `segno` as a runtime dependency; generate SVG at `GET /api/gallery/qr.svg` in the FastAPI adapter. Thumbnails lazy-generated under `{library}/.thumbnails/` via `SubprocessThumbnailGenerator` (ImageMagick / FFmpeg).
+- **Rationale:** Keeps hexagonal boundaries; small dependency; EXIF dates via existing bundled ExifTool on `MediaProbePort.captured_at`.
+
 ## 2026-09-22 — Bundled CLIs + legal pack
 
 - **Context:** User requires no manual third-party installs; privacy policy, third-party home pages, disclaimer in installer.

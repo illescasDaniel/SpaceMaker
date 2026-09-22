@@ -85,6 +85,10 @@ def normalize_extension(filename: str) -> str:
 	return filename.rsplit(".", 1)[-1].lower()
 
 
+def media_kind_for_filename(filename: str) -> MediaKind:
+	return media_kind_for_extension(normalize_extension(filename))
+
+
 def media_kind_for_extension(ext: str) -> MediaKind:
 	ext = ext.lower()
 	if ext in IMAGE_EXTENSIONS:

@@ -9,11 +9,11 @@ from spacemaker.domain.library import LibraryFolder
 
 def test_given_items_in_two_years_when_group_timeline_then_orders_newest_first():
 	# given
-	from spacemaker.domain.gallery import GalleryItem
+	from spacemaker.domain.gallery import gallery_item
 
 	items = [
-		GalleryItem("a", datetime(2024, 1, 1)),
-		GalleryItem("b", datetime(2025, 3, 1)),
+		gallery_item("a.avif", datetime(2024, 1, 1)),
+		gallery_item("b.avif", datetime(2025, 3, 1)),
 	]
 	# when
 	groups = group_timeline(items)

@@ -17,7 +17,7 @@ from spacemaker.bootstrap.services import create_app
 
 
 def run_server(*, port: int, host: str) -> None:
-	app = create_app(port=port)
+	app = create_app(port=port, bind_host=host)
 	uvicorn.run(app, host=host, port=port, log_level="info")
 
 

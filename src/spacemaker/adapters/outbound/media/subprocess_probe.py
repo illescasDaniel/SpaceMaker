@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
@@ -95,3 +96,25 @@ class SubprocessMediaProbe:
 			return False
 		text = result.stdout.strip()
 		return bool(text and re.match(r"^[0-9.]+$", text))
+
+	def captured_at(self, path: str) -> datetime | None:
+		source = str(Path(path).resolve())
+		try:
+			result = self._runner.run(
+				BundledTool.EXIFTOOL,
+				["-DateTimeOriginal", "-s", "-s", "-s", source],
+				check=False,
+			)
+		except FileNotFoundError:
+			return None
+		if result.returncode != 0:
+			return None
+		text = result.stdout.strip()
+		if not text:
+			return None
+		for fmt in ("%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+			try:
+				return datetime.strptime(text, fmt)
+			except ValueError:
+				continue
+		return None

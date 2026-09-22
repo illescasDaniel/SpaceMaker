@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>SpaceMaker — Wireframe</title>
+	<title>SpaceMaker</title>
 	<style>
 		:root {
 			--bg: #0f1419;
@@ -320,6 +320,11 @@
 			color: var(--muted);
 		}
 
+		.firewall-warn {
+			color: var(--warn);
+			margin-top: 0.35rem;
+		}
+
 		.folder-hint code {
 			background: var(--surface2);
 			padding: 0.1rem 0.35rem;
@@ -409,16 +414,21 @@
 		}
 
 		.qr-placeholder {
-			width: 88px;
-			height: 88px;
+			width: min(168px, 42vw);
+			height: min(168px, 42vw);
 			background: #fff;
 			border-radius: 8px;
-			display: grid;
-			place-items: center;
-			color: #333;
-			font-size: 0.65rem;
-			text-align: center;
-			padding: 4px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			overflow: hidden;
+		}
+
+		.qr-placeholder img {
+			width: 100%;
+			height: 100%;
+			display: block;
 		}
 
 		/* Gallery screen */
@@ -452,14 +462,20 @@
 			color: var(--text);
 		}
 
-		.phone-frame-wrap {
-			display: flex;
-			gap: 2rem;
-			flex-wrap: wrap;
-			align-items: flex-start;
+		#view-gallery.screen {
+			max-width: none;
+			width: 100%;
+			padding: 1rem clamp(0.75rem, 4vw, 2rem);
+			box-sizing: border-box;
 		}
 
-		.gallery-main { flex: 1; min-width: 280px; }
+		.gallery-layout {
+			width: 100%;
+			max-width: min(1400px, 100%);
+			margin: 0 auto;
+		}
+
+		.gallery-main { width: 100%; }
 
 		.year-block { margin-bottom: 1.5rem; }
 
@@ -479,65 +495,110 @@
 
 		.thumb-grid {
 			display: grid;
-			grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-			gap: 0.5rem;
+			grid-template-columns: repeat(auto-fill, minmax(min(104px, 26vw), 1fr));
+			gap: clamp(0.5rem, 2vw, 1rem);
+		}
+
+		@media (min-width: 640px) {
+			.thumb-grid {
+				grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+			}
+		}
+
+		@media (min-width: 1024px) {
+			.thumb-grid {
+				grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+			}
 		}
 
 		.thumb {
+			position: relative;
 			aspect-ratio: 1;
 			background: var(--surface2);
 			border-radius: 8px;
 			border: 1px solid var(--border);
-			display: flex;
-			align-items: flex-end;
-			padding: 0.35rem;
-			font-size: 0.65rem;
-			color: var(--muted);
+			overflow: hidden;
 		}
 
-		.phone-frame {
-			width: 320px;
-			border: 3px solid var(--border);
-			border-radius: 24px;
-			padding: 12px 8px;
-			background: var(--surface);
+		.thumb img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
 		}
 
-		.phone-notch {
-			width: 80px;
-			height: 6px;
-			background: var(--border);
-			border-radius: 3px;
-			margin: 0 auto 10px;
+		.thumb-badge {
+			position: absolute;
+			bottom: 4px;
+			right: 4px;
+			background: rgba(15, 20, 25, 0.85);
+			color: var(--text);
+			font-size: 0.6rem;
+			padding: 0.15rem 0.35rem;
+			border-radius: 4px;
 		}
 
-		.phone-frame .thumb-grid {
-			grid-template-columns: repeat(3, 1fr);
-		}
-
-		.phone-frame .year-title { font-size: 1rem; }
-
-		.calendar-mock {
+		.calendar-panel {
 			display: none;
+			width: 100%;
+			max-width: min(520px, 100%);
+		}
+
+		.calendar-panel.visible { display: block; }
+
+		.calendar-nav {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 0.75rem;
+			gap: 0.5rem;
+		}
+
+		.calendar-nav h3 {
+			margin: 0;
+			font-size: 1rem;
+			font-weight: 600;
+		}
+
+		.calendar-grid {
+			display: grid;
 			grid-template-columns: repeat(7, 1fr);
 			gap: 4px;
-			max-width: 360px;
 		}
-
-		.calendar-mock.visible { display: grid; }
 
 		.cal-cell {
 			aspect-ratio: 1;
 			background: var(--surface2);
 			border-radius: 4px;
+			font: inherit;
 			font-size: 0.7rem;
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			color: var(--muted);
+			border: none;
+			padding: 0;
 		}
 
-		.cal-cell.has-media { background: rgba(77, 171, 247, 0.25); color: var(--accent); }
+		.cal-cell.weekday {
+			background: transparent;
+			font-size: 0.65rem;
+			text-transform: uppercase;
+		}
+
+		.cal-cell.has-media {
+			background: rgba(77, 171, 247, 0.25);
+			color: var(--accent);
+			cursor: pointer;
+		}
+
+		.cal-cell.selected {
+			outline: 2px solid var(--accent);
+		}
+
+		.calendar-day-grid {
+			margin-top: 1.25rem;
+		}
 
 		.label-row {
 			display: flex;
@@ -772,27 +833,68 @@
 			</article>
 
 			<!-- Step 3: Visualize -->
-			<article class="step-card disabled" aria-labelledby="step3-title">
+			<article class="step-card disabled" id="step3-card" aria-labelledby="step3-title">
 				<div class="step-header">
 					<div class="step-num">3</div>
 					<h2 class="step-title" id="step3-title">Visualize</h2>
 				</div>
 				<p class="status-line">Open the gallery from <code>converted/</code> only.</p>
-				<p class="status-line"><strong>Status:</strong> Not started</p>
+				<p class="status-line" id="visualize-status"><strong>Status:</strong> Not started</p>
 				<div class="qr-block">
-					<p class="qr-placeholder" id="qr-placeholder" role="img" aria-label="QR code placeholder">QR</p>
+					<div class="qr-placeholder" id="qr-placeholder" role="img" aria-label="Gallery QR code"></div>
 					<div>
-						<p class="label">On your phone</p>
+						<div class="label-row">
+							<p class="label" style="margin: 0;">On your phone</p>
+							<button
+								type="button"
+								class="info-btn"
+								id="btn-lan-firewall-info"
+								title="LAN gallery and firewall"
+								aria-expanded="false"
+								aria-controls="lan-firewall-info-panel"
+							>
+								i
+							</button>
+						</div>
 						<div class="field" id="gallery-url">…</div>
+						<div class="info-panel" id="lan-firewall-info-panel" aria-hidden="true">
+							<h4>Phone cannot open the gallery?</h4>
+							<p>
+								Use the URL or QR above on the <strong>same Wi‑Fi</strong> as this PC. The address must be
+								your computer’s LAN IP (not <code>127.0.0.1</code> or <code>localhost</code>).
+							</p>
+							<h4>Linux firewall (CachyOS / KDE)</h4>
+							<p>
+								Allow <strong>inbound TCP <span class="lan-firewall-port">8765</span></strong> for the
+								SpaceMaker process. With UFW:
+							</p>
+							<p><code>sudo ufw allow 8765/tcp comment 'SpaceMaker LAN gallery'</code></p>
+							<p>
+								Or from the repo:
+								<code>sudo uv run task firewall-allow</code>
+							</p>
+							<p>
+								Plasma Firewall: System Settings → Network → Firewall → allow inbound TCP on this port.
+							</p>
+							<p class="folder-hint" style="margin-top: 0.5rem;">
+								SpaceMaker checks UFW/firewalld rules and whether a LAN self-test can reach this port when
+								the server is running.
+							</p>
+						</div>
+						<p class="folder-hint" id="gallery-lan-hint" hidden>
+							Phone must use your PC’s LAN address (not localhost). Same Wi‑Fi; allow port
+							<span id="gallery-lan-port">8765</span> in the firewall if the page never loads.
+						</p>
+						<p class="folder-hint firewall-warn" id="gallery-firewall-warn" hidden></p>
 					</div>
 				</div>
-				<button type="button" class="btn btn-primary" id="btn-open-gallery">Open gallery</button>
+				<button type="button" class="btn btn-primary" id="btn-open-gallery" disabled>Open gallery</button>
 			</article>
 		</div>
 	</section>
 
 	<!-- GALLERY -->
-	<section id="view-gallery" class="screen" aria-label="Gallery wireframe">
+	<section id="view-gallery" class="screen" aria-label="Gallery">
 		<div class="gallery-toolbar">
 			<h2 style="margin: 0; font-size: 1.2rem;">Gallery</h2>
 			<fieldset class="toggle-group">
@@ -802,51 +904,20 @@
 			</fieldset>
 		</div>
 
-		<div class="phone-frame-wrap">
+		<div class="gallery-layout">
 			<div class="gallery-main">
-				<div id="timeline-view">
-					<div class="year-block">
-						<h3 class="year-title">2025</h3>
-						<p class="month-label">September</p>
-						<div class="thumb-grid">
-							<div class="thumb">IMG_001</div>
-							<div class="thumb">IMG_002</div>
-							<div class="thumb">VID_003</div>
-							<div class="thumb">IMG_004</div>
-							<div class="thumb">IMG_005</div>
-							<div class="thumb">IMG_006</div>
-						</div>
+				<div id="timeline-view"></div>
+				<div id="calendar-view" class="calendar-panel" aria-hidden="true">
+					<div class="calendar-nav">
+						<button type="button" class="btn btn-ghost" id="btn-cal-prev" aria-label="Previous month">←</button>
+						<h3 id="calendar-title">Month</h3>
+						<button type="button" class="btn btn-ghost" id="btn-cal-next" aria-label="Next month">→</button>
 					</div>
-					<div class="year-block">
-						<h3 class="year-title">2024</h3>
-						<p class="month-label">December</p>
-						<div class="thumb-grid">
-							<div class="thumb">…</div>
-							<div class="thumb">…</div>
-							<div class="thumb">…</div>
-							<div class="thumb">…</div>
-						</div>
-					</div>
-				</div>
-				<div id="calendar-view" class="calendar-mock" aria-hidden="true">
-					<div class="cal-cell">M</div><div class="cal-cell">T</div><div class="cal-cell">W</div><div class="cal-cell">T</div><div class="cal-cell">F</div><div class="cal-cell">S</div><div class="cal-cell">S</div>
-					<div class="cal-cell"></div><div class="cal-cell"></div><div class="cal-cell">1</div><div class="cal-cell has-media">2</div><div class="cal-cell">3</div><div class="cal-cell has-media">4</div><div class="cal-cell">5</div>
-					<div class="cal-cell">6</div><div class="cal-cell has-media">7</div><div class="cal-cell">8</div><div class="cal-cell">9</div><div class="cal-cell has-media">10</div><div class="cal-cell">11</div><div class="cal-cell">12</div>
+					<div class="calendar-grid" id="calendar-grid"></div>
+					<p class="month-label calendar-day-grid" id="calendar-day-label" hidden></p>
+					<div class="thumb-grid" id="calendar-day-thumbs"></div>
 				</div>
 			</div>
-
-			<aside class="phone-frame" aria-label="Mobile preview">
-				<div class="phone-notch"></div>
-				<h3 class="year-title">2025 · Sep</h3>
-				<div class="thumb-grid">
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-					<div class="thumb"></div>
-				</div>
-			</aside>
 		</div>
 	</section>
 

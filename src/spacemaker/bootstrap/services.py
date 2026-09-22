@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import socket
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -13,6 +12,7 @@ from spacemaker.adapters.outbound.device.factory import device_repository_for
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
 from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMediaConverter
 from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaProbe
+from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.error_recovery import ErrorRecovery
@@ -36,20 +36,12 @@ def repo_root() -> Path:
 	return Path(__file__).resolve().parents[3]
 
 
-def lan_ip() -> str:
-	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	try:
-		sock.connect(("8.8.8.8", 80))
-		return sock.getsockname()[0]
-	except OSError:
-		return "127.0.0.1"
-	finally:
-		sock.close()
-
-
 class AppServices:
-	def __init__(self, *, port: int = 8765) -> None:
+	def __init__(self, *, port: int = 8765, bind_host: str = "0.0.0.0") -> None:
 		self.port = port
+		self.bind_host = bind_host
+		self._captured_at_cache_key = ""
+		self._captured_at_cache: dict[str, datetime] = {}
 		self.session = AppSession(library_root=normalize_library_root(default_library_root()))
 		self.filesystem = LocalFileSystem()
 		self.runner = ToolRunner()
@@ -57,6 +49,7 @@ class AppServices:
 		self.converter = SubprocessMediaConverter(self.runner)
 		self.error_recovery = ErrorRecovery(self.filesystem)
 		self.gallery = GenerateGallery(self.filesystem)
+		self.thumbnails = SubprocessThumbnailGenerator(self.runner)
 		self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spacemaker-job")
 		self._ws_clients: set[WebSocketLike] = set()
 		self._ws_lock = threading.Lock()
@@ -77,14 +70,26 @@ class AppServices:
 			return {f.value: 0 for f in LibraryFolder}
 		return {f.value: self.filesystem.count_files_in_folder(library_root, f) for f in LibraryFolder}
 
+	def invalidate_gallery_metadata_cache(self) -> None:
+		self._captured_at_cache_key = ""
+		self._captured_at_cache = {}
+
 	def captured_at_map(self, library_root: str) -> dict[str, datetime]:
+		if not library_root:
+			return {}
+		if library_root == self._captured_at_cache_key and self._captured_at_cache:
+			return self._captured_at_cache
 		root = self.filesystem.library_path(library_root, LibraryFolder.CONVERTED, "")
 		paths = self.filesystem.list_files_recursive(root)
 		out: dict[str, datetime] = {}
 		for rel in paths:
 			full = Path(self.filesystem.library_path(library_root, LibraryFolder.CONVERTED, rel))
-			if full.is_file():
-				out[rel] = datetime.fromtimestamp(full.stat().st_mtime)
+			if not full.is_file():
+				continue
+			captured = self.probe.captured_at(str(full))
+			out[rel] = captured if captured is not None else datetime.fromtimestamp(full.stat().st_mtime)
+		self._captured_at_cache_key = library_root
+		self._captured_at_cache = out
 		return out
 
 	def bind_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -130,16 +135,19 @@ class AppServices:
 		return changed
 
 	def enriched_snapshot(self) -> dict[str, object]:
-		self.reconcile_device_selection()
 		base = self.session.snapshot()
 		with self.session._lock:
 			folders = list(self.session.source_folders)
 			has_folders = len(folders) > 0
 			has_device = bool(self.session.device_id)
 			extract_phase = self.session.extract_phase
+			convert_phase = self.session.convert_phase
+			convert_percent = self.session.convert_progress.percent
 			library_root = self.session.library_root
 		actions = wizard_actions(
 			extract_phase=extract_phase,
+			convert_phase=convert_phase,
+			convert_progress_percent=convert_percent,
 			library_root=library_root,
 			count_in_folder=self.filesystem.count_files_in_folder,
 			has_device=has_device,
@@ -253,6 +261,7 @@ class AppServices:
 		self._executor.submit(self._run_convert, library_root)
 
 	def _run_convert(self, library_root: str) -> None:
+		self.invalidate_gallery_metadata_cache()
 		try:
 			use_case = self.convert_use_case()
 
@@ -289,12 +298,13 @@ class AppServices:
 			with self.session._lock:
 				self.session.convert_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)
+		self.invalidate_gallery_metadata_cache()
 		self.push_state()
 
 
-def create_app(*, port: int = 8765):
+def create_app(*, port: int = 8765, bind_host: str = "0.0.0.0"):
 	from spacemaker.adapters.inbound.web.app import create_fastapi_app
 
-	services = AppServices(port=port)
+	services = AppServices(port=port, bind_host=bind_host)
 	app = create_fastapi_app(services)
 	return app

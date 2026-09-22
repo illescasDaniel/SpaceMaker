@@ -15,11 +15,14 @@
 
 ## Visual & UI rules
 
-- **Toolbar:** title “Gallery”; toggle **Timeline** | **Calendar** (wireframe).
-- **Timeline view:** group by **Year**, then **Month**; responsive thumbnail grid (CSS object-fit cover in production).
-- **Calendar view:** month grid; days with media highlighted (count or dot); selecting day filters grid (v1: show month subset).
-- **Mobile:** layout must remain usable at ~320px width (wireframe phone frame).
-- **Performance:** lazy-load thumbnails; generate or cache thumbs on first index (implementation detail — spec requires perceived fast scroll on 1k+ items target).
+- **Layout:** single responsive column (no decorative phone-frame column; narrow viewport is the mobile layout).
+- **Toolbar:** title “Gallery”; toggle **Timeline** | **Calendar**.
+- **Timeline view:** group by **Year**, then **Month**; responsive thumbnail grid with **`object-fit: cover`** on thumb images.
+- **Calendar view:** month navigation (prev/next); weekday header row; days with media highlighted; selecting a day shows that day’s thumbnails below the grid.
+- **Mobile:** layout must remain usable at ~320px width.
+- **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`.
+- **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
+- **Performance:** cached thumbs; perceived fast scroll on 1k+ items target.
 
 ## Metadata for grouping
 
@@ -30,7 +33,7 @@
 
 - Server binds `0.0.0.0` on configurable port (default e.g. 8765).
 - Step 3 displays `http://{lan_ip}:{port}/gallery`.
-- QR encodes the same URL for phone camera scan.
+- QR encodes the same URL for phone camera scan (SVG or PNG from server; not placeholder text).
 
 ## Acceptance criteria (BDD)
 
@@ -93,6 +96,8 @@
 | Unit | Index excludes paths outside `converted/` |
 | Unit | Calendar mark algorithm for day sets |
 | Integration | HTTP GET `/gallery` returns 200 with fixture tree in `tmp_path` |
+| Integration | GET `/api/gallery/calendar` returns month + days-with-media; GET `/thumbs/…` returns JPEG after first request |
+| Unit | SPA path helper / snapshot includes `visualize` step state (see main-wizard spec) |
 | Out of scope | Visual snapshot tests until UI stable |
 
 ## Out of scope

@@ -1,23 +1,36 @@
 from __future__ import annotations
 
 import asyncio
+from io import BytesIO
 from pathlib import Path
 
+import segno
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from spacemaker.bootstrap.firewall import probe_gallery_port
+from spacemaker.bootstrap.lan import lan_ip
 from spacemaker.bootstrap.paths import (
 	default_library_root,
 	is_absolute_library_path,
 	normalize_library_root,
 	pictures_directory,
 )
-from spacemaker.bootstrap.services import AppServices, lan_ip, repo_root
+from spacemaker.bootstrap.services import AppServices, repo_root
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.gallery import GalleryItem
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import LibraryFolder, TransferMode
+
+
+def _gallery_item_dict(item: GalleryItem) -> dict[str, str]:
+	return {
+		"relative_path": item.relative_path,
+		"captured_at": item.captured_at.isoformat(),
+		"kind": item.kind.value,
+	}
 
 
 _STATIC = Path(__file__).resolve().parent / "static"
@@ -47,8 +60,33 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return FileResponse(_STATIC / "index.html")
 
 	@app.get("/api/server-info")
-	def server_info() -> dict[str, str | int]:
-		return {"host": lan_ip(), "port": services.port, "gallery_url": f"http://{lan_ip()}:{services.port}/gallery"}
+	def server_info() -> dict[str, object]:
+		host = lan_ip()
+		gallery_url = f"http://{host}:{services.port}/gallery"
+		lan_listening = services.bind_host in {"0.0.0.0", "::"}  # noqa: S104
+		firewall = probe_gallery_port(services.port, bind_host=services.bind_host)
+		return {
+			"host": host,
+			"port": services.port,
+			"gallery_url": gallery_url,
+			"qr_url": "/api/gallery/qr.svg",
+			"lan_listening": lan_listening,
+			"lan_reachable": lan_listening and host != "127.0.0.1",
+			"firewall": {
+				"backend": firewall.backend,
+				"active": firewall.active,
+				"port_open": firewall.port_open,
+				"lan_connect_ok": firewall.lan_connect_ok,
+				"message": firewall.message,
+			},
+		}
+
+	@app.get("/api/gallery/qr.svg")
+	def gallery_qr() -> Response:
+		gallery_url = f"http://{lan_ip()}:{services.port}/gallery"
+		buffer = BytesIO()
+		segno.make(gallery_url).save(buffer, kind="svg", scale=8)
+		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
 
 	@app.get("/api/defaults")
 	def defaults() -> dict[str, str]:
@@ -163,6 +201,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if not services.session.library_root:
 			raise HTTPException(status_code=400, detail="library_root required")
 		moved = services.error_recovery.move_all_errors_to_converted(services.session.library_root)
+		services.invalidate_gallery_metadata_cache()
 		services.push_state()
 		return {"moved": moved}
 
@@ -176,13 +215,61 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			{
 				"year": group.year,
 				"month": group.month,
-				"items": [
-					{"relative_path": item.relative_path, "captured_at": item.captured_at.isoformat()}
-					for item in group.items
-				],
+				"items": [_gallery_item_dict(item) for item in group.items],
 			}
 			for group in groups
 		]
+
+	@app.get("/api/gallery/calendar")
+	def gallery_calendar(year: int, month: int, library_root: str = "") -> dict[str, object]:
+		root = library_root or services.session.library_root
+		if not root:
+			return {"year": year, "month": month, "days_with_media": []}
+		days = services.gallery.calendar_days(
+			root,
+			year,
+			month,
+			captured_at_for=services.captured_at_map(root),
+		)
+		return {"year": year, "month": month, "days_with_media": days}
+
+	@app.get("/api/gallery/day")
+	def gallery_day(year: int, month: int, day: int, library_root: str = "") -> dict[str, object]:
+		root = library_root or services.session.library_root
+		if not root:
+			return {"year": year, "month": month, "day": day, "items": []}
+		items = services.gallery.list_day(
+			root,
+			year,
+			month,
+			day,
+			captured_at_for=services.captured_at_map(root),
+		)
+		return {
+			"year": year,
+			"month": month,
+			"day": day,
+			"items": [_gallery_item_dict(item) for item in items],
+		}
+
+	@app.get("/thumbs/{relative_path:path}")
+	def thumb_file(relative_path: str) -> FileResponse:
+		root = services.session.library_root
+		if not root:
+			raise HTTPException(status_code=404)
+		base = Path(services.filesystem.library_path(root, LibraryFolder.CONVERTED, "")).resolve()
+		target = (base / relative_path).resolve()
+		if not str(target).startswith(str(base)):
+			raise HTTPException(status_code=403, detail="invalid path")
+		if not target.is_file():
+			raise HTTPException(status_code=404)
+		try:
+			thumb_path = services.thumbnails.ensure_thumb(root, relative_path)
+		except FileNotFoundError as exc:
+			raise HTTPException(status_code=404, detail=str(exc)) from exc
+		except OSError as exc:
+			raise HTTPException(status_code=500, detail="thumbnail generation failed") from exc
+		return FileResponse(thumb_path, media_type="image/jpeg")
 
 	@app.get("/api/legal/{doc_id}")
 	def legal_doc(doc_id: str) -> dict[str, str]:

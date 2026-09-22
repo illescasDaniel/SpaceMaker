@@ -15,6 +15,7 @@ dependencies = [
 	"pyqt6>=6.11.0",
 	"pyqt6-webengine>=6.11.0",
 	"pywebview>=6.2.1",
+	"segno>=1.6.1",
 	"qtpy>=2.4.3",
 	"uvicorn>=0.53.0",
 	"websockets>=17.1",
@@ -77,6 +78,9 @@ lines-after-imports = 2
 "tests/**" = ["S101"]
 "src/spacemaker/adapters/outbound/**" = ["S603", "S607"]
 "src/spacemaker/desktop.py" = ["S104"]
+"src/spacemaker/bootstrap/services.py" = ["S104"]
+"src/spacemaker/bootstrap/firewall.py" = ["S603", "S607", "S104"]
+"scripts/firewall/**" = ["S603", "S607"]
 
 [tool.ty.environment]
 python-version = "3.11"
@@ -102,3 +106,4 @@ format = { cmd = "uv run ruff check --fix src tests && uv run ruff format src te
 spacemaker = { cmd = "uv run spacemaker", help = "launch SpaceMaker desktop (pywebview + server)" }
 spacemaker-server = { cmd = "uv run spacemaker --server-only", help = "run API/UI in browser only" }
 dev-tools = { cmd = "bash scripts/packaging/prepare-dev-tools.sh", help = "populate tools/ for local dev (-- --from-path)" }
+firewall-allow = { cmd = "bash scripts/firewall/allow-spacemaker-port.sh", help = "allow LAN gallery port in ufw/firewalld (run with sudo)" }

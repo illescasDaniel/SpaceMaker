@@ -83,6 +83,9 @@ Project workflows:
 - `.cursor/skills/playbooks/` — when to read full playbooks vs adaptations
 - `.cursor/skills/agent-memory/` — memory bank updates and hand-off
 - `.cursor/skills/fast-tests/` — pytest conventions (srxy-style)
+- `.cursor/skills/save-changes/` — memory update, commit, push (`/save-changes`)
+- `.cursor/skills/apply-worktree/` — merge agent worktree into main checkout + `uv run task checks`
+- `.cursor/skills/delete-worktree/` — remove isolated worktree after apply
 
 Always-on rules: `agent-memory.mdc`, `sdd.mdc`, `hexagonal-python.mdc`, `playbooks.mdc`.
 
