@@ -600,6 +600,22 @@
 			margin-bottom: 1rem;
 		}
 
+		.gallery-meta .gallery-disk-path dd {
+			font-family: ui-monospace, monospace;
+			font-size: 0.78rem;
+			word-break: break-all;
+		}
+
+		.btn-danger {
+			background: transparent;
+			color: var(--error);
+			border: 1px solid var(--error);
+		}
+
+		.btn-danger:hover {
+			background: rgba(255, 107, 107, 0.12);
+		}
+
 		.alert-info {
 			background: rgba(77, 171, 247, 0.12);
 			border: 1px solid var(--accent);
@@ -1332,7 +1348,9 @@
 			<dl class="gallery-meta" id="gallery-item-meta"></dl>
 			<div class="gallery-item-actions">
 				<button type="button" class="btn btn-primary" id="btn-gallery-download">Download</button>
+				<button type="button" class="btn btn-secondary" id="btn-gallery-share" hidden>Share</button>
 				<button type="button" class="btn btn-secondary" id="btn-gallery-friendly" hidden>Download as JPEG</button>
+				<button type="button" class="btn btn-danger" id="btn-gallery-delete" title="Delete from this computer">Delete</button>
 			</div>
 			<div class="alert alert-info" id="gallery-export-alert" role="alert" hidden>
 				<span class="alert-icon" aria-hidden="true">⏳</span>

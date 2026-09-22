@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-22 — Gallery item delete and Web Share export
+
+- **Context:** Item page needed host path visibility, safe removal from `converted/`, and phone-friendly sharing without manual download steps.
+- **Decision:** `GetGalleryItem` returns `absolute_path`; `DeleteGalleryItem` removes converted file + `.thumbnails` cache entry; `DELETE /api/gallery/item`. **Share** reuses friendly export job + fetches blob client-side; `navigator.share({ files })` when supported, else attachment download.
+- **Rationale:** Single encode path for share/download; delete stays in application layer via `FileSystemPort`; Web Share availability is browser/OS dependent so fallback is required.
+
 ## 2026-09-22 — Start convert stops active extract
 
 - **Context:** Users may want to convert files already in `originals/` without manually stopping extract first (common during Wi‑Fi receive).

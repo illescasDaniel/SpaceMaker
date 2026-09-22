@@ -23,6 +23,7 @@ from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.extract_media import ExtractMedia
 from spacemaker.application.generate_gallery import GenerateGallery
+from spacemaker.application.delete_gallery_item import DeleteGalleryItem
 from spacemaker.application.get_gallery_item import GetGalleryItem
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.wizard_state import wizard_actions
@@ -66,6 +67,7 @@ class AppServices:
 		self.error_recovery = ErrorRecovery(self.filesystem)
 		self.gallery = GenerateGallery(self.filesystem)
 		self.get_gallery_item = GetGalleryItem(self.filesystem, self.probe)
+		self.delete_gallery_item = DeleteGalleryItem(self.filesystem)
 		self.export_friendly = ExportFriendlyMedia(self.filesystem, self.converter, self.probe)
 		self.thumbnails = SubprocessThumbnailGenerator(self.runner)
 		self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spacemaker-job")
@@ -100,6 +102,13 @@ class AppServices:
 	def invalidate_gallery_metadata_cache(self) -> None:
 		self._captured_at_cache_key = ""
 		self._captured_at_cache = {}
+
+	def remove_gallery_item(self, library_root: str, relative_path: str) -> bool:
+		removed = self.delete_gallery_item.run(library_root, relative_path)
+		if removed:
+			self.invalidate_gallery_metadata_cache()
+			self.push_state()
+		return removed
 
 	def captured_at_map(self, library_root: str) -> dict[str, datetime]:
 		if not library_root:

@@ -15,6 +15,7 @@ from spacemaker.ports.outbound.media_probe import MediaProbePort
 class GalleryItemDetail:
 	item: GalleryItem
 	metadata: GalleryDisplayMetadata
+	absolute_path: str
 
 
 class GetGalleryItem:
@@ -40,4 +41,4 @@ class GetGalleryItem:
 			when = datetime.fromtimestamp(path.stat().st_mtime)
 		item = gallery_item(relative_path=relative_path, captured_at=when)
 		meta = self._probe.display_metadata(full)
-		return GalleryItemDetail(item=item, metadata=meta)
+		return GalleryItemDetail(item=item, metadata=meta, absolute_path=str(path.resolve()))

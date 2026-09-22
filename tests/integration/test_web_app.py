@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -140,6 +142,30 @@ def test_given_converted_file_when_gallery_item_api_then_metadata(tmp_path) -> N
 	body = response.json()
 	assert body["relative_path"] == "photo.avif"
 	assert body["metadata"]["filename"] == "photo.avif"
+	assert Path(body["absolute_path"]).resolve() == (converted / "photo.avif").resolve()
+
+
+def test_given_converted_file_when_delete_item_then_removed(tmp_path) -> None:
+	library = tmp_path / "lib"
+	converted = library / "converted"
+	converted.mkdir(parents=True)
+	(converted / "photo.avif").write_bytes(b"x")
+
+	client = TestClient(create_app())
+	client.put(
+		"/api/settings",
+		json={
+			"library_root": str(library),
+			"connection_method": "mtp",
+			"transfer_mode": "copy",
+			"device_id": "",
+			"source_folders": ["dcim"],
+		},
+	)
+	response = client.delete("/api/gallery/item", params={"path": "photo.avif"})
+	assert response.status_code == 200
+	assert response.json()["deleted"] is True
+	assert not (converted / "photo.avif").is_file()
 
 
 def test_given_media_download_flag_when_get_then_attachment(tmp_path) -> None:

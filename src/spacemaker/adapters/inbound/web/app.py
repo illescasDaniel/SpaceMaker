@@ -405,10 +405,26 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			raise HTTPException(status_code=404, detail="not found")
 		return {
 			"relative_path": detail.item.relative_path,
+			"absolute_path": detail.absolute_path,
 			"captured_at": detail.item.captured_at.isoformat(),
 			"kind": detail.item.kind.value,
 			"metadata": _metadata_dict(detail.metadata),
 		}
+
+	@app.delete("/api/gallery/item")
+	def gallery_item_delete(path: str, library_root: str = "") -> dict[str, object]:
+		root = library_root or services.session.library_root
+		if not root:
+			raise HTTPException(status_code=400, detail="library not configured")
+		if not is_safe_gallery_relative_path(path):
+			raise HTTPException(status_code=403, detail="invalid path")
+		try:
+			removed = services.remove_gallery_item(root, path)
+		except ValueError as exc:
+			raise HTTPException(status_code=403, detail=str(exc)) from exc
+		if not removed:
+			raise HTTPException(status_code=404, detail="not found")
+		return {"deleted": True, "relative_path": path}
 
 	@app.post("/api/gallery/export")
 	def gallery_export_start(body: GalleryExportBody) -> dict[str, object]:

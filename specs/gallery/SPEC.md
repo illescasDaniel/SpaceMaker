@@ -23,7 +23,7 @@
 - **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`.
 - **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
 - **Performance:** cached thumbs; perceived fast scroll on 1k+ items target.
-- **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, max ~70vh). Metadata block under preview. **Download** (stored file) plus **Download as JPEG** (images) or **Download as MP4** (videos). Export progress in an on-page alert with progress bar; download starts when ready.
+- **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, max ~70vh). Metadata block under preview includes **On disk** (absolute path under library `converted/`). **Download** (stored file); **Share** (friendly JPEG/MP4 export then system share sheet when the browser supports `navigator.share` with files, otherwise download); **Download as JPEG** / **Download as MP4**; **Delete** (removes file from `converted/` on the host PC, drops cached thumb, refreshes gallery index). Export progress in an on-page alert with progress bar.
 
 ## Metadata for grouping
 
@@ -81,8 +81,23 @@
 - **Given** a file in `converted/` listed in the gallery
 - **When** user opens `/gallery/item/{relative_path}` or clicks its thumbnail
 - **Then** a large preview is shown (image or video with controls)
-- **And** metadata appears below the preview
-- **And** Download and format-friendly download actions are visible
+- **And** metadata appears below the preview including the on-disk path
+- **And** Download, Share, format-friendly download, and Delete actions are visible
+
+### Scenario: Delete gallery item from disk
+
+- **Given** the gallery item page for a file in `converted/`
+- **When** user confirms **Delete**
+- **Then** the file is removed from `converted/` on the host
+- **And** the user returns to the gallery grid without that item
+
+### Scenario: Share friendly export
+
+- **Given** the gallery item page for an image or video
+- **When** user chooses **Share**
+- **Then** the server prepares JPEG or H.264+AAC MP4 (same rules as friendly download)
+- **And** when the browser supports sharing files, the system share UI opens with that file
+- **And** otherwise the browser downloads the export
 
 ### Scenario: Download stored file
 

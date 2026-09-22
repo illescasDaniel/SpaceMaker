@@ -23,7 +23,7 @@
 - [x] Convert reliability: nested output dirs, failure surfacing, skip `.thumbnails` (extract + convert)
 - [x] Device detection: stale MTP/GVFS + session reconcile; API errors as JSON
 - [x] **Gallery / Step 3 Visualize** — status, routing, QR, timeline/calendar, EXIF, thumbs
-- [x] **Gallery item page** — preview, metadata, Download + JPEG/MP4 export (server-side, WS progress)
+- [x] **Gallery item page** — preview, metadata, on-disk path, Delete, Share + Download + JPEG/MP4 export (WS progress)
 - [x] **Wi‑Fi QR extract (default)** — phone upload session, tokenized LAN `/upload`, MTP/ADB cable modes retained
 - [x] Wizard: **Start convert** during active extract stops extract gracefully then converts `originals/`
 - [x] **Easy mode (default UI)** — light Easy + dark Advanced, auto Wi‑Fi receive, convert-as-received, View gallery + Gallery phone-help FAB; LAN mobile shells (upload/gallery); **wireframe approved** 2026-09-22

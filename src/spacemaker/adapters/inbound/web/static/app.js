@@ -26,6 +26,7 @@
 	var calendarSelectedDay = null;
 	var galleryItemPath = "";
 	var galleryItemKind = "image";
+	var galleryExportDelivery = "download";
 
 	function isAbsolutePath(path) {
 		if (!path) {
@@ -922,6 +923,50 @@
 		a.remove();
 	}
 
+	function friendlyExportFilename() {
+		var base = galleryItemPath.split("/").pop() || "share";
+		if (galleryItemKind === "video") {
+			return base.replace(/\.[^.]+$/, "") + ".mp4";
+		}
+		return base.replace(/\.[^.]+$/, "") + ".jpg";
+	}
+
+	function deliverFriendlyExport(downloadUrl) {
+		if (galleryExportDelivery === "share") {
+			setGalleryExportProgress(100, "Opening share…");
+			fetch(downloadUrl)
+				.then(function (r) {
+					if (!r.ok) {
+						throw new Error("Could not fetch export.");
+					}
+					return r.blob();
+				})
+				.then(function (blob) {
+					var name = friendlyExportFilename();
+					var mime = galleryItemKind === "video" ? "video/mp4" : "image/jpeg";
+					var file = new File([blob], name, { type: blob.type || mime });
+					if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+						return navigator.share({ files: [file], title: name });
+					}
+					triggerFileDownload(downloadUrl);
+				})
+				.catch(function (shareErr) {
+					if (shareErr && shareErr.name === "AbortError") {
+						return;
+					}
+					triggerFileDownload(downloadUrl);
+				})
+				.finally(function () {
+					setTimeout(hideGalleryExportAlert, 1500);
+					galleryExportDelivery = "download";
+				});
+			return;
+		}
+		setGalleryExportProgress(100, "Download starting…");
+		triggerFileDownload(downloadUrl);
+		setTimeout(hideGalleryExportAlert, 1500);
+	}
+
 	function applyGalleryExport(exp) {
 		var alertEl;
 		var err;
@@ -934,6 +979,7 @@
 			alertEl.hidden = false;
 		}
 		if (exp.phase === "error") {
+			galleryExportDelivery = "download";
 			setGalleryExportProgress(exp.percent || 0, "Export failed");
 			if (err) {
 				err.hidden = false;
@@ -942,23 +988,33 @@
 			return;
 		}
 		if (exp.phase === "running") {
-			setGalleryExportProgress(exp.percent || 0, "Preparing download…");
+			setGalleryExportProgress(
+				exp.percent || 0,
+				galleryExportDelivery === "share" ? "Preparing to share…" : "Preparing download…",
+			);
 			return;
 		}
 		if (exp.phase === "done") {
-			setGalleryExportProgress(100, "Download starting…");
 			if (exp.download_url) {
-				triggerFileDownload(exp.download_url);
+				deliverFriendlyExport(exp.download_url);
+			} else {
+				setTimeout(hideGalleryExportAlert, 1500);
 			}
-			setTimeout(hideGalleryExportAlert, 1500);
 		}
 	}
 
-	function startFriendlyExport() {
+	function startFriendlyExport(delivery) {
 		var fmt = galleryItemKind === "video" ? "h264_aac" : "jpeg";
+		var alertEl = document.getElementById("gallery-export-alert");
+		galleryExportDelivery = delivery || "download";
 		hideGalleryExportAlert();
-		setGalleryExportProgress(0, "Preparing download…");
-		document.getElementById("gallery-export-alert").hidden = false;
+		setGalleryExportProgress(
+			0,
+			galleryExportDelivery === "share" ? "Preparing to share…" : "Preparing download…",
+		);
+		if (alertEl) {
+			alertEl.hidden = false;
+		}
 		api("POST", "/api/gallery/export", { relative_path: galleryItemPath, format: fmt })
 			.then(applyGalleryExport)
 			.catch(function (exportErr) {
@@ -976,6 +1032,7 @@
 		var title = document.getElementById("gallery-item-title");
 		var metaHost = document.getElementById("gallery-item-meta");
 		var friendly = document.getElementById("btn-gallery-friendly");
+		var shareBtn = document.getElementById("btn-gallery-share");
 		if (!stage || !galleryItemPath) {
 			return;
 		}
@@ -1013,8 +1070,12 @@
 						friendly.textContent = "Download as JPEG";
 					}
 				}
+				if (shareBtn) {
+					shareBtn.hidden = false;
+				}
 				if (metaHost) {
 					rows = [
+						["On disk", payload.absolute_path || "—"],
 						["Captured", formatCaptured(meta.captured_at || payload.captured_at)],
 						[
 							"Camera",
@@ -1040,6 +1101,10 @@
 						var dd = document.createElement("dd");
 						dt.textContent = row[0];
 						dd.textContent = row[1];
+						if (row[0] === "On disk") {
+							dt.className = "gallery-disk-path";
+							dd.className = "gallery-disk-path";
+						}
 						metaHost.appendChild(dt);
 						metaHost.appendChild(dd);
 					});
@@ -1354,7 +1419,34 @@
 			if (!galleryItemPath) {
 				return;
 			}
-			startFriendlyExport();
+			startFriendlyExport("download");
+		});
+		onClick("btn-gallery-share", function () {
+			if (!galleryItemPath) {
+				return;
+			}
+			startFriendlyExport("share");
+		});
+		onClick("btn-gallery-delete", function () {
+			if (!galleryItemPath) {
+				return;
+			}
+			if (
+				!window.confirm(
+					"Delete this file from converted/ on this computer? This cannot be undone.",
+				)
+			) {
+				return;
+			}
+			api("DELETE", "/api/gallery/item?path=" + encodeURIComponent(galleryItemPath))
+				.then(function () {
+					galleryItemPath = "";
+					showView("gallery");
+					loadGallery();
+				})
+				.catch(function (err) {
+					window.alert(err.message || "Could not delete this file.");
+				});
 		});
 	}
 

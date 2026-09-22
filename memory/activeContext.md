@@ -2,22 +2,21 @@ _Last updated: 2026-09-22_
 
 ## Branch
 
-`main` — commit `4b9ae6a`; push skipped per user.
+`main` — unpushed local commits; push skipped per user.
 
 ## Current focus
 
-**Easy mode + mobile gallery** — wireframe approved; desktop Easy/Advanced + LAN phone shells.
+Gallery item actions + mobile gallery header polish.
 
 ## Just changed
 
-- Easy **View gallery**, Gallery FAB popup, SPA entry (LAN upload/gallery shells), light upload + `files_sent`
-- Mobile gallery: Timeline/Calendar pill toggle in header (no extra toolbar row)
+- Mobile gallery header: **SpaceMaker Gallery** left, Timeline/Calendar right (wrap when tight)
+- Gallery item: **On disk** path, **Delete**, **Share** (friendly export + `navigator.share` with download fallback)
 
 ## Next steps
 
-1. Optional: explicit **spec approved** for easy-mode in chat
-2. Manual smoke: desktop Easy + Gallery FAB; phone `/gallery` compact header
-3. Phase 4 packaging (open)
+1. Manual smoke: delete/share/path on desktop; Share on iOS Safari / Android Chrome
+2. Phase 4 packaging (open)
 
 ## Run
 
