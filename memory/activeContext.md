@@ -2,7 +2,7 @@ _Last updated: 2026-09-22_
 
 ## Branch
 
-`main` — unpushed commits after `efa4223`; push skipped per user.
+`main` — commit `3595e5f`; push skipped per user.
 
 ## Current focus
 
