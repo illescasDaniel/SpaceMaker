@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
+from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_app, reveal_in_file_manager
 from spacemaker.bootstrap.firewall import probe_gallery_port
 from spacemaker.bootstrap.lan import lan_ip
 from spacemaker.bootstrap.paths import (
@@ -79,13 +80,17 @@ class GalleryExportBody(BaseModel):
 	format: str
 
 
+class GalleryOpenBody(BaseModel):
+	relative_path: str
+	target: str
+
+
 _STATIC = Path(__file__).resolve().parent / "static"
 _LEGAL = {
 	"privacy": repo_root() / "docs" / "legal" / "PRIVACY.md",
 	"disclaimer": repo_root() / "docs" / "legal" / "DISCLAIMER.md",
 	"third_party": repo_root() / "docs" / "legal" / "THIRD_PARTY_TOOLS.md",
 }
-
 
 class SettingsBody(BaseModel):
 	library_root: str = ""
@@ -107,6 +112,15 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if entry is SpaEntry.MOBILE_GALLERY:
 			return _STATIC / "gallery_mobile.html"
 		return _STATIC / "mobile_remote.html"
+
+	@app.get("/json/version")
+	def devtools_version_probe() -> dict[str, str]:
+		# Qt WebEngine / Chromium poll this for remote debugging; stub avoids 404 log noise.
+		return {"Browser": "SpaceMaker", "Protocol-Version": "1.3"}
+
+	@app.get("/json/list")
+	def devtools_list_probe() -> list[dict[str, object]]:
+		return []
 
 	@app.get("/")
 	def root_page(request: Request) -> FileResponse:
@@ -426,6 +440,22 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			raise HTTPException(status_code=404, detail="not found")
 		return {"deleted": True, "relative_path": path}
 
+	@app.post("/api/gallery/open")
+	def gallery_open_on_host(body: GalleryOpenBody) -> dict[str, bool]:
+		target = _resolve_converted_file(services, body.relative_path)
+		try:
+			if body.target == "file":
+				open_file_with_default_app(str(target))
+			elif body.target == "folder":
+				reveal_in_file_manager(str(target))
+			else:
+				raise HTTPException(status_code=400, detail="unknown target")
+		except FileNotFoundError as exc:
+			raise HTTPException(status_code=404, detail=str(exc)) from exc
+		except OSError as exc:
+			raise HTTPException(status_code=500, detail=str(exc)) from exc
+		return {"ok": True}
+
 	@app.post("/api/gallery/export")
 	def gallery_export_start(body: GalleryExportBody) -> dict[str, object]:
 		root = services.session.library_root
@@ -442,7 +472,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return job.to_dict()
 
 	@app.get("/api/gallery/export/{job_id}/file")
-	def gallery_export_file(job_id: str) -> FileResponse:
+	def gallery_export_file(job_id: str, inline: int = 0) -> FileResponse:
 		job = services.get_export_job(job_id)
 		if job is None:
 			raise HTTPException(status_code=404, detail="unknown job")
@@ -451,7 +481,12 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		path = Path(job.download_path)
 		if not path.is_file():
 			raise HTTPException(status_code=404, detail="export file missing")
-		return FileResponse(path, headers={"Content-Disposition": _attachment_filename(path)})
+		name = path.name.replace('"', "")
+		if inline:
+			disposition = f'inline; filename="{name}"'
+		else:
+			disposition = _attachment_filename(path)
+		return FileResponse(path, headers={"Content-Disposition": disposition})
 
 	@app.get("/api/gallery/day")
 	def gallery_day(year: int, month: int, day: int, library_root: str = "") -> dict[str, object]:

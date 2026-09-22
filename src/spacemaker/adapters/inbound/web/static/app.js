@@ -26,8 +26,6 @@
 	var calendarSelectedDay = null;
 	var galleryItemPath = "";
 	var galleryItemKind = "image";
-	var galleryExportDelivery = "download";
-
 	function isAbsolutePath(path) {
 		if (!path) {
 			return false;
@@ -923,45 +921,7 @@
 		a.remove();
 	}
 
-	function friendlyExportFilename() {
-		var base = galleryItemPath.split("/").pop() || "share";
-		if (galleryItemKind === "video") {
-			return base.replace(/\.[^.]+$/, "") + ".mp4";
-		}
-		return base.replace(/\.[^.]+$/, "") + ".jpg";
-	}
-
 	function deliverFriendlyExport(downloadUrl) {
-		if (galleryExportDelivery === "share") {
-			setGalleryExportProgress(100, "Opening share…");
-			fetch(downloadUrl)
-				.then(function (r) {
-					if (!r.ok) {
-						throw new Error("Could not fetch export.");
-					}
-					return r.blob();
-				})
-				.then(function (blob) {
-					var name = friendlyExportFilename();
-					var mime = galleryItemKind === "video" ? "video/mp4" : "image/jpeg";
-					var file = new File([blob], name, { type: blob.type || mime });
-					if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-						return navigator.share({ files: [file], title: name });
-					}
-					triggerFileDownload(downloadUrl);
-				})
-				.catch(function (shareErr) {
-					if (shareErr && shareErr.name === "AbortError") {
-						return;
-					}
-					triggerFileDownload(downloadUrl);
-				})
-				.finally(function () {
-					setTimeout(hideGalleryExportAlert, 1500);
-					galleryExportDelivery = "download";
-				});
-			return;
-		}
 		setGalleryExportProgress(100, "Download starting…");
 		triggerFileDownload(downloadUrl);
 		setTimeout(hideGalleryExportAlert, 1500);
@@ -979,7 +939,6 @@
 			alertEl.hidden = false;
 		}
 		if (exp.phase === "error") {
-			galleryExportDelivery = "download";
 			setGalleryExportProgress(exp.percent || 0, "Export failed");
 			if (err) {
 				err.hidden = false;
@@ -988,10 +947,7 @@
 			return;
 		}
 		if (exp.phase === "running") {
-			setGalleryExportProgress(
-				exp.percent || 0,
-				galleryExportDelivery === "share" ? "Preparing to share…" : "Preparing download…",
-			);
+			setGalleryExportProgress(exp.percent || 0, "Preparing download…");
 			return;
 		}
 		if (exp.phase === "done") {
@@ -1003,15 +959,11 @@
 		}
 	}
 
-	function startFriendlyExport(delivery) {
+	function startFriendlyExport() {
 		var fmt = galleryItemKind === "video" ? "h264_aac" : "jpeg";
 		var alertEl = document.getElementById("gallery-export-alert");
-		galleryExportDelivery = delivery || "download";
 		hideGalleryExportAlert();
-		setGalleryExportProgress(
-			0,
-			galleryExportDelivery === "share" ? "Preparing to share…" : "Preparing download…",
-		);
+		setGalleryExportProgress(0, "Preparing download…");
 		if (alertEl) {
 			alertEl.hidden = false;
 		}
@@ -1032,7 +984,6 @@
 		var title = document.getElementById("gallery-item-title");
 		var metaHost = document.getElementById("gallery-item-meta");
 		var friendly = document.getElementById("btn-gallery-friendly");
-		var shareBtn = document.getElementById("btn-gallery-share");
 		if (!stage || !galleryItemPath) {
 			return;
 		}
@@ -1069,9 +1020,6 @@
 						friendly.hidden = false;
 						friendly.textContent = "Download as JPEG";
 					}
-				}
-				if (shareBtn) {
-					shareBtn.hidden = false;
 				}
 				if (metaHost) {
 					rows = [
@@ -1415,17 +1363,27 @@
 			}
 			triggerFileDownload("/media/" + encodeURI(galleryItemPath) + "?download=1");
 		});
+		onClick("btn-gallery-open", function () {
+			if (!galleryItemPath) {
+				return;
+			}
+			api("POST", "/api/gallery/open", { relative_path: galleryItemPath, target: "file" }).catch(function (err) {
+				window.alert(err.message || "Could not open this file.");
+			});
+		});
+		onClick("btn-gallery-open-folder", function () {
+			if (!galleryItemPath) {
+				return;
+			}
+			api("POST", "/api/gallery/open", { relative_path: galleryItemPath, target: "folder" }).catch(function (err) {
+				window.alert(err.message || "Could not open the folder.");
+			});
+		});
 		onClick("btn-gallery-friendly", function () {
 			if (!galleryItemPath) {
 				return;
 			}
-			startFriendlyExport("download");
-		});
-		onClick("btn-gallery-share", function () {
-			if (!galleryItemPath) {
-				return;
-			}
-			startFriendlyExport("share");
+			startFriendlyExport();
 		});
 		onClick("btn-gallery-delete", function () {
 			if (!galleryItemPath) {

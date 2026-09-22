@@ -5,8 +5,8 @@ Append-only log (newest first). Never rewrite history.
 ## 2026-09-22 — Gallery item delete and Web Share export
 
 - **Context:** Item page needed host path visibility, safe removal from `converted/`, and phone-friendly sharing without manual download steps.
-- **Decision:** `GetGalleryItem` returns `absolute_path`; `DeleteGalleryItem` removes converted file + `.thumbnails` cache entry; `DELETE /api/gallery/item`. **Share** reuses friendly export job + fetches blob client-side; `navigator.share({ files })` when supported, else attachment download.
-- **Rationale:** Single encode path for share/download; delete stays in application layer via `FileSystemPort`; Web Share availability is browser/OS dependent so fallback is required.
+- **Decision:** `GetGalleryItem` returns `absolute_path`; `DeleteGalleryItem` + `DELETE /api/gallery/item`. Desktop uses `POST /api/gallery/open` (xdg-open / OS reveal) instead of raw Download/Share; phone shell keeps Download + friendly export only. Stub `GET /json/version` for Chromium probe noise. HTML shells use default caching (no forced no-cache).
+- **Rationale:** Shell-specific markup; host actions on PC only; avoid uvicorn 404 spam without hurting reload performance in production.
 
 ## 2026-09-22 — Start convert stops active extract
 

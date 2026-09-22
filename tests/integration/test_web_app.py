@@ -17,6 +17,13 @@ def test_given_fresh_app_when_get_index_then_returns_html() -> None:
 	assert "SpaceMaker" in response.text
 
 
+def test_given_devtools_probe_when_get_json_version_then_200() -> None:
+	client = TestClient(create_app())
+	response = client.get("/json/version")
+	assert response.status_code == 200
+	assert response.json().get("Protocol-Version") == "1.3"
+
+
 def test_given_fresh_app_when_get_settings_then_defaults() -> None:
 	client = TestClient(create_app())
 	response = client.get("/api/settings")
@@ -143,6 +150,36 @@ def test_given_converted_file_when_gallery_item_api_then_metadata(tmp_path) -> N
 	assert body["relative_path"] == "photo.avif"
 	assert body["metadata"]["filename"] == "photo.avif"
 	assert Path(body["absolute_path"]).resolve() == (converted / "photo.avif").resolve()
+
+
+def test_given_converted_file_when_open_on_host_then_ok(tmp_path, monkeypatch) -> None:
+	library = tmp_path / "lib"
+	converted = library / "converted"
+	converted.mkdir(parents=True)
+	(converted / "photo.avif").write_bytes(b"x")
+	opened: list[str] = []
+	monkeypatch.setattr(
+		"spacemaker.adapters.inbound.web.app.open_file_with_default_app",
+		lambda path: opened.append(path),
+	)
+
+	client = TestClient(create_app())
+	client.put(
+		"/api/settings",
+		json={
+			"library_root": str(library),
+			"connection_method": "mtp",
+			"transfer_mode": "copy",
+			"device_id": "",
+			"source_folders": ["dcim"],
+		},
+	)
+	response = client.post(
+		"/api/gallery/open",
+		json={"relative_path": "photo.avif", "target": "file"},
+	)
+	assert response.status_code == 200
+	assert opened and opened[0].endswith("photo.avif")
 
 
 def test_given_converted_file_when_delete_item_then_removed(tmp_path) -> None:

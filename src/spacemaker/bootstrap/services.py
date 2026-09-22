@@ -18,12 +18,12 @@ from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaP
 from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.application.convert_media import ConvertMedia
+from spacemaker.application.delete_gallery_item import DeleteGalleryItem
 from spacemaker.application.easy_session import should_auto_start_wifi_extract
 from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.extract_media import ExtractMedia
 from spacemaker.application.generate_gallery import GenerateGallery
-from spacemaker.application.delete_gallery_item import DeleteGalleryItem
 from spacemaker.application.get_gallery_item import GetGalleryItem
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.wizard_state import wizard_actions
