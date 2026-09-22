@@ -22,7 +22,18 @@ How the files work and how to reset them on a new branch: [memory/README.md](mem
 
 ## Phase Gate Protocol
 
-Follow phases in order. **Two hard stops** require **explicit human confirmation in chat** before any later phase — do not infer approval from a broad “implement the plan” message, from an attached plan file alone, or from continuing the same thread.
+Follow phases in order. **Each phase gate** requires **explicit human confirmation in chat** before the next phase — do not infer approval from a broad “implement the plan” message, from an attached plan file alone, from **plan mode OK**, from **“complete all todos”**, or from continuing the same thread.
+
+### “Implement the plan” does not skip gates
+
+When the user approves a **plan** (including exiting plan mode) or asks to **implement the plan** / **finish the todos**:
+
+1. Deliver **only the next gate artifact** (usually Phase 0 wireframe).
+2. **End the turn.** Tell the user how to open the wireframe (path + `xdg-open` or equivalent).
+3. **Wait** for explicit design approval in chat (e.g. “wireframe approved”, “design LGTM”) before **any** `specs/` work.
+4. Repeat for spec, architecture, then tests/implementation — **one gate per approval**, unless the user explicitly approves multiple gates in one message.
+
+Batching Phase 0→4 in a single agent run after plan approval is a **protocol violation**, even if todos list all phases.
 
 | Phase | Deliverable | Gate |
 |-------|-------------|------|
@@ -44,6 +55,8 @@ Allowed **before** spec approval: `wireframes/`, `specs/`, and edits to `docs/` 
 ### After approval
 
 When the user explicitly approves the wireframe, proceed to Phase 1 only. When they explicitly approve the spec, proceed to Phase 2. If Phase 4 reveals a spec flaw, **rewrite the spec** (Phase 1), get **re-approval**, then update ports and tests. Do not patch around a bad spec.
+
+**Production UI** under `static/` must match an **approved** wireframe. If code landed before wireframe approval, treat it as provisional — do not call the UI “done” until design is approved and production is reconciled to the wireframe.
 
 Skill: `.cursor/skills/sdd-feature/SKILL.md` for the same workflow.
 

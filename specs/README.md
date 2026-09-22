@@ -4,7 +4,8 @@ Source of truth for behavior. Wireframes: [wireframes/app.html](../wireframes/ap
 
 | Spec | Scope |
 |------|--------|
-| [main-wizard/SPEC.md](main-wizard/SPEC.md) | 3-step UI, progress, error/invalid warnings, desktop shell |
+| [easy-mode/SPEC.md](easy-mode/SPEC.md) | Default Easy UI, auto Wi‑Fi receive, convert-as-received, gallery QR |
+| [main-wizard/SPEC.md](main-wizard/SPEC.md) | Advanced 3-step UI, progress, error/invalid warnings, desktop shell |
 | [extract-media/SPEC.md](extract-media/SPEC.md) | Device detection, source folders, pause/stop, copy/move, idempotent transfer |
 | [convert-media/SPEC.md](convert-media/SPEC.md) | Folder routing, encode policy, retries, user recovery actions |
 | [gallery/SPEC.md](gallery/SPEC.md) | Timeline/calendar, `converted/` only, LAN + QR |

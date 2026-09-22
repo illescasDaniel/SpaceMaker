@@ -63,7 +63,7 @@ Local FastAPI + static UI in pywebview; no cloud dependency. Gallery may expose 
 
 ## Device extract (Wi‑Fi default, MTP/ADB cable)
 
-- UI default: **Wi‑Fi** (QR + phone browser upload into `originals/` during a receive session; **Move** disabled).
+- UI default: **Easy** mode (light UI, auto Wi‑Fi receive, convert-as-received). **Advanced** wizard retains **Wi‑Fi** default connection (QR upload; **Move** disabled).
 - Alternates: **MTP** and **ADB (cable)** with info (ⓘ) for setup steps.
 - Hexagonal: `DeviceRepository` port; adapters `MtpDeviceRepository`, `AdbDeviceRepository` (adbutils on all OSes for ADB).
 - **MTP:** One **libmtp** adapter on all OSes; **bundle** libmtp CLI in release artifacts.

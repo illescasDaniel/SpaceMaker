@@ -6,22 +6,25 @@ _Last updated: 2026-09-22_
 
 ## Current focus
 
-**Wi‑Fi QR extract + convert during extract** — committed locally; push skipped per user request.
+**Easy mode wireframe polish** — pending user wireframe approval before treating production UI as final.
 
 ## Just changed (session)
 
-- Wi‑Fi default extract: QR upload session, phone pages, specs/docs, tests
-- **Start convert** during active extract: graceful stop + wait, then convert `originals/`
+- Easy mode feature (provisional): specs, domain, services, static UI, wireframes
+- SDD gate docs: plan OK ≠ wireframe approval; Phase 0 must end turn
 
 ## Next steps
 
-1. Phase 4 packaging: PyInstaller + pinned binaries in `tools/`
-2. Manual smoke: Wi‑Fi upload on LAN phone; convert while extract still running
+1. User reviews [wireframes/app.html](../wireframes/app.html) + [wireframes/phone-upload.html](../wireframes/phone-upload.html) after polish
+2. Explicit **wireframe approved** → reconcile production `static/` if needed, then continue gates
+3. Phase 4 packaging (open)
 
-## Run
+## Blocker
+
+- Wireframe UX approval required (Easy mode layout + phone upload light theme)
+
+## Review
 
 ```bash
-uv run task dev-tools -- --from-path
-uv run task spacemaker
-uv run task checks
+xdg-open wireframes/app.html wireframes/phone-upload.html
 ```

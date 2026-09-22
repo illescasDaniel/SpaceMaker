@@ -1,5 +1,6 @@
 (function () {
-	var lastMainView = "wizard";
+	var lastMainView = "home";
+	var uiMode = "easy";
 	var state = null;
 	var deviceLabels = {};
 	var defaultLibraryRoot = "";
@@ -112,11 +113,44 @@
 		});
 	}
 
+	function homeViewId() {
+		return uiMode === "easy" ? "easy" : "wizard";
+	}
+
+	function setUiMode(mode, options) {
+		options = options || {};
+		uiMode = mode === "advanced" ? "advanced" : "easy";
+		document.documentElement.setAttribute("data-ui-mode", uiMode);
+		var btnEasy = document.getElementById("btn-ui-easy");
+		var btnAdvanced = document.getElementById("btn-ui-advanced");
+		if (btnEasy) {
+			btnEasy.classList.toggle("active", uiMode === "easy");
+		}
+		if (btnAdvanced) {
+			btnAdvanced.classList.toggle("active", uiMode === "advanced");
+		}
+		if (!options.skipViewSwitch) {
+			var active = document.querySelector(".screen.active");
+			if (active && (active.id === "view-easy" || active.id === "view-wizard")) {
+				showView("home", { skipHistory: true });
+			}
+		}
+	}
+
+	function setUiModeFromState(next) {
+		var mode = next.ui_mode === "advanced" ? "advanced" : "easy";
+		if (mode !== uiMode) {
+			setUiMode(mode, { skipViewSwitch: false });
+		} else {
+			document.documentElement.setAttribute("data-ui-mode", uiMode);
+		}
+	}
+
 	function pathForMainView(viewId) {
 		if (viewId === "gallery") {
 			return "/gallery";
 		}
-		if (viewId === "wizard") {
+		if (viewId === "home" || viewId === "easy" || viewId === "wizard") {
 			return "/";
 		}
 		return null;
@@ -133,35 +167,40 @@
 	function showView(viewId, options) {
 		var path;
 		var itemPath;
+		var resolved = viewId;
 		options = options || {};
+		if (viewId === "home") {
+			resolved = homeViewId();
+		}
 		document.querySelectorAll(".screen").forEach(function (s) {
 			s.classList.remove("active");
 		});
-		document.getElementById("view-" + viewId).classList.add("active");
-		if (viewId === "wizard" || viewId === "gallery" || viewId === "gallery-item") {
+		document.getElementById("view-" + resolved).classList.add("active");
+		if (resolved === "easy" || resolved === "wizard" || resolved === "gallery" || resolved === "gallery-item") {
 			document.querySelectorAll(".view-tabs button").forEach(function (b) {
 				var tab = b.getAttribute("data-view");
 				b.classList.toggle(
 					"active",
-					tab === viewId || (viewId === "gallery-item" && tab === "gallery"),
+					tab === "gallery" && resolved.indexOf("gallery") === 0 ||
+						tab === "home" && (resolved === "easy" || resolved === "wizard"),
 				);
 			});
-			if (viewId === "wizard" || viewId === "gallery") {
-				lastMainView = viewId;
-				if (viewId === "gallery") {
+			if (resolved === "easy" || resolved === "wizard" || resolved === "gallery") {
+				lastMainView = resolved === "gallery" ? "gallery" : "home";
+				if (resolved === "gallery") {
 					loadGallery();
 				}
 			}
 			if (!options.skipHistory) {
-				if (viewId === "gallery-item" && galleryItemPath) {
+				if (resolved === "gallery-item" && galleryItemPath) {
 					itemPath = "/gallery/item/" + encodeURI(galleryItemPath);
 					if (location.pathname !== itemPath) {
 						history.pushState({ view: "gallery-item", path: galleryItemPath }, "", itemPath);
 					}
 				} else {
-					path = pathForMainView(viewId);
+					path = pathForMainView(resolved === "easy" || resolved === "wizard" ? "home" : resolved);
 					if (path !== null && location.pathname !== path) {
-						history.pushState({ view: viewId }, "", path);
+						history.pushState({ view: resolved }, "", path);
 					}
 				}
 			}
@@ -185,7 +224,7 @@
 			return;
 		}
 		if (location.pathname === "/" || location.pathname === "") {
-			showView("wizard", { skipHistory: true });
+			showView("home", { skipHistory: true });
 		}
 	}
 
@@ -324,8 +363,68 @@
 		showFormBanner("Bundled tools missing (" + missing.join(", ") + "). Run: uv run task dev-tools -- --from-path");
 	}
 
+	function updateEasyUi(next) {
+		var wifi = next.wifi_upload || {};
+		var uploadQr = document.getElementById("easy-upload-qr");
+		var uploadWait = document.getElementById("easy-upload-wait");
+		var transferStatus = document.getElementById("easy-transfer-status");
+		var transferFill = document.getElementById("easy-transfer-fill");
+		var convertStatus = document.getElementById("easy-convert-status");
+		var convertFill = document.getElementById("easy-convert-fill");
+		var galleryBlock = document.getElementById("easy-gallery-block");
+		var converted = (next.library_counts || {}).converted || 0;
+		var ep = next.extract.progress || { completed: 0, percent: 0 };
+		var cp = next.convert.progress || { completed: 0, total: 0, percent: 0 };
+		if (wifi.active && uploadQr) {
+			uploadQr.hidden = false;
+			if (wifi.qr_url) {
+				uploadQr.src = wifi.qr_url + "&_=" + Date.now();
+			}
+			if (uploadWait) {
+				uploadWait.hidden = true;
+			}
+		} else {
+			if (uploadQr) {
+				uploadQr.hidden = true;
+			}
+			if (uploadWait) {
+				uploadWait.hidden = false;
+				uploadWait.textContent =
+					next.extract.phase === "running" || next.extract.phase === "paused"
+						? "Preparing upload QR…"
+						: "Waiting to start Wi‑Fi receive…";
+			}
+		}
+		if (transferStatus) {
+			transferStatus.textContent = ep.completed + " files received";
+		}
+		if (transferFill) {
+			var transferPct = ep.total > 0 ? ep.percent : ep.completed > 0 ? 100 : 0;
+			transferFill.style.width = transferPct + "%";
+		}
+		if (convertStatus) {
+			if (next.convert.phase === "running") {
+				convertStatus.textContent =
+					"In progress — " + cp.completed + " / " + cp.total + " (" + cp.percent + "%)";
+			} else if (next.convert.phase === "error") {
+				convertStatus.textContent = "Failed — " + (next.last_error || "see Advanced for details");
+			} else if (next.convert.phase === "done" && cp.total > 0) {
+				convertStatus.textContent = "Completed — " + cp.completed + " file(s)";
+			} else {
+				convertStatus.textContent = ep.completed > 0 ? "Waiting for next file…" : "Waiting for files";
+			}
+		}
+		if (convertFill) {
+			convertFill.style.width = (next.convert.phase === "running" ? cp.percent : 0) + "%";
+		}
+		if (galleryBlock) {
+			galleryBlock.classList.toggle("panel-hidden", converted <= 0);
+		}
+	}
+
 	function applyState(next) {
 		state = next;
+		setUiModeFromState(next);
 		maybeShowMissingTools(next);
 		syncConnectionButtons(next.connection_method || "wifi");
 		var lib = document.getElementById("input-library-root");
@@ -341,6 +440,7 @@
 		updateConvertUi(next);
 		updateVisualizeUi(next);
 		updateWarnings(next);
+		updateEasyUi(next);
 		validateStep1Form(false);
 		updateExtractButtons(next);
 	}
@@ -622,6 +722,7 @@
 		var deviceId = sel ? sel.value : "";
 		var body = {
 			library_root: libraryRootForSave(),
+			ui_mode: uiMode,
 			connection_method: selectedConnectionMethod(),
 			transfer_mode: modeCopy?.classList.contains("selected") ? "copy" : "move",
 			device_id: deviceId,
@@ -1061,6 +1162,14 @@
 			if (urlField) {
 				urlField.textContent = info.gallery_url;
 			}
+			var easyGalleryQr = document.getElementById("easy-gallery-qr");
+			var easyGalleryUrl = document.getElementById("easy-gallery-url");
+			if (easyGalleryQr) {
+				easyGalleryQr.src = info.qr_url || "/api/gallery/qr.svg";
+			}
+			if (easyGalleryUrl) {
+				easyGalleryUrl.textContent = info.gallery_url || "";
+			}
 			portText = info.port ? String(info.port) : "8765";
 			if (portLabel) {
 				portLabel.textContent = portText;
@@ -1111,7 +1220,30 @@
 
 	document.querySelectorAll(".view-tabs button").forEach(function (btn) {
 		btn.addEventListener("click", function () {
-			showView(btn.getAttribute("data-view"));
+			var v = btn.getAttribute("data-view");
+			showView(v === "home" ? "home" : v);
+		});
+	});
+
+	document.getElementById("btn-ui-easy").addEventListener("click", function () {
+		setUiMode("easy");
+		pushSettings().then(function () {
+			if (uiMode === "easy") {
+				return api("POST", "/api/easy/bootstrap");
+			}
+			return null;
+		}).then(function (data) {
+			if (data) {
+				applyState(data);
+			}
+		}).catch(function (err) {
+			showFormBanner(err.message || "Could not switch to Easy mode.");
+		});
+	});
+	document.getElementById("btn-ui-advanced").addEventListener("click", function () {
+		setUiMode("advanced");
+		pushSettings().catch(function (err) {
+			showFormBanner(err.message || "Could not switch to Advanced mode.");
 		});
 	});
 
@@ -1119,16 +1251,18 @@
 		var active = document.querySelector(".screen.active");
 		if (
 			active &&
-			(active.id === "view-wizard" ||
+			(active.id === "view-easy" ||
+				active.id === "view-wizard" ||
 				active.id === "view-gallery" ||
 				active.id === "view-gallery-item")
 		) {
-			lastMainView = active.id === "view-gallery-item" ? "gallery" : active.id.replace("view-", "");
+			lastMainView =
+				active.id === "view-gallery-item" || active.id === "view-gallery" ? "gallery" : "home";
 		}
 		showView("legal");
 	});
 	document.getElementById("btn-legal-back").addEventListener("click", function () {
-		showView(lastMainView);
+		showView(lastMainView === "gallery" ? "gallery" : "home");
 	});
 
 	var btnTimeline = document.getElementById("btn-timeline");
@@ -1365,6 +1499,7 @@
 				settings.library_root = defaultLibraryRoot;
 				return api("PUT", "/api/settings", {
 					library_root: defaultLibraryRoot,
+					ui_mode: "easy",
 					connection_method: settings.connection_method,
 					transfer_mode: settings.transfer_mode,
 					device_id: settings.device_id,
@@ -1379,6 +1514,9 @@
 			routeFromPath();
 			if (isGalleryEntryPath()) {
 				return null;
+			}
+			if (uiMode === "easy") {
+				return api("POST", "/api/easy/bootstrap").then(applyState);
 			}
 			if (selectedConnectionMethod() === "wifi") {
 				return null;

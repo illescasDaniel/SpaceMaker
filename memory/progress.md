@@ -26,5 +26,6 @@
 - [x] **Gallery item page** — preview, metadata, Download + JPEG/MP4 export (server-side, WS progress)
 - [x] **Wi‑Fi QR extract (default)** — phone upload session, tokenized LAN `/upload`, MTP/ADB cable modes retained
 - [x] Wizard: **Start convert** during active extract stops extract gracefully then converts `originals/`
+- [x] **Easy mode (default UI)** — light Easy + dark Advanced, auto Wi‑Fi receive, convert-as-received, gallery QR gating
 - [ ] Phase 4 (packaging): PyInstaller, bundled `tools/` in installer, legal assets in bundle
 - [x] Specs/docs: bundled third-party tools + legal (privacy, disclaimer, manifest)

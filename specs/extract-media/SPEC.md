@@ -82,7 +82,8 @@ Users choose **which device folders** to include before extract. v1 uses a **mul
 ## Triggers & routing
 
 - **Start (USB):** User selects library root, **MTP or ADB**, **source folders**, Copy or Move mode, connected device, clicks **Start extract**.
-- **Start (Wi‑Fi):** User selects library root, **Wi‑Fi**, clicks **Start extract** — receive session opens (QR/URL).
+- **Start (Wi‑Fi, Advanced):** User selects library root, **Wi‑Fi**, clicks **Start extract** — receive session opens (QR/URL).
+- **Start (Wi‑Fi, Easy):** [easy-mode](../easy-mode/SPEC.md) — receive session starts automatically when Easy loads (default library root; no Start button).
 - **Pause:** User clicks **Pause extract** — finish the **current file** transfer, then enter **`paused`**; no new files start until **Resume**.
 - **Resume:** From **`paused`**, continue the same queue from the next pending file.
 - **Stop:** User clicks **Stop extract** — finish the **current file** if one is in flight, then **abort** the queue; state becomes **`stopped`**; completed/skipped files remain in `originals/`; user may **Start extract** again (idempotent skip rules apply).

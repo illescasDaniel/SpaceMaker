@@ -6,11 +6,13 @@ from dataclasses import dataclass, field
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import JobProgress, TransferMode
+from spacemaker.domain.ui_mode import UiMode
 
 
 @dataclass
 class AppSession:
 	library_root: str = ""
+	ui_mode: UiMode = UiMode.EASY
 	connection_method: ConnectionMethod = ConnectionMethod.WIFI
 	transfer_mode: TransferMode = TransferMode.COPY
 	device_id: str = ""
@@ -27,6 +29,7 @@ class AppSession:
 		with self._lock:
 			return {
 				"library_root": self.library_root,
+				"ui_mode": self.ui_mode.value,
 				"connection_method": self.connection_method.value,
 				"transfer_mode": self.transfer_mode.value,
 				"device_id": self.device_id,

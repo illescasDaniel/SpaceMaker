@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-ui-mode="easy">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -759,22 +759,212 @@
 		.legal-back {
 			margin-bottom: 1rem;
 		}
+
+		html[data-ui-mode="easy"] {
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--warn-bg: #fff9db;
+			--warn: #e67700;
+		}
+
+		html[data-ui-mode="easy"] .wireframe-banner {
+			background: #e7f5ff;
+			color: #1864ab;
+			border-bottom-color: var(--border);
+		}
+
+		.ui-mode-toggle {
+			display: flex;
+			gap: 0.25rem;
+			background: var(--surface);
+			padding: 0.25rem;
+			border-radius: 8px;
+			border: 1px solid var(--border);
+		}
+
+		.ui-mode-toggle button {
+			font: inherit;
+			border: none;
+			background: transparent;
+			color: var(--muted);
+			padding: 0.4rem 0.85rem;
+			border-radius: 6px;
+			cursor: pointer;
+			font-size: 0.85rem;
+		}
+
+		.ui-mode-toggle button.active {
+			background: var(--accent-dim);
+			color: #fff;
+			font-weight: 600;
+		}
+
+		.top-bar-inner {
+			display: flex;
+			align-items: center;
+			gap: 1rem;
+			flex-wrap: wrap;
+		}
+
+		.easy-screen {
+			max-width: 28rem;
+			margin: 0 auto;
+			padding: 2rem 1.5rem 3rem;
+			text-align: center;
+		}
+
+		.easy-qr-wrap {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 16px;
+			padding: 1.5rem;
+			margin-bottom: 1.25rem;
+		}
+
+		.easy-qr-wrap .qr-placeholder {
+			width: min(280px, 72vw);
+			height: min(280px, 72vw);
+			margin: 0 auto;
+			border-radius: 8px;
+		}
+
+		.easy-qr-wrap .qr-placeholder svg {
+			width: 100%;
+			height: 100%;
+		}
+
+		.easy-lead {
+			font-size: 1.05rem;
+			color: var(--text);
+			margin: 0 0 1.75rem;
+			line-height: 1.55;
+		}
+
+		.easy-progress-block {
+			text-align: left;
+			margin-bottom: 1.25rem;
+		}
+
+		.easy-progress-block .label {
+			margin-bottom: 0.35rem;
+		}
+
+		.easy-progress-block .status-line {
+			font-size: 0.85rem;
+			margin: 0.25rem 0 0.5rem;
+		}
+
+		.easy-gallery-block {
+			margin-top: 2rem;
+			padding-top: 1.5rem;
+			border-top: 1px solid var(--border);
+		}
+
+		.easy-gallery-block .qr-placeholder {
+			width: 160px;
+			height: 160px;
+			margin: 0 auto 0.75rem;
+		}
+
+		.easy-note {
+			font-size: 0.8rem;
+			color: var(--muted);
+			margin: 1rem 0 0;
+		}
+
+		.wireframe-demo-row {
+			margin-top: 2rem;
+			font-size: 0.75rem;
+			color: var(--muted);
+		}
+
+		.wireframe-demo-row button {
+			font: inherit;
+			border: 1px dashed var(--border);
+			background: var(--surface2);
+			color: var(--text);
+			padding: 0.35rem 0.65rem;
+			border-radius: 6px;
+			cursor: pointer;
+		}
 	</style>
 </head>
 <body>
-	<div class="wireframe-banner">Wireframe only — layout mock. Main tabs: wizard / gallery. Footer: About &amp; Legal.</div>
+	<div class="wireframe-banner">Wireframe only — Easy (light) default · Advanced (dark wizard). Toggle modes below. Footer: About &amp; Legal.</div>
 
 	<div class="app-shell">
 	<header class="top-bar">
-		<div class="logo">Space<span>Maker</span></div>
+		<div class="top-bar-inner">
+			<div class="logo">Space<span>Maker</span></div>
+			<nav class="ui-mode-toggle" aria-label="UI mode">
+				<button type="button" class="active" id="btn-ui-easy">Easy</button>
+				<button type="button" id="btn-ui-advanced">Advanced</button>
+			</nav>
+		</div>
 		<nav class="view-tabs" aria-label="Wireframe views">
-			<button type="button" class="active" data-view="wizard">Main wizard</button>
+			<button type="button" class="active" data-view="home">Main</button>
 			<button type="button" data-view="gallery">Gallery</button>
 		</nav>
 	</header>
 
-	<!-- MAIN WIZARD -->
-	<section id="view-wizard" class="screen active" aria-label="Three-step wizard">
+	<!-- EASY MODE -->
+	<section id="view-easy" class="screen active" aria-label="Easy mode">
+		<div class="easy-screen">
+			<div class="easy-qr-wrap">
+				<div class="qr-placeholder" role="img" aria-label="QR code for phone upload">
+					<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+						<rect width="21" height="21" fill="#fff"/>
+						<rect x="1" y="1" width="7" height="7" fill="#111"/>
+						<rect x="13" y="1" width="7" height="7" fill="#111"/>
+						<rect x="1" y="13" width="7" height="7" fill="#111"/>
+						<rect x="3" y="3" width="3" height="3" fill="#fff"/>
+						<rect x="15" y="3" width="3" height="3" fill="#fff"/>
+						<rect x="3" y="15" width="3" height="3" fill="#fff"/>
+						<rect x="10" y="10" width="1" height="1" fill="#111"/>
+						<rect x="12" y="8" width="2" height="1" fill="#111"/>
+					</svg>
+				</div>
+			</div>
+			<p class="easy-lead">Scan this QR code with your phone camera. Stay on the same Wi‑Fi, then choose photos and videos to send.</p>
+			<div class="easy-progress-block">
+				<p class="label" style="margin: 0;">Transfer</p>
+				<p class="status-line" id="easy-transfer-status">12 files received</p>
+				<div class="progress" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100">
+					<div class="progress-fill" id="easy-transfer-fill" style="width: 40%"></div>
+				</div>
+			</div>
+			<div class="easy-progress-block">
+				<p class="label" style="margin: 0;">Convert</p>
+				<p class="status-line" id="easy-convert-status">In progress: 65%</p>
+				<div class="progress" role="progressbar" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100">
+					<div class="progress-fill" id="easy-convert-fill" style="width: 65%"></div>
+				</div>
+			</div>
+			<div class="easy-gallery-block panel-hidden" id="easy-gallery-block">
+				<p class="label" style="margin: 0;">View your gallery on phone</p>
+				<div class="qr-placeholder" role="img" aria-label="QR code for gallery">
+					<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+						<rect width="21" height="21" fill="#fff"/>
+						<rect x="1" y="1" width="7" height="7" fill="#111"/>
+						<rect x="13" y="1" width="7" height="7" fill="#111"/>
+						<rect x="1" y="13" width="7" height="7" fill="#111"/>
+					</svg>
+				</div>
+				<p class="folder-hint" style="margin: 0;">http://192.168.1.42:8765/gallery</p>
+				<p class="easy-note">Please don&apos;t open this while uploading content.</p>
+			</div>
+			<p class="wireframe-demo-row">Wireframe demo: <button type="button" id="btn-easy-toggle-gallery">Toggle gallery QR</button></p>
+		</div>
+	</section>
+
+	<!-- MAIN WIZARD (Advanced) -->
+	<section id="view-wizard" class="screen" aria-label="Three-step wizard">
 		<p class="wizard-intro">
 			Backup, convert, and browse phone media locally. Three sequential steps; each card has its own status.
 		</p>
@@ -1049,17 +1239,41 @@
 	</footer>
 
 	<script>
-		var lastMainView = 'wizard';
+		var lastMainView = 'home';
+		var uiMode = 'easy';
+
+		function homeViewId() {
+			return uiMode === 'easy' ? 'easy' : 'wizard';
+		}
+
+		function setUiMode(mode) {
+			uiMode = mode;
+			document.documentElement.setAttribute('data-ui-mode', mode);
+			document.getElementById('btn-ui-easy').classList.toggle('active', mode === 'easy');
+			document.getElementById('btn-ui-advanced').classList.toggle('active', mode === 'advanced');
+			var active = document.querySelector('.screen.active');
+			if (active && (active.id === 'view-easy' || active.id === 'view-wizard')) {
+				showView('home');
+			}
+		}
 
 		function showView(viewId) {
+			var resolved = viewId;
+			if (viewId === 'home') {
+				resolved = homeViewId();
+			}
 			document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
-			document.getElementById('view-' + viewId).classList.add('active');
-			if (viewId === 'wizard' || viewId === 'gallery' || viewId === 'gallery-item') {
+			document.getElementById('view-' + resolved).classList.add('active');
+			if (resolved === 'easy' || resolved === 'wizard' || resolved === 'gallery' || resolved === 'gallery-item') {
 				document.querySelectorAll('.view-tabs button').forEach(function (b) {
-					b.classList.toggle('active', b.getAttribute('data-view') === 'gallery' && viewId.indexOf('gallery') === 0 || b.getAttribute('data-view') === viewId);
+					var tab = b.getAttribute('data-view');
+					b.classList.toggle(
+						'active',
+						tab === 'gallery' && resolved.indexOf('gallery') === 0 || tab === 'home' && (resolved === 'easy' || resolved === 'wizard'),
+					);
 				});
-				if (viewId === 'wizard' || viewId === 'gallery') {
-					lastMainView = viewId;
+				if (resolved === 'easy' || resolved === 'wizard' || resolved === 'gallery') {
+					lastMainView = resolved === 'gallery' ? 'gallery' : 'home';
 				}
 			}
 		}
@@ -1094,19 +1308,26 @@
 
 		document.querySelectorAll('.view-tabs button').forEach(function (btn) {
 			btn.addEventListener('click', function () {
-				showView(btn.getAttribute('data-view'));
+				var v = btn.getAttribute('data-view');
+				showView(v === 'home' ? 'home' : v);
 			});
+		});
+
+		document.getElementById('btn-ui-easy').addEventListener('click', function () { setUiMode('easy'); });
+		document.getElementById('btn-ui-advanced').addEventListener('click', function () { setUiMode('advanced'); });
+		document.getElementById('btn-easy-toggle-gallery').addEventListener('click', function () {
+			document.getElementById('easy-gallery-block').classList.toggle('panel-hidden');
 		});
 
 		document.getElementById('btn-footer-legal').addEventListener('click', function () {
 			var active = document.querySelector('.screen.active');
-			if (active && (active.id === 'view-wizard' || active.id === 'view-gallery')) {
-				lastMainView = active.id.replace('view-', '');
+			if (active && (active.id === 'view-easy' || active.id === 'view-wizard' || active.id === 'view-gallery')) {
+				lastMainView = active.id === 'view-gallery' ? 'gallery' : 'home';
 			}
 			showView('legal');
 		});
 		document.getElementById('btn-legal-back').addEventListener('click', function () {
-			showView(lastMainView);
+			showView(lastMainView === 'gallery' ? 'gallery' : 'home');
 		});
 
 		var btnTimeline = document.getElementById('btn-timeline');

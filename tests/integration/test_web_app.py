@@ -21,6 +21,7 @@ def test_given_fresh_app_when_get_settings_then_defaults() -> None:
 	assert response.status_code == 200
 	body = response.json()
 	assert body["connection_method"] == "wifi"
+	assert body["ui_mode"] == "easy"
 	assert body["extract"]["phase"] == "idle"
 	assert body["library_root"]
 	assert body["extract_controls"]["pause"] is False
@@ -252,3 +253,26 @@ def test_given_wifi_extract_running_with_originals_when_convert_start_then_stops
 	assert body["extract"]["phase"] == "stopped"
 	assert body["convert"]["phase"] in {"running", "done"}
 	assert body["wifi_upload"]["active"] is False
+
+
+def test_given_easy_bootstrap_when_post_then_wifi_extract_running(tmp_path) -> None:
+	library = tmp_path / "lib"
+	library.mkdir()
+	client = TestClient(create_app())
+	client.put(
+		"/api/settings",
+		json={
+			"library_root": str(library),
+			"ui_mode": "easy",
+			"connection_method": "wifi",
+			"transfer_mode": "copy",
+			"device_id": "",
+			"source_folders": [],
+		},
+	)
+	response = client.post("/api/easy/bootstrap")
+	assert response.status_code == 200
+	body = response.json()
+	assert body["ui_mode"] == "easy"
+	assert body["extract"]["phase"] == "running"
+	assert body["wifi_upload"]["active"] is True

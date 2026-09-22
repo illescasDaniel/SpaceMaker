@@ -18,6 +18,7 @@ from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaP
 from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.application.convert_media import ConvertMedia
+from spacemaker.application.easy_session import should_auto_start_wifi_extract
 from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.extract_media import ExtractMedia
@@ -28,12 +29,19 @@ from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.bundled_tools import missing_bundled_tools
 from spacemaker.bootstrap.paths import default_library_root, normalize_library_root
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.convert_policy import (
+	ConvertStartPolicy,
+	convert_start_policy,
+	should_auto_drain_after_upload,
+	should_requeue_convert_drain,
+)
 from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase
 from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode
 from spacemaker.domain.source_folders import SourceFolder, parse_source_folders
+from spacemaker.domain.ui_mode import UiMode
 
 
 class WebSocketLike(Protocol):
@@ -262,6 +270,7 @@ class AppServices:
 				control.after_file()
 		if outcome.disposition.value in {"saved", "skipped"}:
 			self.record_wifi_upload_progress()
+			self._maybe_start_convert_drain()
 
 	def push_state(self) -> None:
 		self.broadcast({"type": "state", "state": self.enriched_snapshot()})
@@ -463,14 +472,50 @@ class AppServices:
 			self._extract_future = None
 		self.push_state()
 
-	def start_convert(self) -> None:
+	def ensure_easy_session(self) -> None:
+		with self.session._lock:
+			self.session.ui_mode = UiMode.EASY
+			self.session.connection_method = ConnectionMethod.WIFI
+			self.session.transfer_mode = TransferMode.COPY
+			extract_phase = self.session.extract_phase
+			library_root = self.session.library_root
+		if library_root:
+			self.filesystem.ensure_library_folders(library_root)
+		if should_auto_start_wifi_extract(
+			ui_mode=UiMode.EASY,
+			extract_phase=extract_phase,
+			library_root=library_root,
+		):
+			self.start_extract()
+		self._maybe_start_convert_drain()
+
+	def _maybe_start_convert_drain(self) -> None:
+		with self.session._lock:
+			ui_mode = self.session.ui_mode
+			convert_phase = self.session.convert_phase
+			library_root = self.session.library_root
+		if not library_root:
+			return
+		originals = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
+		if not should_auto_drain_after_upload(
+			ui_mode=ui_mode,
+			convert_phase=convert_phase,
+			originals_count=originals,
+		):
+			return
+		self.start_convert(policy=ConvertStartPolicy.CONCURRENT_WITH_EXTRACT)
+
+	def start_convert(self, *, policy: ConvertStartPolicy | None = None) -> None:
 		with self.session._lock:
 			if self.session.convert_phase is JobPhase.RUNNING:
 				return
 			library_root = self.session.library_root
+			ui_mode = self.session.ui_mode
 		if not library_root:
 			return
-		self.stop_extract_and_wait()
+		resolved = policy or convert_start_policy(ui_mode=ui_mode)
+		if resolved is ConvertStartPolicy.STOP_EXTRACT_FIRST:
+			self.stop_extract_and_wait()
 		with self.session._lock:
 			originals = self.filesystem.count_files_in_folder(
 				self.session.library_root,
@@ -482,10 +527,11 @@ class AppServices:
 			self.session.convert_phase = JobPhase.RUNNING
 			self.session.convert_progress = JobProgress(0, originals)
 			self.session.last_error = ""
+			concurrent = resolved is ConvertStartPolicy.CONCURRENT_WITH_EXTRACT
 		self.push_state()
-		self._executor.submit(self._run_convert, library_root)
+		self._executor.submit(self._run_convert, library_root, concurrent_with_extract=concurrent)
 
-	def _run_convert(self, library_root: str) -> None:
+	def _run_convert(self, library_root: str, *, concurrent_with_extract: bool = False) -> None:
 		self.invalidate_gallery_metadata_cache()
 		try:
 			use_case = self.convert_use_case()
@@ -498,12 +544,31 @@ class AppServices:
 			progress = use_case.run(library_root, on_progress=on_progress)
 			with self.session._lock:
 				remaining = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
+				extract_phase = self.session.extract_phase
+			if should_requeue_convert_drain(
+				concurrent_with_extract=concurrent_with_extract,
+				remaining_originals=remaining,
+			):
+				with self.session._lock:
+					self.session.convert_progress = progress
+					self.session.convert_phase = JobPhase.IDLE
+				self.invalidate_gallery_metadata_cache()
+				self.push_state()
+				self.start_convert(policy=ConvertStartPolicy.CONCURRENT_WITH_EXTRACT)
+				return
+			with self.session._lock:
 				if progress.total == 0 and remaining > 0:
 					self.session.convert_phase = JobPhase.ERROR
 					self.session.last_error = (
 						f"convert found no files under {library_root}/originals "
 						f"({remaining} file(s) still on disk — check library path)"
 					)
+				elif (
+					concurrent_with_extract and remaining == 0 and extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+				):
+					self.session.convert_phase = JobPhase.IDLE
+					self.session.convert_progress = progress
+					self.session.last_error = ""
 				else:
 					self.session.convert_phase = JobPhase.DONE
 					self.session.convert_progress = progress

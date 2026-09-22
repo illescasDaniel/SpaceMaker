@@ -11,12 +11,26 @@ Do **not** skip or batch gates. After each gate deliverable, **stop the turn** a
 
 | User says | Agent may do |
 |-----------|----------------|
-| “Add feature X” / “implement the plan” | Phase 0 only (wireframe), then stop for **design approval** |
-| User approves wireframe / design | Phase 1 only (spec), then stop for **spec approval** |
+| “Add feature X” / “implement the plan” / plan mode OK / “complete all todos” | **Phase 0 only** (wireframe), then **end turn** for **design approval** |
+| User approves wireframe / design (explicit in chat) | Phase 1 only (spec), then stop for **spec approval** |
 | User approves spec | Phase 2 (ports/domain), then stop for **architecture approval** |
 | User approves architecture | Phases 3–4 (tests, then adapters + production UI) |
 
-An attached plan file or todo list is **not** wireframe or spec approval. The user must confirm design and spec in chat (e.g. “wireframe LGTM”, “spec approved”).
+An attached plan file, plan-mode approval, or todo list is **not** wireframe or spec approval. The user must confirm design and spec in chat (e.g. “wireframe LGTM”, “wireframe approved”, “spec approved”).
+
+### Anti-patterns (never do this)
+
+- Implementing specs, `src/`, or production `static/` in the **same turn** as the first wireframe drop.
+- Treating “implement the plan” as permission to run Phase 0–4 back-to-back.
+- Skipping the browser-review pause — always tell the user **when** to open `wireframes/…` and **wait** for their reply.
+
+### Wireframe hand-off (required text)
+
+After saving the wireframe, include:
+
+- Path: `wireframes/<file>.html`
+- Command: `xdg-open wireframes/<file>.html` (or full path)
+- Ask: explicit approval before spec or code
 
 **Forbidden before spec approval:** changes under `src/spacemaker/` or production `static/` except as part of an already-approved spec (refactors must keep specs green or update spec + re-approve).
 
@@ -27,7 +41,9 @@ Create or update `wireframes/<screen>.html` (self-contained HTML/CSS).
 - Wizard steps, gallery, warning banners for error/invalid folders
 - Desktop and mobile-width checks where relevant
 
-**Stop.** Ask: “Please review the wireframe at … — approve design so I can write the spec?”
+**Stop. End the turn.** Do not start Phase 1 in the same session turn unless the user already wrote explicit wireframe approval above.
+
+Ask: “Please review the wireframe at … — reply with wireframe approved (or requested changes) before I write the spec or touch production UI.”
 
 ## Phase 1 — Spec
 

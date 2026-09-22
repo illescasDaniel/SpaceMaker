@@ -22,11 +22,13 @@ from spacemaker.bootstrap.paths import (
 )
 from spacemaker.bootstrap.services import AppServices, repo_root
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.convert_policy import ConvertStartPolicy
 from spacemaker.domain.gallery import GalleryItem
 from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase, is_safe_gallery_relative_path
 from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import LibraryFolder, TransferMode
+from spacemaker.domain.ui_mode import UiMode
 
 
 def _gallery_item_dict(item: GalleryItem) -> dict[str, str]:
@@ -86,6 +88,7 @@ _LEGAL = {
 
 class SettingsBody(BaseModel):
 	library_root: str = ""
+	ui_mode: UiMode | None = None
 	connection_method: ConnectionMethod = ConnectionMethod.WIFI
 	transfer_mode: TransferMode = TransferMode.COPY
 	device_id: str = ""
@@ -153,8 +156,11 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.put("/api/settings")
 	def put_settings(body: SettingsBody) -> dict[str, object]:
 		with services.session._lock:
+			if body.ui_mode is not None:
+				services.session.ui_mode = body.ui_mode
 			if services.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
-				raise HTTPException(status_code=409, detail="cannot change settings during extract")
+				services.push_state()
+				return services.enriched_snapshot()
 			library_root = normalize_library_root(body.library_root)
 			if library_root and not is_absolute_library_path(library_root):
 				raise HTTPException(status_code=400, detail="library_root must be an absolute path")
@@ -186,6 +192,13 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			if services.session.library_root:
 				services.filesystem.ensure_library_folders(services.session.library_root)
 		services.push_state()
+		return services.enriched_snapshot()
+
+	@app.post("/api/easy/bootstrap")
+	def easy_bootstrap() -> dict[str, object]:
+		if not services.session.library_root or not is_absolute_library_path(services.session.library_root):
+			raise HTTPException(status_code=400, detail="choose a valid library folder")
+		services.ensure_easy_session()
 		return services.enriched_snapshot()
 
 	@app.get("/api/extract/upload-qr.svg")
@@ -317,7 +330,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			)
 		if services.session.convert_phase is JobPhase.RUNNING:
 			raise HTTPException(status_code=409, detail="convert already running")
-		services.start_convert()
+		services.start_convert(policy=ConvertStartPolicy.STOP_EXTRACT_FIRST)
 		return services.enriched_snapshot()
 
 	@app.post("/api/error/move-to-converted")

@@ -3,14 +3,14 @@
 ## Metadata
 
 - **Feature:** Primary desktop/web UI inside pywebview
-- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — tab “Main wizard”
-- **Related specs:** [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — Easy (default) + Advanced wizard
+- **Related specs:** [easy-mode](../easy-mode/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
 - **Transport:** HTTP for pages/API; WebSockets for extract and convert progress
 
 ## Triggers & routing
 
 - **Entry:** User launches SpaceMaker (`desktop.py` opens pywebview → local FastAPI origin).
-- **Default view:** Three-step wizard (cards 1–3). Gallery is a separate view (top tab or route `/gallery`; wireframe uses tabs).
+- **Default view:** **Easy** mode ([easy-mode](../easy-mode/SPEC.md)) — light UI, auto Wi‑Fi receive, convert-as-received. **Advanced** is the three-step wizard (cards 1–3). Header toggle **Easy | Advanced** (session-only; relaunch → Easy). Gallery is a separate tab or route `/gallery`; gallery chrome follows active mode theme (light in Easy, dark in Advanced).
 - **Step gating (UX):**
   - **Start convert** is **disabled** when **`originals/` has zero files** (recursive count) or convert is already **running**.
   - **Start convert** is **enabled** when `originals/` has at least one file, **including while extract is `running` or `paused`**.

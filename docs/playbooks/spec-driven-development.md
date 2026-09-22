@@ -20,13 +20,22 @@ Spec → ports → tests → implementation. If implementation exposes a spec fl
 
 ## Phase gates (see AGENTS.md)
 
-Each gate needs **explicit human confirmation in chat** before the next phase. Plans and todos do not replace wireframe or spec approval.
+Each gate needs **explicit human confirmation in chat** before the next phase. **Plan approval, plan-mode OK, attached plans, and todo lists do not replace wireframe or spec approval.**
 
-0. **Design** — wireframe in `wireframes/` → stop for UX/design approval  
+### Implement-the-plan rule
+
+When execution starts after a plan is approved:
+
+1. **First turn:** wireframe only → user opens HTML in browser → **wait** for “wireframe approved” (or change requests).
+2. **Next turns:** one gate at a time (spec → architecture → tests/implementation).
+
+Never batch all phases because the user said “implement the plan” or “complete all todos”.
+
+0. **Design** — wireframe in `wireframes/` → **end turn**; UX/design approval required  
 1. **Spec** — `specs/<feature>/SPEC.md` → stop for spec approval (no `src/` or production UI yet)  
 2. **Architecture** — domain + ports → stop for approval  
 3. **Tests** — unit tests from BDD  
-4. **Implementation** — adapters + production UI until green  
+4. **Implementation** — adapters + production UI until green; must match **approved** wireframe  
 
 If layout or behavior changes during implementation, update wireframe and/or spec and **re-approve** before continuing.
 
