@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import socket
+import sys
 import threading
 import time
 import webbrowser
@@ -13,6 +15,13 @@ from spacemaker.adapters.inbound.desktop_api import DesktopApi
 from spacemaker.adapters.inbound.qt_webengine_shutdown import install_qt_webengine_shutdown_fix
 from spacemaker.bootstrap.paths import webengine_storage_path
 from spacemaker.bootstrap.services import create_app
+from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
+
+
+def _port_in_use(port: int) -> bool:
+	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+		sock.settimeout(0.4)
+		return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
 def run_server(*, port: int, host: str) -> None:
@@ -33,6 +42,18 @@ def main(argv: list[str] | None = None) -> None:
 	)
 	args = parser.parse_args(argv)
 
+	if _port_in_use(args.port):
+		print(
+			f"Port {args.port} is already in use — an old SpaceMaker server is probably still running.",
+			file=sys.stderr,
+		)
+		print(
+			"Stop it (close other SpaceMaker windows or free the port), then run again.",
+			file=sys.stderr,
+		)
+		print(f"Or use another port: uv run spacemaker --port {args.port + 1}", file=sys.stderr)
+		sys.exit(1)
+
 	thread = threading.Thread(
 		target=run_server,
 		kwargs={"port": args.port, "host": args.host},
@@ -41,7 +62,8 @@ def main(argv: list[str] | None = None) -> None:
 	)
 	thread.start()
 
-	url = f"http://127.0.0.1:{args.port}/"
+	shell_query = UI_SHELL_VERSION.replace(".", "-")
+	url = f"http://127.0.0.1:{args.port}/?_shell={shell_query}"
 
 	if args.server_only:
 		thread.join()

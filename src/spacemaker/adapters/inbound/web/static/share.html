@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="icon" href="/favicon.ico" sizes="32x32">
+	<title>SpaceMaker — Download from PC</title>
+	<style>
+		:root {
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--radius: 12px;
+			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: var(--font);
+			background: var(--bg);
+			color: var(--text);
+			line-height: 1.5;
+		}
+		.page { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+		.logo { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.35rem; }
+		.logo span { color: var(--accent); }
+		.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+		.card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 0.5rem 0;
+			margin-bottom: 0.75rem;
+		}
+		.file-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.75rem;
+			padding: 0.65rem 1rem;
+			border-bottom: 1px solid var(--border);
+			font-size: 0.9rem;
+		}
+		.file-row:last-child { border-bottom: none; }
+		.file-name {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			flex: 1;
+			min-width: 0;
+		}
+		.btn-dl {
+			font: inherit;
+			border: none;
+			border-radius: 6px;
+			padding: 0.35rem 0.65rem;
+			cursor: pointer;
+			font-weight: 600;
+			background: var(--accent-dim);
+			color: #fff;
+			flex-shrink: 0;
+		}
+		.empty { color: var(--muted); font-size: 0.9rem; padding: 1rem; text-align: center; }
+		.hidden { display: none; }
+	</style>
+</head>
+<body>
+	<div class="page">
+		<p class="logo">Space<span>Maker</span></p>
+		<p class="sub">Download files shared from your PC.</p>
+		<div id="panel-ended" class="empty hidden">This share link has expired. Scan the QR code again on your PC.</div>
+		<div id="panel-list" class="card hidden"></div>
+	</div>
+	<script>
+	(function () {
+		var params = new URLSearchParams(window.location.search);
+		var token = params.get("t") || "";
+
+		function sessionUrl() {
+			return "/api/share/session?t=" + encodeURIComponent(token);
+		}
+
+		function downloadUrl(fileId) {
+			return "/api/share/download?t=" + encodeURIComponent(token) + "&file_id=" + encodeURIComponent(fileId);
+		}
+
+		function renderFiles(files) {
+			var list = document.getElementById("panel-list");
+			if (!list) {
+				return;
+			}
+			list.innerHTML = "";
+			if (!files.length) {
+				list.innerHTML = '<p class="empty">No files in this share yet.</p>';
+				list.classList.remove("hidden");
+				return;
+			}
+			files.forEach(function (file) {
+				var row = document.createElement("div");
+				row.className = "file-row";
+				var name = document.createElement("span");
+				name.className = "file-name";
+				name.textContent = file.name;
+				var btn = document.createElement("a");
+				btn.className = "btn-dl";
+				btn.href = downloadUrl(file.id);
+				btn.textContent = "Download";
+				btn.setAttribute("download", "");
+				row.appendChild(name);
+				row.appendChild(btn);
+				list.appendChild(row);
+			});
+			list.classList.remove("hidden");
+		}
+
+		function refreshSession() {
+			if (!token) {
+				document.getElementById("panel-ended").classList.remove("hidden");
+				return Promise.resolve(null);
+			}
+			return fetch(sessionUrl(), { headers: { Accept: "application/json" } })
+				.then(function (r) { return r.json(); })
+				.then(function (body) {
+					if (!body.active) {
+						document.getElementById("panel-ended").classList.remove("hidden");
+						document.getElementById("panel-list").classList.add("hidden");
+						return body;
+					}
+					document.getElementById("panel-ended").classList.add("hidden");
+					renderFiles(body.files || []);
+					return body;
+				});
+		}
+
+		refreshSession();
+		setInterval(refreshSession, 8000);
+	})();
+	</script>
+</body>
+</html>

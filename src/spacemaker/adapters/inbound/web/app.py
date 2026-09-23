@@ -17,12 +17,17 @@ from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_
 from spacemaker.bootstrap.firewall import probe_gallery_port
 from spacemaker.bootstrap.lan import lan_ip
 from spacemaker.bootstrap.paths import (
+	default_documents_receive_root,
 	default_library_root,
+	documents_directory,
+	documents_folder_open_target,
 	is_absolute_library_path,
 	normalize_library_root,
 	pictures_directory,
 )
 from spacemaker.bootstrap.services import AppServices, repo_root
+from spacemaker.bootstrap.ui_shell import NO_CACHE_HEADERS
+from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.convert_policy import ConvertStartPolicy
 from spacemaker.domain.gallery import GalleryItem
@@ -93,6 +98,18 @@ _LEGAL = {
 }
 
 
+class ModuleEnterBody(BaseModel):
+	module: AppModule
+
+
+class ShareSelectionBody(BaseModel):
+	paths: list[str]
+
+
+class LibraryOpenFolderBody(BaseModel):
+	bucket: str
+
+
 class SettingsBody(BaseModel):
 	library_root: str = ""
 	ui_mode: UiMode | None = None
@@ -103,9 +120,22 @@ class SettingsBody(BaseModel):
 	source_folders: list[str] | None = None
 
 
+def _no_cache_file(path: Path) -> FileResponse:
+	return FileResponse(path, headers=dict(NO_CACHE_HEADERS))
+
+
 def create_fastapi_app(services: AppServices) -> FastAPI:
 	app = FastAPI(title="SpaceMaker", version="0.1.0")
 	app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+
+	@app.middleware("http")
+	async def no_cache_shell_assets(request: Request, call_next):
+		response = await call_next(request)
+		path = request.url.path
+		if path == "/" or path.startswith("/gallery") or path == "/static/app.js":
+			for key, value in NO_CACHE_HEADERS.items():
+				response.headers[key] = value
+		return response
 
 	def _spa_file(entry: SpaEntry) -> Path:
 		if entry is SpaEntry.DESKTOP:
@@ -127,7 +157,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	def root_page(request: Request) -> FileResponse:
 		host = normalize_host(request.headers.get("host", ""))
 		entry = spa_entry_for(host=host, path="/")
-		return FileResponse(_spa_file(entry))
+		return _no_cache_file(_spa_file(entry))
 
 	@app.get("/gallery")
 	@app.get("/gallery/item/{relative_path:path}")
@@ -135,7 +165,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		_ = relative_path
 		host = normalize_host(request.headers.get("host", ""))
 		entry = spa_entry_for(host=host, path=request.url.path)
-		return FileResponse(_spa_file(entry))
+		return _no_cache_file(_spa_file(entry))
 
 	@app.get("/upload")
 	def upload_page(t: str = "") -> FileResponse:
@@ -146,6 +176,18 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.get("/upload/ended")
 	def upload_ended_page() -> FileResponse:
 		return FileResponse(_STATIC / "upload-ended.html")
+
+	@app.get("/receive")
+	def receive_page(t: str = "") -> FileResponse:
+		if not services.receive_token_valid(t):
+			return FileResponse(_STATIC / "upload-ended.html")
+		return FileResponse(_STATIC / "receive.html")
+
+	@app.get("/share")
+	def share_page(t: str = "") -> FileResponse:
+		if not services.share_token_valid(t):
+			return FileResponse(_STATIC / "upload-ended.html")
+		return FileResponse(_STATIC / "share.html")
 
 	@app.get("/api/server-info")
 	def server_info() -> dict[str, object]:
@@ -182,6 +224,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {
 			"default_library_root": root,
 			"pictures_directory": str(pictures_directory()),
+			"documents_receive_root": default_documents_receive_root(),
 		}
 
 	@app.get("/api/settings")
@@ -235,6 +278,145 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			raise HTTPException(status_code=400, detail="choose a valid library folder")
 		services.ensure_easy_session()
 		return services.enriched_snapshot()
+
+	@app.post("/api/module/enter")
+	def module_enter(body: ModuleEnterBody) -> dict[str, object]:
+		if body.module in {AppModule.PHOTO_BACKUP, AppModule.USB_PHOTO_BACKUP}:
+			if not services.session.library_root or not is_absolute_library_path(services.session.library_root):
+				raise HTTPException(status_code=400, detail="choose a valid library folder")
+		services.enter_module(body.module)
+		return services.enriched_snapshot()
+
+	@app.post("/api/module/home")
+	def module_home() -> dict[str, object]:
+		services.leave_module_for_home()
+		return services.enriched_snapshot()
+
+	@app.post("/api/share/selection")
+	def share_selection(body: ShareSelectionBody) -> dict[str, object]:
+		services.set_share_selection(body.paths)
+		return services.enriched_snapshot()
+
+	@app.get("/api/receive/qr.svg")
+	def receive_qr(t: str = "") -> Response:
+		if not services.receive_token_valid(t):
+			raise HTTPException(status_code=404, detail="receive session not active")
+		page_url = services._receive_files_snapshot()["page_url"]
+		if not page_url:
+			raise HTTPException(status_code=404, detail="receive session not active")
+		buffer = BytesIO()
+		segno.make(str(page_url)).save(buffer, kind="svg", scale=8)
+		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
+
+	@app.get("/api/share/qr.svg")
+	def share_qr(t: str = "") -> Response:
+		if not services.share_token_valid(t):
+			raise HTTPException(status_code=404, detail="share session not active")
+		page_url = services._file_share_snapshot()["page_url"]
+		if not page_url:
+			raise HTTPException(status_code=404, detail="share session not active")
+		buffer = BytesIO()
+		segno.make(str(page_url)).save(buffer, kind="svg", scale=8)
+		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
+
+	@app.get("/api/receive/session")
+	def receive_session_status(t: str = "") -> dict[str, object]:
+		if not services.receive_token_valid(t):
+			return {"active": False, "accepts_uploads": False, "phase": "ended", "files_sent": 0}
+		with services.session._lock:
+			phase = services.session.receive_files_phase.value
+			files_sent = services.session.receive_files_progress.completed
+		return {
+			"active": True,
+			"accepts_uploads": services.receive_session_accepts_uploads(),
+			"phase": phase,
+			"files_sent": files_sent,
+		}
+
+	@app.post("/api/receive")
+	async def receive_files_upload(
+		files: Annotated[list[UploadFile], File()],
+		t: Annotated[str, Query()] = "",
+	) -> dict[str, object]:
+		if not services.receive_token_valid(t):
+			raise HTTPException(status_code=403, detail="receive session ended")
+		if not services.receive_session_accepts_uploads():
+			raise HTTPException(status_code=409, detail="receive session paused or stopped")
+		if not files:
+			raise HTTPException(status_code=400, detail="no files")
+		results: list[dict[str, str]] = []
+		for upload in files:
+			raw_name = upload.filename or "upload.bin"
+			suffix = Path(raw_name).suffix
+			with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+				temp_path = tmp.name
+				size = 0
+				while True:
+					chunk = await upload.read(1024 * 1024)
+					if not chunk:
+						break
+					tmp.write(chunk)
+					size += len(chunk)
+			try:
+				services.handle_receive_upload(t, raw_name, temp_path, size)
+				results.append({"file": raw_name, "status": "ok"})
+			except PermissionError as exc:
+				services.filesystem.delete_file(temp_path)
+				raise HTTPException(status_code=409, detail=str(exc)) from exc
+			except ValueError as exc:
+				services.filesystem.delete_file(temp_path)
+				raise HTTPException(status_code=400, detail=str(exc)) from exc
+			except Exception:
+				services.filesystem.delete_file(temp_path)
+				raise
+		return {"uploaded": len(results), "files": results}
+
+	@app.get("/api/share/session")
+	def share_session_status(t: str = "") -> dict[str, object]:
+		if not services.share_token_valid(t):
+			return {"active": False, "files": []}
+		return {"active": True, "files": services.share_manifest(t)}
+
+	@app.get("/api/share/download")
+	def share_download(t: str = "", file_id: str = "") -> FileResponse:
+		if not file_id:
+			raise HTTPException(status_code=400, detail="file_id required")
+		target = services.shared_file_for_download(t, file_id)
+		if target is None:
+			raise HTTPException(status_code=404, detail="file not found")
+		return FileResponse(target, headers={"Content-Disposition": _attachment_filename(target)})
+
+	@app.post("/api/documents/open-folder")
+	def open_documents_folder() -> dict[str, bool]:
+		primary = documents_folder_open_target()
+		fallback = documents_directory()
+		try:
+			reveal_in_file_manager(str(primary))
+		except (OSError, FileNotFoundError):
+			if primary.resolve() == fallback.resolve():
+				raise HTTPException(status_code=500, detail="Could not open Documents folder") from None
+			try:
+				reveal_in_file_manager(str(fallback))
+			except (OSError, FileNotFoundError) as exc:
+				raise HTTPException(status_code=500, detail=str(exc)) from exc
+		return {"ok": True}
+
+	@app.post("/api/library/open-folder")
+	def open_library_folder(body: LibraryOpenFolderBody) -> dict[str, bool]:
+		bucket = body.bucket.strip().lower()
+		if bucket not in {"error", "invalid"}:
+			raise HTTPException(status_code=400, detail="unknown bucket")
+		root = services.session.library_root
+		if not root or not is_absolute_library_path(root):
+			raise HTTPException(status_code=400, detail="library not configured")
+		folder = LibraryFolder.ERROR if bucket == "error" else LibraryFolder.INVALID
+		target = Path(services.filesystem.library_path(root, folder, ""))
+		target.mkdir(parents=True, exist_ok=True)
+		try:
+			reveal_in_file_manager(str(target))
+		except OSError as exc:
+			raise HTTPException(status_code=500, detail=str(exc)) from exc
+		return {"ok": True}
 
 	@app.get("/api/extract/upload-qr.svg")
 	def extract_upload_qr(t: str = "") -> Response:

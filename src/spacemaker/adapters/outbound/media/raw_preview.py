@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+
 _RAW_PREVIEW_TAGS = ("PreviewImage", "JpgFromRaw")
 
 

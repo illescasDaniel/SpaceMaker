@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpaceMaker — Download from PC (wireframe)</title>
+	<style>
+		:root {
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--radius: 12px;
+			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		}
+		* { box-sizing: border-box; }
+		body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+		.wireframe-banner {
+			background: #e7f5ff;
+			color: #1864ab;
+			text-align: center;
+			padding: 0.5rem 1rem;
+			font-size: 0.8rem;
+			border-bottom: 1px solid var(--border);
+		}
+		.page { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+		.logo { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.35rem; }
+		.logo span { color: var(--accent); }
+		.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+		.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 1rem; margin-bottom: 0.75rem; }
+		.row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.65rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+		.row:last-child { border-bottom: none; }
+		.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+		.dl { font: inherit; border: none; border-radius: 6px; padding: 0.35rem 0.65rem; cursor: pointer; font-weight: 600; background: var(--accent-dim); color: #fff; flex-shrink: 0; }
+		.state-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 1rem; }
+		.state-tabs button {
+			font: inherit; font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px;
+			border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer;
+		}
+		.state-tabs button.active { background: var(--accent-dim); color: #fff; border-color: transparent; }
+		.panel-hidden { display: none; }
+		.empty { color: var(--muted); font-size: 0.9rem; padding: 1rem; text-align: center; }
+	</style>
+</head>
+<body>
+	<div class="wireframe-banner">Design preview — phone page for <strong>Send files</strong> (download list from PC share).</div>
+	<div class="page">
+		<div class="state-tabs" role="group" aria-label="Wireframe state mock">
+			<button type="button" class="active" data-state="list">File list</button>
+			<button type="button" data-state="ended">Link expired</button>
+		</div>
+		<p class="logo">Space<span>Maker</span></p>
+		<p class="sub">Download files shared from your PC.</p>
+		<div id="panel-list" class="card">
+			<div class="row"><span class="name">Documents/report.pdf</span><button type="button" class="dl">Download</button></div>
+			<div class="row"><span class="name">Pictures/vacation/DSC_0042.jpg</span><button type="button" class="dl">Download</button></div>
+			<div class="row"><span class="name">archive/notes.txt</span><button type="button" class="dl">Download</button></div>
+		</div>
+		<div id="panel-ended" class="card panel-hidden">
+			<p class="empty">This share link has expired. Scan the QR code again on your PC.</p>
+		</div>
+	</div>
+	<script>
+		document.querySelectorAll('.state-tabs button[data-state]').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				document.querySelectorAll('.state-tabs button[data-state]').forEach(function (b) { b.classList.remove('active'); });
+				btn.classList.add('active');
+				var state = btn.getAttribute('data-state');
+				document.getElementById('panel-list').classList.toggle('panel-hidden', state !== 'list');
+				document.getElementById('panel-ended').classList.toggle('panel-hidden', state !== 'ended');
+			});
+		});
+	</script>
+</body>
+</html>

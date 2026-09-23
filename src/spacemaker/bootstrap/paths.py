@@ -7,6 +7,33 @@ from pathlib import Path
 from spacemaker.domain.library import LIBRARY_FOLDERS
 
 
+def documents_directory() -> Path:
+	home = Path.home()
+	candidates: list[Path] = [home / "Documents"]
+	if sys.platform == "linux":
+		xdg = os.environ.get("XDG_DOCUMENTS_DIR")
+		if xdg:
+			candidates.insert(0, Path(xdg))
+	if sys.platform == "darwin":
+		candidates = [home / "Documents"]
+	for candidate in candidates:
+		if candidate.is_dir():
+			return candidate
+	return candidates[0]
+
+
+def default_documents_receive_root() -> str:
+	return str((documents_directory() / "SpaceMaker").resolve())
+
+
+def documents_folder_open_target() -> Path:
+	"""Receive destination if it exists; otherwise the user's Documents directory."""
+	spacemaker = Path(default_documents_receive_root())
+	if spacemaker.is_dir():
+		return spacemaker
+	return documents_directory()
+
+
 def pictures_directory() -> Path:
 	home = Path.home()
 	candidates: list[Path] = [home / "Pictures"]
@@ -26,8 +53,27 @@ def default_library_root() -> str:
 	return str((pictures_directory() / "SpaceMakerLibrary").resolve())
 
 
+def display_user_path(path: str, *, trailing_slash: bool = False) -> str:
+	text = path.strip()
+	if not text:
+		return ""
+	home = str(Path.home())
+	resolved = str(Path(text).expanduser().resolve())
+	if resolved == home:
+		display = "~"
+	elif resolved.startswith(home + os.sep):
+		display = "~" + resolved[len(home) :]
+	else:
+		display = resolved
+	if trailing_slash and not display.endswith("/"):
+		display += "/"
+	return display
+
+
 def webengine_storage_path() -> str:
-	base = Path.home() / ".cache" / "spacemaker" / "webengine"
+	from spacemaker.bootstrap.ui_shell import webengine_profile_slug
+
+	base = Path.home() / ".cache" / "spacemaker" / "webengine" / webengine_profile_slug()
 	base.mkdir(parents=True, exist_ok=True)
 	return str(base)
 

@@ -10,7 +10,7 @@
 ## Triggers & routing
 
 - **Entry:** User launches SpaceMaker (`desktop.py` opens pywebview → local FastAPI origin).
-- **Default view:** **Easy** mode ([easy-mode](../easy-mode/SPEC.md)) — light UI, auto Wi‑Fi receive, convert-as-received. **Advanced** is the three-step wizard (cards 1–3). Header toggle **Easy | Advanced** (session-only; relaunch → Easy). Gallery is a separate tab or route `/gallery`; gallery chrome follows active mode theme (light in Easy, dark in Advanced).
+- **Entry:** **USB photo backup** module from [home-modules](../home-modules/SPEC.md) — three-step wizard (cards 1–3). Header **Home | Gallery** (no Easy/Advanced toggle). Gallery tab unchanged; gallery chrome follows active module theme (light for Photo backup / Home, dark for USB wizard).
 - **Step gating (UX):**
   - **Start convert** is **disabled** when **`originals/` has zero files** (recursive count) or convert is already **running**.
   - **Start convert** is **enabled** when `originals/` has at least one file, **including while extract is `running` or `paused`**.

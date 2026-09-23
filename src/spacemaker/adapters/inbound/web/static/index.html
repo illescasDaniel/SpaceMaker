@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-ui-mode="easy">
+<html lang="en" data-ui-mode="home">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -928,7 +928,8 @@
 			margin-bottom: 1rem;
 		}
 
-		html[data-ui-mode="easy"] {
+		html[data-ui-mode="easy"],
+		html[data-ui-mode="home"] {
 			--bg: #f7f8fa;
 			--surface: #ffffff;
 			--surface2: #eef1f5;
@@ -989,8 +990,39 @@
 			margin-bottom: 1rem;
 		}
 
-		.easy-qr-wrap img {
+		.easy-qr-wrap.qr-frame {
 			width: min(268px, 82vw);
+			flex: 0 1 auto;
+		}
+
+		.qr-with-info {
+			display: flex;
+			align-items: flex-start;
+			justify-content: center;
+			gap: 0.5rem;
+		}
+
+		.qr-with-info .easy-qr-wrap,
+		.qr-with-info .qr-frame-compact {
+			margin-bottom: 0;
+		}
+
+		.qr-with-info > .info-btn {
+			flex-shrink: 0;
+			margin-top: 0.35rem;
+		}
+
+		.qr-frame-compact {
+			display: block;
+			line-height: 0;
+		}
+
+		.qr-with-info-compact > .info-btn {
+			margin-top: 0.15rem;
+		}
+
+		.easy-qr-wrap img {
+			width: 100%;
 			height: auto;
 			display: block;
 			margin: 0 auto;
@@ -998,6 +1030,21 @@
 
 		.easy-qr-wrap .folder-hint {
 			margin: 0.35rem 0 0;
+		}
+
+		.qr-section {
+			margin-bottom: 1rem;
+		}
+
+		.qr-section .info-panel {
+			max-width: min(28rem, 92vw);
+			margin: 0.5rem auto 0;
+			text-align: left;
+		}
+
+		.qr-section .info-panel .field {
+			margin-top: 0.45rem;
+			font-size: 0.8rem;
 		}
 
 		.easy-lead {
@@ -1030,6 +1077,140 @@
 		.btn-easy-view-gallery {
 			width: 100%;
 			margin-top: 0;
+		}
+
+		.module-breadcrumbs {
+			max-width: 32rem;
+			margin: 0 auto 1rem;
+			padding: 0 1.25rem;
+			display: flex;
+			align-items: baseline;
+			flex-wrap: wrap;
+			gap: 0.35rem;
+			font-size: 0.9rem;
+		}
+
+		.module-breadcrumbs-wide {
+			max-width: none;
+			padding-left: clamp(0.5rem, 2vw, 1.25rem);
+			padding-right: clamp(0.5rem, 2vw, 1.25rem);
+		}
+
+		.breadcrumb-home {
+			font: inherit;
+			border: none;
+			background: none;
+			color: var(--accent);
+			cursor: pointer;
+			padding: 0;
+			text-decoration: underline;
+			font-weight: 500;
+		}
+
+		.breadcrumb-home:hover {
+			color: var(--accent-dim);
+		}
+
+		.breadcrumb-sep {
+			color: var(--muted);
+			user-select: none;
+		}
+
+		.breadcrumb-current {
+			font-size: 1.2rem;
+			font-weight: 700;
+			color: var(--text);
+			line-height: 1.25;
+		}
+
+		.home-hub {
+			max-width: 36rem;
+			margin: 0 auto;
+			padding: 1.5rem 1.25rem 2.5rem;
+		}
+
+		.home-hub-lead {
+			text-align: center;
+			color: var(--muted);
+			margin: 0 0 1.5rem;
+		}
+
+		.module-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 1rem;
+		}
+
+		.module-tile {
+			aspect-ratio: 1;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 0.65rem;
+			padding: 1rem;
+			border-radius: var(--radius);
+			border: 1px solid var(--border);
+			background: var(--surface);
+			cursor: pointer;
+			font: inherit;
+			color: var(--text);
+			text-align: center;
+			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+		}
+
+		.module-tile:hover {
+			border-color: var(--accent);
+		}
+
+		.module-tile-icon {
+			width: 3rem;
+			height: 3rem;
+			color: var(--accent-dim);
+		}
+
+		.module-tile-title {
+			font-weight: 700;
+			font-size: 0.92rem;
+			line-height: 1.25;
+		}
+
+		.share-picker {
+			max-width: 32rem;
+			margin: 0 auto;
+			padding: 0 1.25rem 1rem;
+			text-align: left;
+		}
+
+		.share-picker-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+			margin-bottom: 0.75rem;
+		}
+
+		.share-picker-actions .btn {
+			margin-top: 0;
+		}
+
+		.share-path-list {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			font-size: 0.82rem;
+			color: var(--muted);
+			word-break: break-all;
+		}
+
+		.share-path-list li {
+			padding: 0.35rem 0;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.share-server-only {
+			font-size: 0.9rem;
+			color: var(--muted);
+			margin: 0 0 1rem;
 		}
 
 		.gallery-phone-fab {
@@ -1145,13 +1326,9 @@
 	<header class="top-bar">
 		<div class="top-bar-inner">
 			<div class="logo">Space<span>Maker</span></div>
-			<nav class="ui-mode-toggle" aria-label="UI mode">
-				<button type="button" class="active" id="btn-ui-easy">Easy</button>
-				<button type="button" id="btn-ui-advanced">Advanced</button>
-			</nav>
 		</div>
 		<nav class="view-tabs" aria-label="Main views">
-			<button type="button" class="active" data-view="home">Main</button>
+			<button type="button" class="active" data-view="home">Home</button>
 			<button type="button" data-view="gallery">Gallery</button>
 		</nav>
 	</header>
@@ -1169,14 +1346,73 @@
 		</div>
 	</section>
 
-	<section id="view-easy" class="screen active" aria-label="Easy mode">
+	<section id="view-home" class="screen active" aria-label="Home">
+		<div class="form-banner" id="home-form-banner" role="alert" hidden></div>
+		<div class="home-hub">
+			<p class="home-hub-lead">Choose what you want to do on this PC and your phone.</p>
+			<div class="module-grid">
+				<button type="button" class="module-tile" data-module="photo_backup">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="8" y="8" width="14" height="14" rx="1" fill="currentColor" stroke="none"/>
+						<rect x="26" y="8" width="14" height="14" rx="1" fill="currentColor" stroke="none"/>
+						<rect x="8" y="26" width="14" height="14" rx="1" fill="currentColor" stroke="none"/>
+						<rect x="28" y="28" width="4" height="4" fill="currentColor" stroke="none"/>
+						<rect x="34" y="28" width="4" height="4" fill="currentColor" stroke="none"/>
+						<rect x="28" y="34" width="4" height="4" fill="currentColor" stroke="none"/>
+					</svg>
+					<span class="module-tile-title">Photo backup</span>
+				</button>
+				<button type="button" class="module-tile" data-module="usb_photo_backup">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="16" y="6" width="16" height="28" rx="3"/>
+						<path d="M22 38h4"/>
+						<path d="M10 22h6l2-4h12l2 4h6"/>
+					</svg>
+					<span class="module-tile-title">USB photo backup</span>
+				</button>
+				<button type="button" class="module-tile" data-module="receive_files">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="14" y="8" width="12" height="20" rx="2"/>
+						<path d="M26 22h10v14H18"/>
+						<path d="M32 18l4 4-4 4"/>
+					</svg>
+					<span class="module-tile-title">Receive files</span>
+				</button>
+				<button type="button" class="module-tile" data-module="send_files">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="8" y="14" width="20" height="14" rx="2"/>
+						<rect x="22" y="22" width="12" height="20" rx="2"/>
+						<path d="M16 28h-4l4-4"/>
+					</svg>
+					<span class="module-tile-title">Send files</span>
+				</button>
+			</div>
+		</div>
+	</section>
+
+	<section id="view-easy" class="screen" aria-label="Photo backup">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current" aria-current="page">Photo backup</span>
+		</nav>
 		<div class="form-banner" id="easy-form-banner" role="alert" hidden></div>
 		<div class="easy-screen">
-			<div class="easy-qr-wrap">
-				<img id="easy-upload-qr" alt="QR code for phone upload" hidden />
-				<p class="folder-hint" id="easy-upload-wait">Starting Wi‑Fi receive…</p>
+			<div class="qr-section">
+				<div class="qr-with-info">
+					<div class="easy-qr-wrap qr-frame">
+						<img id="easy-upload-qr" alt="QR code for phone upload" hidden />
+						<p class="folder-hint" id="easy-upload-wait">Starting Wi‑Fi receive…</p>
+					</div>
+					<button type="button" class="info-btn" id="btn-easy-qr-info" title="Show upload URL" aria-expanded="false" aria-controls="easy-qr-info-panel">i</button>
+				</div>
+				<div class="info-panel" id="easy-qr-info-panel" aria-hidden="true">
+					<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
+					<input class="field" type="text" readonly id="easy-qr-url" aria-label="Photo upload page URL" value="" />
+				</div>
 			</div>
 			<p class="easy-lead">Scan this QR code with your phone camera. Stay on the same Wi‑Fi, then choose photos and videos to send.</p>
+			<p class="folder-hint" id="photo-library-hint"></p>
 			<div class="easy-progress-block">
 				<p class="label" style="margin: 0;">Transfer</p>
 				<p class="status-line" id="easy-transfer-status">0 files received</p>
@@ -1200,8 +1436,85 @@
 		</div>
 	</section>
 
+	<section id="view-receive-files" class="screen" aria-label="Receive files">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current" aria-current="page">Receive files</span>
+		</nav>
+		<div class="easy-screen">
+			<div class="qr-section">
+				<div class="qr-with-info">
+					<div class="easy-qr-wrap qr-frame">
+						<img id="receive-upload-qr" alt="QR code for phone file upload" hidden />
+						<p class="folder-hint" id="receive-upload-wait">Starting receive session…</p>
+					</div>
+					<button type="button" class="info-btn" id="btn-receive-qr-info" title="Show receive URL" aria-expanded="false" aria-controls="receive-qr-info-panel">i</button>
+				</div>
+				<div class="info-panel" id="receive-qr-info-panel" aria-hidden="true">
+					<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
+					<input class="field" type="text" readonly id="receive-qr-url" aria-label="Receive files page URL" value="" />
+				</div>
+			</div>
+			<p class="easy-lead">Scan this QR code with your phone. Stay on the same Wi‑Fi, then send any files to this PC.</p>
+			<div class="easy-progress-block">
+				<p class="label" style="margin: 0;">Transfer</p>
+				<p class="status-line" id="receive-transfer-status">0 files received</p>
+				<div class="progress" role="progressbar">
+					<div class="progress-fill" id="receive-transfer-fill" style="width: 0%"></div>
+				</div>
+			</div>
+			<p class="folder-hint" id="receive-dest-hint"></p>
+			<div class="easy-view-gallery-wrap panel-hidden" id="receive-open-wrap">
+				<button type="button" class="btn btn-primary btn-easy-view-gallery" id="btn-open-documents-folder">
+					Open documents folder
+				</button>
+			</div>
+		</div>
+	</section>
+
+	<section id="view-send-files" class="screen" aria-label="Send files">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current" aria-current="page">Send files</span>
+		</nav>
+		<div class="share-picker">
+			<p class="share-server-only panel-hidden" id="send-server-only-hint">
+				Open SpaceMaker in the desktop app to pick files and folders from this PC.
+			</p>
+			<div class="share-picker-actions" id="send-picker-actions">
+				<button type="button" class="btn btn-secondary" id="btn-share-add-files">Add files</button>
+				<button type="button" class="btn btn-secondary" id="btn-share-add-folder">Add folder</button>
+				<button type="button" class="btn btn-ghost" id="btn-share-clear">Clear</button>
+			</div>
+			<ul class="share-path-list" id="share-path-list"></ul>
+		</div>
+		<div class="easy-screen">
+			<div class="qr-section panel-hidden" id="send-qr-section">
+				<div class="qr-with-info">
+					<div class="easy-qr-wrap qr-frame" id="send-qr-wrap">
+						<img id="send-share-qr" alt="QR code for phone download" hidden />
+						<p class="folder-hint" id="send-share-wait">Add files above, then scan this QR on your phone.</p>
+					</div>
+					<button type="button" class="info-btn" id="btn-send-qr-info" title="Show share URL" aria-expanded="false" aria-controls="send-qr-info-panel">i</button>
+				</div>
+				<div class="info-panel" id="send-qr-info-panel" aria-hidden="true">
+					<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
+					<input class="field" type="text" readonly id="send-qr-url" aria-label="Share download page URL" value="" />
+				</div>
+			</div>
+			<p class="easy-lead" id="send-share-lead">Choose files or folders on this PC. Your phone can download them from the page opened by the QR code.</p>
+		</div>
+	</section>
+
 	<!-- MAIN WIZARD (Advanced) -->
 	<section id="view-wizard" class="screen" aria-label="Three-step wizard">
+		<nav class="module-breadcrumbs module-breadcrumbs-wide" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current" aria-current="page">USB photo backup</span>
+		</nav>
 		<p class="wizard-intro">
 			Backup, convert, and browse phone media locally. Three sequential steps; each card has its own status.
 		</p>
@@ -1256,13 +1569,23 @@
 					</div>
 					<div id="wifi-live-receive" class="panel-hidden">
 						<div class="qr-block">
-							<img id="wifi-upload-qr" class="qr-placeholder" width="88" height="88" alt="QR code for upload URL" />
+							<div class="qr-with-info qr-with-info-compact">
+								<div class="qr-frame-compact">
+									<img id="wifi-upload-qr" class="qr-placeholder" width="88" height="88" alt="QR code for upload URL" />
+								</div>
+								<button type="button" class="info-btn" id="btn-wifi-qr-info" title="Show upload URL" aria-expanded="false" aria-controls="wifi-qr-info-panel">i</button>
+							</div>
 							<div>
 								<p class="folder-hint" style="margin: 0;">Upload page (same Wi‑Fi)</p>
 								<input class="field" type="text" id="wifi-upload-url" readonly aria-label="Upload URL" style="margin-top: 0.35rem;" />
 							</div>
 						</div>
+						<div class="info-panel" id="wifi-qr-info-panel" aria-hidden="true">
+							<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
+							<input class="field" type="text" readonly id="wifi-qr-url-copy" aria-label="Upload page URL" value="" />
+						</div>
 					</div>
+					<p class="folder-hint" id="wizard-library-hint"></p>
 				</div>
 				<p class="label">Library root</p>
 				<div class="library-row">
@@ -1518,6 +1841,6 @@
 	</footer>
 
 	<script>window.SPACEMAKER_SHELL = "desktop";</script>
-	<script src="/static/app.js"></script>
+	<script src="/static/app.js?v=20260923-home"></script>
 </body>
 </html>

@@ -78,7 +78,10 @@ class ToolRunner:
 		if allow_path and managed.is_file():
 			vaapi = Path("/dev/dri/renderD128").exists()
 			managed_text = self._ffmpeg_encoders_text_at(managed)
-			if hardware_video_encoder_from_ffmpeg_encoders(managed_text, vaapi_render_node=vaapi) is HardwareVideoEncoder.NONE:
+			if (
+				hardware_video_encoder_from_ffmpeg_encoders(managed_text, vaapi_render_node=vaapi)
+				is HardwareVideoEncoder.NONE
+			):
 				search = "ffmpeg.exe" if self._windows else "ffmpeg"
 				system = shutil.which(search)
 				if system:

@@ -3,13 +3,13 @@
 ## Metadata
 
 - **Feature:** Minimal default UI — Wi‑Fi upload QR, auto-receive, convert-as-received, **View gallery** when ready; phone gallery help on Gallery tab
-- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-easy`, Easy | Advanced toggle; phone upload [wireframes/phone-upload.html](../../wireframes/phone-upload.html)
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — Photo backup (`#view-easy`); phone upload [wireframes/phone-upload.html](../../wireframes/phone-upload.html). **Phone upload wireframe approved** 2026-09-23.
 - **UX approved:** 2026-09-22 (initial Easy mode); **2026-09-23** (image import issue panels + open-folder actions)
 - **Related:** [main-wizard](../main-wizard/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
 
 ## Triggers & routing
 
-- **Default on launch:** **Easy** mode (`ui_mode=easy`). **Advanced** shows the existing three-step wizard.
+- **Entry:** Opened from Home hub → **Photo backup** tile (`active_module=photo_backup`, `ui_mode=easy`). **USB photo backup** tile opens the Advanced wizard (`ui_mode=advanced`). App launch defaults to **Home** hub — no auto Wi‑Fi until Photo backup is entered.
 - **Session:** `ui_mode` is session-only (relaunch → Easy). User may switch Easy ↔ Advanced anytime; **does not** stop active Wi‑Fi receive or convert drain.
 - **Header tabs:** **Main** (Easy or Advanced home) and **Gallery** remain. Gallery chrome uses the **active mode theme** (light in Easy, dark in Advanced).
 - **Easy bootstrap:** When the client loads Easy and extract is idle, the server starts **Wi‑Fi receive** automatically (library root from session defaults; no Start extract button).
@@ -20,17 +20,18 @@
 
 - Off-white background, white surfaces, dark text, generous spacing.
 - Vertical stack (centered, max ~28rem):
-  1. **Large upload QR** (active Wi‑Fi session)
+  1. **Large upload QR** (active Wi‑Fi session) with **ⓘ** just outside the QR (not overlapping); tap reveals the encoded upload URL and notes that users without a QR reader can open that URL in the phone browser (same Wi‑Fi). Breadcrumb **`Home / Photo backup`** at top (**Home** returns to hub).
   2. Short instruction: scan with phone on same Wi‑Fi
-  3. **Transfer** progress (files received this session; total unknown → count + optional indeterminate bar while receiving)
-  4. **Convert** progress (same WebSocket convert job as Advanced). When idle with files already in `converted/`, status reads e.g. **1 file converted, waiting for more** (pluralized).
-  5. **Image import issues** (when any): one or two **warning panels** (light theme, same warn styling as Advanced alerts), each shown only when its **image** count **> 0**:
+  3. **Library location line:** e.g. *Photos and videos are saved under `~/Pictures/SpaceMakerLibrary/`* (tilde display of session library root)
+  4. **Transfer** progress (files received this session; total unknown → count + optional indeterminate bar while receiving)
+  5. **Convert** progress (same WebSocket convert job as Advanced). When idle with files already in `converted/`, status reads e.g. **1 file converted, waiting for more** (pluralized).
+  6. **Image import issues** (when any): one or two **warning panels** (light theme, same warn styling as Advanced alerts), each shown only when its **image** count **> 0**:
      - **Unsupported:** heading e.g. *2 unsupported images*; hint that files are in the library **`invalid/`** folder and are **not** in the gallery; text action **Click here to open the invalid folder**.
      - **Failed convert:** heading e.g. *1 image failed to convert* (pluralized); hint that files are in **`error/`** (encode failed after retry); text action **Click here to open the error folder**.
      - When both counts are zero, the whole block is hidden (no placeholder).
      - Counts are **images only** (same semantics as today’s `image_import_issues` WebSocket field). No per-file list in Easy.
-  6. **View gallery** button — **only when** `converted/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
-  7. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
+  7. **View gallery** button — **only when** `converted/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
+  8. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
 - No library picker, connection toggle, or extract/convert buttons on Easy.
 - Phone **upload** page (`/upload`): light, minimal; footer hint varies for **iPhone vs Android** (UA detection). **iPhone:** single **Choose** button (no folder picker). **Android:** **Choose files** + **Choose folder**.
 - Phone **gallery** (`/gallery` on device browser): dedicated mobile shell (no Easy/Advanced or Main/Gallery chrome); theme follows **system** light/dark via `shell-gallery.css`. Server serves `gallery_mobile.html` for **private LAN** hosts; loopback/desktop app keeps full `index.html`.

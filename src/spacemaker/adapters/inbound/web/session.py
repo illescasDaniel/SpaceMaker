@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 
+from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import JobProgress, TransferMode
@@ -12,7 +13,10 @@ from spacemaker.domain.ui_mode import UiMode
 @dataclass
 class AppSession:
 	library_root: str = ""
+	active_module: AppModule = AppModule.HOME
 	ui_mode: UiMode = UiMode.EASY
+	receive_files_phase: JobPhase = JobPhase.IDLE
+	receive_files_progress: JobProgress = field(default_factory=lambda: JobProgress(0, 0))
 	connection_method: ConnectionMethod = ConnectionMethod.WIFI
 	transfer_mode: TransferMode = TransferMode.COPY
 	device_id: str = ""
@@ -29,7 +33,16 @@ class AppSession:
 		with self._lock:
 			return {
 				"library_root": self.library_root,
+				"active_module": self.active_module.value,
 				"ui_mode": self.ui_mode.value,
+				"receive_files": {
+					"phase": self.receive_files_phase.value,
+					"progress": {
+						"completed": self.receive_files_progress.completed,
+						"total": self.receive_files_progress.total,
+						"percent": self.receive_files_progress.percent,
+					},
+				},
 				"connection_method": self.connection_method.value,
 				"transfer_mode": self.transfer_mode.value,
 				"device_id": self.device_id,

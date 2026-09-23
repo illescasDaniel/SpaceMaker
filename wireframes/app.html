@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-ui-mode="easy">
+<html lang="en" data-ui-mode="home">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -773,7 +773,8 @@
 			margin-bottom: 1rem;
 		}
 
-		html[data-ui-mode="easy"] {
+		html[data-ui-mode="easy"],
+		html[data-ui-mode="home"] {
 			--bg: #f7f8fa;
 			--surface: #ffffff;
 			--surface2: #eef1f5;
@@ -840,9 +841,62 @@
 			margin-bottom: 1rem;
 		}
 
-		.easy-qr-wrap .qr-placeholder {
+		.easy-qr-wrap.qr-frame {
 			width: min(268px, 82vw);
-			height: min(268px, 82vw);
+			flex: 0 1 auto;
+		}
+
+		.qr-with-info {
+			display: flex;
+			align-items: flex-start;
+			justify-content: center;
+			gap: 0.5rem;
+		}
+
+		.qr-with-info > .info-btn {
+			flex-shrink: 0;
+			margin-top: 0.35rem;
+		}
+
+		.module-breadcrumbs {
+			max-width: 32rem;
+			margin: 0 auto 1rem;
+			padding: 0 1.25rem;
+			display: flex;
+			align-items: baseline;
+			flex-wrap: wrap;
+			gap: 0.35rem;
+			font-size: 0.9rem;
+		}
+
+		.module-breadcrumbs-wide {
+			max-width: none;
+			padding-left: clamp(0.5rem, 2vw, 1.25rem);
+		}
+
+		.breadcrumb-home {
+			font: inherit;
+			border: none;
+			background: none;
+			color: var(--accent);
+			cursor: pointer;
+			padding: 0;
+			text-decoration: underline;
+			font-weight: 500;
+		}
+
+		.breadcrumb-sep { color: var(--muted); }
+
+		.breadcrumb-current {
+			font-size: 1.2rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+
+		.easy-qr-wrap .qr-placeholder {
+			width: 100%;
+			height: auto;
+			aspect-ratio: 1;
 			margin: 0 auto;
 			border-radius: 8px;
 		}
@@ -970,6 +1024,99 @@
 			margin: 1rem 0 0;
 		}
 
+
+		.home-hub {
+			max-width: 36rem;
+			margin: 0 auto;
+			padding: 1.5rem 1.25rem 2.5rem;
+		}
+
+		.home-hub-lead {
+			text-align: center;
+			color: var(--muted);
+			margin: 0 0 1.5rem;
+			font-size: 1.05rem;
+		}
+
+		.module-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 1rem;
+		}
+
+		.module-tile {
+			aspect-ratio: 1;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 0.65rem;
+			padding: 1rem;
+			border-radius: var(--radius);
+			border: 1px solid var(--border);
+			background: var(--surface);
+			cursor: pointer;
+			font: inherit;
+			color: var(--text);
+			text-align: center;
+			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+		}
+
+		.module-tile:hover {
+			border-color: var(--accent);
+		}
+
+		.module-tile-icon {
+			width: 3rem;
+			height: 3rem;
+			color: var(--accent-dim);
+		}
+
+		.module-tile-title {
+			font-weight: 700;
+			font-size: 0.92rem;
+			line-height: 1.25;
+		}
+
+		.share-picker {
+			max-width: 32rem;
+			margin: 0 auto;
+			padding: 0 1.25rem 1rem;
+			text-align: left;
+		}
+
+		.share-picker-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+			margin-bottom: 0.75rem;
+		}
+
+		.share-picker-actions .btn {
+			margin-top: 0;
+		}
+
+		.share-path-list {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			font-size: 0.82rem;
+			color: var(--muted);
+			word-break: break-all;
+		}
+
+		.share-path-list li {
+			padding: 0.35rem 0;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.wireframe-review-hint {
+			text-align: center;
+			font-size: 0.85rem;
+			color: var(--muted);
+			margin: 1.25rem 0 0;
+		}
+
 		.wireframe-demo-row {
 			margin-top: 2rem;
 			font-size: 0.75rem;
@@ -1046,20 +1193,20 @@
 	</style>
 </head>
 <body>
-	<div class="wireframe-banner">Wireframe only — Easy (light) default · Advanced (dark wizard). First-run: Components setup. Footer: About &amp; Legal.</div>
+	<div class="wireframe-banner">
+		<strong>Design preview (static HTML)</strong> — open this file in your browser (File → Open, or drag onto a browser window).
+		Click each Home tile to review layout. Phone pages: <code>wireframes/phone-receive.html</code>, <code>wireframes/phone-share.html</code>.
+		Not the live app (<code>uv run task spacemaker</code>).
+	</div>
 
 	<div class="app-shell">
 	<header class="top-bar">
 		<div class="top-bar-inner">
 			<div class="logo">Space<span>Maker</span></div>
-			<nav class="ui-mode-toggle" aria-label="UI mode">
-				<button type="button" class="active" id="btn-ui-easy">Easy</button>
-				<button type="button" id="btn-ui-advanced">Advanced</button>
-			</nav>
 		</div>
 		<nav class="view-tabs" aria-label="Wireframe views">
 			<button type="button" data-view="components">Components</button>
-			<button type="button" class="active" data-view="home">Main</button>
+			<button type="button" class="active" data-view="home">Home</button>
 			<button type="button" data-view="gallery">Gallery</button>
 		</nav>
 	</header>
@@ -1097,11 +1244,61 @@
 		</div>
 	</section>
 
-	<!-- EASY MODE -->
-	<section id="view-easy" class="screen active" aria-label="Easy mode">
+	<section id="view-home" class="screen active" aria-label="Home hub">
+		<div class="home-hub">
+			<p class="home-hub-lead">Choose what you want to do on this PC and your phone.</p>
+			<div class="module-grid">
+				<button type="button" class="module-tile" data-module="photo_backup">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="8" y="8" width="14" height="14" rx="1" fill="currentColor" stroke="none"/>
+						<rect x="26" y="8" width="14" height="14" rx="1" fill="currentColor" stroke="none"/>
+						<rect x="8" y="26" width="14" height="14" rx="1" fill="currentColor" stroke="none"/>
+						<rect x="28" y="28" width="4" height="4" fill="currentColor" stroke="none"/>
+						<rect x="34" y="28" width="4" height="4" fill="currentColor" stroke="none"/>
+						<rect x="28" y="34" width="4" height="4" fill="currentColor" stroke="none"/>
+					</svg>
+					<span class="module-tile-title">Photo backup</span>
+				</button>
+				<button type="button" class="module-tile" data-module="usb_photo_backup">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="16" y="6" width="16" height="28" rx="3"/>
+						<path d="M22 38h4"/>
+						<path d="M10 22h6l2-4h12l2 4h6"/>
+					</svg>
+					<span class="module-tile-title">USB photo backup</span>
+				</button>
+				<button type="button" class="module-tile" data-module="receive_files">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="14" y="8" width="12" height="20" rx="2"/>
+						<path d="M26 22h10v14H18"/>
+						<path d="M32 18l4 4-4 4"/>
+					</svg>
+					<span class="module-tile-title">Receive files</span>
+				</button>
+				<button type="button" class="module-tile" data-module="send_files">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="8" y="14" width="20" height="14" rx="2"/>
+						<rect x="22" y="22" width="12" height="20" rx="2"/>
+						<path d="M16 28h-4l4-4"/>
+					</svg>
+					<span class="module-tile-title">Send files</span>
+				</button>
+			</div>
+			<p class="wireframe-review-hint">Tap a tile to preview that screen. Use <strong>Home</strong> in the breadcrumb to return.</p>
+		</div>
+	</section>
+
+	<!-- PHOTO BACKUP (Easy) -->
+	<section id="view-easy" class="screen" aria-label="Photo backup">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current">Photo backup</span>
+		</nav>
 		<div class="easy-screen">
-			<div class="easy-qr-wrap">
-				<div class="qr-placeholder" role="img" aria-label="QR code for phone upload">
+			<div class="qr-with-info">
+				<div class="easy-qr-wrap qr-frame">
+					<div class="qr-placeholder" role="img" aria-label="QR code for phone upload">
 					<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 						<rect width="21" height="21" fill="#fff"/>
 						<rect x="1" y="1" width="7" height="7" fill="#111"/>
@@ -1113,9 +1310,12 @@
 						<rect x="10" y="10" width="1" height="1" fill="#111"/>
 						<rect x="12" y="8" width="2" height="1" fill="#111"/>
 					</svg>
+					</div>
 				</div>
+				<button type="button" class="info-btn" title="Show upload URL">i</button>
 			</div>
 			<p class="easy-lead">Scan this QR code with your phone camera. Stay on the same Wi‑Fi, then choose photos and videos to send.</p>
+			<p class="folder-hint">Photos and videos are saved under <code>~/Pictures/SpaceMakerLibrary/</code></p>
 			<div class="easy-progress-block">
 				<p class="label" style="margin: 0;">Transfer</p>
 				<p class="status-line" id="easy-transfer-status">1 file received</p>
@@ -1167,8 +1367,82 @@
 		</div>
 	</section>
 
+	<section id="view-receive-files" class="screen" aria-label="Receive files">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current">Receive files</span>
+		</nav>
+		<div class="easy-screen">
+			<div class="qr-with-info">
+				<div class="easy-qr-wrap qr-frame">
+					<div class="qr-placeholder" role="img" aria-label="QR code for phone file upload">
+					<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+						<rect width="21" height="21" fill="#fff"/>
+						<rect x="1" y="1" width="7" height="7" fill="#111"/>
+						<rect x="13" y="1" width="7" height="7" fill="#111"/>
+						<rect x="1" y="13" width="7" height="7" fill="#111"/>
+					</svg>
+					</div>
+				</div>
+				<button type="button" class="info-btn" title="Show receive URL">i</button>
+			</div>
+			<p class="easy-lead">Scan this QR code with your phone. Stay on the same Wi‑Fi, then send any files to this PC.</p>
+			<div class="easy-progress-block">
+				<p class="label" style="margin: 0;">Transfer</p>
+				<p class="status-line">3 files received</p>
+				<div class="progress" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+					<div class="progress-fill" style="width: 100%"></div>
+				</div>
+			</div>
+			<p class="folder-hint">Files are saved under <code>~/Documents/SpaceMaker/</code></p>
+			<div class="easy-view-gallery-wrap">
+				<button type="button" class="btn btn-primary btn-easy-view-gallery">Open documents folder</button>
+			</div>
+		</div>
+	</section>
+	<section id="view-send-files" class="screen" aria-label="Send files">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current">Send files</span>
+		</nav>
+		<div class="share-picker">
+			<div class="share-picker-actions">
+				<button type="button" class="btn btn-secondary">Add files</button>
+				<button type="button" class="btn btn-secondary">Add folder</button>
+				<button type="button" class="btn btn-ghost">Clear</button>
+			</div>
+			<ul class="share-path-list">
+				<li>/home/you/Documents/report.pdf</li>
+				<li>/home/you/Pictures/vacation/</li>
+			</ul>
+		</div>
+		<div class="easy-screen">
+			<div class="qr-with-info">
+				<div class="easy-qr-wrap qr-frame">
+					<div class="qr-placeholder" role="img" aria-label="QR code for phone download">
+					<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+						<rect width="21" height="21" fill="#fff"/>
+						<rect x="1" y="1" width="7" height="7" fill="#111"/>
+						<rect x="13" y="1" width="7" height="7" fill="#111"/>
+						<rect x="1" y="13" width="7" height="7" fill="#111"/>
+					</svg>
+					</div>
+				</div>
+				<button type="button" class="info-btn" title="Show share URL">i</button>
+			</div>
+			<p class="easy-lead">Choose files or folders on this PC. Your phone opens the QR page to download each shared file.</p>
+		</div>
+	</section>
+
 	<!-- MAIN WIZARD (Advanced) -->
 	<section id="view-wizard" class="screen" aria-label="Three-step wizard">
+		<nav class="module-breadcrumbs module-breadcrumbs-wide" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current">USB photo backup</span>
+		</nav>
 		<p class="wizard-intro">
 			Backup, convert, and browse phone media locally. Three sequential steps; each card has its own status.
 		</p>
@@ -1479,42 +1753,37 @@
 
 	<script>
 		var lastMainView = 'home';
-		var uiMode = 'easy';
 
-		function homeViewId() {
-			return uiMode === 'easy' ? 'easy' : 'wizard';
+		function moduleToViewId(module) {
+			if (module === 'photo_backup') return 'easy';
+			if (module === 'usb_photo_backup') return 'wizard';
+			if (module === 'receive_files') return 'receive-files';
+			if (module === 'send_files') return 'send-files';
+			return 'home';
 		}
 
-		function setUiMode(mode) {
-			uiMode = mode;
-			document.documentElement.setAttribute('data-ui-mode', mode);
-			document.getElementById('btn-ui-easy').classList.toggle('active', mode === 'easy');
-			document.getElementById('btn-ui-advanced').classList.toggle('active', mode === 'advanced');
-			var active = document.querySelector('.screen.active');
-			if (active && (active.id === 'view-easy' || active.id === 'view-wizard')) {
-				showView('home');
-			}
+		function syncTheme(resolved) {
+			document.documentElement.setAttribute('data-ui-mode', resolved === 'wizard' ? 'advanced' : resolved === 'home' ? 'home' : 'easy');
 		}
 
 		function showView(viewId) {
-			var resolved = viewId;
-			if (viewId === 'home') {
-				resolved = homeViewId();
-			}
+			var resolved = viewId === 'home' ? 'home' : viewId;
 			document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
 			document.getElementById('view-' + resolved).classList.add('active');
+			syncTheme(resolved);
 			if (resolved === 'components') {
 				document.querySelectorAll('.view-tabs button').forEach(function (b) {
 					b.classList.toggle('active', b.getAttribute('data-view') === 'components');
 				});
 				return;
 			}
-			if (resolved === 'easy' || resolved === 'wizard' || resolved === 'gallery' || resolved === 'gallery-item') {
+			var mainViews = ['home', 'easy', 'wizard', 'receive-files', 'send-files', 'gallery', 'gallery-item'];
+			if (mainViews.indexOf(resolved) >= 0) {
 				document.querySelectorAll('.view-tabs button').forEach(function (b) {
 					var tab = b.getAttribute('data-view');
 					b.classList.toggle(
 						'active',
-						tab === 'gallery' && resolved.indexOf('gallery') === 0 || tab === 'home' && (resolved === 'easy' || resolved === 'wizard'),
+						tab === 'gallery' && resolved.indexOf('gallery') === 0 || tab === 'home' && resolved !== 'gallery' && resolved !== 'gallery-item',
 					);
 				});
 				if (resolved === 'easy' || resolved === 'wizard' || resolved === 'gallery') {
@@ -1558,8 +1827,14 @@
 			});
 		});
 
-		document.getElementById('btn-ui-easy').addEventListener('click', function () { setUiMode('easy'); });
-		document.getElementById('btn-ui-advanced').addEventListener('click', function () { setUiMode('advanced'); });
+		document.querySelectorAll('[data-module]').forEach(function (tile) {
+			tile.addEventListener('click', function () {
+				showView(moduleToViewId(tile.getAttribute('data-module')));
+			});
+		});
+		document.querySelectorAll('.breadcrumb-home').forEach(function (btn) {
+			btn.addEventListener('click', function () { showView('home'); });
+		});
 		document.getElementById('btn-easy-toggle-gallery').addEventListener('click', function () {
 			document.getElementById('easy-view-gallery-wrap').classList.toggle('panel-hidden');
 		});

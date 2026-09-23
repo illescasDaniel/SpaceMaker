@@ -67,9 +67,7 @@ class ConvertMedia:
 			return
 		if kind is MediaKind.VIDEO and self._converter.library_video_encoder() is HardwareVideoEncoder.NONE:
 			if route is ConversionRoute.ENCODE:
-				self.last_failure = (
-					f"{relative}: no hardware video encoder available; kept original in gallery"
-				)
+				self.last_failure = f"{relative}: no hardware video encoder available; kept original in gallery"
 			self._move_to_folder(library_root, relative, LibraryFolder.CONVERTED)
 			return
 		if self._try_skip_existing_valid(library_root, relative):

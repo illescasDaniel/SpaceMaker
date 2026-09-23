@@ -1,5 +1,6 @@
 (function () {
 	var clientShell = window.SPACEMAKER_SHELL || "desktop";
+	var EXPECTED_UI_SHELL_VERSION = "2026.09.home-modules";
 	var lastMainView = "home";
 	var uiMode = "easy";
 	var state = null;
@@ -44,6 +45,61 @@
 
 	function clearFormBanner() {
 		showFormBanner("");
+	}
+
+	function warnIfStaleShell(settings) {
+		if (!isDesktopShell() || !settings) {
+			return;
+		}
+		if (settings.ui_shell_version === EXPECTED_UI_SHELL_VERSION) {
+			var homeBanner = document.getElementById("home-form-banner");
+			if (homeBanner) {
+				homeBanner.hidden = true;
+				homeBanner.textContent = "";
+			}
+			return;
+		}
+		var port = location.port || "8765";
+		var message =
+			"UI and server do not match. Quit every SpaceMaker window, stop any process on port " +
+			port +
+			", then run: uv run task spacemaker";
+		var homeBanner = document.getElementById("home-form-banner");
+		if (homeBanner) {
+			homeBanner.textContent = message;
+			homeBanner.hidden = false;
+		} else {
+			showFormBanner(message);
+		}
+	}
+
+	function syncActiveModuleView(next) {
+		if (!isDesktopShell() || !next || toolsBlockMainApp(next)) {
+			return;
+		}
+		var active = document.querySelector(".screen.active");
+		if (!active || !active.id) {
+			return;
+		}
+		if (active.id === "view-components") {
+			return;
+		}
+		var currentId = active.id.replace(/^view-/, "");
+		if (
+			currentId === "gallery" ||
+			currentId === "gallery-item" ||
+			currentId === "settings" ||
+			currentId === "legal"
+		) {
+			return;
+		}
+		var target =
+			!next.active_module || next.active_module === "home"
+				? "home"
+				: moduleToViewId(next.active_module);
+		if (currentId !== target) {
+			showView(target, { skipHistory: true });
+		}
 	}
 
 	function selectedConnectionMethod() {
@@ -132,8 +188,68 @@
 		});
 	}
 
+	function moduleToViewId(module) {
+		switch (module) {
+			case "photo_backup":
+				return "easy";
+			case "usb_photo_backup":
+				return "wizard";
+			case "receive_files":
+				return "receive-files";
+			case "send_files":
+				return "send-files";
+			default:
+				return "home";
+		}
+	}
+
 	function homeViewId() {
-		return uiMode === "easy" ? "easy" : "wizard";
+		if (!state || !state.active_module || state.active_module === "home") {
+			return "home";
+		}
+		return moduleToViewId(state.active_module);
+	}
+
+	function syncShellTheme(resolvedViewId) {
+		if (resolvedViewId === "wizard") {
+			document.documentElement.setAttribute("data-ui-mode", "advanced");
+		} else if (resolvedViewId === "home") {
+			document.documentElement.setAttribute("data-ui-mode", "home");
+		} else {
+			document.documentElement.setAttribute("data-ui-mode", "easy");
+		}
+	}
+
+	function isMainHubView(resolved) {
+		return (
+			resolved === "home" ||
+			resolved === "easy" ||
+			resolved === "wizard" ||
+			resolved === "receive-files" ||
+			resolved === "send-files"
+		);
+	}
+
+	function enterModule(moduleId) {
+		return api("POST", "/api/module/enter", { module: moduleId })
+			.then(applyState)
+			.then(function () {
+				showView(moduleToViewId(moduleId));
+			})
+			.catch(function (err) {
+				showFormBanner(err.message || "Could not open this module.");
+			});
+	}
+
+	function goHomeHub() {
+		return api("POST", "/api/module/home")
+			.then(applyState)
+			.then(function () {
+				showView("home");
+			})
+			.catch(function (err) {
+				showFormBanner(err.message || "Could not return to Home.");
+			});
 	}
 
 	function refreshGalleryThemePolicy() {
@@ -170,11 +286,13 @@
 	}
 
 	function setUiModeFromState(next) {
-		var mode = next.ui_mode === "advanced" ? "advanced" : "easy";
-		if (mode !== uiMode) {
-			setUiMode(mode, { skipViewSwitch: false });
+		uiMode = next.ui_mode === "advanced" ? "advanced" : "easy";
+		var active = document.querySelector(".screen.active");
+		var resolved = active && active.id ? active.id.replace(/^view-/, "") : "home";
+		if (resolved === "home" || !isMainHubView(resolved)) {
+			syncShellTheme(homeViewId());
 		} else {
-			document.documentElement.setAttribute("data-ui-mode", uiMode);
+			syncShellTheme(resolved);
 		}
 	}
 
@@ -238,24 +356,25 @@
 		var resolved = viewId;
 		options = options || {};
 		if (viewId === "home") {
-			resolved = homeViewId();
+			resolved = "home";
 		}
 		document.querySelectorAll(".screen").forEach(function (s) {
 			s.classList.remove("active");
 		});
 		document.getElementById("view-" + resolved).classList.add("active");
+		syncShellTheme(resolved);
 		syncGalleryPhoneHelpVisibility(resolved);
 		refreshGalleryThemePolicy();
-		if (resolved === "easy" || resolved === "wizard" || resolved === "gallery" || resolved === "gallery-item") {
+		if (isMainHubView(resolved) || resolved === "gallery" || resolved === "gallery-item") {
 			document.querySelectorAll(".view-tabs button").forEach(function (b) {
 				var tab = b.getAttribute("data-view");
 				b.classList.toggle(
 					"active",
 					tab === "gallery" && resolved.indexOf("gallery") === 0 ||
-						tab === "home" && (resolved === "easy" || resolved === "wizard"),
+						tab === "home" && isMainHubView(resolved),
 				);
 			});
-			if (resolved === "easy" || resolved === "wizard" || resolved === "gallery") {
+			if (isMainHubView(resolved) || resolved === "gallery") {
 				lastMainView = resolved === "gallery" ? "gallery" : "home";
 				if (resolved === "gallery") {
 					loadGallery();
@@ -268,7 +387,7 @@
 						history.pushState({ view: "gallery-item", path: galleryItemPath }, "", itemPath);
 					}
 				} else {
-					path = pathForMainView(resolved === "easy" || resolved === "wizard" ? "home" : resolved);
+					path = pathForMainView(isMainHubView(resolved) ? "home" : resolved);
 					if (path !== null && location.pathname !== path) {
 						history.pushState({ view: resolved }, "", path);
 					}
@@ -295,7 +414,7 @@
 			return;
 		}
 		if (location.pathname === "/" || location.pathname === "") {
-			showView("home", { skipHistory: true });
+			showView(homeViewId(), { skipHistory: true });
 		}
 	}
 
@@ -364,9 +483,17 @@
 		var live = document.getElementById("wifi-live-receive");
 		var urlInput = document.getElementById("wifi-upload-url");
 		var qrImg = document.getElementById("wifi-upload-qr");
+		var wizardLibraryHint = document.getElementById("wizard-library-hint");
+		var libDisplay = next.library_root_display || next.library_root;
 		if (!idle || !live) {
 			return;
 		}
+		if (wizardLibraryHint && libDisplay && (next.connection_method || "") === "wifi") {
+			wizardLibraryHint.textContent = "Photos and videos are saved under " + libDisplay;
+		} else if (wizardLibraryHint) {
+			wizardLibraryHint.textContent = "";
+		}
+		setQrUrlField("wifi-qr-url-copy", wifi.upload_url || "");
 		if (wifi.active) {
 			idle.classList.add("panel-hidden");
 			live.classList.remove("panel-hidden");
@@ -545,6 +672,110 @@
 		});
 	}
 
+	function bindInfoPanelToggle(btnId, panelId) {
+		onClick(btnId, function () {
+			var panel = document.getElementById(panelId);
+			var btn = document.getElementById(btnId);
+			if (!panel || !btn) {
+				return;
+			}
+			var open = !panel.classList.contains("visible");
+			panel.classList.toggle("visible", open);
+			panel.setAttribute("aria-hidden", open ? "false" : "true");
+			btn.setAttribute("aria-expanded", open ? "true" : "false");
+		});
+	}
+
+	function setQrUrlField(inputId, url) {
+		var input = document.getElementById(inputId);
+		if (input) {
+			input.value = url || "";
+		}
+	}
+
+	function updateReceiveUi(next) {
+		var session = next.receive_files_session || {};
+		var uploadQr = document.getElementById("receive-upload-qr");
+		var uploadWait = document.getElementById("receive-upload-wait");
+		var transferStatus = document.getElementById("receive-transfer-status");
+		var transferFill = document.getElementById("receive-transfer-fill");
+		var destHint = document.getElementById("receive-dest-hint");
+		var rf = next.receive_files || {};
+		var rp = rf.progress || { completed: 0, percent: 0, total: 0 };
+		if (session.active && uploadQr) {
+			uploadQr.hidden = false;
+			if (session.qr_url) {
+				uploadQr.src = session.qr_url + "&_=" + Date.now();
+			}
+			if (uploadWait) {
+				uploadWait.hidden = true;
+			}
+		} else if (uploadQr) {
+			uploadQr.hidden = true;
+			if (uploadWait) {
+				uploadWait.hidden = false;
+				uploadWait.textContent = "Waiting to start receive session…";
+			}
+		}
+		if (transferStatus) {
+			transferStatus.textContent = easyFileCountLabel(
+				rp.completed,
+				"file received",
+				"files received",
+			);
+		}
+		if (transferFill) {
+			var transferPct = rp.total > 0 ? rp.percent : rp.completed > 0 ? 100 : 0;
+			transferFill.style.width = transferPct + "%";
+		}
+		var destDisplay = next.documents_receive_root_display || next.documents_receive_root;
+		if (destHint && destDisplay) {
+			destHint.textContent = "Files are saved under " + destDisplay;
+		}
+		var openWrap = document.getElementById("receive-open-wrap");
+		if (openWrap) {
+			var fileCount = next.documents_receive_file_count;
+			if (typeof fileCount !== "number") {
+				fileCount = rp.completed;
+			}
+			openWrap.classList.toggle("panel-hidden", fileCount < 1);
+		}
+		setQrUrlField("receive-qr-url", session.page_url || "");
+	}
+
+	function updateSendUi(next) {
+		var share = next.file_share || {};
+		var paths = next.share_selection || [];
+		var list = document.getElementById("share-path-list");
+		var qrSection = document.getElementById("send-qr-section");
+		var uploadQr = document.getElementById("send-share-qr");
+		var serverHint = document.getElementById("send-server-only-hint");
+		var hasDesktop = !!(window.pywebview && window.pywebview.api);
+		if (serverHint) {
+			serverHint.classList.toggle("panel-hidden", hasDesktop);
+		}
+		if (list) {
+			list.innerHTML = "";
+			paths.forEach(function (p) {
+				var li = document.createElement("li");
+				li.textContent = p;
+				list.appendChild(li);
+			});
+		}
+		if (share.active && paths.length && qrSection && uploadQr) {
+			qrSection.classList.remove("panel-hidden");
+			uploadQr.hidden = false;
+			if (share.qr_url) {
+				uploadQr.src = share.qr_url + "&_=" + Date.now();
+			}
+			setQrUrlField("send-qr-url", share.page_url || "");
+		} else if (qrSection && uploadQr) {
+			qrSection.classList.add("panel-hidden");
+			uploadQr.hidden = true;
+			setQrUrlField("send-qr-url", "");
+		}
+	}
+
 	function updateEasyUi(next) {
 		var wifi = next.wifi_upload || {};
 		var uploadQr = document.getElementById("easy-upload-qr");
@@ -557,6 +788,12 @@
 		var converted = (next.library_counts || {}).converted || 0;
 		var ep = next.extract.progress || { completed: 0, percent: 0 };
 		var cp = next.convert.progress || { completed: 0, total: 0, percent: 0 };
+		var photoLibraryHint = document.getElementById("photo-library-hint");
+		var libDisplay = next.library_root_display || next.library_root;
+		if (photoLibraryHint && libDisplay) {
+			photoLibraryHint.textContent = "Photos and videos are saved under " + libDisplay;
+		}
+		setQrUrlField("easy-qr-url", wifi.upload_url || "");
 		if (wifi.active && uploadQr) {
 			uploadQr.hidden = false;
 			if (wifi.qr_url) {
@@ -658,6 +895,8 @@
 		updateVisualizeUi(next);
 		updateWarnings(next);
 		updateEasyUi(next);
+		updateReceiveUi(next);
+		updateSendUi(next);
 		if (next.managed_tools) {
 			renderComponentsList(next.managed_tools);
 		}
@@ -665,6 +904,7 @@
 		if (toolsBlockMainApp(next)) {
 			return;
 		}
+		syncActiveModuleView(next);
 		validateStep1Form(false);
 		updateExtractButtons(next);
 	}
@@ -1564,38 +1804,83 @@
 	document.querySelectorAll(".view-tabs button").forEach(function (btn) {
 		btn.addEventListener("click", function () {
 			var v = btn.getAttribute("data-view");
-			showView(v === "home" ? "home" : v);
+			if (v === "home") {
+				goHomeHub();
+				return;
+			}
+			showView(v);
 		});
 	});
 
-	document.getElementById("btn-ui-easy").addEventListener("click", function () {
-		setUiMode("easy");
-		pushSettings().then(function () {
-			if (uiMode === "easy") {
-				return api("POST", "/api/easy/bootstrap");
+	document.querySelectorAll("[data-module]").forEach(function (tile) {
+		tile.addEventListener("click", function () {
+			var moduleId = tile.getAttribute("data-module");
+			if (moduleId) {
+				enterModule(moduleId);
 			}
-			return null;
-		}).then(function (data) {
-			if (data) {
-				applyState(data);
-			}
-		}).catch(function (err) {
-			showFormBanner(err.message || "Could not switch to Easy mode.");
 		});
 	});
-	document.getElementById("btn-ui-advanced").addEventListener("click", function () {
-		setUiMode("advanced");
-		pushSettings().catch(function (err) {
-			showFormBanner(err.message || "Could not switch to Advanced mode.");
+	document.querySelectorAll(".breadcrumb-home").forEach(function (btn) {
+		btn.addEventListener("click", function () {
+			goHomeHub();
 		});
+	});
+	onClick("btn-open-documents-folder", function () {
+		api("POST", "/api/documents/open-folder").catch(function (err) {
+			showFormBanner(err.message || "Could not open documents folder.");
+		});
+	});
+
+	function refreshShareSelection(paths) {
+		return api("POST", "/api/share/selection", { paths: paths }).then(applyState);
+	}
+
+	onClick("btn-share-clear", function () {
+		refreshShareSelection([]);
+	});
+	onClick("btn-share-add-files", function () {
+		if (!(window.pywebview && window.pywebview.api && window.pywebview.api.choose_files)) {
+			showFormBanner("Use the desktop app to pick files.");
+			return;
+		}
+		var current = (state && state.share_selection && state.share_selection[0]) || "";
+		Promise.resolve(window.pywebview.api.choose_files(current))
+			.then(function (picked) {
+				var merged = (state && state.share_selection ? state.share_selection.slice() : []).concat(picked || []);
+				return refreshShareSelection(merged);
+			})
+			.catch(function () {
+				showFormBanner("Could not open the file picker.");
+			});
+	});
+	onClick("btn-share-add-folder", function () {
+		if (!(window.pywebview && window.pywebview.api && window.pywebview.api.choose_share_folder)) {
+			showFormBanner("Use the desktop app to pick a folder.");
+			return;
+		}
+		var current = (state && state.share_selection && state.share_selection[0]) || "";
+		Promise.resolve(window.pywebview.api.choose_share_folder(current))
+			.then(function (folder) {
+				if (!folder) {
+					return null;
+				}
+				var merged = (state && state.share_selection ? state.share_selection.slice() : []).concat([folder]);
+				return refreshShareSelection(merged);
+			})
+			.catch(function () {
+				showFormBanner("Could not open the folder picker.");
+			});
 	});
 
 	function rememberMainViewBeforeFooterPage() {
 		var active = document.querySelector(".screen.active");
 		if (
 			active &&
-			(active.id === "view-easy" ||
+			(active.id === "view-home" ||
+				active.id === "view-easy" ||
 				active.id === "view-wizard" ||
+				active.id === "view-receive-files" ||
+				active.id === "view-send-files" ||
 				active.id === "view-gallery" ||
 				active.id === "view-gallery-item")
 		) {
@@ -1635,9 +1920,6 @@
 			.then(applyState)
 			.then(function () {
 				showView("home");
-				if (uiMode === "easy") {
-					return api("POST", "/api/easy/bootstrap").then(applyState);
-				}
 				return null;
 			})
 			.catch(function (err) {
@@ -1695,6 +1977,10 @@
 		panel.setAttribute("aria-hidden", open ? "false" : "true");
 		this.setAttribute("aria-expanded", open ? "true" : "false");
 	});
+	bindInfoPanelToggle("btn-easy-qr-info", "easy-qr-info-panel");
+	bindInfoPanelToggle("btn-receive-qr-info", "receive-qr-info-panel");
+	bindInfoPanelToggle("btn-send-qr-info", "send-qr-info-panel");
+	bindInfoPanelToggle("btn-wifi-qr-info", "wifi-qr-info-panel");
 
 	function switchConnectionMethod(method) {
 		syncConnectionButtons(method);
@@ -1896,7 +2182,7 @@
 				settings.library_root = defaultLibraryRoot;
 				return api("PUT", "/api/settings", {
 					library_root: defaultLibraryRoot,
-					ui_mode: "easy",
+					ui_mode: settings.ui_mode || "easy",
 					connection_method: settings.connection_method,
 					transfer_mode: settings.transfer_mode,
 					device_id: settings.device_id,
@@ -1908,6 +2194,7 @@
 		})
 		.then(applyState)
 		.then(function () {
+			warnIfStaleShell(state);
 			if (state && toolsBlockMainApp(state)) {
 				maybeShowComponentsScreen(state);
 				return runComponentsEnsure()
@@ -1927,13 +2214,15 @@
 			if (isGalleryEntryPath()) {
 				return null;
 			}
-			if (uiMode === "easy") {
-				return api("POST", "/api/easy/bootstrap").then(applyState);
+			if (state && state.active_module && state.active_module !== "home") {
+				showView(moduleToViewId(state.active_module), { skipHistory: true });
+			} else {
+				showView("home", { skipHistory: true });
 			}
-			if (selectedConnectionMethod() === "wifi") {
-				return null;
+			if (state && state.active_module === "usb_photo_backup" && selectedConnectionMethod() !== "wifi") {
+				return loadDevices();
 			}
-			return loadDevices();
+			return null;
 		})
 		.then(function () {
 			if (isGalleryEntryPath()) {

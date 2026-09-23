@@ -8,6 +8,27 @@ from spacemaker.bootstrap.paths import default_library_root, normalize_library_r
 
 
 class DesktopApi:
+	def choose_files(self, current: str = "") -> list[str]:
+		windows = webview.windows
+		if not windows:
+			return []
+		directory = str(Path((current or default_library_root()).strip()).parent)
+		if not Path(directory).is_dir():
+			directory = str(pictures_directory())
+		result = windows[0].create_file_dialog(
+			webview.FileDialog.OPEN,
+			directory=directory,
+			allow_multiple=True,
+		)
+		if not result:
+			return []
+		if isinstance(result, (list, tuple)):
+			return [str(item) for item in result]
+		return [str(result)]
+
+	def choose_share_folder(self, current: str = "") -> str:
+		return self.choose_library_folder(current)
+
 	def choose_library_folder(self, current: str = "") -> str:
 		windows = webview.windows
 		if not windows:

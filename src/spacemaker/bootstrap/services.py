@@ -24,14 +24,23 @@ from spacemaker.application.easy_session import should_auto_start_wifi_extract
 from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.extract_media import ExtractMedia
+from spacemaker.application.file_share_manifest import SharedFileEntry, expand_share_selection
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.application.get_gallery_item import GetGalleryItem
 from spacemaker.application.library_image_issues import count_image_files_in_library_folder
 from spacemaker.application.managed_tools import ManagedToolsService
+from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path, tools_install_root
-from spacemaker.bootstrap.paths import default_library_root, normalize_library_root
+from spacemaker.bootstrap.paths import (
+	default_documents_receive_root,
+	default_library_root,
+	display_user_path,
+	normalize_library_root,
+)
+from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
+from spacemaker.domain.app_module import AppModule, LanSessionKind
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.convert_policy import (
 	ConvertStartPolicy,
@@ -93,9 +102,18 @@ class AppServices:
 		self._extract_control: ExtractJobControl | None = None
 		self._wifi_upload_token: str = ""
 		self._wifi_token_lock = threading.Lock()
+		self._lan_session_kind: LanSessionKind = LanSessionKind.NONE
+		self._receive_upload_token: str = ""
+		self._share_session_token: str = ""
 		self._wifi_uploads_in_flight = 0
+		self._receive_uploads_in_flight = 0
+		self._receive_control: ExtractJobControl | None = None
+		self._share_entries: list[SharedFileEntry] = []
+		self._share_selection: list[str] = []
 		self._extract_future: Future[None] | None = None
 		self.receive_uploaded = ReceiveUploadedMedia(self.filesystem)
+		self.receive_documents = ReceiveUploadedDocuments(self.filesystem)
+		self._documents_receive_root = default_documents_receive_root()
 
 	def devices_for(self, method: ConnectionMethod):
 		if method is ConnectionMethod.WIFI:
@@ -112,6 +130,16 @@ class AppServices:
 		if not library_root:
 			return {f.value: 0 for f in LibraryFolder}
 		return {f.value: self.filesystem.count_files_in_folder(library_root, f) for f in LibraryFolder}
+
+	def _documents_receive_file_count(self) -> int:
+		root = Path(self._documents_receive_root)
+		if not root.is_dir():
+			return 0
+		count = 0
+		for path in root.rglob("*"):
+			if path.is_file():
+				count += 1
+		return count
 
 	def invalidate_gallery_metadata_cache(self) -> None:
 		self._captured_at_cache_key = ""
@@ -249,6 +277,20 @@ class AppServices:
 		base["managed_tools_dir"] = tools_status.get("tools_dir", "")
 		base["missing_tools"] = self._missing_tools()
 		base["wifi_upload"] = self._wifi_upload_snapshot()
+		base["receive_files_session"] = self._receive_files_snapshot()
+		base["file_share"] = self._file_share_snapshot()
+		base["documents_receive_root"] = self._documents_receive_root
+		base["documents_receive_root_display"] = display_user_path(
+			self._documents_receive_root,
+			trailing_slash=True,
+		)
+		base["documents_receive_file_count"] = self._documents_receive_file_count()
+		if library_root:
+			base["library_root_display"] = display_user_path(library_root, trailing_slash=True)
+		else:
+			base["library_root_display"] = display_user_path(default_library_root(), trailing_slash=True)
+		base["share_selection"] = list(self._share_selection)
+		base["ui_shell_version"] = UI_SHELL_VERSION
 		return base
 
 	def _wifi_upload_snapshot(self) -> dict[str, object]:
@@ -273,12 +315,239 @@ class AppServices:
 	def _clear_wifi_token(self) -> None:
 		with self._wifi_token_lock:
 			self._wifi_upload_token = ""
+			if self._lan_session_kind is LanSessionKind.PHOTO_UPLOAD:
+				self._lan_session_kind = LanSessionKind.NONE
 
 	def _mint_wifi_token(self) -> str:
 		token = secrets.token_urlsafe(24)
 		with self._wifi_token_lock:
 			self._wifi_upload_token = token
+			self._lan_session_kind = LanSessionKind.PHOTO_UPLOAD
 		return token
+
+	def _receive_files_snapshot(self) -> dict[str, object]:
+		from spacemaker.bootstrap.lan import lan_ip
+
+		with self._wifi_token_lock:
+			token = self._receive_upload_token
+			kind = self._lan_session_kind
+		with self.session._lock:
+			phase = self.session.receive_files_phase
+		active = kind is LanSessionKind.RECEIVE_FILES and bool(token) and phase is JobPhase.RUNNING
+		if not active:
+			return {"active": False, "page_url": "", "qr_url": ""}
+		host = lan_ip()
+		page_url = f"http://{host}:{self.port}/receive?t={token}"
+		return {
+			"active": True,
+			"page_url": page_url,
+			"qr_url": f"/api/receive/qr.svg?t={token}",
+		}
+
+	def _file_share_snapshot(self) -> dict[str, object]:
+		from spacemaker.bootstrap.lan import lan_ip
+
+		with self._wifi_token_lock:
+			token = self._share_session_token
+			kind = self._lan_session_kind
+		active = kind is LanSessionKind.SEND_FILES and bool(token) and bool(self._share_entries)
+		if not active:
+			return {"active": False, "page_url": "", "qr_url": "", "file_count": 0}
+		host = lan_ip()
+		page_url = f"http://{host}:{self.port}/share?t={token}"
+		return {
+			"active": True,
+			"page_url": page_url,
+			"qr_url": f"/api/share/qr.svg?t={token}",
+			"file_count": len(self._share_entries),
+		}
+
+	def receive_token_valid(self, token: str) -> bool:
+		if not token:
+			return False
+		with self._wifi_token_lock:
+			return (
+				self._lan_session_kind is LanSessionKind.RECEIVE_FILES
+				and bool(self._receive_upload_token)
+				and secrets.compare_digest(self._receive_upload_token, token)
+			)
+
+	def share_token_valid(self, token: str) -> bool:
+		if not token:
+			return False
+		with self._wifi_token_lock:
+			return (
+				self._lan_session_kind is LanSessionKind.SEND_FILES
+				and bool(self._share_session_token)
+				and secrets.compare_digest(self._share_session_token, token)
+			)
+
+	def _clear_receive_session(self) -> None:
+		with self._wifi_token_lock:
+			self._receive_upload_token = ""
+			if self._lan_session_kind is LanSessionKind.RECEIVE_FILES:
+				self._lan_session_kind = LanSessionKind.NONE
+		with self.session._lock:
+			if self.session.receive_files_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
+				self.session.receive_files_phase = JobPhase.STOPPED
+		self._receive_control = None
+
+	def _clear_share_session(self) -> None:
+		with self._wifi_token_lock:
+			self._share_session_token = ""
+			if self._lan_session_kind is LanSessionKind.SEND_FILES:
+				self._lan_session_kind = LanSessionKind.NONE
+
+	def stop_active_lan_session(self) -> None:
+		with self.session._lock:
+			module = self.session.active_module
+			extract_phase = self.session.extract_phase
+			method = self.session.connection_method
+		if module is AppModule.PHOTO_BACKUP and method is ConnectionMethod.WIFI:
+			if extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
+				self.stop_extract()
+		elif extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED} and method is ConnectionMethod.WIFI:
+			self.stop_extract()
+		self._clear_receive_session()
+		self._clear_share_session()
+		self._share_entries = []
+
+	def enter_module(self, module: AppModule) -> None:
+		self.stop_active_lan_session()
+		with self.session._lock:
+			self.session.active_module = module
+			if module is AppModule.PHOTO_BACKUP:
+				self.session.ui_mode = UiMode.EASY
+				self.session.connection_method = ConnectionMethod.WIFI
+				self.session.transfer_mode = TransferMode.COPY
+			elif module is AppModule.USB_PHOTO_BACKUP:
+				self.session.ui_mode = UiMode.ADVANCED
+		if module is AppModule.PHOTO_BACKUP:
+			self.bootstrap_photo_backup()
+		elif module is AppModule.RECEIVE_FILES:
+			self.start_receive_files_session()
+		elif module is AppModule.SEND_FILES:
+			self._share_selection = []
+			self._share_entries = []
+			self._clear_share_session()
+
+	def leave_module_for_home(self) -> None:
+		self.stop_active_lan_session()
+		self._share_selection = []
+		with self.session._lock:
+			self.session.active_module = AppModule.HOME
+
+	def bootstrap_photo_backup(self) -> None:
+		with self.session._lock:
+			self.session.ui_mode = UiMode.EASY
+			self.session.connection_method = ConnectionMethod.WIFI
+			self.session.transfer_mode = TransferMode.COPY
+			extract_phase = self.session.extract_phase
+			library_root = self.session.library_root
+			active_module = self.session.active_module
+		if library_root:
+			self.filesystem.ensure_library_folders(library_root)
+		if should_auto_start_wifi_extract(
+			active_module=active_module,
+			ui_mode=UiMode.EASY,
+			extract_phase=extract_phase,
+			library_root=library_root,
+		):
+			self.start_extract()
+		self._maybe_start_convert_drain()
+
+	def start_receive_files_session(self) -> None:
+		self.filesystem.ensure_parent_directory(str(Path(self._documents_receive_root) / "placeholder"))
+		Path(self._documents_receive_root).mkdir(parents=True, exist_ok=True)
+		self._receive_control = ExtractJobControl(on_paused=self._on_receive_paused)
+		with self.session._lock:
+			self.session.receive_files_phase = JobPhase.RUNNING
+			self.session.receive_files_progress = JobProgress(0, 0)
+		token = secrets.token_urlsafe(24)
+		with self._wifi_token_lock:
+			self._receive_upload_token = token
+			self._lan_session_kind = LanSessionKind.RECEIVE_FILES
+		self.push_state()
+
+	def _on_receive_paused(self) -> None:
+		with self.session._lock:
+			self.session.receive_files_phase = JobPhase.PAUSED
+		self.push_state()
+
+	def receive_session_accepts_uploads(self) -> bool:
+		with self.session._lock:
+			if self.session.receive_files_phase is not JobPhase.RUNNING:
+				return False
+		control = self._receive_control
+		if control is None:
+			return False
+		return control.accepts_new_file()
+
+	def record_receive_upload_progress(self) -> None:
+		with self.session._lock:
+			completed = self.session.receive_files_progress.completed + 1
+			self.session.receive_files_progress = JobProgress(completed=completed, total=completed)
+		self.push_state()
+
+	def handle_receive_upload(self, token: str, raw_relative: str, temp_path: str, incoming_size: int) -> None:
+		if not self.receive_token_valid(token):
+			raise PermissionError("receive session ended")
+		control = self._receive_control
+		if control is None or not control.accepts_new_file():
+			raise PermissionError("receive session paused or stopped")
+		self._receive_uploads_in_flight += 1
+		try:
+			outcome = self.receive_documents.ingest(
+				self._documents_receive_root,
+				raw_relative,
+				temp_path=temp_path,
+				incoming_size=incoming_size,
+			)
+		finally:
+			self._receive_uploads_in_flight = max(0, self._receive_uploads_in_flight - 1)
+			if control is not None:
+				control.after_file()
+		if outcome.disposition.value in {"saved", "skipped"}:
+			self.record_receive_upload_progress()
+
+	def set_share_selection(self, paths: list[str]) -> None:
+		clean = [p.strip() for p in paths if p and p.strip()]
+		self._share_selection = clean
+		pairs = expand_share_selection(clean)
+		entries: list[SharedFileEntry] = []
+		for index, (display, absolute) in enumerate(pairs):
+			entries.append(
+				SharedFileEntry(
+					entry_id=f"f{index}",
+					display_name=display,
+					absolute_path=absolute,
+				),
+			)
+		self._share_entries = entries
+		if not entries:
+			self._clear_share_session()
+			self.push_state()
+			return
+		token = secrets.token_urlsafe(24)
+		with self._wifi_token_lock:
+			self._share_session_token = token
+			self._lan_session_kind = LanSessionKind.SEND_FILES
+		self.push_state()
+
+	def shared_file_for_download(self, token: str, entry_id: str) -> Path | None:
+		if not self.share_token_valid(token):
+			return None
+		for entry in self._share_entries:
+			if entry.entry_id == entry_id:
+				path = Path(entry.absolute_path)
+				if path.is_file():
+					return path
+		return None
+
+	def share_manifest(self, token: str) -> list[dict[str, str]]:
+		if not self.share_token_valid(token):
+			return []
+		return [{"id": e.entry_id, "name": e.display_name} for e in self._share_entries]
 
 	def wifi_token_valid(self, token: str) -> bool:
 		if not token:
@@ -533,20 +802,8 @@ class AppServices:
 
 	def ensure_easy_session(self) -> None:
 		with self.session._lock:
-			self.session.ui_mode = UiMode.EASY
-			self.session.connection_method = ConnectionMethod.WIFI
-			self.session.transfer_mode = TransferMode.COPY
-			extract_phase = self.session.extract_phase
-			library_root = self.session.library_root
-		if library_root:
-			self.filesystem.ensure_library_folders(library_root)
-		if should_auto_start_wifi_extract(
-			ui_mode=UiMode.EASY,
-			extract_phase=extract_phase,
-			library_root=library_root,
-		):
-			self.start_extract()
-		self._maybe_start_convert_drain()
+			self.session.active_module = AppModule.PHOTO_BACKUP
+		self.bootstrap_photo_backup()
 
 	def _maybe_start_convert_drain(self) -> None:
 		with self.session._lock:

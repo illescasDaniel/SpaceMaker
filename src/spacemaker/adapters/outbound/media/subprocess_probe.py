@@ -8,8 +8,8 @@ from pathlib import Path
 from spacemaker.adapters.outbound.media.raw_preview import raw_embedded_preview_available
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
-from spacemaker.domain.media import is_raw_extension, normalize_extension
 from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
+from spacemaker.domain.media import is_raw_extension, normalize_extension
 from spacemaker.domain.web_compat import VideoProbe
 
 

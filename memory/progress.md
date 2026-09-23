@@ -28,7 +28,8 @@
 - [x] Wizard: **Start convert** during active extract stops extract gracefully then converts `originals/`
 - [x] **Easy mode (default UI)** — light Easy + dark Advanced, auto Wi‑Fi receive, convert-as-received, View gallery + Gallery phone-help FAB; LAN mobile shells (upload/gallery); **wireframe approved** 2026-09-22
 - [x] **Easy mode image import issue counts** — images in `error/` / `invalid/` totals on Easy home
-- [ ] **Easy mode import issues — where to review** — wireframe approved 2026-09-23; spec draft (approval + open-folder API + UI)
+- [x] **Home modules hub** — four tiles; Photo/USB/receive/send; specs + implementation; WebEngine cache bust; receive open-folder UX
+- [ ] **Easy mode import issues — where to review** — wireframe approved 2026-09-23; spec draft (open-folder API partially via `/api/library/open-folder`)
 - [x] **GPU-only video convert** — HW AV1 → HW H.264 → move-as-is; gallery preview gating; MP4 export hidden without HW encoder
 - [x] Phase 4 (packaging): portable PyInstaller onefile, managed CLI downloads, legal assets, app icon + favicon
 - [x] Specs/docs: bundled third-party tools + legal (privacy, disclaimer, manifest)

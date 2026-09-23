@@ -27,4 +27,5 @@ def reveal_in_file_manager(path: str) -> None:
 	elif sys.platform == "win32":
 		subprocess.run(["explorer", "/select,", str(target)], check=True)
 	else:
-		subprocess.run(["xdg-open", str(target.parent)], check=True)
+		open_path = str(target) if target.is_dir() else str(target.parent)
+		subprocess.run(["xdg-open", open_path], check=True)
