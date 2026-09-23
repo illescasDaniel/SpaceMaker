@@ -92,6 +92,7 @@ _LEGAL = {
 	"third_party": repo_root() / "docs" / "legal" / "THIRD_PARTY_TOOLS.md",
 }
 
+
 class SettingsBody(BaseModel):
 	library_root: str = ""
 	ui_mode: UiMode | None = None
@@ -141,6 +142,10 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if not services.wifi_token_valid(t):
 			return FileResponse(_STATIC / "upload-ended.html")
 		return FileResponse(_STATIC / "upload.html")
+
+	@app.get("/upload/ended")
+	def upload_ended_page() -> FileResponse:
+		return FileResponse(_STATIC / "upload-ended.html")
 
 	@app.get("/api/server-info")
 	def server_info() -> dict[str, object]:
@@ -526,6 +531,32 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		except OSError as exc:
 			raise HTTPException(status_code=500, detail="thumbnail generation failed") from exc
 		return FileResponse(thumb_path, media_type="image/jpeg")
+
+	@app.get("/favicon.ico")
+	def favicon() -> FileResponse:
+		icon = _STATIC / "favicon.png"
+		if not icon.is_file():
+			raise HTTPException(status_code=404)
+		return FileResponse(icon, media_type="image/png")
+
+	@app.get("/api/tools/status")
+	def tools_status() -> dict[str, object]:
+		return services.managed_tools.status_dict()
+
+	@app.post("/api/tools/ensure")
+	def tools_ensure() -> dict[str, object]:
+		services.managed_tools.ensure_all()
+		return services.managed_tools.status_dict()
+
+	@app.post("/api/tools/components-continue")
+	def tools_components_continue() -> dict[str, object]:
+		services.managed_tools.allow_path_fallback()
+		return services.managed_tools.status_dict()
+
+	@app.delete("/api/tools/downloaded")
+	def tools_delete_downloaded() -> dict[str, object]:
+		services.managed_tools.delete_downloaded()
+		return services.managed_tools.status_dict()
 
 	@app.get("/api/legal/{doc_id}")
 	def legal_doc(doc_id: str) -> dict[str, str]:

@@ -138,11 +138,13 @@ def test_given_video_needing_encode_and_no_hw_when_convert_then_moves_to_convert
 	probe.videos[src] = VideoProbe("mp4", "hevc", "aac", 5_000_000)
 	converter = FakeMediaConverter(library_encoder=HardwareVideoEncoder.NONE)
 	converter.bind_filesystem(fs)
+	use_case = ConvertMedia(fs, converter, probe)
 	# when
-	ConvertMedia(fs, converter, probe).run(library)
+	use_case.run(library)
 	# then
 	assert fs.files[_paths(fs, library, LibraryFolder.CONVERTED, rel)] == 500
 	assert not converter.encoded_videos
+	assert "no hardware video encoder" in use_case.last_failure
 
 
 def test_given_video_needing_encode_and_h264_hw_when_convert_then_h264_output():
@@ -179,3 +181,23 @@ def test_given_low_bitrate_mp4_when_convert_then_move_as_is():
 	ConvertMedia(fs, FakeMediaConverter(), probe).run(library)
 	# then
 	assert fs.files[_paths(fs, library, LibraryFolder.CONVERTED, rel)] == 50
+
+
+def test_given_video_when_ffprobe_missing_then_moves_to_error_with_failure():
+	# given
+	fs = FakeFileSystem()
+	library = "/lib"
+	rel = "clip.mp4"
+	src = _paths(fs, library, LibraryFolder.ORIGINALS, rel)
+	fs.files[src] = 80
+
+	class ProbeMissing(FakeMediaProbe):
+		def probe_video(self, path: str) -> VideoProbe | None:
+			raise FileNotFoundError("Tool not found: ffprobe")
+
+	use_case = ConvertMedia(fs, FakeMediaConverter(), ProbeMissing())
+	# when
+	use_case.run(library)
+	# then
+	assert fs.files[_paths(fs, library, LibraryFolder.ERROR, rel)] == 80
+	assert "ffprobe" in use_case.last_failure

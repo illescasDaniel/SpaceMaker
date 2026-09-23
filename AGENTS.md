@@ -93,7 +93,7 @@ Under the user-chosen library root:
 
 Conversion rules: [docs/playbooks/SpaceMaker-adaptations.md](docs/playbooks/SpaceMaker-adaptations.md) and reference script [docs/reference/convert_all_1_1.sh](docs/reference/convert_all_1_1.sh).
 
-Release builds bundle **all** third-party CLIs (adb, libmtp, ffmpeg, ffprobe, magick, exiftool) per OS/CPU — [specs/packaging/SPEC.md](specs/packaging/SPEC.md). Legal: [docs/legal/](docs/legal/), [specs/legal/SPEC.md](specs/legal/SPEC.md). Dev may use tools on `PATH`; frozen app must not require manual installs.
+Release builds are **portable onefile executables** that **download** pinned third-party CLIs (adb, libmtp, ffmpeg, ffprobe, magick, exiftool) into the user data folder per OS/CPU — [specs/packaging/SPEC.md](specs/packaging/SPEC.md). Legal: [docs/legal/](docs/legal/), [specs/legal/SPEC.md](specs/legal/SPEC.md). Resolution order: managed dir → download → `PATH` (only after setup **Continue** or `SPACEMAKER_DEV=1`). Override dir: `SPACEMAKER_TOOLS_DIR`.
 
 ## Reference playbooks
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -10,8 +11,10 @@ from spacemaker.adapters.outbound.media.ffmpeg_encoders import (
 	h264_hw_encoder_ffmpeg_args,
 	hardware_video_encoder_from_ffmpeg_encoders,
 )
+from spacemaker.adapters.outbound.media.raw_preview import extract_raw_embedded_jpeg
 from spacemaker.adapters.outbound.media.tool_runner import ToolExecutionError, ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
+from spacemaker.domain.media import is_raw_extension, normalize_extension
 from spacemaker.domain.video_encode import HardwareVideoEncoder
 
 
@@ -22,13 +25,40 @@ class SubprocessMediaConverter:
 		self._library_encoder: HardwareVideoEncoder | None = None
 
 	def encode_image_to_avif(self, source: str, destination: str) -> None:
-		source_path = str(Path(source).resolve())
+		source_path = Path(source).resolve()
 		dest_path = str(Path(destination).resolve())
 		Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
+		try:
+			self._magick_encode_avif(str(source_path), dest_path)
+		except ToolExecutionError:
+			ext = normalize_extension(source_path.name)
+			if not is_raw_extension(ext):
+				raise
+			with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+				preview_path = Path(tmp.name)
+			try:
+				exiftool = self._runner.path(BundledTool.EXIFTOOL)
+				if not extract_raw_embedded_jpeg(
+					source=source_path,
+					destination=preview_path,
+					exiftool=exiftool,
+				):
+					raise ToolExecutionError(
+						BundledTool.MAGICK,
+						["magick", str(source_path)],
+						subprocess.CompletedProcess([], 1, "", "no embedded RAW preview"),
+					)
+				self._magick_encode_avif(str(preview_path), dest_path)
+			finally:
+				preview_path.unlink(missing_ok=True)
+		self._copy_image_metadata(source_path, dest_path)
+
+	def _magick_encode_avif(self, source_path: str, dest_path: str) -> None:
 		self._runner.run(
 			BundledTool.MAGICK,
 			[
 				source_path,
+				"-auto-orient",
 				"-depth",
 				"10",
 				"-quality",
@@ -38,10 +68,19 @@ class SubprocessMediaConverter:
 				dest_path,
 			],
 		)
+
+	def _copy_image_metadata(self, source_path: Path, dest_path: str) -> None:
 		try:
 			self._runner.run(
 				BundledTool.EXIFTOOL,
-				["-overwrite_original", "-TagsFromFile", source_path, "-all:all", dest_path],
+				[
+					"-overwrite_original",
+					"-TagsFromFile",
+					str(source_path),
+					"-all:all",
+					"--Orientation:all",
+					dest_path,
+				],
 				check=False,
 			)
 		except FileNotFoundError:
@@ -84,21 +123,14 @@ class SubprocessMediaConverter:
 		self._runner.run(BundledTool.FFMPEG, args)
 
 	def encode_image_to_jpeg(self, source: str, destination: str) -> None:
-		source_path = str(Path(source).resolve())
+		source_path = Path(source).resolve()
 		dest_path = str(Path(destination).resolve())
 		Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
 		self._runner.run(
 			BundledTool.MAGICK,
-			[source_path, "-quality", "95", dest_path],
+			[str(source_path), "-auto-orient", "-quality", "95", dest_path],
 		)
-		try:
-			self._runner.run(
-				BundledTool.EXIFTOOL,
-				["-overwrite_original", "-TagsFromFile", source_path, "-all:all", dest_path],
-				check=False,
-			)
-		except FileNotFoundError:
-			pass
+		self._copy_image_metadata(source_path, dest_path)
 
 	def encode_video_to_h264_aac(
 		self,

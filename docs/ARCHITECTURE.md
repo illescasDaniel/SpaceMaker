@@ -27,7 +27,7 @@ Composition root: `bootstrap.build_services()` wires outbound adapters into use 
 
 ## Runtime flow
 
-1. **Extract** — `DeviceRepository` (MTP via bundled **libmtp**, or ADB via **adbutils** + bundled platform-tools `adb`) copies or moves media into `originals/` (idempotent transfer). See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md).
+1. **Extract** — `DeviceRepository` (MTP via **libmtp**, or ADB via **adbutils** + platform-tools `adb`) copies or moves media into `originals/` (idempotent transfer). Tool paths: managed download dir → `PATH`. See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md).
 2. **Convert** — reads `originals/`, writes `converted/`, or moves failures to `error/` / `invalid/` per policy.
 3. **Gallery** — serves and indexes `converted/` only; optional LAN URL + QR for phone access.
 

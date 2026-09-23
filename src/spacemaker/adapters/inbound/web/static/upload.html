@@ -3,6 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="icon" href="/favicon.ico" sizes="32x32">
 	<title>SpaceMaker — Upload</title>
 	<style>
 		:root {
@@ -155,14 +156,32 @@
 			return "/api/upload/session?t=" + encodeURIComponent(token);
 		}
 
+		var sessionPollTimer = null;
+
+		function stopSessionPolling() {
+			if (sessionPollTimer !== null) {
+				clearInterval(sessionPollTimer);
+				sessionPollTimer = null;
+			}
+		}
+
+		function showSessionEnded() {
+			stopSessionPolling();
+			window.location.replace("/upload/ended");
+		}
+
 		function refreshSession() {
+			if (!token) {
+				showSessionEnded();
+				return Promise.resolve(null);
+			}
 			return fetch(sessionUrl(), { headers: { Accept: "application/json" } })
 				.then(function (r) { return r.json(); })
 				.then(function (body) {
 					var paused = document.getElementById("alert-paused");
 					var ready = document.getElementById("panel-ready");
 					if (!body.active) {
-						window.location.replace("/upload?t=" + encodeURIComponent(token));
+						showSessionEnded();
 						return body;
 					}
 					if (!body.accepts_uploads) {
@@ -232,7 +251,7 @@
 
 		applyUploadUiForDevice();
 		refreshSession();
-		setInterval(refreshSession, 5000);
+		sessionPollTimer = setInterval(refreshSession, 5000);
 	})();
 	</script>
 </body>

@@ -113,6 +113,19 @@
 			.steps { grid-template-columns: repeat(3, 1fr); }
 		}
 
+		#view-wizard.screen {
+			max-width: none;
+			width: 100%;
+			padding: 1rem clamp(0.5rem, 2vw, 1.25rem);
+			box-sizing: border-box;
+		}
+
+		#view-wizard .steps {
+			max-width: min(1400px, 100%);
+			margin-left: auto;
+			margin-right: auto;
+		}
+
 		.step-card {
 			background: var(--surface);
 			border: 1px solid var(--border);
@@ -860,6 +873,52 @@
 			margin: 0.25rem 0 0.5rem;
 		}
 
+		.easy-import-issues {
+			text-align: left;
+			margin: 1.25rem 0 0;
+			display: flex;
+			flex-direction: column;
+			gap: 0.65rem;
+		}
+
+		.easy-import-issues.panel-hidden {
+			display: none;
+		}
+
+		.easy-import-alert {
+			margin-top: 0;
+			text-align: left;
+		}
+
+		.easy-import-alert strong {
+			display: block;
+			margin-bottom: 0.25rem;
+		}
+
+		.easy-import-hint {
+			margin: 0.35rem 0 0;
+			font-size: 0.82rem;
+			line-height: 1.45;
+			color: var(--muted);
+		}
+
+		.easy-import-open {
+			display: inline-block;
+			margin: 0.5rem 0 0;
+			padding: 0;
+			border: none;
+			background: none;
+			font: inherit;
+			font-size: 0.85rem;
+			color: var(--accent);
+			text-decoration: underline;
+			cursor: pointer;
+		}
+
+		.easy-import-open:hover {
+			color: var(--accent-dim);
+		}
+
 		.easy-view-gallery-wrap {
 			margin-top: 2rem;
 			padding-top: 1.5rem;
@@ -926,10 +985,68 @@
 			border-radius: 6px;
 			cursor: pointer;
 		}
+
+		.components-screen {
+			max-width: 36rem;
+			margin: 0 auto;
+			padding: 1.5rem 1rem 2rem;
+		}
+
+		.components-screen h2 {
+			margin: 0 0 0.5rem;
+			font-size: 1.35rem;
+		}
+
+		.components-lead {
+			color: var(--muted);
+			font-size: 0.9rem;
+			margin: 0 0 1.25rem;
+		}
+
+		.tool-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+			padding: 0.65rem 0;
+			border-bottom: 1px solid var(--border);
+			font-size: 0.9rem;
+		}
+
+		.tool-row:last-child {
+			border-bottom: none;
+		}
+
+		.tool-name {
+			font-weight: 600;
+		}
+
+		.tool-status {
+			color: var(--muted);
+			font-size: 0.85rem;
+			text-align: right;
+		}
+
+		.tool-status.ready { color: #2f9e44; }
+		.tool-status.path { color: var(--warn); }
+		.tool-status.fail { color: #e03131; }
+
+		.components-actions {
+			margin-top: 1.5rem;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.75rem;
+		}
+
+		.legal-tools-dir {
+			font-family: ui-monospace, monospace;
+			font-size: 0.8rem;
+			word-break: break-all;
+		}
 	</style>
 </head>
 <body>
-	<div class="wireframe-banner">Wireframe only — Easy (light) default · Advanced (dark wizard). Toggle modes below. Footer: About &amp; Legal.</div>
+	<div class="wireframe-banner">Wireframe only — Easy (light) default · Advanced (dark wizard). First-run: Components setup. Footer: About &amp; Legal.</div>
 
 	<div class="app-shell">
 	<header class="top-bar">
@@ -941,10 +1058,44 @@
 			</nav>
 		</div>
 		<nav class="view-tabs" aria-label="Wireframe views">
+			<button type="button" data-view="components">Components</button>
 			<button type="button" class="active" data-view="home">Main</button>
 			<button type="button" data-view="gallery">Gallery</button>
 		</nav>
 	</header>
+
+	<!-- FIRST-RUN / COMPONENTS -->
+	<section id="view-components" class="screen" aria-label="Required components">
+		<div class="components-screen">
+			<h2>Setting up components</h2>
+			<p class="components-lead">SpaceMaker downloads pinned versions of FFmpeg, ImageMagick, and other tools into your user data folder. If a download fails, install that tool yourself — the app will use your system copy when available.</p>
+			<div class="tool-row">
+				<span class="tool-name">ffmpeg / ffprobe</span>
+				<span class="tool-status ready">Ready (downloaded)</span>
+			</div>
+			<div class="tool-row">
+				<span class="tool-name">magick (ImageMagick)</span>
+				<span class="tool-status">Downloading…</span>
+			</div>
+			<div class="tool-row">
+				<span class="tool-name">exiftool</span>
+				<span class="tool-status path">Using system install</span>
+			</div>
+			<div class="tool-row">
+				<span class="tool-name">adb</span>
+				<span class="tool-status ready">Ready (downloaded)</span>
+			</div>
+			<div class="tool-row">
+				<span class="tool-name">mtp-detect / mtp-getfile</span>
+				<span class="tool-status fail">Install libmtp — not on PATH</span>
+			</div>
+			<div class="components-actions">
+				<button type="button" class="btn btn-primary" id="btn-components-continue">Continue</button>
+				<button type="button" class="btn btn-secondary" id="btn-components-retry">Retry downloads</button>
+			</div>
+			<p class="wireframe-demo-row" style="margin-top: 1.25rem;">Wireframe demo: <button type="button" id="btn-wireframe-show-components">Show components screen</button></p>
+		</div>
+	</section>
 
 	<!-- EASY MODE -->
 	<section id="view-easy" class="screen active" aria-label="Easy mode">
@@ -979,11 +1130,40 @@
 					<div class="progress-fill" id="easy-convert-fill" style="width: 65%"></div>
 				</div>
 			</div>
-			<p class="status-line" id="easy-import-issues" role="status">1 image failed to convert · 2 unsupported images</p>
+			<div class="easy-import-issues" id="easy-import-issues-wrap" role="status" aria-live="polite">
+				<div class="alert alert-warn easy-import-alert" id="easy-import-invalid">
+					<span class="alert-icon" aria-hidden="true">⚠</span>
+					<div>
+						<strong><span id="easy-invalid-count">2</span> unsupported images</strong>
+						<p class="easy-import-hint">
+							These files are in your library’s <code>invalid/</code> folder. They are not shown in the gallery.
+						</p>
+						<button type="button" class="easy-import-open" id="btn-easy-open-invalid">
+							Click here to open the invalid folder
+						</button>
+					</div>
+				</div>
+				<div class="alert alert-warn easy-import-alert" id="easy-import-error">
+					<span class="alert-icon" aria-hidden="true">⚠</span>
+					<div>
+						<strong><span id="easy-error-count">1</span> image failed to convert</strong>
+						<p class="easy-import-hint">
+							These files are in your library’s <code>error/</code> folder (encode failed after retry).
+						</p>
+						<button type="button" class="easy-import-open" id="btn-easy-open-error">
+							Click here to open the error folder
+						</button>
+					</div>
+				</div>
+			</div>
 			<div class="easy-view-gallery-wrap panel-hidden" id="easy-view-gallery-wrap">
 				<button type="button" class="btn btn-primary btn-easy-view-gallery" id="btn-easy-view-gallery">View gallery</button>
 			</div>
-			<p class="wireframe-demo-row">Wireframe demo: <button type="button" id="btn-easy-toggle-gallery">Toggle View gallery button</button></p>
+			<p class="wireframe-demo-row">
+				Wireframe demo:
+				<button type="button" id="btn-easy-toggle-gallery">Toggle View gallery</button>
+				<button type="button" id="btn-easy-cycle-import-issues">Cycle import issue banners</button>
+			</p>
 		</div>
 	</section>
 
@@ -1255,7 +1435,7 @@
 			<p><strong>Contact:</strong> <a href="mailto:contact@daniel-ir.eu">contact@daniel-ir.eu</a></p>
 
 			<h3>Third-party tools</h3>
-			<p>Release builds bundle these programs (you do not install them separately):</p>
+			<p>On first launch, SpaceMaker downloads pinned builds of these programs into a folder on your computer (not inside the app). If a download fails, install the tool with your package manager; SpaceMaker uses that copy when it is on your PATH.</p>
 			<ul>
 				<li><a href="https://ffmpeg.org/" target="_blank" rel="noopener">FFmpeg</a> / ffprobe — video</li>
 				<li><a href="https://imagemagick.org/" target="_blank" rel="noopener">ImageMagick</a> — AVIF</li>
@@ -1270,10 +1450,30 @@
 		</div>
 	</section>
 
+	<section id="view-settings" class="screen" aria-label="Settings">
+		<div class="legal-page">
+			<button type="button" class="btn btn-ghost legal-back" id="btn-settings-back">← Back</button>
+			<h2>Settings</h2>
+			<h3>Downloaded components</h3>
+			<p>SpaceMaker stores pinned FFmpeg, adb, and other tools in this folder.</p>
+			<p><strong>Folder:</strong></p>
+			<p class="legal-tools-dir">~/.local/share/spacemaker/tools</p>
+			<div class="tool-row"><span class="tool-name">ffmpeg / ffprobe</span><span class="tool-status ready">Ready (downloaded)</span></div>
+			<div class="tool-row"><span class="tool-name">magick (ImageMagick)</span><span class="tool-status resolution-missing">Not downloaded yet</span></div>
+			<p>
+				<button type="button" class="btn btn-secondary" id="btn-settings-delete-tools">Delete downloaded components</button>
+				<button type="button" class="btn btn-ghost" id="btn-settings-retry-downloads">Retry downloads</button>
+			</p>
+			<p class="status-line" style="margin-top: 0.5rem;">Removes only downloaded files. System packages are untouched.</p>
+		</div>
+	</section>
+
 	</div>
 
 	<footer class="app-footer">
 		SpaceMaker · local backup &amp; convert ·
+		<button type="button" id="btn-footer-settings">Settings</button>
+		·
 		<button type="button" id="btn-footer-legal">About &amp; Legal</button>
 	</footer>
 
@@ -1303,6 +1503,12 @@
 			}
 			document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
 			document.getElementById('view-' + resolved).classList.add('active');
+			if (resolved === 'components') {
+				document.querySelectorAll('.view-tabs button').forEach(function (b) {
+					b.classList.toggle('active', b.getAttribute('data-view') === 'components');
+				});
+				return;
+			}
 			if (resolved === 'easy' || resolved === 'wizard' || resolved === 'gallery' || resolved === 'gallery-item') {
 				document.querySelectorAll('.view-tabs button').forEach(function (b) {
 					var tab = b.getAttribute('data-view');
@@ -1357,11 +1563,60 @@
 		document.getElementById('btn-easy-toggle-gallery').addEventListener('click', function () {
 			document.getElementById('easy-view-gallery-wrap').classList.toggle('panel-hidden');
 		});
+		document.getElementById('btn-easy-open-invalid').addEventListener('click', function () {
+			alert('Wireframe: reveal invalid/ in file manager');
+		});
+		document.getElementById('btn-easy-open-error').addEventListener('click', function () {
+			alert('Wireframe: reveal error/ in file manager');
+		});
+		(function () {
+			var cycle = 0;
+			var wrap = document.getElementById('easy-import-issues-wrap');
+			var inv = document.getElementById('easy-import-invalid');
+			var err = document.getElementById('easy-import-error');
+			document.getElementById('btn-easy-cycle-import-issues').addEventListener('click', function () {
+				cycle = (cycle + 1) % 4;
+				if (cycle === 0) {
+					wrap.classList.add('panel-hidden');
+				} else {
+					wrap.classList.remove('panel-hidden');
+					inv.hidden = cycle === 2;
+					err.hidden = cycle === 1;
+				}
+			});
+		})();
 		document.getElementById('btn-easy-view-gallery').addEventListener('click', function () {
 			showView('gallery');
 		});
 		document.getElementById('btn-gallery-phone-help').addEventListener('click', function () {
 			document.getElementById('gallery-phone-popup').classList.toggle('panel-hidden');
+		});
+
+		document.getElementById('btn-wireframe-show-components').addEventListener('click', function () {
+			showView('components');
+		});
+		document.getElementById('btn-components-continue').addEventListener('click', function () {
+			showView('home');
+		});
+		document.getElementById('btn-components-retry').addEventListener('click', function () {
+			alert('Wireframe: retry downloads');
+		});
+		document.getElementById('btn-settings-delete-tools').addEventListener('click', function () {
+			alert('Wireframe: delete downloaded components');
+		});
+		document.getElementById('btn-settings-retry-downloads').addEventListener('click', function () {
+			alert('Wireframe: retry downloads');
+		});
+
+		document.getElementById('btn-footer-settings').addEventListener('click', function () {
+			var active = document.querySelector('.screen.active');
+			if (active && (active.id === 'view-easy' || active.id === 'view-wizard' || active.id === 'view-gallery')) {
+				lastMainView = active.id === 'view-gallery' ? 'gallery' : 'home';
+			}
+			showView('settings');
+		});
+		document.getElementById('btn-settings-back').addEventListener('click', function () {
+			showView(lastMainView === 'gallery' ? 'gallery' : 'home');
 		});
 
 		document.getElementById('btn-footer-legal').addEventListener('click', function () {

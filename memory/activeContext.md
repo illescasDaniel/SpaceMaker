@@ -1,24 +1,26 @@
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-23_
 
 ## Branch
 
-`main` — push skipped per user.
+`main` — local commit; push skipped per user.
 
 ## Current focus
 
-Manual smoke for Easy issue counts and video preview/MP4 gating; Phase 4 packaging when ready.
+1. **Easy mode import issues (SDD):** wireframe approved; `specs/easy-mode/SPEC.md` drafted — **await spec approval**, then implement panels + `POST /api/library/open-folder`.
+2. **Managed tools:** catalog download, Components screen APIs, Continue → PATH fallback; validate magick/exiftool retries and GPU ffmpeg on real convert.
 
-## Just changed (this commit)
+## Just changed (saved commit)
 
-- Easy: **image_import_issues** line (images in `error/` + `invalid/`)
-- Video convert: HW AV1 → else HW H.264 → else move-as-is; no CPU encoders; `.h264.mp4` fallback output
-- Gallery: `preview_in_browser` for HEVC etc.; hide **Download as MP4** when no HW encoder
-- Specs/playbooks updated (convert-media, easy-mode, gallery)
+- Managed CLI catalog/installer, Components APIs, persisted Continue marker, tool runner PATH preference
+- RAW preview path in convert pipeline; packaging catalog/spec assets; favicon route
+- Phone upload `/upload/ended` route; wireframe Easy import-issue panels
+- Easy-mode spec: warn panels + open-folder actions
 
 ## Next steps
 
-1. Manual smoke: Easy issue counts after failed image convert; HEVC item without preview; MP4 button on/off by HW
-2. Phase 4 packaging (open)
+1. User: **spec approved** for easy-mode import issues → ports, tests, production UI
+2. Settings/Components: retry **magick** + **exiftool**; **Continue**; re-test MOV convert with PATH GPU ffmpeg
+3. `uv run task checks`
 
 ## Run
 

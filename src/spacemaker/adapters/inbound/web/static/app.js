@@ -161,7 +161,7 @@
 		if (btnAdvanced) {
 			btnAdvanced.classList.toggle("active", uiMode === "advanced");
 		}
-		if (!options.skipViewSwitch) {
+		if (!options.skipViewSwitch && !toolsBlockMainApp(state)) {
 			var active = document.querySelector(".screen.active");
 			if (active && (active.id === "view-easy" || active.id === "view-wizard")) {
 				showView("home", { skipHistory: true });
@@ -431,7 +431,118 @@
 		if (banner && !banner.hidden) {
 			return;
 		}
-		showFormBanner("Bundled tools missing (" + missing.join(", ") + "). Run: uv run task dev-tools -- --from-path");
+		showFormBanner(
+			"Some components are missing (" +
+				missing.join(", ") +
+				"). Open Components setup or install them on your PATH.",
+		);
+	}
+
+	var COMPONENTS_DISMISS_KEY = "spacemaker_components_continue";
+
+	function toolsBlockMainApp(next) {
+		return !!(next && next.tools_setup_pending);
+	}
+
+	function currentViewId() {
+		var active = document.querySelector(".screen.active");
+		return active ? active.id : "";
+	}
+
+	function toolDisplayName(toolId) {
+		var labels = {
+			adb: "adb",
+			ffmpeg: "ffmpeg / ffprobe",
+			ffprobe: "ffprobe",
+			magick: "magick (ImageMagick)",
+			exiftool: "exiftool",
+			"mtp-detect": "mtp-detect",
+			"mtp-getfile": "mtp-getfile",
+		};
+		return labels[toolId] || toolId;
+	}
+
+	function toolStatusText(tool) {
+		if (tool.phase === "downloading" || tool.message === "Waiting for download") {
+			return tool.phase === "downloading" ? "Downloading…" : "Waiting for download…";
+		}
+		if (tool.resolution === "managed") {
+			return "Ready (downloaded)";
+		}
+		if (tool.resolution === "path") {
+			return "Using system install (you chose Continue)";
+		}
+		if (tool.phase === "failed") {
+			return tool.message || "Download failed";
+		}
+		return tool.message || "Not downloaded yet";
+	}
+
+	function fillToolStatusList(container, tools) {
+		if (!container || !tools) {
+			return;
+		}
+		container.innerHTML = "";
+		tools.forEach(function (tool) {
+			var row = document.createElement("div");
+			row.className = "tool-row";
+			var name = document.createElement("span");
+			name.className = "tool-name";
+			name.textContent = toolDisplayName(tool.tool_id);
+			var status = document.createElement("span");
+			status.className = "tool-status resolution-" + (tool.resolution || "missing");
+			status.textContent = toolStatusText(tool);
+			row.appendChild(name);
+			row.appendChild(status);
+			container.appendChild(row);
+		});
+	}
+
+	function renderComponentsList(managedTools) {
+		if (!managedTools || !managedTools.tools) {
+			return;
+		}
+		fillToolStatusList(document.getElementById("components-tool-list"), managedTools.tools);
+		fillToolStatusList(document.getElementById("settings-tool-list"), managedTools.tools);
+		var settingsDir = document.getElementById("settings-managed-tools-dir");
+		if (settingsDir && managedTools.tools_dir) {
+			settingsDir.textContent = managedTools.tools_dir;
+		}
+	}
+
+	function shouldPromptComponentsSetup(next) {
+		if (!toolsBlockMainApp(next)) {
+			sessionStorage.removeItem(COMPONENTS_DISMISS_KEY);
+			return false;
+		}
+		if (sessionStorage.getItem(COMPONENTS_DISMISS_KEY) === "1") {
+			return false;
+		}
+		return true;
+	}
+
+	function maybeShowComponentsScreen(next) {
+		if (!shouldPromptComponentsSetup(next)) {
+			return;
+		}
+		var viewId = currentViewId();
+		if (viewId === "view-settings" || viewId === "view-legal") {
+			renderComponentsList(next.managed_tools || {});
+			return;
+		}
+		renderComponentsList(next.managed_tools || {});
+		showView("components", { skipHistory: true });
+		var continueBtn = document.getElementById("btn-components-continue");
+		if (continueBtn) {
+			continueBtn.disabled = false;
+		}
+	}
+
+	function runComponentsEnsure() {
+		return api("POST", "/api/tools/ensure").then(function (payload) {
+			renderComponentsList(payload);
+			return payload;
+		});
 	}
 
 	function updateEasyUi(next) {
@@ -483,6 +594,8 @@
 					"In progress — " + cp.completed + " / " + cp.total + " (" + cp.percent + "%)";
 			} else if (next.convert.phase === "error") {
 				convertStatus.textContent = "Failed — " + (next.last_error || "see Advanced for details");
+			} else if (next.last_error) {
+				convertStatus.textContent = next.last_error;
 			} else if (next.convert.phase === "done" && cp.total > 0) {
 				convertStatus.textContent = "Completed — " + cp.completed + " file(s)";
 			} else if (converted > 0) {
@@ -545,6 +658,13 @@
 		updateVisualizeUi(next);
 		updateWarnings(next);
 		updateEasyUi(next);
+		if (next.managed_tools) {
+			renderComponentsList(next.managed_tools);
+		}
+		maybeShowComponentsScreen(next);
+		if (toolsBlockMainApp(next)) {
+			return;
+		}
 		validateStep1Form(false);
 		updateExtractButtons(next);
 	}
@@ -1470,7 +1590,7 @@
 		});
 	});
 
-	document.getElementById("btn-footer-legal").addEventListener("click", function () {
+	function rememberMainViewBeforeFooterPage() {
 		var active = document.querySelector(".screen.active");
 		if (
 			active &&
@@ -1482,10 +1602,82 @@
 			lastMainView =
 				active.id === "view-gallery-item" || active.id === "view-gallery" ? "gallery" : "home";
 		}
+	}
+
+	document.getElementById("btn-footer-settings").addEventListener("click", function () {
+		rememberMainViewBeforeFooterPage();
+		if (state && state.managed_tools) {
+			renderComponentsList(state.managed_tools);
+		}
+		showView("settings");
+	});
+	document.getElementById("btn-footer-legal").addEventListener("click", function () {
+		rememberMainViewBeforeFooterPage();
 		showView("legal");
+	});
+	document.getElementById("btn-settings-back").addEventListener("click", function () {
+		if (state && toolsBlockMainApp(state)) {
+			showView("components", { skipHistory: true });
+			return;
+		}
+		showView(lastMainView === "gallery" ? "gallery" : "home");
 	});
 	document.getElementById("btn-legal-back").addEventListener("click", function () {
 		showView(lastMainView === "gallery" ? "gallery" : "home");
+	});
+	onClick("btn-components-continue", function () {
+		api("POST", "/api/tools/components-continue")
+			.then(function (payload) {
+				sessionStorage.setItem(COMPONENTS_DISMISS_KEY, "1");
+				renderComponentsList(payload);
+				return api("GET", "/api/settings");
+			})
+			.then(applyState)
+			.then(function () {
+				showView("home");
+				if (uiMode === "easy") {
+					return api("POST", "/api/easy/bootstrap").then(applyState);
+				}
+				return null;
+			})
+			.catch(function (err) {
+				showFormBanner(err.message || "Could not continue setup.");
+			});
+	});
+	onClick("btn-components-retry", function () {
+		runComponentsEnsure().catch(function (err) {
+			showFormBanner(err.message || "Could not retry downloads.");
+		});
+	});
+	onClick("btn-settings-delete-tools", function () {
+		if (
+			!window.confirm(
+				"Delete all downloaded components? System packages will not be removed.",
+			)
+		) {
+			return;
+		}
+		api("DELETE", "/api/tools/downloaded")
+			.then(function (payload) {
+				sessionStorage.removeItem(COMPONENTS_DISMISS_KEY);
+				renderComponentsList(payload);
+				return api("GET", "/api/settings");
+			})
+			.then(applyState)
+			.then(function () {
+				if (state && toolsBlockMainApp(state)) {
+					showView("components", { skipHistory: true });
+				}
+			})
+			.then(applyState)
+			.catch(function (err) {
+				showFormBanner(err.message || "Could not delete downloaded components.");
+			});
+	});
+	onClick("btn-settings-retry-downloads", function () {
+		runComponentsEnsure().catch(function (err) {
+			showFormBanner(err.message || "Could not retry downloads.");
+		});
 	});
 
 	bindGalleryUi();
@@ -1716,6 +1908,21 @@
 		})
 		.then(applyState)
 		.then(function () {
+			if (state && toolsBlockMainApp(state)) {
+				maybeShowComponentsScreen(state);
+				return runComponentsEnsure()
+					.then(function () {
+						return api("GET", "/api/settings");
+					})
+					.then(applyState);
+			}
+			return null;
+		})
+		.then(function () {
+			if (state && toolsBlockMainApp(state)) {
+				maybeShowComponentsScreen(state);
+				return null;
+			}
 			routeFromPath();
 			if (isGalleryEntryPath()) {
 				return null;

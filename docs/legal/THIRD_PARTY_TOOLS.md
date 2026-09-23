@@ -1,21 +1,21 @@
-# Third-party tools bundled with SpaceMaker
+# Third-party tools used by SpaceMaker
 
-SpaceMaker includes the following **external programs** inside official installers/binaries. You should not need to download or install them manually.
+SpaceMaker runs these **external programs** on your computer for extract and convert. Official portable builds **download pinned versions** into your user data folder on first launch. If a download fails, install the tool yourself (package manager or vendor site) and ensure it is on your `PATH`.
 
-Machine-readable manifest: [packaging/third-party-manifest.yaml](../../packaging/third-party-manifest.yaml).
+Machine-readable manifest: [packaging/third-party-manifest.yaml](../../packaging/third-party-manifest.yaml). Download pins: [packaging/tool-catalog.json](../../packaging/tool-catalog.json).
 
 | Tool | Purpose in SpaceMaker | Project home |
 |------|------------------------|--------------|
 | **adb** | Copy/move files from Android (ADB mode) | https://developer.android.com/tools/releases/platform-tools |
 | **mtp-detect**, **mtp-getfile** (libmtp) | MTP device access (default connection mode) | https://libmtp.sourceforge.net/ |
-| **ffmpeg** | Encode video to AV1 | https://ffmpeg.org/ |
+| **ffmpeg** | Encode video to AV1 / H.264 | https://ffmpeg.org/ |
 | **ffprobe** | Validate videos; read bitrate/duration | https://ffmpeg.org/ |
 | **magick** (ImageMagick) | Encode images to AVIF | https://imagemagick.org/ |
 | **exiftool** | Copy EXIF/metadata to AVIF outputs | https://exiftool.org/ |
 
 ## Licenses
 
-Exact license texts for each bundled build are shipped under `packaging/licenses/` in the source repository and copied into release artifacts. Summaries:
+License texts shipped inside upstream archives are stored next to the downloaded binaries when available. Summaries:
 
 - **adb / platform-tools:** Android SDK Platform Tools License (Google)
 - **libmtp:** LGPL-2.1+
@@ -23,8 +23,12 @@ Exact license texts for each bundled build are shipped under `packaging/licenses
 - **ImageMagick:** ImageMagick License
 - **ExifTool:** Artistic License / GPL (variant documented per release)
 
-SpaceMaker’s own license is stated in the repository `LICENSE` file (to be added before public release).
+SpaceMaker’s own license is in the repository [LICENSE](../../LICENSE) file (MIT).
 
-## Updates to bundled tools
+## Updates to downloaded tools
 
-Version pins live under `packaging/*.version` files. Security updates may ship in patch releases without changing this document’s structure.
+Version pins live in [packaging/tool-catalog.json](../../packaging/tool-catalog.json). Security updates may ship in patch releases without changing this document’s structure.
+
+## Removing downloads
+
+In **Settings**, use **Delete downloaded components** to remove only the managed tools folder. System packages are not uninstalled.

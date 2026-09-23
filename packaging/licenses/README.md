@@ -1,5 +1,7 @@
 # Third-party license texts
 
-Place full license files for each **bundled** build here before release (e.g. `ffmpeg.LICENSE`, `platform-tools.NOTICE`, `libmtp.COPYING`).
+License files extracted from **downloaded** upstream archives are stored next to managed binaries when the catalog provides them.
 
-Release packaging copies this directory into the installer. Summaries and home pages: [docs/legal/THIRD_PARTY_TOOLS.md](../../docs/legal/THIRD_PARTY_TOOLS.md).
+Summaries and home pages: [docs/legal/THIRD_PARTY_TOOLS.md](../../docs/legal/THIRD_PARTY_TOOLS.md).
+
+Portable release builds do not pre-ship full license trees in the repository; they are populated after first-run downloads when upstream bundles include them.

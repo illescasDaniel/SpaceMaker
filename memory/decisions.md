@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-22 — Portable release: managed CLI downloads (not bundled in exe)
+
+- **Context:** Public release should be a single portable executable without embedding large third-party CLIs; users still need pinned, working dependency versions.
+- **Decision:** Download pinned tools into OS-specific user data dirs (`managed_tools_dir()`); resolution order managed → catalog download → `PATH`; Components UI on first run; About & Legal **Delete downloaded components**. Catalog in `packaging/tool-catalog.json`; ffmpeg/ffprobe via `static-ffmpeg` PyPI wheel; adb via versioned platform-tools zip. No traditional installer. Reverses “bundle all CLIs inside artifact” v1 decision.
+- **Rationale:** Smaller portable binary; updatable pins; graceful fallback when upstream download fails; aligns with user-requested portable model.
+
 ## 2026-09-22 — GPU-only library video convert and gallery preview gating
 
 - **Context:** CPU AV1/x264 encodes are slow and HEVC library outputs do not preview in the web gallery; users on machines without HW encoders still need files in `converted/`.

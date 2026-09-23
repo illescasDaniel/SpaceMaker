@@ -66,10 +66,10 @@ Local FastAPI + static UI in pywebview; no cloud dependency. Gallery may expose 
 - UI default: **Easy** mode (light UI, auto Wi‑Fi receive, convert-as-received). **Advanced** wizard retains **Wi‑Fi** default connection (QR upload; **Move** disabled).
 - Alternates: **MTP** and **ADB (cable)** with info (ⓘ) for setup steps.
 - Hexagonal: `DeviceRepository` port; adapters `MtpDeviceRepository`, `AdbDeviceRepository` (adbutils on all OSes for ADB).
-- **MTP:** One **libmtp** adapter on all OSes; **bundle** libmtp CLI in release artifacts.
-- **ADB:** **adbutils** + **bundled** `adb` per OS/CPU.
-- **Convert:** **bundled** ffmpeg, ffprobe, magick, exiftool — see `packaging/third-party-manifest.yaml`.
-- **Legal:** ship privacy, disclaimer, third-party notice in installer + in-app About (`specs/legal/SPEC.md`).
+- **MTP:** One **libmtp** adapter on all OSes; download libmtp CLI when catalog provides it, else `PATH`.
+- **ADB:** **adbutils** + managed or `PATH` `adb` per OS/CPU.
+- **Convert:** managed or `PATH` ffmpeg, ffprobe, magick, exiftool — see `packaging/tool-catalog.yaml`.
+- **Legal:** ship privacy, disclaimer, third-party notice in portable binary + in-app About (`specs/legal/SPEC.md`).
 - **Move** from device: prefer ADB; MTP move may be unsupported per file.
 - Spec: [specs/extract-media/SPEC.md](../../specs/extract-media/SPEC.md).
 

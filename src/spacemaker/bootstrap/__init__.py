@@ -1,4 +1,4 @@
-"""Composition root and runtime paths (expanded in Phase 4)."""
+"""Composition root and runtime paths."""
 
 from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path
 

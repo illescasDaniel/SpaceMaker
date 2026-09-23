@@ -1,21 +1,36 @@
-# Packaging (desktop binary / installer)
+# Packaging (portable desktop executable)
 
 ## Metadata
 
-- **Feature:** Self-contained SpaceMaker per OS + CPU; **all** third-party CLIs bundled
+- **Feature:** Self-contained SpaceMaker per OS + CPU; third-party CLIs **downloaded** on first run (not shipped inside the exe)
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-components`, Settings delete control
 - **Related:** [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [legal/SPEC.md](../legal/SPEC.md)
 - **Manifest:** [packaging/third-party-manifest.yaml](../../packaging/third-party-manifest.yaml)
-- **Out of scope v1:** Auto-update, code signing (follow-up)
+- **Catalog:** [packaging/tool-catalog.json](../../packaging/tool-catalog.json)
+- **Out of scope v1:** Auto-update, code signing, traditional installers
 
 ## Goals
 
-End users must **not** go online to install dependencies. The installer or release archive includes:
+End users receive a **single portable executable** (PyInstaller onefile). It contains the Python runtime, web UI, legal markdown, and app icon. It does **not** contain adb, libmtp, ffmpeg, ffprobe, magick, or exiftool.
 
-1. SpaceMaker (Python runtime + app via PyInstaller or equivalent)
-2. **Every CLI** listed in the third-party manifest, built for the **target OS and CPU**
-3. **Legal docs** (`PRIVACY.md`, `DISCLAIMER.md`, `THIRD_PARTY_TOOLS.md`) + `packaging/licenses/` texts (see legal spec)
+On first launch (or when a tool is missing from the managed folder), SpaceMaker **downloads pinned builds** from upstream or PyPI wheel sources into the standard per-user data directory:
 
-## Bundled third-party binaries (v1)
+| OS | Managed tools directory |
+|----|-------------------------|
+| Linux | `$XDG_DATA_HOME/spacemaker/tools` or `~/.local/share/spacemaker/tools` |
+| Windows | `%LOCALAPPDATA%\SpaceMaker\tools` |
+| macOS | `~/Library/Application Support/SpaceMaker/tools` |
+
+Resolution order for each tool:
+
+1. Executable in the managed tools directory
+2. Download per [packaging/tool-catalog.json](../../packaging/tool-catalog.json) for current OS/CPU
+3. Binary on the user `PATH` (user is informed the download did not succeed)
+4. Missing — feature that needs the tool shows a clear manual-install message
+
+A failed download for one tool must **not** block setup for other tools.
+
+## Third-party programs (v1)
 
 | Tool | Role |
 |------|------|
@@ -25,52 +40,73 @@ End users must **not** go online to install dependencies. The installer or relea
 | `magick` | AVIF encode |
 | `exiftool` | Metadata copy |
 
-No user-facing step may say “install FFmpeg” or “download platform-tools” for packaged builds.
+When no portable catalog entry exists for a platform (common for libmtp), skip download and rely on PATH + manual-install copy.
 
 ## Target matrix (v1)
 
-| OS | CPU architectures | Artifact style |
-|----|-------------------|----------------|
-| **Windows** | x64 | Installer or zip; `tools/*.exe` |
-| **Linux** | x64, arm64 | AppImage or tarball; `tools/*` |
-| **macOS** | arm64, x64 | `.app`; `Contents/Resources/tools/` |
+| OS | CPU architectures | Artifact |
+|----|-------------------|----------|
+| **Windows** | x64 | `SpaceMaker.exe` (onefile) |
+| **Linux** | x64, arm64 | `SpaceMaker` binary (onefile) |
+| **macOS** | arm64, x64 | `SpaceMaker.app` or onefile binary |
 
 ## Runtime resolution
 
-- Module: `spacemaker.bootstrap.bundled_tools` — `BundledTool`, `resolve_tool_path()`.
-- **Frozen (release):** use `bundle_root()/tools/<name>`; **missing file = error** (no PATH fallback).
-- **Dev (`uv run`):** **only** `tools/<name>`; missing file = clear error + `tools/README.md`. Optional `SPACEMAKER_DEV=1` allows `PATH` fallback for contributors without a populated `tools/` tree.
-- Adapters receive absolute paths from bootstrap; never assume global installs in production.
+- Module: `spacemaker.bootstrap.bundled_tools` — `BundledTool`, `resolve_tool_path()`, `managed_tools_dir()`
+- `ToolRunner` and adapters receive absolute paths from bootstrap; never assume global installs without the resolution order above.
+- Optional override for tests/dev: `SPACEMAKER_TOOLS_DIR` points at a directory containing tool binaries.
+- Optional `SPACEMAKER_TOOLS_DIR` for tests; production uses the managed user data folder only.
 
 ## Version pinning
 
-- Per-tool version files under `packaging/` (e.g. `ffmpeg.version`, `platform-tools.version`).
-- CI rebuilds when pins change; manifest documents homepage + license (legal docs).
+- Pinned URLs, PyPI wheel coordinates, and optional sha256 live in `packaging/tool-catalog.json` per OS/CPU.
+- [packaging/third-party-manifest.yaml](../../packaging/third-party-manifest.yaml) documents purpose, homepage, license summary (legal).
 
 ## PyInstaller
 
-- `.spec` copies `tools/` tree + `docs/legal/` + licenses into artifact.
-- `packaging/README.md` (Phase 4) documents matrix build commands.
+- Onefile spec embeds `docs/legal/`, app icon, and static UI.
+- Does **not** bundle the `tools/` CLI tree.
+- [packaging/README.md](../../packaging/README.md) documents matrix build commands.
+
+## UI
+
+- **Components screen** (`#view-components`): shown when any required tool is not yet resolved; per-tool status (downloading, ready downloaded, using system install, needs manual install); Continue and Retry.
+- **Settings** (`#view-settings`): managed folder path; **Delete downloaded components** removes only the managed tools directory; next launch may re-download.
 
 ## Acceptance criteria (BDD)
 
-### Scenario: Convert uses bundled ffmpeg
+### Scenario: Convert prefers managed ffmpeg over PATH
 
-- **Given** a frozen Linux x64 build
-- **When** convert runs on a sample video
-- **Then** subprocess invokes bundled `tools/ffmpeg`, not `/usr/bin/ffmpeg`
+- **Given** managed `tools/ffmpeg` exists and `/usr/bin/ffmpeg` exists
+- **When** convert runs
+- **Then** subprocess invokes managed `ffmpeg`, not `/usr/bin/ffmpeg`
 
-### Scenario: User never prompted to download FFmpeg
+### Scenario: Download failure falls back to PATH
 
-- **Given** packaged app first launch
-- **When** user completes extract + convert flow
-- **Then** no UI directs them to external download sites for bundled tools
+- **Given** managed ffmpeg absent and catalog download fails
+- **And** `ffmpeg` is on PATH
+- **When** convert runs
+- **Then** subprocess uses PATH ffmpeg
+- **And** components status shows “Using system install” for ffmpeg
+
+### Scenario: Portable exe has no bundled CLIs
+
+- **Given** a built onefile artifact
+- **When** the payload is inspected
+- **Then** adb, ffmpeg, and magick are not embedded next to the exe
 
 ### Scenario: Legal files in artifact
 
-- **Given** any release installer
-- **When** payload is listed
-- **Then** privacy, disclaimer, and third-party notice files are included
+- **Given** any release binary
+- **When** legal paths are resolved at runtime
+- **Then** privacy, disclaimer, and third-party notice markdown are available
+
+### Scenario: Delete downloaded components
+
+- **Given** the user clicks **Delete downloaded components** in Settings
+- **When** the action completes
+- **Then** the managed tools directory is removed
+- **And** system PATH tools are unchanged
 
 ### Scenario: Manifest matches BundledTool enum
 
@@ -82,13 +118,14 @@ No user-facing step may say “install FFmpeg” or “download platform-tools�
 
 | Layer | Coverage |
 |-------|----------|
-| Unit | `test_bundled_tools.py` — resolve frozen/dev/windows |
+| Unit | `test_bundled_tools.py` — managed dir, PATH fallback |
+| Unit | `test_managed_tools.py` — ensure/delete with fake installer |
 | Unit | `test_third_party_manifest.py` — manifest ↔ enum |
 | Unit | `test_legal_docs_present.py` — required markdown exists |
-| Integration | Post-build smoke: each bundled binary `--version` or equivalent |
-| CI | Matrix per OS/arch |
+| Integration | API `/api/tools/*` with mocked downloads |
 
 ## Out of scope
 
 - Full Android SDK (platform-tools only)
-- User-managed optional codecs outside manifest
+- Bundling CLIs inside the executable
+- Installer welcome wizards

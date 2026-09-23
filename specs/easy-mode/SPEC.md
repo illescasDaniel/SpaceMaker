@@ -4,7 +4,7 @@
 
 - **Feature:** Minimal default UI — Wi‑Fi upload QR, auto-receive, convert-as-received, **View gallery** when ready; phone gallery help on Gallery tab
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-easy`, Easy | Advanced toggle; phone upload [wireframes/phone-upload.html](../../wireframes/phone-upload.html)
-- **UX approved:** 2026-09-22 (chat: wireframe approved)
+- **UX approved:** 2026-09-22 (initial Easy mode); **2026-09-23** (image import issue panels + open-folder actions)
 - **Related:** [main-wizard](../main-wizard/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
 
 ## Triggers & routing
@@ -24,7 +24,11 @@
   2. Short instruction: scan with phone on same Wi‑Fi
   3. **Transfer** progress (files received this session; total unknown → count + optional indeterminate bar while receiving)
   4. **Convert** progress (same WebSocket convert job as Advanced). When idle with files already in `converted/`, status reads e.g. **1 file converted, waiting for more** (pluralized).
-  5. **Image import issues** (when any): total counts of **images** in library `error/` (failed convert) and `invalid/` (unsupported), e.g. *2 images failed to convert · 1 unsupported image*. Hidden when both are zero. No per-file list in Easy (see Advanced or folders).
+  5. **Image import issues** (when any): one or two **warning panels** (light theme, same warn styling as Advanced alerts), each shown only when its **image** count **> 0**:
+     - **Unsupported:** heading e.g. *2 unsupported images*; hint that files are in the library **`invalid/`** folder and are **not** in the gallery; text action **Click here to open the invalid folder**.
+     - **Failed convert:** heading e.g. *1 image failed to convert* (pluralized); hint that files are in **`error/`** (encode failed after retry); text action **Click here to open the error folder**.
+     - When both counts are zero, the whole block is hidden (no placeholder).
+     - Counts are **images only** (same semantics as today’s `image_import_issues` WebSocket field). No per-file list in Easy.
   6. **View gallery** button — **only when** `converted/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
   7. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
 - No library picker, connection toggle, or extract/convert buttons on Easy.
@@ -35,6 +39,16 @@
 ### Advanced (dark)
 
 - Unchanged three-step wizard ([main-wizard](../main-wizard/SPEC.md)).
+
+## API & actions
+
+| Action | Behavior |
+|--------|----------|
+| Open invalid folder | `POST /api/library/open-folder` with body `{ "bucket": "invalid" }` — reveals `{library_root}/invalid/` in the OS file manager (create folder if missing). Same host adapter as gallery “open containing folder” ([main-wizard](../main-wizard/SPEC.md) Review default). |
+| Open error folder | Same endpoint with `{ "bucket": "error" }` for `{library_root}/error/`. |
+| Failure | Missing or non-writable library root → JSON error; client shows a short banner on Easy (same pattern as other Easy API errors). |
+
+Allowed `bucket` values: `error`, `invalid` only (no path traversal; resolved under session library root).
 
 ## Convert while receiving (Easy only)
 
@@ -91,8 +105,48 @@
 - **When** the user clicks **Start convert**
 - **Then** extract stops and convert runs (unchanged Advanced behavior)
 
+### Scenario: No import issue panels when buckets empty
+
+- **Given** Easy mode and `image_import_issues.errors` and `image_import_issues.invalid` are both **0**
+- **When** Easy mode is shown
+- **Then** the image import issues block is not visible
+
+### Scenario: Unsupported images panel
+
+- **Given** Easy mode and at least one **image** in library `invalid/`
+- **When** Easy mode is shown
+- **Then** the unsupported-images warning panel is visible with the correct count
+- **And** the hint mentions `invalid/` and that files are not in the gallery
+
+### Scenario: Failed convert panel
+
+- **Given** Easy mode and at least one **image** in library `error/` and zero images in `invalid/`
+- **When** Easy mode is shown
+- **Then** only the failed-convert warning panel is visible
+- **And** the unsupported panel is not shown
+
+### Scenario: Open invalid folder from Easy
+
+- **Given** the unsupported-images panel is visible
+- **When** the user activates **Click here to open the invalid folder**
+- **Then** the OS file manager opens (or focuses) the library `invalid/` directory
+
+### Scenario: Open error folder from Easy
+
+- **Given** the failed-convert panel is visible
+- **When** the user activates **Click here to open the error folder**
+- **Then** the OS file manager opens (or focuses) the library `error/` directory
+
 ## Out of scope
 
 - Persisting `ui_mode` across app restarts
-- Easy-mode per-file error/invalid bucket review UI (counts only; use Advanced or OS folders for details)
+- Easy-mode per-file filenames or in-app file list (folder reveal only)
+- **Move to converted** from Easy (Advanced Step 2 only)
 - Changing conversion flags in Easy
+
+## Testing strategy
+
+| Layer | Focus |
+|-------|--------|
+| Unit | Easy import panel visibility from `image_import_issues` counts (zero → hidden; partial → one or two panels) |
+| Integration | `POST /api/library/open-folder` resolves `error` / `invalid` under session library root; rejects unknown bucket |

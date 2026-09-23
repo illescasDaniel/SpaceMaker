@@ -17,6 +17,7 @@ from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMe
 from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaProbe
 from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
+from spacemaker.adapters.outbound.tools.catalog_installer import CatalogToolInstaller
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.delete_gallery_item import DeleteGalleryItem
 from spacemaker.application.easy_session import should_auto_start_wifi_extract
@@ -26,9 +27,10 @@ from spacemaker.application.extract_media import ExtractMedia
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.application.get_gallery_item import GetGalleryItem
 from spacemaker.application.library_image_issues import count_image_files_in_library_folder
+from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.wizard_state import wizard_actions
-from spacemaker.bootstrap.bundled_tools import missing_bundled_tools
+from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path, tools_install_root
 from spacemaker.bootstrap.paths import default_library_root, normalize_library_root
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.convert_policy import (
@@ -52,6 +54,12 @@ class WebSocketLike(Protocol):
 
 
 def repo_root() -> Path:
+	import sys
+
+	if getattr(sys, "frozen", False):
+		meipass = getattr(sys, "_MEIPASS", None)
+		if meipass:
+			return Path(meipass)
 	return Path(__file__).resolve().parents[3]
 
 
@@ -63,7 +71,11 @@ class AppServices:
 		self._captured_at_cache: dict[str, datetime] = {}
 		self.session = AppSession(library_root=normalize_library_root(default_library_root()))
 		self.filesystem = LocalFileSystem()
-		self.runner = ToolRunner()
+		self.managed_tools = ManagedToolsService(
+			CatalogToolInstaller(repo_root=repo_root()),
+			dest_dir=tools_install_root(),
+		)
+		self.runner = ToolRunner(path_fallback_allowed=self.managed_tools.permit_path_fallback)
 		self.probe = SubprocessMediaProbe(self.runner)
 		self.converter = SubprocessMediaConverter(self.runner)
 		self.error_recovery = ErrorRecovery(self.filesystem)
@@ -174,6 +186,18 @@ class AppServices:
 				changed = True
 		return changed
 
+	def _missing_tools(self) -> list[str]:
+		missing: list[str] = []
+		for tool in BundledTool:
+			try:
+				resolve_tool_path(
+					tool,
+					allow_path_fallback=self.managed_tools.permit_path_fallback(tool),
+				)
+			except FileNotFoundError:
+				missing.append(tool.value)
+		return missing
+
 	def enriched_snapshot(self) -> dict[str, object]:
 		base = self.session.snapshot()
 		with self.session._lock:
@@ -217,7 +241,13 @@ class AppServices:
 		base["video_friendly_export_available"] = (
 			self.converter.library_video_encoder() is not HardwareVideoEncoder.NONE
 		)
-		base["missing_tools"] = missing_bundled_tools()
+		tools_status = self.managed_tools.status_dict()
+		base["managed_tools"] = tools_status
+		base["tools_ready"] = bool(tools_status.get("all_ready"))
+		base["tools_downloads_pending"] = bool(tools_status.get("downloads_pending"))
+		base["tools_setup_pending"] = bool(tools_status.get("setup_pending"))
+		base["managed_tools_dir"] = tools_status.get("tools_dir", "")
+		base["missing_tools"] = self._missing_tools()
 		base["wifi_upload"] = self._wifi_upload_snapshot()
 		return base
 

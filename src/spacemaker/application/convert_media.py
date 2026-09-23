@@ -48,7 +48,12 @@ class ConvertMedia:
 
 	def _process_file(self, library_root: str, relative: str) -> None:
 		source = self._filesystem.library_path(library_root, LibraryFolder.ORIGINALS, relative)
-		video_probe = self._video_probe_for(relative, source)
+		try:
+			video_probe = self._video_probe_for(relative, source)
+		except FileNotFoundError as exc:
+			self.last_failure = f"{relative}: {exc}"
+			self._move_to_folder(library_root, relative, LibraryFolder.ERROR)
+			return
 		kind = media_kind_for_extension(normalize_extension(relative))
 		if kind is MediaKind.VIDEO and video_probe is None and not relative.lower().endswith(".av1.mp4"):
 			self._move_to_folder(library_root, relative, LibraryFolder.INVALID)
@@ -61,6 +66,10 @@ class ConvertMedia:
 			self._move_to_folder(library_root, relative, LibraryFolder.CONVERTED)
 			return
 		if kind is MediaKind.VIDEO and self._converter.library_video_encoder() is HardwareVideoEncoder.NONE:
+			if route is ConversionRoute.ENCODE:
+				self.last_failure = (
+					f"{relative}: no hardware video encoder available; kept original in gallery"
+				)
 			self._move_to_folder(library_root, relative, LibraryFolder.CONVERTED)
 			return
 		if self._try_skip_existing_valid(library_root, relative):

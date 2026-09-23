@@ -1,0 +1,75 @@
+{
+	"platforms": {
+		"linux-x86_64": {
+			"adb": {
+				"strategy": "zip",
+				"url": "https://dl.google.com/android/repository/platform-tools_r35.0.2-linux.zip",
+				"files": { "adb": "platform-tools/adb" }
+			},
+			"ffmpeg": {
+				"strategy": "archive",
+				"url": "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz",
+				"files": { "ffmpeg": "ffmpeg", "ffprobe": "ffprobe" }
+			},
+			"ffprobe": { "companion_of": "ffmpeg" },
+			"magick": {
+				"strategy": "file",
+				"url": "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-31/ImageMagick-7.1.2-31-gcc-x86_64.AppImage"
+			},
+			"exiftool": {
+				"strategy": "archive",
+				"url": "https://sourceforge.net/projects/exiftool/files/Image-ExifTool-13.59.tar.gz/download",
+				"files": { "exiftool": "exiftool" }
+			}
+		},
+		"linux-aarch64": {
+			"adb": {
+				"strategy": "zip",
+				"url": "https://dl.google.com/android/repository/platform-tools_r35.0.2-linux.zip",
+				"files": { "adb": "platform-tools/adb" }
+			},
+			"ffmpeg": {
+				"strategy": "archive",
+				"url": "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz",
+				"files": { "ffmpeg": "ffmpeg", "ffprobe": "ffprobe" }
+			},
+			"ffprobe": { "companion_of": "ffmpeg" },
+			"exiftool": {
+				"strategy": "archive",
+				"url": "https://sourceforge.net/projects/exiftool/files/Image-ExifTool-13.59.tar.gz/download",
+				"files": { "exiftool": "exiftool" }
+			}
+		},
+		"win-x86_64": {
+			"adb": {
+				"strategy": "zip",
+				"url": "https://dl.google.com/android/repository/platform-tools_r35.0.2-win.zip",
+				"files": { "adb": "platform-tools/adb.exe" }
+			},
+			"ffmpeg": {
+				"strategy": "zip",
+				"url": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-7.1.1-essentials_build.zip",
+				"files": { "ffmpeg": "ffmpeg.exe", "ffprobe": "ffprobe.exe" }
+			},
+			"ffprobe": { "companion_of": "ffmpeg" }
+		},
+		"macos-aarch64": {
+			"adb": {
+				"strategy": "zip",
+				"url": "https://dl.google.com/android/repository/platform-tools_r35.0.2-darwin.zip",
+				"files": { "adb": "platform-tools/adb" }
+			},
+			"ffmpeg": { "strategy": "static_ffmpeg_wheel", "version": "2.13" },
+			"ffprobe": { "companion_of": "ffmpeg" }
+		},
+		"macos-x86_64": {
+			"adb": {
+				"strategy": "zip",
+				"url": "https://dl.google.com/android/repository/platform-tools_r35.0.2-darwin.zip",
+				"files": { "adb": "platform-tools/adb" }
+			},
+			"ffmpeg": { "strategy": "static_ffmpeg_wheel", "version": "2.13" },
+			"ffprobe": { "companion_of": "ffmpeg" }
+		}
+	}
+}

@@ -3,6 +3,8 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="icon" href="/favicon.ico" sizes="32x32">
+	<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 	<title>SpaceMaker</title>
 	<style>
 		:root {
@@ -102,6 +104,19 @@
 
 		@media (min-width: 900px) {
 			.steps { grid-template-columns: repeat(3, 1fr); }
+		}
+
+		#view-wizard.screen {
+			max-width: none;
+			width: 100%;
+			padding: 1rem clamp(0.5rem, 2vw, 1.25rem);
+			box-sizing: border-box;
+		}
+
+		#view-wizard .steps {
+			max-width: min(1400px, 100%);
+			margin-left: auto;
+			margin-right: auto;
 		}
 
 		.step-card {
@@ -811,6 +826,65 @@
 			background: var(--surface);
 		}
 
+		.components-screen {
+			max-width: 36rem;
+			margin: 0 auto;
+			padding: 1.5rem 1rem 2rem;
+		}
+
+		.components-screen h2 {
+			margin: 0 0 0.5rem;
+			font-size: 1.35rem;
+		}
+
+		.components-lead {
+			color: var(--muted);
+			font-size: 0.9rem;
+			margin: 0 0 1.25rem;
+		}
+
+		.tool-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+			padding: 0.65rem 0;
+			border-bottom: 1px solid var(--border);
+			font-size: 0.9rem;
+		}
+
+		.tool-row:last-child { border-bottom: none; }
+
+		.tool-name { font-weight: 600; }
+
+		.tool-status {
+			color: var(--muted);
+			font-size: 0.85rem;
+			text-align: right;
+			max-width: 14rem;
+		}
+
+		.tool-status.resolution-managed { color: var(--success); }
+		.tool-status.resolution-path { color: var(--warn); }
+		.tool-status.resolution-missing { color: var(--error); }
+
+		.components-actions {
+			margin-top: 1.5rem;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.75rem;
+		}
+
+		.legal-tools-dir {
+			font-family: ui-monospace, monospace;
+			font-size: 0.8rem;
+			word-break: break-all;
+		}
+
+		.settings-tool-list {
+			margin: 1rem 0;
+		}
+
 		.app-footer button {
 			font: inherit;
 			background: none;
@@ -1081,6 +1155,19 @@
 			<button type="button" data-view="gallery">Gallery</button>
 		</nav>
 	</header>
+
+	<section id="view-components" class="screen" aria-label="Required components">
+		<div class="components-screen">
+			<h2>Setting up components</h2>
+			<p class="components-lead">SpaceMaker downloads pinned FFmpeg, ImageMagick, and other tools into a folder on your computer and uses those copies first. Stay on this screen until downloads finish. Continue only if a download failed and you already installed that tool on your system.</p>
+			<div id="components-tool-list"></div>
+			<p class="folder-hint" id="components-setup-hint" hidden></p>
+			<div class="components-actions">
+				<button type="button" class="btn btn-primary" id="btn-components-continue">Continue</button>
+				<button type="button" class="btn btn-secondary" id="btn-components-retry">Retry downloads</button>
+			</div>
+		</div>
+	</section>
 
 	<section id="view-easy" class="screen active" aria-label="Easy mode">
 		<div class="form-banner" id="easy-form-banner" role="alert" hidden></div>
@@ -1389,7 +1476,7 @@
 			<p><strong>Contact:</strong> <a href="mailto:contact@daniel-ir.eu">contact@daniel-ir.eu</a></p>
 
 			<h3>Third-party tools</h3>
-			<p>Release builds bundle these programs (you do not install them separately):</p>
+			<p>On first launch, SpaceMaker downloads pinned builds of these programs into a folder on your computer. If a download fails, install the tool with your package manager; SpaceMaker uses that copy when it is on your PATH.</p>
 			<ul>
 				<li><a href="https://ffmpeg.org/" target="_blank" rel="noopener">FFmpeg</a> / ffprobe — video</li>
 				<li><a href="https://imagemagick.org/" target="_blank" rel="noopener">ImageMagick</a> — AVIF</li>
@@ -1397,10 +1484,27 @@
 				<li><a href="https://libmtp.sourceforge.net/" target="_blank" rel="noopener">libmtp</a> — MTP</li>
 				<li><a href="https://developer.android.com/tools/releases/platform-tools" target="_blank" rel="noopener">Android platform-tools (adb)</a></li>
 			</ul>
-			<p>Production app loads full text from bundled <code>docs/legal/</code> files.</p>
 
 			<h3>Disclaimer</h3>
 			<p>You are responsible for backups. Copy, Move, and convert may delete or move files. The authors are not liable for lost or corrupted media. Use Copy mode first if you are unsure.</p>
+		</div>
+	</section>
+
+	<section id="view-settings" class="screen" aria-label="Settings">
+		<div class="legal-page">
+			<button type="button" class="btn btn-ghost legal-back" id="btn-settings-back">← Back</button>
+			<h2>Settings</h2>
+
+			<h3>Downloaded components</h3>
+			<p>SpaceMaker stores pinned FFmpeg, adb, and other tools in this folder. The app uses these downloads first; your system PATH is used only after you choose <strong>Continue</strong> on the setup screen.</p>
+			<p><strong>Folder:</strong></p>
+			<p class="legal-tools-dir" id="settings-managed-tools-dir">—</p>
+			<div id="settings-tool-list" class="settings-tool-list"></div>
+			<p>
+				<button type="button" class="btn btn-secondary" id="btn-settings-delete-tools">Delete downloaded components</button>
+				<button type="button" class="btn btn-ghost" id="btn-settings-retry-downloads">Retry downloads</button>
+			</p>
+			<p class="folder-hint">Deleting removes only downloaded files. The app may download them again on next launch.</p>
 		</div>
 	</section>
 
@@ -1408,6 +1512,8 @@
 
 	<footer class="app-footer">
 		SpaceMaker · local backup &amp; convert ·
+		<button type="button" id="btn-footer-settings">Settings</button>
+		·
 		<button type="button" id="btn-footer-legal">About &amp; Legal</button>
 	</footer>
 

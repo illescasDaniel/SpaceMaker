@@ -5,8 +5,10 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from spacemaker.adapters.outbound.media.raw_preview import raw_embedded_preview_available
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
+from spacemaker.domain.media import is_raw_extension, normalize_extension
 from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.web_compat import VideoProbe
 
@@ -17,22 +19,19 @@ class SubprocessMediaProbe:
 
 	def probe_video(self, path: str) -> VideoProbe | None:
 		source = str(Path(path).resolve())
-		try:
-			result = self._runner.run(
-				BundledTool.FFPROBE,
-				[
-					"-v",
-					"error",
-					"-show_entries",
-					"format=bit_rate,duration:stream=codec_name",
-					"-of",
-					"json",
-					source,
-				],
-				check=False,
-			)
-		except FileNotFoundError:
-			return None
+		result = self._runner.run(
+			BundledTool.FFPROBE,
+			[
+				"-v",
+				"error",
+				"-show_entries",
+				"format=bit_rate,duration:stream=codec_name",
+				"-of",
+				"json",
+				source,
+			],
+			check=False,
+		)
 		if result.returncode != 0:
 			return None
 		try:
@@ -61,19 +60,31 @@ class SubprocessMediaProbe:
 		return VideoProbe(container_ext=ext, video_codec=video_codec, audio_codec=audio_codec, bitrate_bps=bitrate)
 
 	def image_readable(self, path: str) -> bool:
-		return self.output_valid_image(path)
+		source = Path(path).resolve()
+		if self._magick_identify_ok(str(source)):
+			return True
+		ext = normalize_extension(source.name)
+		if not is_raw_extension(ext):
+			return False
+		try:
+			exiftool = self._runner.path(BundledTool.EXIFTOOL)
+		except FileNotFoundError:
+			return False
+		return raw_embedded_preview_available(source=source, exiftool=exiftool)
 
-	def output_valid_image(self, path: str) -> bool:
-		source = str(Path(path).resolve())
+	def _magick_identify_ok(self, path: str) -> bool:
 		try:
 			result = self._runner.run(
 				BundledTool.MAGICK,
-				["identify", "-ping", source],
+				["identify", "-ping", path],
 				check=False,
 			)
 		except FileNotFoundError:
 			return False
 		return result.returncode == 0
+
+	def output_valid_image(self, path: str) -> bool:
+		return self._magick_identify_ok(str(Path(path).resolve()))
 
 	def output_valid_video(self, path: str) -> bool:
 		source = str(Path(path).resolve())
@@ -142,7 +153,11 @@ class SubprocessMediaProbe:
 			except (TypeError, ValueError):
 				height = None
 		duration: float | None = None
-		if self.probe_video(source) is not None:
+		try:
+			video = self.probe_video(source)
+		except FileNotFoundError:
+			video = None
+		if video is not None:
 			vdims = self._video_dimensions(source)
 			if vdims:
 				width, height = vdims

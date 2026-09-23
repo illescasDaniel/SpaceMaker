@@ -40,17 +40,17 @@
 
 **MTP (users vs app):** On Windows and Linux, MTP is already “native” for humans (Explorer, Nautilus/Dolphin, etc.). Users only need **File transfer / MTP** on the phone. They do **not** need to install libmtp manually on those OSes for normal use.
 
-**MTP (app):** SpaceMaker needs a programmatic MTP client. Use **libmtp** (same stack on **Windows, Linux, and macOS**) in `MtpDeviceRepository` — CLI tools (`mtp-detect`, `mtp-getfile`, …) or a thin binding. Packaged builds should **bundle or ship** libmtp tools where licensing allows (PyInstaller side-by-side); dev machines install libmtp via package manager.
+**MTP (app):** SpaceMaker needs a programmatic MTP client. Use **libmtp** (same stack on **Windows, Linux, and macOS**) in `MtpDeviceRepository` — CLI tools (`mtp-detect`, `mtp-getfile`, …) or a thin binding. Release builds **download** libmtp tools when a portable catalog entry exists; otherwise the user installs libmtp via their package manager and SpaceMaker uses `PATH`.
 
 | OS | MTP (SpaceMaker adapter) | ADB adapter |
 |----|--------------------------|-------------|
-| **All** | **libmtp** (one code path), **bundled** in release builds | [adbutils](https://github.com/openatx/adbutils) + **bundled** platform-tools `adb` |
+| **All** | **libmtp** (one code path), managed download or `PATH` | [adbutils](https://github.com/openatx/adbutils) + managed or `PATH` `adb` |
 
-- **Packaged app:** Ship the correct `adb` (and libmtp tools) per **OS + CPU** inside the installer/binary — see [packaging/SPEC.md](../packaging/SPEC.md). Users do not install Android SDK platform-tools.
-- **Dev:** `uv run` may fall back to `adb` / libmtp on `PATH` when bundle absent.
+- **Portable app:** Download pinned `adb` (and libmtp tools when catalog provides them) into the user data folder — see [packaging/SPEC.md](../packaging/SPEC.md). Fall back to `PATH` when download fails.
+- **Dev:** app downloads into managed tools dir; optional `SPACEMAKER_TOOLS_DIR` or `SPACEMAKER_DEV=1` for PATH fallback.
 - **Not** primary v1: Windows WPD COM-only adapter, macOS gphoto2-only path (optional fallback later if libmtp fails on a device).
 - **Domain/application** depend only on `DeviceRepository` — never import adbutils or libmtp directly.
-- Adapter resolves bundled binary path via bootstrap; missing bundled tools in **frozen** builds = hard error with support hint.
+- Adapter resolves tool path via bootstrap (managed dir → download → `PATH`); missing tools surface in the Components screen and per-feature errors.
 - Unit tests use fakes; integration tests mock subprocess/adbutils.
 
 ### Info button (help content)
@@ -58,8 +58,8 @@
 An **info** control (ⓘ) beside the connection method opens a panel or modal with:
 
 1. **Wi‑Fi:** PC and phone on the **same Wi‑Fi**; click **Start extract**; scan QR or open URL; pick files/folders on the phone. Allow firewall for the app port if prompted. Move is not available.
-2. **MTP:** plug phone → unlock → choose **File transfer / MTP** (not “charge only”). No extra desktop install on Windows/Linux for typical use; on macOS, USB MTP is less automatic — troubleshooting may mention libmtp if the app reports a missing bundled tool.
-3. **ADB (cable):** Developer options → USB debugging → accept RSA prompt on phone. **No separate adb install** in packaged SpaceMaker (adb is bundled); dev builds may use system `adb` on PATH.
+2. **MTP:** plug phone → unlock → choose **File transfer / MTP** (not “charge only”). If libmtp was not downloaded, install it via your OS package manager when the app asks.
+3. **ADB (cable):** Developer options → USB debugging → accept RSA prompt on phone. SpaceMaker downloads `adb` when possible; otherwise install platform-tools and ensure `adb` is on `PATH`.
 
 Copy is concise; link to future docs page optional.
 

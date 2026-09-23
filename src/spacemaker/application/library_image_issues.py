@@ -11,8 +11,4 @@ def count_image_files_in_library_folder(
 	folder: LibraryFolder,
 ) -> int:
 	rel_paths = filesystem.list_files_in_library_folder(library_root, folder)
-	return sum(
-		1
-		for rel in rel_paths
-		if media_kind_for_extension(normalize_extension(rel)) is MediaKind.IMAGE
-	)
+	return sum(1 for rel in rel_paths if media_kind_for_extension(normalize_extension(rel)) is MediaKind.IMAGE)

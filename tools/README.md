@@ -1,18 +1,13 @@
-# Bundled CLI tools (dev + release)
+# CLI tools (managed download folder)
 
-SpaceMaker runs **only** binaries from this directory (`tools/<name>`), not your system `PATH`.
+SpaceMaker resolves third-party binaries in this order:
 
-Release builds ship a full `tools/` tree per [packaging/third-party-manifest.yaml](../packaging/third-party-manifest.yaml).
+1. **Managed folder** — `~/.local/share/spacemaker/tools` (Linux), or the OS-specific path shown in **Settings**
+2. **Download** — pinned builds from the app catalog on first launch
+3. **System `PATH`** — only after you choose **Continue** on the components setup screen (or when `SPACEMAKER_DEV=1` for contributors)
 
-## Local development
+Required tool names: `adb`, `ffmpeg`, `ffprobe`, `magick`, `exiftool`, `mtp-detect`, `mtp-getfile`.
 
-1. **Preferred:** copy the same pinned binaries CI uses for your OS/CPU into this folder.
-2. **Convenience (dev):** populate symlinks from tools already on `PATH`:
+Optional override for tests or custom layouts: `SPACEMAKER_TOOLS_DIR=/path/to/tools`.
 
-   ```bash
-   uv run task dev-tools -- --from-path
-   ```
-
-3. **Optional:** set `SPACEMAKER_DEV=1` when running SpaceMaker to allow `PATH` fallback without files here (not recommended; release behavior always uses `tools/`).
-
-Required names on Linux: `adb`, `ffmpeg`, `ffprobe`, `magick`, `exiftool`, `mtp-detect`, `mtp-getfile`.
+See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md) and [packaging/tool-catalog.json](../packaging/tool-catalog.json).

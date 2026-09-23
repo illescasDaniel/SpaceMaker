@@ -8,13 +8,12 @@ Requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv run task sync-dev
-uv run task dev-tools -- --from-path   # populate tools/ (magick, ffmpeg, adb, …)
 uv run task checks
 uv run task checks -- --fix
 uv run task spacemaker                 # desktop app
 ```
 
-SpaceMaker runs **bundled CLIs from `tools/`**, not your system `PATH`. See [tools/README.md](tools/README.md) and [specs/packaging/SPEC.md](specs/packaging/SPEC.md).
+On first launch the app downloads pinned CLIs into your user data folder. **Settings** shows each component’s status. System `PATH` is used only after you choose **Continue** on the setup screen (or with `SPACEMAKER_DEV=1`). See [tools/README.md](tools/README.md) and [specs/packaging/SPEC.md](specs/packaging/SPEC.md).
 
 Web lint/format (Biome, ESLint-class checks for JS in wireframes and static UI):
 
@@ -23,4 +22,4 @@ npm ci
 npm run check
 ```
 
-See [AGENTS.md](AGENTS.md), [specs/](specs/), and [docs/legal/](docs/legal/) (privacy, bundled tools, disclaimer).
+See [AGENTS.md](AGENTS.md), [specs/](specs/), and [docs/legal/](docs/legal/) (privacy, third-party tools, disclaimer).

@@ -106,5 +106,4 @@ checks = { cmd = "python scripts/quality/checks.py", help = "quality gate (pass 
 format = { cmd = "uv run ruff check --fix src tests && uv run ruff format src tests", help = "format Python" }
 spacemaker = { cmd = "uv run spacemaker", help = "launch SpaceMaker desktop (pywebview + server)" }
 spacemaker-server = { cmd = "uv run spacemaker --server-only", help = "run API/UI in browser only" }
-dev-tools = { cmd = "bash scripts/packaging/prepare-dev-tools.sh", help = "populate tools/ for local dev (-- --from-path)" }
 firewall-allow = { cmd = "bash scripts/firewall/allow-spacemaker-port.sh", help = "allow LAN gallery port in ufw/firewalld (run with sudo)" }

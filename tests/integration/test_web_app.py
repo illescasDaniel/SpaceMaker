@@ -35,6 +35,18 @@ def test_given_fresh_app_when_get_settings_then_defaults() -> None:
 	assert body["library_root"]
 	assert body["extract_controls"]["pause"] is False
 	assert body["extract_controls"]["stop"] is False
+	assert "managed_tools" in body
+	assert "tools_dir" in body["managed_tools"]
+
+
+def test_given_fresh_app_when_get_tools_status_then_lists_tools() -> None:
+	client = TestClient(create_app())
+	response = client.get("/api/tools/status")
+	assert response.status_code == 200
+	body = response.json()
+	assert body["tools_dir"]
+	assert isinstance(body["tools"], list)
+	assert len(body["tools"]) == 7
 
 
 def test_given_fresh_app_when_websocket_connects_then_receives_state() -> None:
@@ -48,10 +60,10 @@ def test_given_fresh_app_when_websocket_connects_then_receives_state() -> None:
 def test_given_adb_without_bundled_tool_when_list_devices_then_503_json(monkeypatch, tmp_path) -> None:
 	tools = tmp_path / "tools"
 	tools.mkdir()
-	monkeypatch.setenv("SPACEMAKER_DEV", "")
+	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(tools))
 	monkeypatch.setattr(
-		"spacemaker.adapters.outbound.media.tool_runner.bundle_root",
-		lambda exe_dir=None: tools,
+		"spacemaker.bootstrap.bundled_tools.shutil.which",
+		lambda _name: None,
 	)
 	client = TestClient(create_app())
 	response = client.get("/api/devices", params={"connection_method": "adb"})
@@ -260,6 +272,7 @@ def test_given_wifi_extract_when_upload_then_file_in_originals(tmp_path) -> None
 		"/api/settings",
 		json={
 			"library_root": str(library),
+			"ui_mode": "advanced",
 			"connection_method": "wifi",
 			"transfer_mode": "copy",
 			"device_id": "",

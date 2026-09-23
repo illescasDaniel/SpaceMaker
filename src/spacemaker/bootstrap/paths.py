@@ -32,6 +32,48 @@ def webengine_storage_path() -> str:
 	return str(base)
 
 
+def managed_tools_dir() -> Path:
+	if sys.platform == "win32":
+		local = os.environ.get("LOCALAPPDATA", "")
+		base = Path(local) / "SpaceMaker" if local else Path.home() / "AppData" / "Local" / "SpaceMaker"
+	elif sys.platform == "darwin":
+		base = Path.home() / "Library" / "Application Support" / "SpaceMaker"
+	else:
+		xdg = os.environ.get("XDG_DATA_HOME")
+		base = Path(xdg) / "spacemaker" if xdg else Path.home() / ".local" / "share" / "spacemaker"
+	return base / "tools"
+
+
+def ensure_managed_tools_dir() -> Path:
+	tools = managed_tools_dir()
+	tools.mkdir(parents=True, exist_ok=True)
+	return tools
+
+
+def spacemaker_data_dir(*, tools_dir: Path | None = None) -> Path:
+	return (tools_dir or managed_tools_dir()).parent
+
+
+def components_setup_complete_marker(*, tools_dir: Path | None = None) -> Path:
+	return spacemaker_data_dir(tools_dir=tools_dir) / "components_setup_complete"
+
+
+def load_components_setup_complete(*, tools_dir: Path | None = None) -> bool:
+	return components_setup_complete_marker(tools_dir=tools_dir).is_file()
+
+
+def save_components_setup_complete(*, tools_dir: Path | None = None) -> None:
+	path = components_setup_complete_marker(tools_dir=tools_dir)
+	path.parent.mkdir(parents=True, exist_ok=True)
+	path.write_text("ok\n", encoding="utf-8")
+
+
+def clear_components_setup_complete(*, tools_dir: Path | None = None) -> None:
+	path = components_setup_complete_marker(tools_dir=tools_dir)
+	if path.is_file():
+		path.unlink()
+
+
 def is_absolute_library_path(path: str) -> bool:
 	text = path.strip()
 	if not text:

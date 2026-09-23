@@ -11,7 +11,6 @@ from webview.errors import WebViewException
 
 from spacemaker.adapters.inbound.desktop_api import DesktopApi
 from spacemaker.adapters.inbound.qt_webengine_shutdown import install_qt_webengine_shutdown_fix
-from spacemaker.bootstrap.bundled_tools import bundled_tools_hint, missing_bundled_tools
 from spacemaker.bootstrap.paths import webengine_storage_path
 from spacemaker.bootstrap.services import create_app
 
@@ -49,10 +48,6 @@ def main(argv: list[str] | None = None) -> None:
 		return
 
 	time.sleep(0.3)
-	missing = missing_bundled_tools()
-	if missing:
-		print("SpaceMaker: bundled tools missing:", ", ".join(missing))
-		print(bundled_tools_hint())
 	install_qt_webengine_shutdown_fix()
 	webview.create_window(
 		"SpaceMaker",
