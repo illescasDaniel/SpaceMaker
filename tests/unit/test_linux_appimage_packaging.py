@@ -16,6 +16,7 @@ def test_given_linux_packaging_scripts_when_checking_layout_then_present_and_exe
 		_LINUX / "build-appdir.sh",
 		_LINUX / "prune_pyqt6.sh",
 		_LINUX / "smoke_webengine.py",
+		_LINUX / "smoke-appimage.sh",
 		_BUILD_APPIMAGE,
 	]
 	for path in scripts:
@@ -39,6 +40,17 @@ def test_given_build_appimage_script_when_reading_then_uses_pinned_tool_and_zstd
 	assert "build-appdir.sh" in text
 	assert "compression-level" in text
 	assert "19" in text
+	assert "SHA256SUMS" in text
+	assert ".xz" not in text
+
+
+def test_given_release_workflow_when_reading_then_runs_on_tags_only():
+	workflow = _REPO / ".github" / "workflows" / "appimage.yml"
+	assert workflow.is_file()
+	text = workflow.read_text(encoding="utf-8")
+	assert 'tags: ["v*"]' in text
+	assert "softprops/action-gh-release" in text
+	assert "build-appimage" in text or "build_appimage" in text
 
 
 def test_given_bundle_env_when_resolving_repo_root_then_uses_share_tree(tmp_path: Path):

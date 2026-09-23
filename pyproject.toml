@@ -1,11 +1,11 @@
 [project]
 name = "spacemaker"
-version = "0.1.0"
+version = "1.0.0"
 description = "Local backup, convert, and gallery for phone media"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{ name = "Daniel Illescas Romero" }]
+authors = [{ name = "Daniel Illescas Romero", email = "contact@daniel-ir.eu" }]
 dependencies = [
 	"adbutils>=2.12.0",
 	"fastapi>=0.141.1",

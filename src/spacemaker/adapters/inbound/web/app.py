@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from spacemaker import __version__ as app_version
 from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
 from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_app, reveal_in_file_manager
 from spacemaker.bootstrap.firewall import probe_gallery_port
@@ -125,7 +126,7 @@ def _no_cache_file(path: Path) -> FileResponse:
 
 
 def create_fastapi_app(services: AppServices) -> FastAPI:
-	app = FastAPI(title="SpaceMaker", version="0.1.0")
+	app = FastAPI(title="SpaceMaker", version=app_version)
 	app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 	@app.middleware("http")

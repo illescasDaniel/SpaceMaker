@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux AppImage from pruned AppDir venv. Output: dist/*.AppImage (+ optional .xz)
+# Linux AppImage from pruned AppDir venv. Output: dist/*.AppImage + SHA256SUMS
 
 set -euo pipefail
 
@@ -25,8 +25,6 @@ APPDIR="${APPDIR:-${repo}/build/SpaceMaker.AppDir}"
 APPIMAGETOOL_VERSION="${APPIMAGETOOL_VERSION:-1.9.1}"
 APPIMAGETOOL_URL="${APPIMAGETOOL_URL:-https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${app_arch}.AppImage}"
 APPIMAGETOOL_SHA256="${APPIMAGETOOL_SHA256:-ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0}"
-# shellcheck disable=SC2206
-SPACEMAKER_XZ_OPTS=(${SPACEMAKER_XZ_OPTS:--9e -T0})
 
 bash "${repo}/packaging/linux-appimage/build-appdir.sh"
 
@@ -47,6 +45,8 @@ Icon=spacemaker
 Categories=Utility;
 Terminal=false
 StartupWMClass=SpaceMaker
+X-AppImage-Version=${version}
+X-AppImage-Publisher=Daniel Illescas Romero
 EOF
 
 cat >"${APPDIR}/AppRun" <<'EOF'
@@ -94,16 +94,10 @@ ARCH="${app_arch}" VERSION="${version}" APPIMAGE_EXTRACT_AND_RUN=1 "${tool}" \
 chmod +x "${out}"
 echo "Built ${out} ($(du -h "${out}" | cut -f1))"
 
-out_xz="${out}.xz"
-if command -v xz >/dev/null 2>&1; then
-	echo "Wrapping ${out_xz} (xz ${SPACEMAKER_XZ_OPTS[*]})…"
-	xz "${SPACEMAKER_XZ_OPTS[@]}" -k -f "${out}"
-	echo "Wrapped ${out_xz} ($(du -h "${out_xz}" | cut -f1))"
-	(
-		cd "${repo}/dist"
-		sha256sum "$(basename "${out_xz}")" >SHA256SUMS
-	)
-	echo "Wrote ${repo}/dist/SHA256SUMS"
-fi
+(
+	cd "${repo}/dist"
+	sha256sum "$(basename "${out}")" >SHA256SUMS
+)
+echo "Wrote ${repo}/dist/SHA256SUMS"
 
 echo "OK: ${out}"

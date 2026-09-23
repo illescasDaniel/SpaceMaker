@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-23 — Linux 1.0 release: AppDir AppImage and tag-only CI
+
+- **Context:** PyInstaller onefile AppImages were large (~256 MB) and double-compressed; srxy uses relocatable AppDir + Qt prune; `.xz` wrap saved ~2 MB for noticeable CPU/time.
+- **Decision:** Primary Linux artifact = pruned AppDir + squashfs zstd‑19 AppImage; `SHA256SUMS` on the `.AppImage` (no `.xz`). GitHub Actions `.github/workflows/appimage.yml` runs only on `v*` tags (+ optional `workflow_dispatch`), uploads artifact, attaches to GitHub Release. Version **1.0.0** and maintainer contact centralized in `app_meta` / `pyproject.toml`.
+- **Rationale:** WebEngine floor limits shrink margin; AppDir avoids onefile overhead; tag-only CI matches release cadence and avoids main-branch build cost.
+
 ## 2026-09-23 — Home hub modules and Qt WebEngine shell cache
 
 - **Context:** Single default UI needed distinct flows (photo backup, USB wizard, receive/send files); pywebview kept serving stale HTML/JS while the browser showed updates.

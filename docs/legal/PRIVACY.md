@@ -33,4 +33,4 @@ v1 release builds: **no analytics telemetry** unless explicitly documented in a 
 
 ## Contact
 
-Project maintainer contact: _contact@daniel-ir.eu_.
+**Daniel Illescas Romero** — [contact@daniel-ir.eu](mailto:contact@daniel-ir.eu)

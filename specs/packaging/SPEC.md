@@ -68,7 +68,8 @@ When no portable catalog entry exists for a platform (common for libmtp), skip d
 
 - Build: `packaging/linux-appimage/build-appdir.sh` → relocatable venv under `usr/`, then [`prune_pyqt6.sh`](../../packaging/linux-appimage/prune_pyqt6.sh) (drops unused Qt modules; **keeps Qt WebEngine** for pywebview).
 - Bundle metadata under `usr/share/spacemaker/` (`docs/legal/`, `packaging/tool-catalog.json`, app icon).
-- Pack with pinned `appimagetool`, squashfs **zstd compression level 19**; optional `.AppImage.xz` + `SHA256SUMS` in `dist/`.
+- Pack with pinned `appimagetool`, squashfs **zstd compression level 19**; `SHA256SUMS` in `dist/`.
+- CI: GitHub Actions on version tags `v*` only (`.github/workflows/appimage.yml`).
 - Post-prune smoke: offscreen WebEngine load + `--server-only` HTTP.
 
 ## PyInstaller (optional / Windows / macOS)

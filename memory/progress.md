@@ -32,4 +32,6 @@
 - [ ] **Easy mode import issues — where to review** — wireframe approved 2026-09-23; spec draft (open-folder API partially via `/api/library/open-folder`)
 - [x] **GPU-only video convert** — HW AV1 → HW H.264 → move-as-is; gallery preview gating; MP4 export hidden without HW encoder
 - [x] Phase 4 (packaging): portable PyInstaller onefile, managed CLI downloads, legal assets, app icon + favicon
+- [x] Linux release: pruned AppDir AppImage (srxy-style), zstd squashfs, tag-only GitHub Actions release
+- [x] Version **1.0.0** + maintainer contact in package metadata and About UI
 - [x] Specs/docs: bundled third-party tools + legal (privacy, disclaimer, manifest)

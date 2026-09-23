@@ -873,11 +873,35 @@
 		}
 	}
 
+	function updateAboutMeta(next) {
+		var line = document.getElementById("about-app-meta");
+		if (!line || !next) {
+			return;
+		}
+		var ver = next.app_version || "";
+		var author = next.app_author || "";
+		var contact = next.app_contact || "";
+		var parts = ["SpaceMaker"];
+		if (ver) {
+			parts[0] += " " + ver;
+		}
+		if (author) {
+			parts.push(author);
+		}
+		line.textContent = parts.join(" · ");
+		var link = document.getElementById("about-contact-link");
+		if (link && contact) {
+			link.href = "mailto:" + contact;
+			link.textContent = contact;
+		}
+	}
+
 	function applyState(next) {
 		state = next;
 		if (isMobileGalleryShell()) {
 			return;
 		}
+		updateAboutMeta(next);
 		setUiModeFromState(next);
 		maybeShowMissingTools(next);
 		syncConnectionButtons(next.connection_method || "wifi");

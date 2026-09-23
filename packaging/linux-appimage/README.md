@@ -11,6 +11,7 @@ SpaceMaker keeps **Qt WebEngine** (pywebview Qt backend); srxy’s `prune_pyside
 | [`build-appdir.sh`](build-appdir.sh) | AppDir under `$APPDIR` (default `build/SpaceMaker.AppDir`) |
 | [`prune_pyqt6.sh`](prune_pyqt6.sh) | Drop unused PyQt6/Qt payload after `uv pip install` |
 | [`smoke_webengine.py`](smoke_webengine.py) | Offscreen `QWebEngineView` load test |
+| [`smoke-appimage.sh`](smoke-appimage.sh) | End-to-end AppImage `--help` + HTTP smoke (CI) |
 
 Entry from repo root:
 

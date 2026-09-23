@@ -32,6 +32,7 @@ from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.wizard_state import wizard_actions
+from spacemaker.bootstrap.app_meta import app_release_info
 from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path, tools_install_root
 from spacemaker.bootstrap.paths import (
 	default_documents_receive_root,
@@ -296,6 +297,7 @@ class AppServices:
 			base["library_root_display"] = display_user_path(default_library_root(), trailing_slash=True)
 		base["share_selection"] = list(self._share_selection)
 		base["ui_shell_version"] = UI_SHELL_VERSION
+		base.update(app_release_info())
 		return base
 
 	def _wifi_upload_snapshot(self) -> dict[str, object]:

@@ -5,7 +5,7 @@ Third-party CLIs are **not** embedded; they are downloaded on first run into the
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/)
-- Linux AppImage: `curl`, `xz` (optional wrap), network on first build for pinned `appimagetool`
+- Linux AppImage: `curl`, network on first build for pinned `appimagetool`
 - Windows/macOS onefile: PyInstaller (`uv sync --group dev`)
 
 ## Linux (primary): AppImage
@@ -21,8 +21,9 @@ Outputs (gitignored under `dist/`):
 | File | Role |
 |------|------|
 | `SpaceMaker-<version>-<arch>.AppImage` | Double-clickable release |
-| `SpaceMaker-<version>-<arch>.AppImage.xz` | Smaller download (optional) |
-| `SHA256SUMS` | Checksum of the `.xz` artifact |
+| `SHA256SUMS` | SHA-256 of the AppImage |
+
+Tagged releases (`v*`) build via [`.github/workflows/appimage.yml`](../.github/workflows/appimage.yml) and attach assets to the GitHub Release.
 
 AppDir only (no squashfs pack):
 
@@ -34,7 +35,7 @@ uv run task build-installer
 
 Details: [linux-appimage/](linux-appimage/) (`build-appdir.sh`, `prune_pyqt6.sh`).
 
-Reference sizes (x86_64, WebEngine floor): AppDir ~675 MB unpacked → AppImage ~225 MB (zstd‑19) as of v0.1.0.
+Reference sizes (x86_64, WebEngine floor): AppDir ~675 MB unpacked → AppImage ~225 MB (zstd‑19) as of v1.0.0.
 
 ## Windows / macOS: PyInstaller onefile
 
