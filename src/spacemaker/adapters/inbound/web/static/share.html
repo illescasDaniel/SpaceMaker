@@ -105,12 +105,16 @@
 				row.className = "file-row";
 				var name = document.createElement("span");
 				name.className = "file-name";
-				name.textContent = file.name;
+				if (file.kind === "folder_zip") {
+					name.textContent = file.name + " (folder)";
+				} else {
+					name.textContent = file.name;
+				}
 				var btn = document.createElement("a");
 				btn.className = "btn-dl";
 				btn.href = downloadUrl(file.id);
-				btn.textContent = "Download";
-				btn.setAttribute("download", "");
+				btn.textContent = file.kind === "folder_zip" ? "Download zip" : "Download";
+				btn.setAttribute("download", file.download_name || file.name || "");
 				row.appendChild(name);
 				row.appendChild(btn);
 				list.appendChild(row);

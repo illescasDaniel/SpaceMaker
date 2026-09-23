@@ -7,7 +7,17 @@ from pathlib import Path
 from typing import Annotated
 
 import segno
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+	BackgroundTasks,
+	FastAPI,
+	File,
+	HTTPException,
+	Query,
+	Request,
+	UploadFile,
+	WebSocket,
+	WebSocketDisconnect,
+)
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -15,6 +25,7 @@ from pydantic import BaseModel
 from spacemaker import __version__ as app_version
 from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
 from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_app, reveal_in_file_manager
+from spacemaker.application.file_share_manifest import EmptyShareSelectionError
 from spacemaker.bootstrap.firewall import probe_gallery_port
 from spacemaker.bootstrap.lan import lan_ip
 from spacemaker.bootstrap.paths import (
@@ -78,6 +89,11 @@ def _resolve_converted_file(services: AppServices, relative_path: str) -> Path:
 
 def _attachment_filename(path: Path) -> str:
 	name = path.name.replace('"', "")
+	return f'attachment; filename="{name}"'
+
+
+def _attachment_named(filename: str) -> str:
+	name = filename.replace('"', "")
 	return f'attachment; filename="{name}"'
 
 
@@ -295,7 +311,10 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 
 	@app.post("/api/share/selection")
 	def share_selection(body: ShareSelectionBody) -> dict[str, object]:
-		services.set_share_selection(body.paths)
+		try:
+			services.set_share_selection(body.paths)
+		except EmptyShareSelectionError as exc:
+			raise HTTPException(status_code=400, detail=str(exc)) from exc
 		return services.enriched_snapshot()
 
 	@app.get("/api/receive/qr.svg")
@@ -379,13 +398,28 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"active": True, "files": services.share_manifest(t)}
 
 	@app.get("/api/share/download")
-	def share_download(t: str = "", file_id: str = "") -> FileResponse:
+	def share_download(
+		background: BackgroundTasks,
+		t: str = "",
+		file_id: str = "",
+	) -> FileResponse:
 		if not file_id:
 			raise HTTPException(status_code=400, detail="file_id required")
-		target = services.shared_file_for_download(t, file_id)
+		target = services.resolve_share_download(t, file_id)
 		if target is None:
 			raise HTTPException(status_code=404, detail="file not found")
-		return FileResponse(target, headers={"Content-Disposition": _attachment_filename(target)})
+		if target.kind == "file":
+			return FileResponse(
+				target.source_path,
+				headers={"Content-Disposition": _attachment_named(target.download_filename)},
+			)
+		zip_path = services.materialize_share_folder_zip(target.source_path)
+		background.add_task(zip_path.unlink, missing_ok=True)
+		return FileResponse(
+			zip_path,
+			media_type="application/zip",
+			headers={"Content-Disposition": _attachment_named(target.download_filename)},
+		)
 
 	@app.post("/api/documents/open-folder")
 	def open_documents_folder() -> dict[str, bool]:

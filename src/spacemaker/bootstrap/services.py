@@ -24,7 +24,17 @@ from spacemaker.application.easy_session import should_auto_start_wifi_extract
 from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.extract_media import ExtractMedia
-from spacemaker.application.file_share_manifest import SharedFileEntry, expand_share_selection
+from spacemaker.application.file_share_manifest import (
+	EMPTY_SHARE_FOLDER_MESSAGE,
+	EmptyShareSelectionError,
+	SharedManifestEntry,
+	ShareDownloadTarget,
+	build_share_manifest,
+	count_shareable_files_in_root,
+	dedupe_share_selection_paths,
+	prune_share_selection_paths,
+	write_folder_zip,
+)
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.application.get_gallery_item import GetGalleryItem
 from spacemaker.application.library_image_issues import count_image_files_in_library_folder
@@ -114,7 +124,7 @@ class AppServices:
 		self._wifi_uploads_in_flight = 0
 		self._receive_uploads_in_flight = 0
 		self._receive_control: ExtractJobControl | None = None
-		self._share_entries: list[SharedFileEntry] = []
+		self._share_entries: list[SharedManifestEntry] = []
 		self._share_selection: list[str] = []
 		self._extract_future: Future[None] | None = None
 		self.receive_uploaded = ReceiveUploadedMedia(self.filesystem)
@@ -518,43 +528,86 @@ class AppServices:
 			self.record_receive_upload_progress()
 
 	def set_share_selection(self, paths: list[str]) -> None:
-		clean = [p.strip() for p in paths if p and p.strip()]
+		raw = [p.strip() for p in paths if p and p.strip()]
+		raw = dedupe_share_selection_paths(raw)
+		clean, _had_empty_folder = prune_share_selection_paths(raw)
+		entries = build_share_manifest(clean)
+		if raw and not entries:
+			raise EmptyShareSelectionError(EMPTY_SHARE_FOLDER_MESSAGE)
+		if clean == self._share_selection and self._share_entries:
+			return
 		self._share_selection = clean
-		pairs = expand_share_selection(clean)
-		entries: list[SharedFileEntry] = []
-		for index, (display, absolute) in enumerate(pairs):
-			entries.append(
-				SharedFileEntry(
-					entry_id=f"f{index}",
-					display_name=display,
-					absolute_path=absolute,
-				),
-			)
 		self._share_entries = entries
 		if not entries:
 			self._clear_share_session()
 			self.push_state()
 			return
-		token = secrets.token_urlsafe(24)
 		with self._wifi_token_lock:
-			self._share_session_token = token
-			self._lan_session_kind = LanSessionKind.SEND_FILES
+			if self._lan_session_kind is not LanSessionKind.SEND_FILES or not self._share_session_token:
+				self._share_session_token = secrets.token_urlsafe(24)
+				self._lan_session_kind = LanSessionKind.SEND_FILES
 		self.push_state()
 
-	def shared_file_for_download(self, token: str, entry_id: str) -> Path | None:
+	def resolve_share_download(self, token: str, entry_id: str) -> ShareDownloadTarget | None:
 		if not self.share_token_valid(token):
 			return None
 		for entry in self._share_entries:
-			if entry.entry_id == entry_id:
-				path = Path(entry.absolute_path)
-				if path.is_file():
-					return path
+			if entry.entry_id != entry_id:
+				continue
+			path = Path(entry.absolute_path)
+			if entry.kind == "file":
+				if not path.is_file():
+					return None
+				return ShareDownloadTarget(
+					kind="file",
+					source_path=path,
+					download_filename=path.name,
+				)
+			if entry.kind == "folder_zip":
+				if not path.is_dir():
+					return None
+				if count_shareable_files_in_root(path) < 1:
+					return None
+				safe_name = entry.display_name.replace('"', "").strip() or "folder"
+				return ShareDownloadTarget(
+					kind="folder_zip",
+					source_path=path,
+					download_filename=f"{safe_name}.zip",
+				)
 		return None
+
+	def materialize_share_folder_zip(self, folder_root: Path) -> Path:
+		import os
+		import tempfile
+
+		fd, name = tempfile.mkstemp(prefix="spacemaker-share-", suffix=".zip")
+		os.close(fd)
+		dest = Path(name)
+		write_folder_zip(folder_root, dest)
+		return dest
+
+	def shared_file_for_download(self, token: str, entry_id: str) -> Path | None:
+		target = self.resolve_share_download(token, entry_id)
+		if target is None or target.kind != "file":
+			return None
+		return target.source_path
 
 	def share_manifest(self, token: str) -> list[dict[str, str]]:
 		if not self.share_token_valid(token):
 			return []
-		return [{"id": e.entry_id, "name": e.display_name} for e in self._share_entries]
+		out: list[dict[str, str]] = []
+		for entry in self._share_entries:
+			row: dict[str, str] = {
+				"id": entry.entry_id,
+				"name": entry.display_name,
+				"kind": entry.kind,
+			}
+			if entry.kind == "folder_zip":
+				row["download_name"] = f"{entry.display_name}.zip"
+			else:
+				row["download_name"] = entry.display_name
+			out.append(row)
+		return out
 
 	def wifi_token_valid(self, token: str) -> bool:
 		if not token:

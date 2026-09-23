@@ -1855,8 +1855,50 @@
 		});
 	});
 
+	function mergeShareSelection(extra) {
+		var base = state && state.share_selection ? state.share_selection.slice() : [];
+		var seen = {};
+		var merged = [];
+		var i;
+		var p;
+		var key;
+		function addPath(path) {
+			if (!path || !String(path).trim()) {
+				return;
+			}
+			key = String(path).trim();
+			if (seen[key]) {
+				return;
+			}
+			seen[key] = true;
+			merged.push(key);
+		}
+		for (i = 0; i < base.length; i++) {
+			addPath(base[i]);
+		}
+		if (extra) {
+			if (Array.isArray(extra)) {
+				for (i = 0; i < extra.length; i++) {
+					addPath(extra[i]);
+				}
+			} else {
+				addPath(extra);
+			}
+		}
+		return merged;
+	}
+
 	function refreshShareSelection(paths) {
-		return api("POST", "/api/share/selection", { paths: paths }).then(applyState);
+		return api("POST", "/api/share/selection", { paths: paths })
+			.then(applyState)
+			.catch(function (err) {
+				if (paths && paths.length) {
+					window.alert(err.message || "Could not update the share list.");
+				} else {
+					showFormBanner(err.message || "Could not update the share list.");
+				}
+				throw err;
+			});
 	}
 
 	onClick("btn-share-clear", function () {
@@ -1870,8 +1912,10 @@
 		var current = (state && state.share_selection && state.share_selection[0]) || "";
 		Promise.resolve(window.pywebview.api.choose_files(current))
 			.then(function (picked) {
-				var merged = (state && state.share_selection ? state.share_selection.slice() : []).concat(picked || []);
-				return refreshShareSelection(merged);
+				if (!picked || !picked.length) {
+					return null;
+				}
+				return refreshShareSelection(mergeShareSelection(picked));
 			})
 			.catch(function () {
 				showFormBanner("Could not open the file picker.");
@@ -1882,14 +1926,32 @@
 			showFormBanner("Use the desktop app to pick a folder.");
 			return;
 		}
-		var current = (state && state.share_selection && state.share_selection[0]) || "";
+		var current = (state && state.share_selection && state.share_selection[state.share_selection.length - 1]) || "";
 		Promise.resolve(window.pywebview.api.choose_share_folder(current))
 			.then(function (folder) {
-				if (!folder) {
+				if (!folder || !String(folder).trim()) {
 					return null;
 				}
-				var merged = (state && state.share_selection ? state.share_selection.slice() : []).concat([folder]);
-				return refreshShareSelection(merged);
+				var countPromise = window.pywebview.api.share_folder_file_count
+					? Promise.resolve(window.pywebview.api.share_folder_file_count(folder))
+					: Promise.resolve(1);
+				return countPromise.then(function (count) {
+					if (count < 1) {
+						window.alert(
+							"This folder has no files. Choose a folder that contains at least one file.",
+						);
+						return null;
+					}
+					var merged = mergeShareSelection(folder);
+					if (
+						state &&
+						state.share_selection &&
+						merged.length === state.share_selection.length
+					) {
+						return null;
+					}
+					return refreshShareSelection(merged);
+				});
 			})
 			.catch(function () {
 				showFormBanner("Could not open the folder picker.");
