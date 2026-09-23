@@ -10,6 +10,12 @@ build/
 node_modules/
 .spacemaker-quality-gate.lock
 
+.env
+.env.*
+.coverage
+htmlcov/
+coverage/
+
 # Local dev tool symlinks (see tools/README.md); release CI ships real binaries.
 tools/*
 !tools/README.md

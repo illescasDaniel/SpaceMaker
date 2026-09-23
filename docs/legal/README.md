@@ -1,10 +1,10 @@
 # Legal & transparency
 
-SpaceMaker is **local-first**: media stays on your machine unless you choose to open the LAN gallery on your network.
+SpaceMaker is **local-first**: media stays on your machine unless you use optional **LAN** features (gallery QR, Photo backup upload, Receive files, Send files) on your network.
 
 | Document | Audience |
 |----------|----------|
-| [PRIVACY.md](PRIVACY.md) | Privacy policy (data handling, optional LAN, first-launch tool downloads) |
+| [PRIVACY.md](PRIVACY.md) | Privacy policy (data handling, optional LAN sessions, first-launch tool downloads) |
 | [THIRD_PARTY_TOOLS.md](THIRD_PARTY_TOOLS.md) | Third-party programs, home pages, licenses |
 | [DISCLAIMER.md](DISCLAIMER.md) | Limitation of liability (file loss, backups) |
 

@@ -21,8 +21,9 @@ See [packaging/third-party-manifest.yaml](../../packaging/third-party-manifest.y
 
 Ship [PRIVACY.md](../../docs/legal/PRIVACY.md) in release artifacts. It must state:
 
-- Local-first processing (library folders on disk)
-- Optional LAN gallery (local network only)
+- Local-first processing (library folders on disk; Receive files under Documents)
+- Optional LAN: gallery QR, Photo backup upload, Receive files, Send files (local network only; tokenized where applicable)
+- Desktop **control** APIs (settings, extract/convert, share selection, etc.) are loopback-only; phones use tokenized pages or gallery QR
 - First-launch download of third-party CLI tools
 - v1: no analytics telemetry unless this spec is updated
 
@@ -76,9 +77,9 @@ Wireframe **approved** 2026-09-22 (updated for portable release model).
 
 ### Scenario: Back from legal page
 
-- **Given** the user opened About & Legal from the wizard
+- **Given** the user opened About & Legal from any main view (Home, a module, Gallery, etc.)
 - **When** they click **Back**
-- **Then** they return to the wizard view
+- **Then** they return to the view they came from
 
 ## Testing strategy
 

@@ -1,5 +1,4 @@
 import zipfile
-from pathlib import Path
 
 from spacemaker.application.file_share_manifest import (
 	build_share_manifest,

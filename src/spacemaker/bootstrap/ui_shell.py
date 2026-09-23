@@ -2,6 +2,17 @@
 
 UI_SHELL_VERSION = "2026.09.home-modules"
 
+CONTENT_SECURITY_POLICY = (
+	"default-src 'self'; "
+	"script-src 'self' 'unsafe-inline'; "
+	"style-src 'self' 'unsafe-inline'; "
+	"img-src 'self' data: blob:; "
+	"media-src 'self'; "
+	"connect-src 'self' ws: wss:; "
+	"base-uri 'self'; "
+	"frame-ancestors 'none'"
+)
+
 NO_CACHE_HEADERS = {"Cache-Control": "no-store, must-revalidate"}
 
 

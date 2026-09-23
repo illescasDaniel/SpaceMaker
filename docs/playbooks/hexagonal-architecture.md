@@ -12,11 +12,11 @@
 | Concept | Path |
 |---------|------|
 | Domain | `src/spacemaker/domain/` |
-| Ports | `src/spacemaker/ports/inbound/`, `outbound/` |
+| Ports | `src/spacemaker/ports/outbound/` (use cases in `application/`) |
 | Use cases | `src/spacemaker/application/` |
 | Inbound adapters | `src/spacemaker/adapters/inbound/web/` |
 | Outbound adapters | `src/spacemaker/adapters/outbound/` |
-| Composition root | `src/spacemaker/bootstrap.py` |
+| Composition root | `src/spacemaker/bootstrap/` |
 
 ## Golden rules
 
@@ -27,4 +27,4 @@
 
 ## DI
 
-`bootstrap.build_services()` constructs outbound adapters, injects into use cases, registers FastAPI dependencies.
+`bootstrap.services.create_app()` constructs outbound adapters, injects into use cases, registers FastAPI routes.

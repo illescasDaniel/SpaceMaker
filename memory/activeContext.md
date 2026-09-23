@@ -2,22 +2,21 @@ _Last updated: 2026-09-23_
 
 ## Branch
 
-`main` — Send files share UX committed locally; push skipped per user.
+`main`
 
 ## Current focus
 
 **Easy mode import issues (SDD)** — wireframe approved; spec draft in `specs/easy-mode/SPEC.md`; await spec approval for panels + open-folder UX on Photo backup.
 
-## Just changed (this commit)
+## Just changed (committed)
 
-- **Send files** — reject empty folders; top-level folders download as zip on phone; dedupe paths; cancel folder picker no longer duplicates; reuse share session token when adding items (same QR)
+- **Security/docs/hygiene** — loopback desktop APIs + `/ws`; gallery session root only; path/XSS/CSP hardening; privacy + playbook/spec doc refresh; `.gitignore`; removed dead `ThumbnailPort` and unused packaging favicons
 
 ## Next steps
 
-1. User: **spec approved** for easy-mode import issues → implement panels
-2. `git push` when ready; tag **`v1.0.0`** to trigger AppImage release workflow
-3. Manual LAN test: Send files — scan once, add folder/file, confirm phone list updates without new QR
-4. Optional: `uv run task readme-screenshot` / `uv run task checks`
+1. User: **spec approved** for easy-mode import panels → implement
+2. Manual LAN test: loopback gates + phone gallery/upload still work
+3. Tag **`v1.0.0`** when ready for AppImage release workflow
 
 ## Run
 

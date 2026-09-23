@@ -1,17 +1,17 @@
-# Easy mode (default UI)
+# Easy mode (Photo backup)
 
 ## Metadata
 
-- **Feature:** Minimal default UI — Wi‑Fi upload QR, auto-receive, convert-as-received, **View gallery** when ready; phone gallery help on Gallery tab
+- **Feature:** Photo backup module — Wi‑Fi upload QR, auto-receive, convert-as-received, **View gallery** when ready; phone gallery help on Gallery tab
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — Photo backup (`#view-easy`); phone upload [wireframes/phone-upload.html](../../wireframes/phone-upload.html). **Phone upload wireframe approved** 2026-09-23.
 - **UX approved:** 2026-09-22 (initial Easy mode); **2026-09-23** (image import issue panels + open-folder actions)
 - **Related:** [main-wizard](../main-wizard/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
 
 ## Triggers & routing
 
-- **Entry:** Opened from Home hub → **Photo backup** tile (`active_module=photo_backup`, `ui_mode=easy`). **USB photo backup** tile opens the Advanced wizard (`ui_mode=advanced`). App launch defaults to **Home** hub — no auto Wi‑Fi until Photo backup is entered.
-- **Session:** `ui_mode` is session-only (relaunch → Easy). User may switch Easy ↔ Advanced anytime; **does not** stop active Wi‑Fi receive or convert drain.
-- **Header tabs:** **Main** (Easy or Advanced home) and **Gallery** remain. Gallery chrome uses the **active mode theme** (light in Easy, dark in Advanced).
+- **Entry:** Opened from Home hub → **Photo backup** tile (`active_module=photo_backup`, `ui_mode=easy`). **USB photo backup** tile opens the wizard (`ui_mode=advanced`). App launch defaults to **Home** hub — no auto Wi‑Fi until Photo backup is entered.
+- **Session:** `ui_mode` is session-only (relaunch → Easy). Entering Home or another module does not imply an Easy↔Advanced toggle (USB is a separate module).
+- **Header tabs:** **Home** (hub or active module) and **Gallery**. Gallery chrome uses the **active module theme** (light for Photo backup / Home, dark for USB wizard).
 - **Easy bootstrap:** When the client loads Easy and extract is idle, the server starts **Wi‑Fi receive** automatically (library root from session defaults; no Start extract button).
 
 ## Visual & UI rules

@@ -28,7 +28,7 @@ def main() -> int:
 	master = Image.open(_SOURCE).convert("RGBA")
 	_save_resize(master, 1024, _SOURCE)
 	_save_resize(master, 1024, _ASSETS / "spacemaker-icon.png")
-	for size in (16, 32, 48, 180, 512):
+	for size in (32,):
 		_save_resize(master, size, _ASSETS / f"favicon-{size}.png")
 	_save_resize(master, 32, _STATIC / "favicon.png")
 	_save_resize(master, 180, _STATIC / "apple-touch-icon.png")

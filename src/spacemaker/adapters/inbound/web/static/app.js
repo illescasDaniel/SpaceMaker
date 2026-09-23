@@ -47,6 +47,69 @@
 		showFormBanner("");
 	}
 
+	function setStatusLine(el, detailText) {
+		if (!el) {
+			return;
+		}
+		el.textContent = "";
+		var strong = document.createElement("strong");
+		strong.textContent = "Status:";
+		el.appendChild(strong);
+		el.appendChild(document.createTextNode(" " + detailText));
+	}
+
+	function setStageLoading(stage) {
+		if (!stage) {
+			return;
+		}
+		stage.textContent = "";
+		var p = document.createElement("p");
+		p.className = "status-line";
+		p.textContent = "Loading…";
+		stage.appendChild(p);
+	}
+
+	function setStageMessage(stage, message) {
+		if (!stage) {
+			return;
+		}
+		stage.textContent = "";
+		var p = document.createElement("p");
+		p.className = "status-line";
+		p.textContent = message;
+		stage.appendChild(p);
+	}
+
+	function renderGalleryItemStage(stage, payload, meta) {
+		if (!stage) {
+			return;
+		}
+		stage.textContent = "";
+		var mediaUrl = "/media/" + encodeURI(payload.relative_path);
+		var label = meta.filename || payload.relative_path;
+		if (payload.kind === "video") {
+			if (payload.preview_in_browser) {
+				var video = document.createElement("video");
+				video.controls = true;
+				video.preload = "metadata";
+				video.src = mediaUrl;
+				video.setAttribute("aria-label", label);
+				stage.appendChild(video);
+			} else {
+				var noPreview = document.createElement("p");
+				noPreview.className = "status-line gallery-no-preview";
+				noPreview.textContent =
+					"No in-browser preview for this codec (e.g. HEVC). Use Open on desktop or download the file.";
+				stage.appendChild(noPreview);
+			}
+			return;
+		}
+		var img = document.createElement("img");
+		img.src = mediaUrl;
+		img.alt = label;
+		stage.appendChild(img);
+	}
+
 	function warnIfStaleShell(settings) {
 		if (!isDesktopShell() || !settings) {
 			return;
@@ -943,7 +1006,7 @@
 		}
 		var phase = next.extract.phase;
 		var p = next.extract.progress;
-		status.innerHTML = "<strong>Status:</strong> " + extractPhaseLabel(phase, p);
+		setStatusLine(status, extractPhaseLabel(phase, p));
 		if (fill) {
 			fill.style.width = p.percent + "%";
 		}
@@ -1045,7 +1108,7 @@
 		var enabled = !!viz.enabled;
 		card.classList.toggle("disabled", !enabled);
 		card.classList.toggle("done", enabled && viz.phase === "completed");
-		status.innerHTML = "<strong>Status:</strong> " + (viz.status_text || "Not started");
+		setStatusLine(status, viz.status_text || "Not started");
 		if (btn) {
 			btn.disabled = !enabled;
 		}
@@ -1065,32 +1128,37 @@
 		var bucketErrorCount = (next.library_counts || {}).error || 0;
 		var bucketInvalidCount = (next.library_counts || {}).invalid || 0;
 		if (next.convert.phase === "running") {
-			status.innerHTML =
-				"<strong>Status:</strong> In progress — " + p.completed + " / " + p.total + " (" + p.percent + "%)";
+			setStatusLine(
+				status,
+				"In progress — " + p.completed + " / " + p.total + " (" + p.percent + "%)",
+			);
 		} else if (next.convert.phase === "error") {
-			status.innerHTML = "<strong>Status:</strong> Failed — " + (next.last_error || "Convert stopped unexpectedly.");
+			setStatusLine(status, "Failed — " + (next.last_error || "Convert stopped unexpectedly."));
 		} else if (next.convert.phase === "done" && p.total > 0) {
 			if (bucketErrorCount > 0 || bucketInvalidCount > 0) {
-				status.innerHTML =
-					"<strong>Status:</strong> Completed with issues — " +
-					(next.last_error || bucketErrorCount + " in error/, " + bucketInvalidCount + " in invalid/");
+				setStatusLine(
+					status,
+					"Completed with issues — " +
+						(next.last_error || bucketErrorCount + " in error/, " + bucketInvalidCount + " in invalid/"),
+				);
 			} else {
-				status.innerHTML = "<strong>Status:</strong> Completed — " + p.completed + " file(s) processed";
+				setStatusLine(status, "Completed — " + p.completed + " file(s) processed");
 			}
 		} else if ((extractPhase === "running" || extractPhase === "paused") && ready) {
-			status.innerHTML =
-				"<strong>Status:</strong> Extract active — " +
-				originals +
-				" file(s) in originals/; Start convert will stop extract and convert them";
+			setStatusLine(
+				status,
+				"Extract active — " +
+					originals +
+					" file(s) in originals/; Start convert will stop extract and convert them",
+			);
 		} else if (extractPhase === "running" || extractPhase === "paused") {
-			status.innerHTML = "<strong>Status:</strong> Waiting — add files to originals/ to convert during extract";
+			setStatusLine(status, "Waiting — add files to originals/ to convert during extract");
 		} else if (extractPhase === "stopped") {
-			status.innerHTML = "<strong>Status:</strong> Extract stopped — you can convert files already in originals/";
+			setStatusLine(status, "Extract stopped — you can convert files already in originals/");
 		} else if (!ready) {
-			status.innerHTML =
-				"<strong>Status:</strong> Add files to originals/ first (" + originals + " found at library root)";
+			setStatusLine(status, "Add files to originals/ first (" + originals + " found at library root)");
 		} else {
-			status.innerHTML = "<strong>Status:</strong> Ready — " + originals + " file(s) in originals/";
+			setStatusLine(status, "Ready — " + originals + " file(s) in originals/");
 		}
 		if (fill) {
 			fill.style.width = p.percent + "%";
@@ -1392,41 +1460,22 @@
 			return;
 		}
 		hideGalleryExportAlert();
-		stage.innerHTML = '<p class="status-line">Loading…</p>';
+		setStageLoading(stage);
 		api("GET", "/api/gallery/item?path=" + encodeURIComponent(galleryItemPath))
 			.then(function (payload) {
 				var meta = payload.metadata || {};
-				var mediaUrl = "/media/" + encodeURI(payload.relative_path);
 				var rows;
 				galleryItemKind = payload.kind === "video" ? "video" : "image";
 				if (title) {
 					title.textContent = meta.filename || payload.relative_path;
 				}
-				if (payload.kind === "video") {
-					if (payload.preview_in_browser) {
-						stage.innerHTML =
-							'<video controls preload="metadata" src="' +
-							mediaUrl +
-							'" aria-label="' +
-							(meta.filename || payload.relative_path) +
-							'"></video>';
-					} else {
-						stage.innerHTML =
-							'<p class="status-line gallery-no-preview">No in-browser preview for this codec (e.g. HEVC). Use <strong>Open</strong> on desktop or download the file.</p>';
-					}
-					if (friendly) {
+				renderGalleryItemStage(stage, payload, meta);
+				if (friendly) {
+					if (payload.kind === "video") {
 						var mp4Ok = state && state.video_friendly_export_available;
 						friendly.hidden = !mp4Ok;
 						friendly.textContent = "Download as MP4";
-					}
-				} else {
-					stage.innerHTML =
-						'<img src="' +
-						mediaUrl +
-						'" alt="' +
-						(meta.filename || payload.relative_path) +
-						'" />';
-					if (friendly) {
+					} else {
 						friendly.hidden = false;
 						friendly.textContent = "Download as JPEG";
 					}
@@ -1469,7 +1518,7 @@
 				}
 			})
 			.catch(function () {
-				stage.innerHTML = '<p class="status-line">Could not load this item.</p>';
+				setStageMessage(stage, "Could not load this item.");
 			});
 	}
 

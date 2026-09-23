@@ -10,18 +10,17 @@ description: File placement and port naming for SpaceMaker hexagonal layout. Use
 | What | Where |
 |------|--------|
 | Entities, enums, errors | `src/spacemaker/domain/` |
-| Inbound use-case ports | `src/spacemaker/ports/inbound/` |
 | Outbound ports | `src/spacemaker/ports/outbound/` |
 | Use case impl | `src/spacemaker/application/` |
 | FastAPI, static UI, WS | `src/spacemaker/adapters/inbound/web/` |
 | FFmpeg, adb, FS | `src/spacemaker/adapters/outbound/` |
-| Wiring | `src/spacemaker/bootstrap.py` |
+| Wiring | `src/spacemaker/bootstrap/` |
 | pywebview entry | `src/spacemaker/desktop.py` |
 
 ## Naming
 
 - Outbound: `DeviceRepository`, `MediaConverter`, `FileSystem` (Protocol suffix optional)
-- Inbound: `ExtractMediaPort`, `ConvertMediaPort`, etc., or direct use case classes behind facades
+- Inbound: use case classes in `application/` (no separate `ports/inbound/` tree today)
 
 ## Import guard
 

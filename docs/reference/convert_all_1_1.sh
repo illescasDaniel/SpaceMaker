@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Historical reference for compression flags and folder routing.
+# SpaceMaker app convert policy is GPU-only video encode (or move-as-is); see specs/convert-media and docs/playbooks/SpaceMaker-adaptations.md.
 
 set -euo pipefail
 

@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-23 — LAN server: loopback-only desktop control plane
+
+- **Context:** FastAPI binds `0.0.0.0` for phone QR/LAN gallery, but mutating APIs, `GET /api/settings`, and `/ws` exposed full session state (including upload/receive/share token URLs) to any LAN client.
+- **Decision:** `require_loopback()` on `request.client.host` for desktop control APIs and WebSocket; phone gallery (list/media/thumbs/delete/export) and tokenized upload/receive/share stay reachable on LAN; drop `library_root` query override on gallery endpoints; resolve converted paths with `Path.relative_to`.
+- **Rationale:** Matches trusted-PC / untrusted-LAN model without adding gallery QR tokens (product choice deferred).
+
 ## 2026-09-23 — Send files: folder zips and stable LAN share token
 
 - **Context:** Phone download listed every file inside a shared folder; adding items regenerated the share token and forced a new QR scan; canceling the folder picker duplicated the last path.

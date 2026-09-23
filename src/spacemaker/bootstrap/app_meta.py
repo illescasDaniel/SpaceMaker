@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+
 APP_AUTHOR = "Daniel Illescas Romero"
 APP_CONTACT_EMAIL = "contact@daniel-ir.eu"
 _FALLBACK_VERSION = "1.0.0"

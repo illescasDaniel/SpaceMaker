@@ -21,7 +21,7 @@ GamesLibrary has no wireframe folder. SpaceMaker requires `wireframes/*.html` **
 
 ## Conversion policy (summary)
 
-Authoritative compression flags: [convert_all_1_1.sh](../reference/convert_all_1_1.sh). Behavior:
+Authoritative compression flags (historical shell reference): [convert_all_1_1.sh](../reference/convert_all_1_1.sh). **App runtime** uses GPU-only video encode or move-as-is (see [convert-media](../../specs/convert-media/SPEC.md)). Behavior:
 
 **Move as-is (no re-encode)** from `originals/` → `converted/`:
 
@@ -51,7 +51,7 @@ Separate from library convert. On-demand when the user chooses **Download as JPE
 
 **Image → JPEG:** ImageMagick `-quality 95`; ExifTool copy all tags from source. No size rollback — quality first.
 
-**Video → MP4:** `libx264` CRF 18, `yuv420p`, AAC 256k, `-map_metadata 0`, `+faststart`. No size rollback.
+**Video → MP4:** **Hardware H.264 + AAC** only (same encoder priority as library convert). If no HW H.264 encoder is available, hide **Download as MP4** on the item page. No CPU `libx264`. No size rollback.
 
 **Skip encode:** if the stored file is already JPEG (image action) or already H.264 + AAC in MP4 (video action), serve the stored file as the download.
 
@@ -59,16 +59,16 @@ Progress: WebSocket `gallery_export` events while encoding; UI alert on the item
 
 ## Desktop shell
 
-Local FastAPI + static UI in pywebview; no cloud dependency. Gallery may expose LAN URL + QR (spec/wireframe).
+Local FastAPI + static UI in pywebview; no cloud dependency. **Home hub** is the launch screen; optional LAN gallery URL + QR and tokenized upload/receive/share pages (specs).
 
 ## Device extract (Wi‑Fi default, MTP/ADB cable)
 
-- UI default: **Easy** mode (light UI, auto Wi‑Fi receive, convert-as-received). **Advanced** wizard retains **Wi‑Fi** default connection (QR upload; **Move** disabled).
-- Alternates: **MTP** and **ADB (cable)** with info (ⓘ) for setup steps.
+- **Photo backup** (Home tile): light UI, auto Wi‑Fi receive, convert-as-received (`ui_mode=easy` internally).
+- **USB photo backup** tile opens the three-step wizard (`ui_mode=advanced` internally). Wi‑Fi default in wizard when that module is extended; cable modes **MTP** and **ADB (cable)** with info (ⓘ) for setup steps.
 - Hexagonal: `DeviceRepository` port; adapters `MtpDeviceRepository`, `AdbDeviceRepository` (adbutils on all OSes for ADB).
 - **MTP:** One **libmtp** adapter on all OSes; download libmtp CLI when catalog provides it, else `PATH`.
 - **ADB:** **adbutils** + managed or `PATH` `adb` per OS/CPU.
-- **Convert:** managed or `PATH` ffmpeg, ffprobe, magick, exiftool — see `packaging/tool-catalog.yaml`.
+- **Convert:** managed or `PATH` ffmpeg, ffprobe, magick, exiftool — see `packaging/tool-catalog.json`.
 - **Legal:** ship privacy, disclaimer, third-party notice in portable binary + in-app About (`specs/legal/SPEC.md`).
 - **Move** from device: prefer ADB; MTP move may be unsupported per file.
 - Spec: [specs/extract-media/SPEC.md](../../specs/extract-media/SPEC.md).

@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from spacemaker import __version__ as app_version
+from spacemaker.adapters.inbound.web.client_access import require_loopback, require_loopback_websocket
 from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
 from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_app, reveal_in_file_manager
 from spacemaker.application.file_share_manifest import EmptyShareSelectionError
@@ -38,7 +39,7 @@ from spacemaker.bootstrap.paths import (
 	pictures_directory,
 )
 from spacemaker.bootstrap.services import AppServices, repo_root
-from spacemaker.bootstrap.ui_shell import NO_CACHE_HEADERS
+from spacemaker.bootstrap.ui_shell import CONTENT_SECURITY_POLICY, NO_CACHE_HEADERS
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.convert_policy import ConvertStartPolicy
@@ -72,6 +73,14 @@ def _metadata_dict(meta: GalleryDisplayMetadata) -> dict[str, object]:
 	}
 
 
+def _path_is_under_base(base: Path, target: Path) -> bool:
+	try:
+		target.resolve().relative_to(base.resolve())
+	except ValueError:
+		return False
+	return True
+
+
 def _resolve_converted_file(services: AppServices, relative_path: str) -> Path:
 	if not is_safe_gallery_relative_path(relative_path):
 		raise HTTPException(status_code=403, detail="invalid path")
@@ -80,11 +89,15 @@ def _resolve_converted_file(services: AppServices, relative_path: str) -> Path:
 		raise HTTPException(status_code=404)
 	base = Path(services.filesystem.library_path(root, LibraryFolder.CONVERTED, "")).resolve()
 	target = (base / relative_path).resolve()
-	if not str(target).startswith(str(base)):
+	if not _path_is_under_base(base, target):
 		raise HTTPException(status_code=403, detail="invalid path")
 	if not target.is_file():
 		raise HTTPException(status_code=404)
 	return target
+
+
+def _session_library_root(services: AppServices) -> str:
+	return services.session.library_root
 
 
 def _attachment_filename(path: Path) -> str:
@@ -152,6 +165,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if path == "/" or path.startswith("/gallery") or path == "/static/app.js":
 			for key, value in NO_CACHE_HEADERS.items():
 				response.headers[key] = value
+		if path == "/" or path.startswith("/gallery") or path in {"/upload", "/receive", "/share"}:
+			response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
 		return response
 
 	def _spa_file(entry: SpaEntry) -> Path:
@@ -236,7 +251,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
 
 	@app.get("/api/defaults")
-	def defaults() -> dict[str, str]:
+	def defaults(request: Request) -> dict[str, str]:
+		require_loopback(request)
 		root = default_library_root()
 		return {
 			"default_library_root": root,
@@ -245,11 +261,13 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		}
 
 	@app.get("/api/settings")
-	def get_settings() -> dict[str, object]:
+	def get_settings(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		return services.enriched_snapshot()
 
 	@app.put("/api/settings")
-	def put_settings(body: SettingsBody) -> dict[str, object]:
+	def put_settings(request: Request, body: SettingsBody) -> dict[str, object]:
+		require_loopback(request)
 		with services.session._lock:
 			if body.ui_mode is not None:
 				services.session.ui_mode = body.ui_mode
@@ -290,14 +308,16 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return services.enriched_snapshot()
 
 	@app.post("/api/easy/bootstrap")
-	def easy_bootstrap() -> dict[str, object]:
+	def easy_bootstrap(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		if not services.session.library_root or not is_absolute_library_path(services.session.library_root):
 			raise HTTPException(status_code=400, detail="choose a valid library folder")
 		services.ensure_easy_session()
 		return services.enriched_snapshot()
 
 	@app.post("/api/module/enter")
-	def module_enter(body: ModuleEnterBody) -> dict[str, object]:
+	def module_enter(request: Request, body: ModuleEnterBody) -> dict[str, object]:
+		require_loopback(request)
 		if body.module in {AppModule.PHOTO_BACKUP, AppModule.USB_PHOTO_BACKUP}:
 			if not services.session.library_root or not is_absolute_library_path(services.session.library_root):
 				raise HTTPException(status_code=400, detail="choose a valid library folder")
@@ -305,12 +325,14 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return services.enriched_snapshot()
 
 	@app.post("/api/module/home")
-	def module_home() -> dict[str, object]:
+	def module_home(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		services.leave_module_for_home()
 		return services.enriched_snapshot()
 
 	@app.post("/api/share/selection")
-	def share_selection(body: ShareSelectionBody) -> dict[str, object]:
+	def share_selection(request: Request, body: ShareSelectionBody) -> dict[str, object]:
+		require_loopback(request)
 		try:
 			services.set_share_selection(body.paths)
 		except EmptyShareSelectionError as exc:
@@ -318,7 +340,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return services.enriched_snapshot()
 
 	@app.get("/api/receive/qr.svg")
-	def receive_qr(t: str = "") -> Response:
+	def receive_qr(request: Request, t: str = "") -> Response:
+		require_loopback(request)
 		if not services.receive_token_valid(t):
 			raise HTTPException(status_code=404, detail="receive session not active")
 		page_url = services._receive_files_snapshot()["page_url"]
@@ -329,7 +352,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
 
 	@app.get("/api/share/qr.svg")
-	def share_qr(t: str = "") -> Response:
+	def share_qr(request: Request, t: str = "") -> Response:
+		require_loopback(request)
 		if not services.share_token_valid(t):
 			raise HTTPException(status_code=404, detail="share session not active")
 		page_url = services._file_share_snapshot()["page_url"]
@@ -422,7 +446,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		)
 
 	@app.post("/api/documents/open-folder")
-	def open_documents_folder() -> dict[str, bool]:
+	def open_documents_folder(request: Request) -> dict[str, bool]:
+		require_loopback(request)
 		primary = documents_folder_open_target()
 		fallback = documents_directory()
 		try:
@@ -437,7 +462,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"ok": True}
 
 	@app.post("/api/library/open-folder")
-	def open_library_folder(body: LibraryOpenFolderBody) -> dict[str, bool]:
+	def open_library_folder(request: Request, body: LibraryOpenFolderBody) -> dict[str, bool]:
+		require_loopback(request)
 		bucket = body.bucket.strip().lower()
 		if bucket not in {"error", "invalid"}:
 			raise HTTPException(status_code=400, detail="unknown bucket")
@@ -454,7 +480,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"ok": True}
 
 	@app.get("/api/extract/upload-qr.svg")
-	def extract_upload_qr(t: str = "") -> Response:
+	def extract_upload_qr(request: Request, t: str = "") -> Response:
+		require_loopback(request)
 		if not services.wifi_token_valid(t):
 			raise HTTPException(status_code=404, detail="upload session not active")
 		upload_url = f"http://{lan_ip()}:{services.port}/upload?t={t}"
@@ -515,7 +542,11 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"uploaded": len(results), "files": results}
 
 	@app.get("/api/devices")
-	def list_devices(connection_method: ConnectionMethod = ConnectionMethod.WIFI) -> list[dict[str, str]]:
+	def list_devices(
+		request: Request,
+		connection_method: ConnectionMethod = ConnectionMethod.WIFI,
+	) -> list[dict[str, str]]:
+		require_loopback(request)
 		if connection_method is ConnectionMethod.WIFI:
 			return []
 		try:
@@ -528,12 +559,14 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return [{"device_id": d.device_id, "label": d.label} for d in devices]
 
 	@app.get("/api/library/counts")
-	def library_counts(library_root: str = "") -> dict[str, int]:
-		root = library_root or services.session.library_root
+	def library_counts(request: Request) -> dict[str, int]:
+		require_loopback(request)
+		root = _session_library_root(services)
 		return services.folder_counts(root)
 
 	@app.post("/api/extract/start")
-	def extract_start() -> dict[str, object]:
+	def extract_start(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		if not services.session.library_root or not is_absolute_library_path(services.session.library_root):
 			raise HTTPException(status_code=400, detail="choose a valid library folder")
 		method = services.session.connection_method
@@ -548,22 +581,26 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return services.enriched_snapshot()
 
 	@app.post("/api/extract/pause")
-	def extract_pause() -> dict[str, object]:
+	def extract_pause(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		services.pause_extract()
 		return services.enriched_snapshot()
 
 	@app.post("/api/extract/resume")
-	def extract_resume() -> dict[str, object]:
+	def extract_resume(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		services.resume_extract()
 		return services.enriched_snapshot()
 
 	@app.post("/api/extract/stop")
-	def extract_stop() -> dict[str, object]:
+	def extract_stop(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		services.stop_extract()
 		return services.enriched_snapshot()
 
 	@app.post("/api/convert/start")
-	def convert_start() -> dict[str, object]:
+	def convert_start(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		with services.session._lock:
 			root = normalize_library_root(services.session.library_root)
 			if root:
@@ -588,7 +625,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return services.enriched_snapshot()
 
 	@app.post("/api/error/move-to-converted")
-	def move_errors() -> dict[str, int]:
+	def move_errors(request: Request) -> dict[str, int]:
+		require_loopback(request)
 		if not services.session.library_root:
 			raise HTTPException(status_code=400, detail="library_root required")
 		moved = services.error_recovery.move_all_errors_to_converted(services.session.library_root)
@@ -597,8 +635,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"moved": moved}
 
 	@app.get("/api/gallery/timeline")
-	def gallery_timeline(library_root: str = "") -> list[dict[str, object]]:
-		root = library_root or services.session.library_root
+	def gallery_timeline() -> list[dict[str, object]]:
+		root = _session_library_root(services)
 		if not root:
 			return []
 		groups = services.gallery.list_timeline(root, captured_at_for=services.captured_at_map(root))
@@ -612,8 +650,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		]
 
 	@app.get("/api/gallery/calendar")
-	def gallery_calendar(year: int, month: int, library_root: str = "") -> dict[str, object]:
-		root = library_root or services.session.library_root
+	def gallery_calendar(year: int, month: int) -> dict[str, object]:
+		root = _session_library_root(services)
 		if not root:
 			return {"year": year, "month": month, "days_with_media": []}
 		days = services.gallery.calendar_days(
@@ -625,8 +663,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"year": year, "month": month, "days_with_media": days}
 
 	@app.get("/api/gallery/item")
-	def gallery_item_detail(path: str, library_root: str = "") -> dict[str, object]:
-		root = library_root or services.session.library_root
+	def gallery_item_detail(path: str) -> dict[str, object]:
+		root = _session_library_root(services)
 		if not root:
 			raise HTTPException(status_code=404, detail="library not configured")
 		if not is_safe_gallery_relative_path(path):
@@ -649,8 +687,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		}
 
 	@app.delete("/api/gallery/item")
-	def gallery_item_delete(path: str, library_root: str = "") -> dict[str, object]:
-		root = library_root or services.session.library_root
+	def gallery_item_delete(path: str) -> dict[str, object]:
+		root = _session_library_root(services)
 		if not root:
 			raise HTTPException(status_code=400, detail="library not configured")
 		if not is_safe_gallery_relative_path(path):
@@ -664,7 +702,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"deleted": True, "relative_path": path}
 
 	@app.post("/api/gallery/open")
-	def gallery_open_on_host(body: GalleryOpenBody) -> dict[str, bool]:
+	def gallery_open_on_host(request: Request, body: GalleryOpenBody) -> dict[str, bool]:
+		require_loopback(request)
 		target = _resolve_converted_file(services, body.relative_path)
 		try:
 			if body.target == "file":
@@ -712,8 +751,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return FileResponse(path, headers={"Content-Disposition": disposition})
 
 	@app.get("/api/gallery/day")
-	def gallery_day(year: int, month: int, day: int, library_root: str = "") -> dict[str, object]:
-		root = library_root or services.session.library_root
+	def gallery_day(year: int, month: int, day: int) -> dict[str, object]:
+		root = _session_library_root(services)
 		if not root:
 			return {"year": year, "month": month, "day": day, "items": []}
 		items = services.gallery.list_day(
@@ -737,7 +776,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			raise HTTPException(status_code=404)
 		base = Path(services.filesystem.library_path(root, LibraryFolder.CONVERTED, "")).resolve()
 		target = (base / relative_path).resolve()
-		if not str(target).startswith(str(base)):
+		if not _path_is_under_base(base, target):
 			raise HTTPException(status_code=403, detail="invalid path")
 		if not target.is_file():
 			raise HTTPException(status_code=404)
@@ -757,21 +796,25 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return FileResponse(icon, media_type="image/png")
 
 	@app.get("/api/tools/status")
-	def tools_status() -> dict[str, object]:
+	def tools_status(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		return services.managed_tools.status_dict()
 
 	@app.post("/api/tools/ensure")
-	def tools_ensure() -> dict[str, object]:
+	def tools_ensure(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		services.managed_tools.ensure_all()
 		return services.managed_tools.status_dict()
 
 	@app.post("/api/tools/components-continue")
-	def tools_components_continue() -> dict[str, object]:
+	def tools_components_continue(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		services.managed_tools.allow_path_fallback()
 		return services.managed_tools.status_dict()
 
 	@app.delete("/api/tools/downloaded")
-	def tools_delete_downloaded() -> dict[str, object]:
+	def tools_delete_downloaded(request: Request) -> dict[str, object]:
+		require_loopback(request)
 		services.managed_tools.delete_downloaded()
 		return services.managed_tools.status_dict()
 
@@ -792,6 +835,9 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 
 	@app.websocket("/ws")
 	async def websocket_endpoint(websocket: WebSocket) -> None:
+		if not require_loopback_websocket(websocket):
+			await websocket.close(code=1008, reason="desktop-only")
+			return
 		await websocket.accept()
 		if services._event_loop is None:
 			services.bind_event_loop(asyncio.get_running_loop())

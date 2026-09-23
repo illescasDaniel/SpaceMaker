@@ -10,9 +10,7 @@ class EmptyShareSelectionError(ValueError):
 	"""User selection resolves to zero shareable files."""
 
 
-EMPTY_SHARE_FOLDER_MESSAGE = (
-	"This folder has no files. Choose a folder that contains at least one file."
-)
+EMPTY_SHARE_FOLDER_MESSAGE = "This folder has no files. Choose a folder that contains at least one file."
 
 ShareManifestKind = Literal["file", "folder_zip"]
 

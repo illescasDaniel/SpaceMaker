@@ -73,10 +73,10 @@ Skill: `.cursor/skills/sdd-feature/SKILL.md` for the same workflow.
 ## Architecture rules
 
 - **`src/spacemaker/domain/`:** entities, value objects, errors. Stdlib only.
-- **`src/spacemaker/ports/`:** inbound use-case ports and outbound ports (`DeviceRepository`, `MediaConverter`, `FileSystem`, etc.). Domain + `typing.Protocol` only.
+- **`src/spacemaker/ports/`:** outbound ports (`DeviceRepository`, `MediaConverter`, `FileSystem`, etc.). Domain + `typing.Protocol` only. Use cases live in `application/`, not separate inbound port modules.
 - **`src/spacemaker/application/`:** use cases (`ExtractMedia`, `ConvertMedia`, `GenerateGallery`). No FastAPI, FFmpeg, adb, or filesystem I/O.
 - **`src/spacemaker/adapters/`:** inbound (FastAPI, static web UI) and outbound (FFmpeg, adb/MTP, filesystem).
-- **`bootstrap.py`:** composition root; **`desktop.py`:** pywebview entry.
+- **`src/spacemaker/bootstrap/`:** composition root; **`desktop.py`:** pywebview entry.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/playbooks/SpaceMaker-adaptations.md](docs/playbooks/SpaceMaker-adaptations.md).
 
@@ -93,7 +93,7 @@ Under the user-chosen library root:
 
 Conversion rules: [docs/playbooks/SpaceMaker-adaptations.md](docs/playbooks/SpaceMaker-adaptations.md) and reference script [docs/reference/convert_all_1_1.sh](docs/reference/convert_all_1_1.sh).
 
-Release builds are **portable onefile executables** that **download** pinned third-party CLIs (adb, libmtp, ffmpeg, ffprobe, magick, exiftool) into the user data folder per OS/CPU — [specs/packaging/SPEC.md](specs/packaging/SPEC.md). Legal: [docs/legal/](docs/legal/), [specs/legal/SPEC.md](specs/legal/SPEC.md). Resolution order: managed dir → download → `PATH` (only after setup **Continue** or `SPACEMAKER_DEV=1`). Override dir: `SPACEMAKER_TOOLS_DIR`.
+Release builds are **portable executables** (Linux **AppImage** primary; optional PyInstaller onefile on other platforms) that **download** pinned third-party CLIs (adb, libmtp, ffmpeg, ffprobe, magick, exiftool) into the user data folder per OS/CPU — [specs/packaging/SPEC.md](specs/packaging/SPEC.md). Legal: [docs/legal/](docs/legal/), [specs/legal/SPEC.md](specs/legal/SPEC.md). Resolution order: managed dir → download → `PATH` (only after setup **Continue** or `SPACEMAKER_DEV=1`). Override dir: `SPACEMAKER_TOOLS_DIR`.
 
 ## Reference playbooks
 

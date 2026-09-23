@@ -3,7 +3,7 @@
 ## Metadata
 
 - **Feature:** Primary desktop/web UI inside pywebview
-- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — Easy (default) + Advanced wizard
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — USB wizard + Home hub (Photo backup uses `#view-easy`)
 - **Related specs:** [easy-mode](../easy-mode/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
 - **Transport:** HTTP for pages/API; WebSockets for extract and convert progress
 
