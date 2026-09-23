@@ -27,6 +27,12 @@ License texts shipped inside upstream archives are stored next to the downloaded
 
 SpaceMaker’s own license is in the repository [LICENSE](../../LICENSE) file (MIT).
 
+## Bundled web assets (UI)
+
+| Asset | Purpose | License |
+|-------|---------|---------|
+| **Font Awesome Free** 6.x (solid chevrons in gallery) | Self-hosted under `static/vendor/fontawesome/` | [Font Awesome Free License](https://fontawesome.com/license/free) (icons: CC BY 4.0; fonts: SIL OFL 1.1; code: MIT) — full text in `static/vendor/fontawesome/LICENSE.txt` |
+
 ## Updates to downloaded tools
 
 Version pins live in [packaging/tool-catalog.json](../../packaging/tool-catalog.json). Security updates may ship in patch releases without changing this document’s structure.

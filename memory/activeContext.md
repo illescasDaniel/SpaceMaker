@@ -6,18 +6,18 @@ _Last updated: 2026-09-23_
 
 ## Current focus
 
-Shipped **iPhone USB (AFC)**, **extract/convert stop + shutdown**, and **desktop CSP** fixes on `main`.
+Gallery UX and theming shipped on `main`; no active feature branch.
 
 ## Just changed (committed)
 
-- Linux **iPhone (USB)** wizard method + `AfcDeviceRepository` (scoped DCIM walk, PATH libimobiledevice/ifuse)
-- Extract stop waits for USB thread; **Stop convert**; clean desktop shutdown
-- Loopback CSP allows `unsafe-eval` for pywebview; directive separator test prevents malformed headers
+- Gallery item **Previous / Next** (timeline order) with self-hosted **Font Awesome** chevrons and grid-centered nav buttons
+- **System light/dark** via shared `theme.css` on all web shells; removed module-based palette switching
+- CSP `font-src 'self'`; Font Awesome noted in `docs/legal/THIRD_PARTY_TOOLS.md`
 
 ## Next steps
 
-1. Manual: iPhone USB extract → Stop extract → convert only when count stable
-2. Manual: Stop convert; quit app → port 8765 free
+1. Manual: Gallery item nav + theme in light and dark OS settings (desktop + phone gallery QR)
+2. Manual: iPhone USB extract → Stop extract → convert when count stable
 3. Easy-mode import panels — await spec approval (separate track)
 
 ## Run

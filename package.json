@@ -6,6 +6,7 @@
 		"fix": "biome check --write ."
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.0.0"
+		"@biomejs/biome": "^2.0.0",
+		"@fortawesome/fontawesome-free": "^6.7.2"
 	}
 }

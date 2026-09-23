@@ -1,10 +1,11 @@
 """Desktop / phone web UI shell version (bump when static assets change materially)."""
 
-UI_SHELL_VERSION = "2026.09.home-modules"
+UI_SHELL_VERSION = "2026.09.gallery-nav"
 
 _CSP_COMMON = (
 	"default-src 'self'; "
 	"style-src 'self' 'unsafe-inline'; "
+	"font-src 'self'; "
 	"img-src 'self' data: blob:; "
 	"media-src 'self'; "
 	"connect-src 'self' ws: wss:; "

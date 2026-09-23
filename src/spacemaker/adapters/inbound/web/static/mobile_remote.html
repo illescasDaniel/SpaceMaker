@@ -5,12 +5,13 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="icon" href="/favicon.ico" sizes="32x32">
 	<title>SpaceMaker</title>
+	<link rel="stylesheet" href="/static/theme.css">
 	<style>
 		body {
 			margin: 0;
-			font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-			background: #f7f8fa;
-			color: #1a2332;
+			font-family: var(--font);
+			background: var(--bg);
+			color: var(--text);
 			line-height: 1.5;
 			min-height: 100vh;
 			display: flex;
@@ -23,12 +24,13 @@
 			text-align: center;
 		}
 		h1 { font-size: 1.25rem; margin: 0 0 0.75rem; }
-		p { margin: 0; color: #5c6b82; font-size: 0.95rem; }
+		p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+		.logo-accent { color: var(--accent); }
 	</style>
 </head>
 <body>
 	<div class="card">
-		<h1>Space<span style="color:#228be6">Maker</span></h1>
+		<h1>Space<span class="logo-accent">Maker</span></h1>
 		<p>Use the QR codes on your PC — upload to send files, or open the gallery QR to browse converted media.</p>
 	</div>
 </body>

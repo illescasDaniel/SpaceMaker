@@ -10,7 +10,7 @@
 ## Triggers & routing
 
 - **Entry:** User launches SpaceMaker (`desktop.py` opens pywebview → local FastAPI origin).
-- **Entry:** **USB photo backup** module from [home-modules](../home-modules/SPEC.md) — three-step wizard (cards 1–3). Header **Home | Gallery** (no Easy/Advanced toggle). Gallery tab unchanged; gallery chrome follows active module theme (light for Photo backup / Home, dark for USB wizard).
+- **Entry:** **USB photo backup** module from [home-modules](../home-modules/SPEC.md) — three-step wizard (cards 1–3). Header **Home | Gallery** (no Easy/Advanced toggle). **Theme:** system light/dark on all views ([home-modules](../home-modules/SPEC.md)).
 - **Step gating (UX):**
   - **Start convert** is **disabled** when **`originals/` has zero files** (recursive count) or convert is already **running**.
   - **Start convert** is **enabled** when `originals/` has at least one file, **including while extract is `running` or `paused`**.
@@ -25,7 +25,7 @@
 
 - Match wireframe structure: header **SpaceMaker**, three cards on wide viewports, stacked on narrow.
 - Each card shows: step number, title, **status line** (`Not started` | `In progress: N%` | `Completed: N files` | `Waiting for …` | `Failed`), progress bar when applicable.
-- **Step 1 — Extract:** **connection method** segmented control (**Wi‑Fi** default, **MTP**, **ADB (cable)**, **iPhone (USB)**) with a **visible container border** (see wireframe), **info (ⓘ)** button, library root picker, Copy/Move mode chips (**label text uses `--text`**, readable on dark background), **Start extract**, **Pause extract**, **Resume extract** (while paused), **Stop extract**, file counts.
+- **Step 1 — Extract:** **connection method** segmented control (**Wi‑Fi** default, **MTP**, **ADB (cable)**, **iPhone (USB)**) with a **visible container border** (see wireframe), **info (ⓘ)** button, library root picker, Copy/Move mode chips (**label text uses `--text`** on theme surfaces), **Start extract**, **Pause extract**, **Resume extract** (while paused), **Stop extract**, file counts.
 - **Step 1 — Wi‑Fi:** hide USB **device picker**, **device status**, and **source folder** checklist. Show **phone upload** block: idle hint until extract starts; while **running** or **paused**, show LAN **URL + QR** for the **upload page** (not the gallery URL). **Move** chip is **disabled**; only **Copy** applies (uploads always copy into `originals/`).
 - **Step 1 — USB (MTP/ADB):** **device picker** + **status line** (friendly copy + connection indicator — never raw `libmtp:0`-style ids as the main message), **source folder** checklist, Copy/Move chips (Move enabled when cable method selected).
 - **Step 1 — Extract controls (enabled/disabled):**
@@ -35,7 +35,7 @@
   | Running | **disabled** | enabled | hidden/disabled | enabled |
   | Paused | disabled | hidden/disabled | enabled | enabled |
   | Stopped / completed / error | enabled | disabled | hidden/disabled | disabled |
-- **Step 1 — Accessibility:** form controls (`select`, `input`) use **`--text`** on **`--surface2`** backgrounds (readable contrast on dark theme).
+- **Step 1 — Accessibility:** form controls (`select`, `input`) use **`--text`** on **`--surface2`** backgrounds (readable contrast in both system themes).
 - **Step 2 — Convert:** one-line policy summary (AVIF/AV1, files leave `originals/`), **Start convert** button (enabled when `originals/` non-empty — see step gating), progress bar.
 - **Warnings (Step 2 area):**
   - **Error bucket:** rendered **only** when `error/` file count **> 0**. When count is **0**, the warning block is **not in the DOM** or is **hidden** with no placeholder — users must not see an empty warning.

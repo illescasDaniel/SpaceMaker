@@ -6,21 +6,39 @@
 	<title>SpaceMaker — Wireframe</title>
 	<style>
 		:root {
-			--bg: #0f1419;
-			--surface: #1a2332;
-			--surface2: #243044;
-			--border: #3d4f6f;
-			--text: #e8eef7;
-			--muted: #8b9cb3;
-			--accent: #4dabf7;
-			--accent-dim: #228be6;
-			--success: #51cf66;
-			--warn: #fcc419;
-			--warn-bg: #3d3200;
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--success: #37b24d;
+			--warn: #e67700;
+			--warn-bg: #fff9db;
 			--error: #ff6b6b;
-			--disabled: #5c6b82;
+			--disabled: #adb5bd;
 			--radius: 12px;
 			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #0f1419;
+				--surface: #1a2332;
+				--surface2: #243044;
+				--border: #3d4f6f;
+				--text: #e8eef7;
+				--muted: #8b9cb3;
+				--accent: #4dabf7;
+				--accent-dim: #228be6;
+				--success: #51cf66;
+				--warn: #fcc419;
+				--warn-bg: #3d3200;
+				--error: #ff6b6b;
+				--disabled: #5c6b82;
+			}
 		}
 
 		* { box-sizing: border-box; }
@@ -575,6 +593,58 @@
 			margin-bottom: 1rem;
 		}
 
+		.gallery-item-stage-wrap {
+			display: grid;
+			margin-bottom: 1rem;
+		}
+
+		.gallery-item-stage-wrap > .gallery-item-stage,
+		.gallery-item-stage-wrap > .gallery-item-nav {
+			grid-area: 1 / 1;
+		}
+
+		.gallery-item-stage-wrap .gallery-item-stage {
+			margin-bottom: 0;
+			min-width: 0;
+		}
+
+		.gallery-item-nav {
+			z-index: 2;
+			align-self: center;
+			justify-self: start;
+			margin-left: 0.5rem;
+			width: 2.75rem;
+			height: 2.75rem;
+			padding: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: var(--radius);
+			border: 1px solid var(--border);
+			background: var(--surface);
+			color: var(--text);
+			box-shadow: 0 2px 12px color-mix(in srgb, var(--text) 16%, transparent);
+			cursor: pointer;
+			font: inherit;
+			font-size: 1rem;
+		}
+
+		.gallery-item-nav:hover:not(:disabled) {
+			border-color: var(--accent);
+			background: var(--surface2);
+		}
+
+		.gallery-item-nav:disabled {
+			opacity: 0.35;
+			cursor: default;
+		}
+
+		.gallery-item-nav-next {
+			justify-self: end;
+			margin-left: 0;
+			margin-right: 0.5rem;
+		}
+
 		.gallery-item-stage {
 			background: var(--surface2);
 			border: 1px solid var(--border);
@@ -773,23 +843,9 @@
 			margin-bottom: 1rem;
 		}
 
-		html[data-ui-mode="easy"],
-		html[data-ui-mode="home"] {
-			--bg: #f7f8fa;
-			--surface: #ffffff;
-			--surface2: #eef1f5;
-			--border: #dde2ea;
-			--text: #1a2332;
-			--muted: #5c6b82;
-			--accent: #228be6;
-			--accent-dim: #1c7ed6;
-			--warn-bg: #fff9db;
-			--warn: #e67700;
-		}
-
-		html[data-ui-mode="easy"] .wireframe-banner {
-			background: #e7f5ff;
-			color: #1864ab;
+		.wireframe-banner {
+			background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+			color: var(--accent-dim);
 			border-bottom-color: var(--border);
 		}
 
@@ -1674,8 +1730,12 @@
 	<section id="view-gallery-item" class="screen" aria-label="Gallery item">
 		<div class="gallery-item-layout">
 			<button type="button" class="btn btn-ghost gallery-item-back" id="btn-gallery-item-back">← Back to gallery</button>
-			<div class="gallery-item-stage" id="gallery-item-stage">
-				<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%232a3440' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='24' text-anchor='middle' dominant-baseline='middle'%3EPreview%3C/text%3E%3C/svg%3E" alt="2025/September/IMG_0042.avif" />
+			<div class="gallery-item-stage-wrap">
+				<button type="button" class="gallery-item-nav gallery-item-nav-prev" id="btn-gallery-item-prev" aria-label="Previous photo">←</button>
+				<div class="gallery-item-stage" id="gallery-item-stage">
+					<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%232a3440' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='24' text-anchor='middle' dominant-baseline='middle'%3EPreview%3C/text%3E%3C/svg%3E" alt="2025/September/IMG_0042.avif" />
+				</div>
+				<button type="button" class="gallery-item-nav gallery-item-nav-next" id="btn-gallery-item-next" aria-label="Next photo">→</button>
 			</div>
 			<h2 class="gallery-item-title">2025/September/IMG_0042.avif</h2>
 			<dl class="gallery-meta">
@@ -1766,15 +1826,10 @@
 			return 'home';
 		}
 
-		function syncTheme(resolved) {
-			document.documentElement.setAttribute('data-ui-mode', resolved === 'wizard' ? 'advanced' : resolved === 'home' ? 'home' : 'easy');
-		}
-
 		function showView(viewId) {
 			var resolved = viewId === 'home' ? 'home' : viewId;
 			document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
 			document.getElementById('view-' + resolved).classList.add('active');
-			syncTheme(resolved);
 			if (resolved === 'components') {
 				document.querySelectorAll('.view-tabs button').forEach(function (b) {
 					b.classList.toggle('active', b.getAttribute('data-view') === 'components');

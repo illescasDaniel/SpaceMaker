@@ -19,7 +19,7 @@
 
 - **Home:** 2×2 grid of square tiles with inline icons and titles: Photo backup, USB photo backup, Receive files, Send files.
 - Each module screen shows breadcrumbs **`Home / {module title}`** — **Home** is tappable (same as **Back to Home** / `POST /api/module/home`); the module name is larger and bold. No separate back button.
-- **Photo backup** uses light theme (former Easy). **USB photo backup** uses dark wizard theme. **Receive / Send** use light theme.
+- **Theme:** all modules and Gallery use **system light/dark** (`theme.css` + `prefers-color-scheme`); layout differs per module, not palette.
 
 ## Acceptance criteria (BDD)
 

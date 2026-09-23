@@ -11,14 +11,14 @@
 
 - **Entry:** Opened from Home hub → **Photo backup** tile (`active_module=photo_backup`, `ui_mode=easy`). **USB photo backup** tile opens the wizard (`ui_mode=advanced`). App launch defaults to **Home** hub — no auto Wi‑Fi until Photo backup is entered.
 - **Session:** `ui_mode` is session-only (relaunch → Easy). Entering Home or another module does not imply an Easy↔Advanced toggle (USB is a separate module).
-- **Header tabs:** **Home** (hub or active module) and **Gallery**. Gallery chrome uses the **active module theme** (light for Photo backup / Home, dark for USB wizard).
+- **Header tabs:** **Home** (hub or active module) and **Gallery**. All shells follow the **OS light/dark** preference (`prefers-color-scheme` via shared `theme.css`); no per-module forced light/dark.
 - **Easy bootstrap:** When the client loads Easy and extract is idle, the server starts **Wi‑Fi receive** automatically (library root from session defaults; no Start extract button).
 
 ## Visual & UI rules
 
-### Easy (light, minimalist)
+### Easy (Photo backup layout)
 
-- Off-white background, white surfaces, dark text, generous spacing.
+- System light/dark tokens; generous spacing, centered column (~28rem).
 - Vertical stack (centered, max ~28rem):
   1. **Large upload QR** (active Wi‑Fi session) with **ⓘ** just outside the QR (not overlapping); tap reveals the encoded upload URL and notes that users without a QR reader can open that URL in the phone browser (same Wi‑Fi). Breadcrumb **`Home / Photo backup`** at top (**Home** returns to hub).
   2. Short instruction: scan with phone on same Wi‑Fi
@@ -33,13 +33,13 @@
   7. **View gallery** button — **only when** `converted/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
   8. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
 - No library picker, connection toggle, or extract/convert buttons on Easy.
-- Phone **upload** page (`/upload`): light, minimal; footer hint varies for **iPhone vs Android** (UA detection). **iPhone:** single **Choose** button (no folder picker). **Android:** **Choose files** + **Choose folder**.
-- Phone **gallery** (`/gallery` on device browser): dedicated mobile shell (no Easy/Advanced or Main/Gallery chrome); theme follows **system** light/dark via `shell-gallery.css`. Server serves `gallery_mobile.html` for **private LAN** hosts; loopback/desktop app keeps full `index.html`.
+- Phone **upload** page (`/upload`): minimal; system theme via `theme.css`; footer hint varies for **iPhone vs Android** (UA detection). **iPhone:** single **Choose** button (no folder picker). **Android:** **Choose files** + **Choose folder**.
+- Phone **gallery** (`/gallery` on device browser): dedicated mobile shell (no Easy/Advanced or Main/Gallery chrome); system theme via `theme.css` + `shell-gallery.css`. Server serves `gallery_mobile.html` for **private LAN** hosts; loopback/desktop app keeps full `index.html`.
 - Phone **upload** page shows **files sent** count from `/api/upload/session` (`files_sent`).
 
-### Advanced (dark)
+### USB wizard layout
 
-- Unchanged three-step wizard ([main-wizard](../main-wizard/SPEC.md)).
+- Unchanged three-step wizard ([main-wizard](../main-wizard/SPEC.md)); same system theme as other modules.
 
 ## API & actions
 

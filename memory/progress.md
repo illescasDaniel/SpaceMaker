@@ -42,3 +42,5 @@
 - [x] Version **1.0.0** + maintainer contact in package metadata and About UI
 - [x] Specs/docs: bundled third-party tools + legal (privacy, disclaimer, manifest); docs refresh (hub, LAN security, architecture)
 - [x] **Public README** — features, getting started, development; Home hub PNG + `uv run task readme-screenshot`
+- [x] **Gallery item prev/next** — timeline order; Font Awesome chevrons; grid-centered overlay controls
+- [x] **System UI theme** — `theme.css` + `prefers-color-scheme` on desktop and phone shells (no per-module light/dark)

@@ -16,11 +16,22 @@
 			--radius: 12px;
 			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #0f1419;
+				--surface: #1a2332;
+				--border: #3d4f6f;
+				--text: #e8eef7;
+				--muted: #8b9cb3;
+				--accent: #4dabf7;
+				--accent-dim: #228be6;
+			}
+		}
 		* { box-sizing: border-box; }
 		body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
 		.wireframe-banner {
-			background: #e7f5ff;
-			color: #1864ab;
+			background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+			color: var(--accent-dim);
 			text-align: center;
 			padding: 0.5rem 1rem;
 			font-size: 0.8rem;

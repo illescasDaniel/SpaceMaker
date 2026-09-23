@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-23 — System theme and self-hosted Font Awesome for gallery nav
+
+- **Context:** Per-module light vs dark palettes diverged from user expectation; gallery prev/next used hard-coded dark overlays with poor contrast in light mode; chevron alignment was off with absolute positioning.
+- **Decision:** Single `theme.css` with `prefers-color-scheme` for all shells; remove `syncShellTheme` / gallery-system-theme overrides. Gallery nav uses CSS grid overlay + vendored Font Awesome Free solid chevrons under `static/vendor/fontawesome/` (CSP `font-src 'self'`).
+- **Rationale:** Matches OS appearance everywhere; keeps LAN/desktop offline-capable without CDN; grid `align-self: center` tracks preview height reliably.
+
 ## 2026-09-23 — LAN server: loopback-only desktop control plane
 
 - **Context:** FastAPI binds `0.0.0.0` for phone QR/LAN gallery, but mutating APIs, `GET /api/settings`, and `/ws` exposed full session state (including upload/receive/share token URLs) to any LAN client.

@@ -5,6 +5,9 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="icon" href="/favicon.ico" sizes="32x32">
 	<title>SpaceMaker — Gallery</title>
+	<link rel="stylesheet" href="/static/theme.css">
+	<link rel="stylesheet" href="/static/vendor/fontawesome/css/fontawesome.min.css">
+	<link rel="stylesheet" href="/static/vendor/fontawesome/css/solid.min.css">
 	<link rel="stylesheet" href="/static/shell-gallery.css">
 </head>
 <body>
@@ -40,7 +43,11 @@
 		<section id="view-gallery-item" class="screen" aria-label="Gallery item">
 			<div class="gallery-item-layout">
 				<button type="button" class="btn btn-ghost gallery-item-back" id="btn-gallery-item-back">← Back to gallery</button>
-				<div class="gallery-item-stage" id="gallery-item-stage"></div>
+				<div class="gallery-item-stage-wrap">
+					<button type="button" class="gallery-item-nav gallery-item-nav-prev" id="btn-gallery-item-prev" aria-label="Previous photo" disabled><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
+					<div class="gallery-item-stage" id="gallery-item-stage"></div>
+					<button type="button" class="gallery-item-nav gallery-item-nav-next" id="btn-gallery-item-next" aria-label="Next photo" disabled><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+				</div>
 				<h2 class="gallery-item-title" id="gallery-item-title"></h2>
 				<dl class="gallery-meta" id="gallery-item-meta"></dl>
 				<div class="gallery-item-actions">

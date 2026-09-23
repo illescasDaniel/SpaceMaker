@@ -1,6 +1,6 @@
 (function () {
 	var clientShell = window.SPACEMAKER_SHELL || "desktop";
-	var EXPECTED_UI_SHELL_VERSION = "2026.09.home-modules";
+	var EXPECTED_UI_SHELL_VERSION = "2026.09.gallery-nav";
 	var lastMainView = "home";
 	var uiMode = "easy";
 	var state = null;
@@ -27,6 +27,7 @@
 	var calendarSelectedDay = null;
 	var galleryItemPath = "";
 	var galleryItemKind = "image";
+	var galleryBrowsePaths = [];
 	function isAbsolutePath(path) {
 		if (!path) {
 			return false;
@@ -276,16 +277,6 @@
 		return moduleToViewId(state.active_module);
 	}
 
-	function syncShellTheme(resolvedViewId) {
-		if (resolvedViewId === "wizard") {
-			document.documentElement.setAttribute("data-ui-mode", "advanced");
-		} else if (resolvedViewId === "home") {
-			document.documentElement.setAttribute("data-ui-mode", "home");
-		} else {
-			document.documentElement.setAttribute("data-ui-mode", "easy");
-		}
-	}
-
 	function isMainHubView(resolved) {
 		return (
 			resolved === "home" ||
@@ -318,12 +309,6 @@
 			});
 	}
 
-	function refreshGalleryThemePolicy() {
-		if (isMobileGalleryShell()) {
-			return;
-		}
-	}
-
 	function easyFileCountLabel(count, singular, plural) {
 		if (count === 1) {
 			return "1 " + singular;
@@ -334,7 +319,6 @@
 	function setUiMode(mode, options) {
 		options = options || {};
 		uiMode = mode === "advanced" ? "advanced" : "easy";
-		document.documentElement.setAttribute("data-ui-mode", uiMode);
 		var btnEasy = document.getElementById("btn-ui-easy");
 		var btnAdvanced = document.getElementById("btn-ui-advanced");
 		if (btnEasy) {
@@ -353,13 +337,6 @@
 
 	function setUiModeFromState(next) {
 		uiMode = next.ui_mode === "advanced" ? "advanced" : "easy";
-		var active = document.querySelector(".screen.active");
-		var resolved = active && active.id ? active.id.replace(/^view-/, "") : "home";
-		if (resolved === "home" || !isMainHubView(resolved)) {
-			syncShellTheme(homeViewId());
-		} else {
-			syncShellTheme(resolved);
-		}
 	}
 
 	function pathForMainView(viewId) {
@@ -428,9 +405,7 @@
 			s.classList.remove("active");
 		});
 		document.getElementById("view-" + resolved).classList.add("active");
-		syncShellTheme(resolved);
 		syncGalleryPhoneHelpVisibility(resolved);
-		refreshGalleryThemePolicy();
 		if (isMainHubView(resolved) || resolved === "gallery" || resolved === "gallery-item") {
 			document.querySelectorAll(".view-tabs button").forEach(function (b) {
 				var tab = b.getAttribute("data-view");
@@ -462,14 +437,75 @@
 		}
 	}
 
+	function pathsFromTimelineGroups(groups) {
+		var paths = [];
+		if (!groups) {
+			return paths;
+		}
+		groups.forEach(function (g) {
+			(g.items || []).forEach(function (item) {
+				paths.push(item.relative_path);
+			});
+		});
+		return paths;
+	}
+
+	function ensureGalleryBrowsePaths() {
+		if (galleryBrowsePaths.length) {
+			return Promise.resolve(galleryBrowsePaths);
+		}
+		return api("GET", "/api/gallery/timeline")
+			.then(function (groups) {
+				galleryBrowsePaths = pathsFromTimelineGroups(groups);
+				return galleryBrowsePaths;
+			})
+			.catch(function () {
+				galleryBrowsePaths = [];
+				return galleryBrowsePaths;
+			});
+	}
+
+	function updateGalleryItemNav() {
+		var prevBtn = document.getElementById("btn-gallery-item-prev");
+		var nextBtn = document.getElementById("btn-gallery-item-next");
+		if (!prevBtn || !nextBtn) {
+			return;
+		}
+		if (!galleryItemPath || !galleryBrowsePaths.length) {
+			prevBtn.disabled = true;
+			nextBtn.disabled = true;
+			return;
+		}
+		var idx = galleryBrowsePaths.indexOf(galleryItemPath);
+		if (idx === -1) {
+			prevBtn.disabled = true;
+			nextBtn.disabled = true;
+			return;
+		}
+		prevBtn.disabled = idx <= 0;
+		nextBtn.disabled = idx >= galleryBrowsePaths.length - 1;
+	}
+
+	function shiftGalleryItem(delta) {
+		var idx = galleryBrowsePaths.indexOf(galleryItemPath);
+		if (idx === -1) {
+			return;
+		}
+		var target = idx + delta;
+		if (target < 0 || target >= galleryBrowsePaths.length) {
+			return;
+		}
+		showGalleryItem(galleryBrowsePaths[target]);
+	}
+
 	function showGalleryItem(relativePath, options) {
 		galleryItemPath = relativePath;
 		showView("gallery-item", options || {});
 		loadGalleryItemDetail();
+		ensureGalleryBrowsePaths().then(updateGalleryItemNav);
 	}
 
 	function routeFromPath() {
-		refreshGalleryThemePolicy();
 		var itemPath = galleryItemPathFromLocation();
 		if (itemPath) {
 			showGalleryItem(itemPath, { skipHistory: true });
@@ -1488,6 +1524,7 @@
 		}
 		hideGalleryExportAlert();
 		setStageLoading(stage);
+		updateGalleryItemNav();
 		api("GET", "/api/gallery/item?path=" + encodeURIComponent(galleryItemPath))
 			.then(function (payload) {
 				var meta = payload.metadata || {};
@@ -1543,9 +1580,11 @@
 						metaHost.appendChild(dd);
 					});
 				}
+				updateGalleryItemNav();
 			})
 			.catch(function () {
 				setStageMessage(stage, "Could not load this item.");
+				updateGalleryItemNav();
 			});
 	}
 
@@ -1556,6 +1595,8 @@
 				var currentYear = null;
 				var yearBlock = null;
 				var yTitle;
+				galleryBrowsePaths = pathsFromTimelineGroups(groups);
+				updateGalleryItemNav();
 				if (!host) {
 					return;
 				}
@@ -1842,6 +1883,12 @@
 		});
 		onClick("btn-gallery-item-back", function () {
 			showView("gallery");
+		});
+		onClick("btn-gallery-item-prev", function () {
+			shiftGalleryItem(-1);
+		});
+		onClick("btn-gallery-item-next", function () {
+			shiftGalleryItem(1);
 		});
 		onClick("btn-gallery-download", function () {
 			if (!galleryItemPath) {
