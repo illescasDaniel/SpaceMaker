@@ -2,6 +2,8 @@
 
 Third-party CLIs are **not** embedded; they are downloaded on first run into the user data folder (see [specs/packaging/SPEC.md](../specs/packaging/SPEC.md)).
 
+Refresh the README Home screenshot: `uv run task readme-screenshot` (writes [docs/assets/readme-home.png](../docs/assets/readme-home.png)).
+
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/)

@@ -35,3 +35,4 @@
 - [x] Linux release: pruned AppDir AppImage (srxy-style), zstd squashfs, tag-only GitHub Actions release
 - [x] Version **1.0.0** + maintainer contact in package metadata and About UI
 - [x] Specs/docs: bundled third-party tools + legal (privacy, disclaimer, manifest)
+- [x] **Public README** — features, getting started, development; Home hub PNG + `uv run task readme-screenshot`

@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-23 — README Home screenshot via offscreen WebEngine
+
+- **Context:** Public GitHub release needs a committed Home hub hero image that stays in sync with production UI without manual window grabs or CI WebEngine deps.
+- **Decision:** `scripts/packaging/capture_readme_home_screenshot.py` starts `--server-only` in an isolated `HOME`, `POST /api/tools/components-continue`, renders at 980×920 with PyQt6 `QWebEngineView` (`QT_QPA_PLATFORM=offscreen` default); output `docs/assets/readme-home.png`; task `uv run task readme-screenshot`. Not run in AppImage CI.
+- **Rationale:** Same HTML as desktop; repeatable for contributors; avoids OS window-manager automation.
+
 ## 2026-09-23 — Linux 1.0 release: AppDir AppImage and tag-only CI
 
 - **Context:** PyInstaller onefile AppImages were large (~256 MB) and double-compressed; srxy uses relocatable AppDir + Qt prune; `.xz` wrap saved ~2 MB for noticeable CPU/time.
