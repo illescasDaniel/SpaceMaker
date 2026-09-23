@@ -113,7 +113,7 @@ After changing the Home hub UI, refresh the committed hero image:
 uv run task readme-screenshot  # writes docs/assets/readme-home.png
 ```
 
-Uses an isolated temp profile and offscreen Qt WebEngine (same 980×920 viewport as the desktop window). If capture fails, try `QT_QPA_PLATFORM=xcb`.
+Uses an isolated temp profile and offscreen Qt WebEngine (same 1200×900 viewport as the desktop window). If capture fails, try `QT_QPA_PLATFORM=xcb`.
 
 ### Project layout & conventions
 

@@ -16,12 +16,13 @@ from pathlib import Path
 import httpx
 
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
+from spacemaker.bootstrap.window_geometry import DESKTOP_WINDOW_HEIGHT, DESKTOP_WINDOW_WIDTH
 
 
 _REPO = Path(__file__).resolve().parents[2]
 _DEFAULT_OUTPUT = _REPO / "docs" / "assets" / "readme-home.png"
-_VIEW_WIDTH = 980
-_VIEW_HEIGHT = 920
+_VIEW_WIDTH = DESKTOP_WINDOW_WIDTH
+_VIEW_HEIGHT = DESKTOP_WINDOW_HEIGHT
 _HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0)
 _SERVER_WAIT_S = 45.0
 _HOME_WAIT_S = 30.0

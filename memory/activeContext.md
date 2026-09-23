@@ -2,7 +2,7 @@ _Last updated: 2026-09-23_
 
 ## Branch
 
-`main` — public README + screenshot tooling committed locally; push pending (user skipped push on last save).
+`main` — README release commit + wider desktop window committed locally; push pending (user skipped push).
 
 ## Current focus
 
@@ -10,17 +10,16 @@ _Last updated: 2026-09-23_
 
 ## Just changed (this commit)
 
-- **README.md** — public release copy (features, AppImage getting started, privacy/legal, expanded development)
-- **`docs/assets/readme-home.png`** — Home hub hero image
-- **`scripts/packaging/capture_readme_home_screenshot.py`** + **`uv run task readme-screenshot`**
-- **packaging/README.md** — cross-link to refresh README screenshot
+- **`bootstrap/window_geometry.py`** — default desktop size **1200×900** (4:3), min **800×600**
+- **`desktop.py`** + **`capture_readme_home_screenshot.py`** — share those constants; README viewport note updated
 
 ## Next steps
 
 1. User: **spec approved** for easy-mode import issues → implement panels
 2. `git push` when ready; tag **`v1.0.0`** to trigger AppImage release workflow
-3. Manual LAN test: all four modules on phone
-4. Add GitHub Releases URL to README once remote is configured
+3. Optional: `uv run task readme-screenshot` to refresh hero PNG at new width
+4. Manual LAN test: all four modules on phone
+5. Add GitHub Releases URL to README once remote is configured
 
 ## Run
 

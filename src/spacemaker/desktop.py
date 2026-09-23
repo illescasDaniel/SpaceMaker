@@ -16,6 +16,11 @@ from spacemaker.adapters.inbound.qt_webengine_shutdown import install_qt_webengi
 from spacemaker.bootstrap.paths import app_icon_path, webengine_storage_path
 from spacemaker.bootstrap.services import create_app
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
+from spacemaker.bootstrap.window_geometry import (
+	DESKTOP_WINDOW_HEIGHT,
+	DESKTOP_WINDOW_MIN_SIZE,
+	DESKTOP_WINDOW_WIDTH,
+)
 
 
 def _apply_qt_window_icon() -> None:
@@ -93,9 +98,9 @@ def main(argv: list[str] | None = None) -> None:
 		"SpaceMaker",
 		url,
 		js_api=DesktopApi(),
-		width=980,
-		height=920,
-		min_size=(720, 680),
+		width=DESKTOP_WINDOW_WIDTH,
+		height=DESKTOP_WINDOW_HEIGHT,
+		min_size=DESKTOP_WINDOW_MIN_SIZE,
 	)
 	gui = None if args.gui == "auto" else args.gui
 	try:
