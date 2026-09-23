@@ -5,9 +5,16 @@ SpaceMaker ships as a **single executable** per OS/CPU. Third-party CLIs are **n
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/)
-- PyInstaller (install when building): `uv pip install pyinstaller`
+
+PyInstaller is a dev dependency; `uv sync --group dev` installs it.
 
 ## Build (Linux x64 example)
+
+```bash
+uv run task build-installer
+```
+
+Equivalent manual steps:
 
 ```bash
 uv sync --group dev

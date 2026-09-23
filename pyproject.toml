@@ -27,6 +27,7 @@ spacemaker = "spacemaker.desktop:main"
 
 [dependency-groups]
 dev = [
+	"pyinstaller>=6.19",
 	"pytest>=9.1",
 	"pytest-cov>=7.1",
 	"pytest-timeout>=2.4",
@@ -107,3 +108,4 @@ format = { cmd = "uv run ruff check --fix src tests && uv run ruff format src te
 spacemaker = { cmd = "uv run spacemaker", help = "launch SpaceMaker desktop (pywebview + server)" }
 spacemaker-server = { cmd = "uv run spacemaker --server-only", help = "run API/UI in browser only" }
 firewall-allow = { cmd = "bash scripts/firewall/allow-spacemaker-port.sh", help = "allow LAN gallery port in ufw/firewalld (run with sudo)" }
+build-installer = { cmd = "bash scripts/packaging/build_installer.sh", help = "PyInstaller onefile → dist/SpaceMaker (portable release binary)" }

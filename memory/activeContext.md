@@ -25,4 +25,5 @@ _Last updated: 2026-09-23_
 ```bash
 uv run task spacemaker
 uv run task checks
+uv run task build-installer   # → dist/SpaceMaker (gitignored)
 ```

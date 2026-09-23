@@ -90,3 +90,7 @@ def main(argv: list[str] | None = None) -> None:
 		print(f"Desktop window unavailable ({exc}). Opening {url} in your browser.")
 		webbrowser.open(url)
 		thread.join()
+
+
+if __name__ == "__main__":
+	main()

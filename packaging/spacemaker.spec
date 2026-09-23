@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-repo = Path(SPECPATH).resolve().parent.parent
+repo = Path(SPECPATH).resolve().parent
 src = repo / "src"
 icon = repo / "packaging" / "assets" / "spacemaker-icon.png"
 
