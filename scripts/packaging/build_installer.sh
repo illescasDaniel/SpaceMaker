@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
-# Portable onefile executable → dist/ (gitignored). See packaging/README.md.
+# Portable release build → dist/ (gitignored). Linux: pruned AppDir; other OS: PyInstaller onefile.
 
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${repo}"
+
+if [[ "$(uname -s)" == "Linux" ]]; then
+	echo "Linux: building pruned AppDir (use build-appimage to pack)…"
+	APPDIR="${repo}/dist/spacemaker-linux.AppDir"
+	export APPDIR
+	bash "${repo}/packaging/linux-appimage/build-appdir.sh"
+	echo "OK: ${APPDIR} ($(du -sh "${APPDIR}" | cut -f1))"
+	exit 0
+fi
 
 echo "Syncing dev dependencies (includes PyInstaller)…"
 uv sync --group dev
@@ -12,10 +21,13 @@ uv sync --group dev
 echo "Syncing brand icons…"
 uv run python scripts/packaging/sync_brand_icons.py
 
-echo "Building onefile installer artifact in dist/…"
+echo "Building onefile artifact in dist/…"
 uv run pyinstaller packaging/spacemaker.spec --noconfirm
 
 artifact="${repo}/dist/SpaceMaker"
+if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "CYGWIN"* || "$(uname -s)" == "MSYS"* ]]; then
+	artifact="${repo}/dist/SpaceMaker.exe"
+fi
 if [[ ! -f "${artifact}" ]]; then
 	echo "error: expected artifact missing: ${artifact}" >&2
 	exit 1

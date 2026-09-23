@@ -108,5 +108,5 @@ format = { cmd = "uv run ruff check --fix src tests && uv run ruff format src te
 spacemaker = { cmd = "uv run spacemaker", help = "launch SpaceMaker desktop (pywebview + server)" }
 spacemaker-server = { cmd = "uv run spacemaker --server-only", help = "run API/UI in browser only" }
 firewall-allow = { cmd = "bash scripts/firewall/allow-spacemaker-port.sh", help = "allow LAN gallery port in ufw/firewalld (run with sudo)" }
-build-installer = { cmd = "bash scripts/packaging/build_installer.sh", help = "PyInstaller onefile → dist/SpaceMaker (portable release binary)" }
-build-appimage = { cmd = "bash scripts/packaging/build_appimage.sh", help = "Linux AppImage in dist/ (runs build-installer first)" }
+build-installer = { cmd = "bash scripts/packaging/build_installer.sh", help = "Linux: pruned AppDir in dist/; other OS: PyInstaller onefile" }
+build-appimage = { cmd = "bash scripts/packaging/build_appimage.sh", help = "Linux AppImage (pruned AppDir + zstd squashfs) in dist/" }

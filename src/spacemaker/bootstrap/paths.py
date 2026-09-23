@@ -78,15 +78,37 @@ def webengine_storage_path() -> str:
 	return str(base)
 
 
+def bundle_resource_root() -> Path | None:
+	"""Linux AppImage / AppDir share tree (legal, tool catalog, icon)."""
+	override = os.environ.get("SPACEMAKER_BUNDLE_ROOT", "").strip()
+	if override:
+		root = Path(override)
+		if root.is_dir():
+			return root
+	appdir = os.environ.get("APPDIR", "").strip()
+	if appdir:
+		share = Path(appdir) / "usr" / "share" / "spacemaker"
+		if share.is_dir():
+			return share
+	if getattr(sys, "frozen", False):
+		meipass = getattr(sys, "_MEIPASS", None)
+		if meipass:
+			return Path(meipass)
+	return None
+
+
 def app_icon_path() -> Path | None:
 	"""PNG used for the desktop window / task switcher (dev tree + PyInstaller bundle)."""
 	candidates: list[Path] = []
+	bundled = bundle_resource_root()
+	if bundled is not None:
+		candidates.append(bundled / "packaging" / "assets" / "spacemaker-icon.png")
 	if getattr(sys, "frozen", False):
 		meipass = getattr(sys, "_MEIPASS", None)
 		if meipass:
 			candidates.append(Path(meipass) / "packaging" / "assets" / "spacemaker-icon.png")
-	repo_root = Path(__file__).resolve().parents[3]
-	candidates.append(repo_root / "packaging" / "assets" / "spacemaker-icon.png")
+	dev_root = Path(__file__).resolve().parents[3]
+	candidates.append(dev_root / "packaging" / "assets" / "spacemaker-icon.png")
 	for path in candidates:
 		if path.is_file():
 			return path

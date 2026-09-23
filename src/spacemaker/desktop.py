@@ -23,10 +23,12 @@ def _apply_qt_window_icon() -> None:
 	if icon is None:
 		return
 	try:
+		from typing import cast
+
 		from qtpy.QtGui import QIcon
 		from qtpy.QtWidgets import QApplication
 
-		app = QApplication.instance()
+		app = cast(QApplication, QApplication.instance())
 		if app is not None:
 			app.setWindowIcon(QIcon(str(icon)))
 	except ImportError:

@@ -65,6 +65,11 @@ class WebSocketLike(Protocol):
 def repo_root() -> Path:
 	import sys
 
+	from spacemaker.bootstrap.paths import bundle_resource_root
+
+	bundled = bundle_resource_root()
+	if bundled is not None:
+		return bundled
 	if getattr(sys, "frozen", False):
 		meipass = getattr(sys, "_MEIPASS", None)
 		if meipass:

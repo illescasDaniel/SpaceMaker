@@ -1,53 +1,59 @@
 # Portable release builds
 
-SpaceMaker ships as a **single executable** per OS/CPU. Third-party CLIs are **not** embedded; they are downloaded on first run into the user data folder (see [specs/packaging/SPEC.md](../specs/packaging/SPEC.md)).
+Third-party CLIs are **not** embedded; they are downloaded on first run into the user data folder (see [specs/packaging/SPEC.md](../specs/packaging/SPEC.md)).
 
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/)
+- Linux AppImage: `curl`, `xz` (optional wrap), network on first build for pinned `appimagetool`
+- Windows/macOS onefile: PyInstaller (`uv sync --group dev`)
 
-PyInstaller is a dev dependency; `uv sync --group dev` installs it.
+## Linux (primary): AppImage
 
-## Build (Linux x64 example)
+Pruned relocatable AppDir (managed CPython + venv + PyQt6 WebEngine), packed with squashfs zstd level 19:
+
+```bash
+uv run task build-appimage
+```
+
+Outputs (gitignored under `dist/`):
+
+| File | Role |
+|------|------|
+| `SpaceMaker-<version>-<arch>.AppImage` | Double-clickable release |
+| `SpaceMaker-<version>-<arch>.AppImage.xz` | Smaller download (optional) |
+| `SHA256SUMS` | Checksum of the `.xz` artifact |
+
+AppDir only (no squashfs pack):
 
 ```bash
 uv run task build-installer
 ```
 
-Equivalent manual steps:
+→ `dist/spacemaker-linux.AppDir/`
+
+Details: [linux-appimage/](linux-appimage/) (`build-appdir.sh`, `prune_pyqt6.sh`).
+
+Reference sizes (x86_64, WebEngine floor): AppDir ~675 MB unpacked → AppImage ~225 MB (zstd‑19) as of v0.1.0.
+
+## Windows / macOS: PyInstaller onefile
 
 ```bash
 uv sync --group dev
 uv run pyinstaller packaging/spacemaker.spec --noconfirm
 ```
 
-Artifact: `dist/SpaceMaker` (onefile).
+Artifact: `dist/SpaceMaker` or `SpaceMaker.exe`.
 
-## Linux AppImage (x64 / arm64)
+## Icons
 
-Double-clickable distribution on Linux (includes desktop entry + icon):
-
-```bash
-uv run task build-appimage
-```
-
-Output: `dist/SpaceMaker-<version>-<arch>.AppImage` (requires `curl` to fetch `appimagetool` on first build).
-
-Regenerate PNG icons (app, favicon, static web) from the master source:
+Regenerate PNG icons from the master source:
 
 ```bash
 uv run python scripts/packaging/sync_brand_icons.py
 ```
 
-Master artwork: [assets/spacemaker-icon-source.png](assets/spacemaker-icon-source.png) (phone + PC + tool).
-
-## Matrix
-
-| Platform | Notes |
-|----------|--------|
-| Linux x64 / arm64 | Run pyinstaller on target arch |
-| Windows x64 | `pyinstaller packaging/spacemaker.spec` on Windows |
-| macOS arm64 / x64 | Build on macOS; codesign is out of scope v1 |
+Master artwork: [assets/spacemaker-icon-source.png](assets/spacemaker-icon-source.png).
 
 ## Pins
 

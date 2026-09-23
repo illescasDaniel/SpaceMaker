@@ -26,5 +26,6 @@ _Last updated: 2026-09-23_
 uv run task spacemaker
 uv run task checks
 uv run task build-installer   # → dist/SpaceMaker (gitignored)
-uv run task build-appimage    # → dist/SpaceMaker-<ver>-<arch>.AppImage
+uv run task build-appimage    # → dist/SpaceMaker-<ver>-<arch>.AppImage (~225M zstd) + .xz
+uv run task build-installer   # Linux → dist/spacemaker-linux.AppDir
 ```

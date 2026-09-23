@@ -11,7 +11,9 @@
 
 ## Goals
 
-End users receive a **single portable executable** (PyInstaller onefile). It contains the Python runtime, web UI, legal markdown, and app icon. It does **not** contain adb, libmtp, ffmpeg, ffprobe, magick, or exiftool.
+End users receive a **portable desktop build** per OS. It contains the Python runtime, web UI, legal markdown, and app icon. It does **not** contain adb, libmtp, ffmpeg, ffprobe, magick, or exiftool.
+
+On **Linux**, the primary release artifact is a **pruned relocatable AppDir** packed as an AppImage (managed CPython + venv + Qt WebEngine for pywebview). PyInstaller onefile remains optional for dev or non-Linux targets.
 
 On first launch (or when a tool is missing from the managed folder), SpaceMaker **downloads pinned builds** from upstream or PyPI wheel sources into the standard per-user data directory:
 
@@ -47,7 +49,7 @@ When no portable catalog entry exists for a platform (common for libmtp), skip d
 | OS | CPU architectures | Artifact |
 |----|-------------------|----------|
 | **Windows** | x64 | `SpaceMaker.exe` (onefile) |
-| **Linux** | x64, arm64 | `SpaceMaker` binary (onefile) or `SpaceMaker-<version>-<arch>.AppImage` |
+| **Linux** | x64, arm64 | `SpaceMaker-<version>-<arch>.AppImage` (pruned AppDir); optional PyInstaller onefile for dev |
 | **macOS** | arm64, x64 | `SpaceMaker.app` or onefile binary |
 
 ## Runtime resolution
@@ -62,9 +64,16 @@ When no portable catalog entry exists for a platform (common for libmtp), skip d
 - Pinned URLs, PyPI wheel coordinates, and optional sha256 live in `packaging/tool-catalog.json` per OS/CPU.
 - [packaging/third-party-manifest.yaml](../../packaging/third-party-manifest.yaml) documents purpose, homepage, license summary (legal).
 
-## PyInstaller
+## Linux AppImage (release)
 
-- Onefile spec embeds `docs/legal/`, app icon, and static UI.
+- Build: `packaging/linux-appimage/build-appdir.sh` → relocatable venv under `usr/`, then [`prune_pyqt6.sh`](../../packaging/linux-appimage/prune_pyqt6.sh) (drops unused Qt modules; **keeps Qt WebEngine** for pywebview).
+- Bundle metadata under `usr/share/spacemaker/` (`docs/legal/`, `packaging/tool-catalog.json`, app icon).
+- Pack with pinned `appimagetool`, squashfs **zstd compression level 19**; optional `.AppImage.xz` + `SHA256SUMS` in `dist/`.
+- Post-prune smoke: offscreen WebEngine load + `--server-only` HTTP.
+
+## PyInstaller (optional / Windows / macOS)
+
+- Onefile spec embeds `docs/legal/`, app icon, and static UI when used.
 - Does **not** bundle the `tools/` CLI tree.
 - [packaging/README.md](../../packaging/README.md) documents matrix build commands.
 
@@ -122,6 +131,7 @@ When no portable catalog entry exists for a platform (common for libmtp), skip d
 | Unit | `test_managed_tools.py` — ensure/delete with fake installer |
 | Unit | `test_third_party_manifest.py` — manifest ↔ enum |
 | Unit | `test_legal_docs_present.py` — required markdown exists |
+| Unit | `test_linux_appimage_packaging.py` — AppDir script contracts (no full AppImage in CI) |
 | Integration | API `/api/tools/*` with mocked downloads |
 
 ## Out of scope
