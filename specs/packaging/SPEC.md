@@ -38,6 +38,7 @@ A failed download for one tool must **not** block setup for other tools.
 |------|------|
 | `adb` | ADB extract |
 | `mtp-detect`, `mtp-getfile` | MTP extract (libmtp) |
+| `idevice_id`, `idevicepair`, `ideviceinfo`, `ifuse` | iPhone USB extract (AFC; Linux, `PATH` only — install packages **usbmuxd**, **libimobiledevice**, **ifuse**) |
 | `ffmpeg`, `ffprobe` | Video encode + validation |
 | `magick` | AVIF encode |
 | `exiftool` | Metadata copy |

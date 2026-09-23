@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import secrets
 import threading
 import time
@@ -127,6 +128,8 @@ class AppServices:
 		self._share_entries: list[SharedManifestEntry] = []
 		self._share_selection: list[str] = []
 		self._extract_future: Future[None] | None = None
+		self._convert_control: ExtractJobControl | None = None
+		self._convert_future: Future[None] | None = None
 		self.receive_uploaded = ReceiveUploadedMedia(self.filesystem)
 		self.receive_documents = ReceiveUploadedDocuments(self.filesystem)
 		self._documents_receive_root = default_documents_receive_root()
@@ -242,6 +245,31 @@ class AppServices:
 				missing.append(tool.value)
 		return missing
 
+	def _extract_job_active(self) -> bool:
+		future = self._extract_future
+		if future is not None and not future.done():
+			return True
+		with self.session._lock:
+			if self.session.connection_method is ConnectionMethod.WIFI:
+				return self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+		return False
+
+	def _extract_stopping(self) -> bool:
+		control = self._extract_control
+		future = self._extract_future
+		if control is None or future is None or future.done():
+			return False
+		return control.was_stopped()
+
+	def _convert_job_active(self) -> bool:
+		future = self._convert_future
+		return future is not None and not future.done()
+
+	def shutdown(self, *, timeout_seconds: float = 10.0) -> None:
+		self.stop_extract_and_wait(timeout_seconds=timeout_seconds)
+		self.stop_convert_and_wait(timeout_seconds=timeout_seconds)
+		self._executor.shutdown(wait=False, cancel_futures=True)
+
 	def enriched_snapshot(self) -> dict[str, object]:
 		base = self.session.snapshot()
 		with self.session._lock:
@@ -263,7 +291,9 @@ class AppServices:
 			has_device=has_device,
 			has_source_folders=has_folders,
 			connection_method=connection_method,
+			convert_job_active=self._convert_job_active(),
 		)
+		base["extract_stopping"] = self._extract_stopping()
 		base.update(actions)
 		counts = self.folder_counts(library_root) if library_root else {f.value: 0 for f in LibraryFolder}
 		base["library_counts"] = counts
@@ -733,6 +763,8 @@ class AppServices:
 			self.push_gallery_export(self._export_jobs[job_id])
 
 	def start_extract(self) -> None:
+		if self._extract_job_active():
+			return
 		with self.session._lock:
 			if self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
 				return
@@ -799,16 +831,17 @@ class AppServices:
 		was_wifi = False
 		with self.session._lock:
 			was_wifi = self.session.connection_method is ConnectionMethod.WIFI
-			if self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
+			if was_wifi and self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
 				self.session.extract_phase = JobPhase.STOPPED
 		if was_wifi:
 			self._clear_wifi_token()
 		self.push_state()
 
 	def stop_extract_and_wait(self, *, timeout_seconds: float = 300.0) -> None:
+		future = self._extract_future
 		with self.session._lock:
-			active = self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
-		if not active:
+			phase_active = self.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+		if not phase_active and (future is None or future.done()):
 			return
 		self.stop_extract()
 		deadline = time.monotonic() + timeout_seconds
@@ -818,7 +851,22 @@ class AppServices:
 		if future is not None:
 			remaining = deadline - time.monotonic()
 			if remaining > 0:
-				future.result(timeout=remaining)
+				with contextlib.suppress(Exception):
+					future.result(timeout=remaining)
+
+	def stop_convert(self) -> None:
+		if self._convert_control is not None:
+			self._convert_control.request_stop()
+		self.push_state()
+
+	def stop_convert_and_wait(self, *, timeout_seconds: float = 300.0) -> None:
+		future = self._convert_future
+		if future is None or future.done():
+			return
+		self.stop_convert()
+		remaining = timeout_seconds
+		with contextlib.suppress(Exception):
+			future.result(timeout=remaining)
 
 	def _run_extract(
 		self,
@@ -846,7 +894,7 @@ class AppServices:
 				on_progress=on_progress,
 			)
 			with self.session._lock:
-				if self.session.extract_phase is JobPhase.STOPPED or (control is not None and control.was_stopped()):
+				if control is not None and control.was_stopped():
 					self.session.extract_phase = JobPhase.STOPPED
 				elif control is not None and control.is_paused():
 					self.session.extract_phase = JobPhase.PAUSED
@@ -882,9 +930,9 @@ class AppServices:
 		self.start_convert(policy=ConvertStartPolicy.CONCURRENT_WITH_EXTRACT)
 
 	def start_convert(self, *, policy: ConvertStartPolicy | None = None) -> None:
+		if self._convert_job_active():
+			return
 		with self.session._lock:
-			if self.session.convert_phase is JobPhase.RUNNING:
-				return
 			library_root = self.session.library_root
 			ui_mode = self.session.ui_mode
 		if not library_root:
@@ -892,22 +940,30 @@ class AppServices:
 		resolved = policy or convert_start_policy(ui_mode=ui_mode)
 		if resolved is ConvertStartPolicy.STOP_EXTRACT_FIRST:
 			self.stop_extract_and_wait()
+		elif self._extract_job_active():
+			self.stop_extract_and_wait()
 		with self.session._lock:
 			originals = self.filesystem.count_files_in_folder(
 				self.session.library_root,
 				LibraryFolder.ORIGINALS,
 			)
-			if not can_start_convert(extract_phase=self.session.extract_phase, originals_count=originals):
+			if not can_start_convert(originals_count=originals, convert_job_active=False):
 				return
 			library_root = self.session.library_root
 			self.session.convert_phase = JobPhase.RUNNING
 			self.session.convert_progress = JobProgress(0, originals)
 			self.session.last_error = ""
 			concurrent = resolved is ConvertStartPolicy.CONCURRENT_WITH_EXTRACT
+		self._convert_control = ExtractJobControl()
 		self.push_state()
-		self._executor.submit(self._run_convert, library_root, concurrent_with_extract=concurrent)
+		self._convert_future = self._executor.submit(
+			self._run_convert,
+			library_root,
+			concurrent_with_extract=concurrent,
+		)
 
 	def _run_convert(self, library_root: str, *, concurrent_with_extract: bool = False) -> None:
+		control = self._convert_control
 		self.invalidate_gallery_metadata_cache()
 		try:
 			use_case = self.convert_use_case()
@@ -917,11 +973,11 @@ class AppServices:
 					self.session.convert_progress = progress
 				self.push_state()
 
-			progress = use_case.run(library_root, on_progress=on_progress)
+			progress = use_case.run(library_root, control=control, on_progress=on_progress)
 			with self.session._lock:
 				remaining = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
 				extract_phase = self.session.extract_phase
-			if should_requeue_convert_drain(
+			if (control is None or not control.was_stopped()) and should_requeue_convert_drain(
 				concurrent_with_extract=concurrent_with_extract,
 				remaining_originals=remaining,
 			):
@@ -945,6 +1001,10 @@ class AppServices:
 					self.session.convert_phase = JobPhase.IDLE
 					self.session.convert_progress = progress
 					self.session.last_error = ""
+				elif control is not None and control.was_stopped():
+					self.session.convert_phase = JobPhase.STOPPED
+					self.session.convert_progress = progress
+					self.session.last_error = ""
 				else:
 					self.session.convert_phase = JobPhase.DONE
 					self.session.convert_progress = progress
@@ -964,6 +1024,8 @@ class AppServices:
 			with self.session._lock:
 				self.session.convert_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)
+		finally:
+			self._convert_future = None
 		self.invalidate_gallery_metadata_cache()
 		self.push_state()
 
@@ -972,5 +1034,4 @@ def create_app(*, port: int = 8765, bind_host: str = "0.0.0.0"):
 	from spacemaker.adapters.inbound.web.app import create_fastapi_app
 
 	services = AppServices(port=port, bind_host=bind_host)
-	app = create_fastapi_app(services)
-	return app
+	return create_fastapi_app(services)

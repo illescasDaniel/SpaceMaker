@@ -7,7 +7,8 @@ Machine-readable manifest: [packaging/third-party-manifest.yaml](../../packaging
 | Tool | Purpose in SpaceMaker | Project home |
 |------|------------------------|--------------|
 | **adb** | Copy/move files from Android (ADB mode) | https://developer.android.com/tools/releases/platform-tools |
-| **mtp-detect**, **mtp-getfile** (libmtp) | MTP device access (default connection mode) | https://libmtp.sourceforge.net/ |
+| **mtp-detect**, **mtp-getfile** (libmtp) | MTP device access | https://libmtp.sourceforge.net/ |
+| **idevice_id**, **idevicepair**, **ideviceinfo**, **ifuse** (libimobiledevice) | iPhone USB / DCIM (Linux, system `PATH` only) | https://libimobiledevice.org/ |
 | **ffmpeg** | Encode video to AV1 / H.264 | https://ffmpeg.org/ |
 | **ffprobe** | Validate videos; read bitrate/duration | https://ffmpeg.org/ |
 | **magick** (ImageMagick) | Encode images to AVIF | https://imagemagick.org/ |
@@ -19,6 +20,7 @@ License texts shipped inside upstream archives are stored next to the downloaded
 
 - **adb / platform-tools:** Android SDK Platform Tools License (Google)
 - **libmtp:** LGPL-2.1+
+- **libimobiledevice / ifuse:** LGPL-2.1+
 - **FFmpeg / ffprobe:** LGPL or GPL depending on build configuration (documented per release)
 - **ImageMagick:** ImageMagick License
 - **ExifTool:** Artistic License / GPL (variant documented per release)

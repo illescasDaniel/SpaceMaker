@@ -1216,6 +1216,7 @@
 		<div class="components-screen">
 			<h2>Setting up components</h2>
 			<p class="components-lead">SpaceMaker downloads pinned versions of FFmpeg, ImageMagick, and other tools into your user data folder. If a download fails, install that tool yourself — the app will use your system copy when available.</p>
+			<p class="folder-hint"><strong>Linux — iPhone USB backup:</strong> install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro; unlock the iPhone and tap <strong>Trust</strong> when prompted.</p>
 			<div class="tool-row">
 				<span class="tool-name">ffmpeg / ffprobe</span>
 				<span class="tool-status ready">Ready (downloaded)</span>
@@ -1456,13 +1457,14 @@
 				</div>
 				<div class="label-row">
 					<p class="label" style="margin: 0;">Connection</p>
-					<button type="button" class="info-btn" id="btn-connection-info" title="How to enable MTP or ADB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
+					<button type="button" class="info-btn" id="btn-connection-info" title="How to connect via Wi‑Fi, MTP, ADB, or iPhone USB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
 				</div>
 				<fieldset class="connection-toggle">
 					<legend class="sr-only">Device connection method</legend>
 					<button type="button" class="active" id="btn-conn-wifi">Wi‑Fi</button>
 					<button type="button" id="btn-conn-mtp">MTP</button>
 					<button type="button" id="btn-conn-adb">ADB<span class="rec">cable</span></button>
+					<button type="button" id="btn-conn-afc">iPhone<span class="rec">USB</span></button>
 				</fieldset>
 				<div class="info-panel" id="connection-info-panel" aria-hidden="true">
 					<h4>Wi‑Fi (default)</h4>
@@ -1471,6 +1473,8 @@
 					<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
 					<h4>ADB (cable)</h4>
 					<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install.</p>
+					<h4>iPhone (USB)</h4>
+					<p><strong>Linux only</strong> in this release. Install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro (SpaceMaker uses your <code>PATH</code>, like libmtp). On Arch/CachyOS, <code>usbmuxd</code> is started when you <strong>plug in</strong> the iPhone (udev) — do not use <code>systemctl enable usbmuxd</code>. Unlock the phone, tap <strong>Trust</strong>, and keep it unlocked during extract. Only <strong>Camera (DCIM)</strong> is useful on iPhone — HEIC/MOV copy into <code>originals/</code>. Photos stored only in iCloud may be missing locally.</p>
 				</div>
 				<div id="panel-usb">
 					<p class="label">Device</p>
@@ -1930,6 +1934,7 @@
 		var btnWifi = document.getElementById('btn-conn-wifi');
 		var btnMtp = document.getElementById('btn-conn-mtp');
 		var btnAdb = document.getElementById('btn-conn-adb');
+		var btnAfc = document.getElementById('btn-conn-afc');
 		var panelUsb = document.getElementById('panel-usb');
 		var panelWifi = document.getElementById('panel-wifi');
 		var deviceStatusText = document.getElementById('device-status-text');
@@ -1952,6 +1957,7 @@
 			btnWifi.classList.toggle('active', method === 'wifi');
 			btnMtp.classList.toggle('active', method === 'mtp');
 			btnAdb.classList.toggle('active', method === 'adb');
+			btnAfc.classList.toggle('active', method === 'afc');
 			panelUsb.classList.toggle('panel-hidden', method === 'wifi');
 			panelWifi.classList.toggle('panel-hidden', method !== 'wifi');
 			hintWifi.classList.toggle('panel-hidden', method !== 'wifi');
@@ -1968,6 +1974,8 @@
 				moveWifiHint.hidden = true;
 				if (method === 'mtp') {
 					deviceStatusText.textContent = 'Samsung Galaxy S24 · Connected via MTP';
+				} else if (method === 'afc') {
+					deviceStatusText.textContent = 'Daniel’s iPhone · Connected via iPhone USB';
 				} else {
 					deviceStatusText.textContent = 'Pixel 8 · Connected via ADB';
 				}
@@ -1977,6 +1985,7 @@
 		btnWifi.addEventListener('click', function () { setConnectionMethod('wifi'); });
 		btnMtp.addEventListener('click', function () { setConnectionMethod('mtp'); });
 		btnAdb.addEventListener('click', function () { setConnectionMethod('adb'); });
+		btnAfc.addEventListener('click', function () { setConnectionMethod('afc'); });
 		setConnectionMethod('wifi');
 
 		chipCopy.addEventListener('click', function () {

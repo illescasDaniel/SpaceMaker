@@ -2,16 +2,21 @@
 
 UI_SHELL_VERSION = "2026.09.home-modules"
 
-CONTENT_SECURITY_POLICY = (
+_CSP_COMMON = (
 	"default-src 'self'; "
-	"script-src 'self' 'unsafe-inline'; "
 	"style-src 'self' 'unsafe-inline'; "
 	"img-src 'self' data: blob:; "
 	"media-src 'self'; "
 	"connect-src 'self' ws: wss:; "
 	"base-uri 'self'; "
-	"frame-ancestors 'none'"
+	"frame-ancestors 'none'; "
 )
+
+# LAN phone pages (upload/gallery QR): no eval.
+CONTENT_SECURITY_POLICY = f"{_CSP_COMMON}script-src 'self' 'unsafe-inline'"
+
+# Desktop pywebview (loopback): js_api bridge uses new Function() — requires unsafe-eval.
+CONTENT_SECURITY_POLICY_DESKTOP = f"{_CSP_COMMON}script-src 'self' 'unsafe-inline' 'unsafe-eval'"
 
 NO_CACHE_HEADERS = {"Cache-Control": "no-store, must-revalidate"}
 

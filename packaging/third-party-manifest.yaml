@@ -17,6 +17,26 @@ tools:
     homepage: https://libmtp.sourceforge.net/
     license_note: LGPL-2.1+
 
+  - id: idevice_id
+    purpose: List connected iPhones (AFC / usbmux)
+    homepage: https://libimobiledevice.org/
+    license_note: LGPL-2.1+
+
+  - id: idevicepair
+    purpose: Trust / pair iPhone for AFC access
+    homepage: https://libimobiledevice.org/
+    license_note: LGPL-2.1+
+
+  - id: ideviceinfo
+    purpose: Friendly iPhone name for device picker
+    homepage: https://libimobiledevice.org/
+    license_note: LGPL-2.1+
+
+  - id: ifuse
+    purpose: Mount iPhone DCIM via Apple File Conduit (FUSE)
+    homepage: https://libimobiledevice.org/
+    license_note: LGPL-2.1+
+
   - id: ffmpeg
     purpose: Video transcode to AV1
     homepage: https://ffmpeg.org/

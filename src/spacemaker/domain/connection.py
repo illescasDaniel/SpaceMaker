@@ -7,3 +7,4 @@ class ConnectionMethod(StrEnum):
 	WIFI = "wifi"
 	MTP = "mtp"
 	ADB = "adb"
+	AFC = "afc"

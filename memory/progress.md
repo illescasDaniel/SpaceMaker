@@ -33,6 +33,9 @@
 - [x] **Send files (PC → phone)** — empty-folder guard; folder zip downloads; dedupe selection; stable share QR token while adding items
 - [x] **App review (security, docs, hygiene)** — loopback desktop APIs, privacy/legal refresh, stale docs, gitignore, dead port/favicons
 - [ ] **Easy mode import issues — where to review** — wireframe approved 2026-09-23; spec draft (open-folder API partially via `/api/library/open-folder`)
+- [x] **iPhone USB (AFC) extract — Linux trial** — wireframe/specs + `AfcDeviceRepository`, wizard **iPhone (USB)**; PATH tools like libmtp
+- [x] **Extract/convert job control + shutdown** — stop extract waits for USB thread; **Stop convert**; `AppServices.shutdown()` + clean desktop exit
+- [x] **Desktop CSP** — loopback allows `unsafe-eval` for pywebview bridge; LAN pages stay strict
 - [x] **GPU-only video convert** — HW AV1 → HW H.264 → move-as-is; gallery preview gating; MP4 export hidden without HW encoder
 - [x] Phase 4 (packaging): portable PyInstaller onefile, managed CLI downloads, legal assets, app icon + favicon
 - [x] Linux release: pruned AppDir AppImage (srxy-style), zstd squashfs, tag-only GitHub Actions release

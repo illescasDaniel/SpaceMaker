@@ -9,6 +9,7 @@ from spacemaker.domain.conversion import (
 	route_before_encode,
 	video_av1_relative_path,
 )
+from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.library import JobProgress, LibraryFolder
 from spacemaker.domain.media import MediaKind, media_kind_for_extension, normalize_extension
 from spacemaker.domain.video_encode import HardwareVideoEncoder, video_h264_web_relative_path
@@ -34,16 +35,22 @@ class ConvertMedia:
 		self,
 		library_root: str,
 		*,
+		control: ExtractJobControl | None = None,
 		on_progress: Callable[[JobProgress], None] | None = None,
 	) -> JobProgress:
 		self.last_failure = ""
 		rel_paths = self._filesystem.list_files_in_library_folder(library_root, LibraryFolder.ORIGINALS)
 		total = len(rel_paths)
 		completed = 0
+		self._emit(on_progress, completed, total)
 		for rel in rel_paths:
+			if control is not None and not control.before_next_file():
+				break
 			self._process_file(library_root, rel)
 			completed += 1
 			self._emit(on_progress, completed, total)
+			if control is not None:
+				control.after_file()
 		return JobProgress(completed=completed, total=total)
 
 	def _process_file(self, library_root: str, relative: str) -> None:

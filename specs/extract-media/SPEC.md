@@ -2,20 +2,21 @@
 
 ## Metadata
 
-- **Feature:** Copy or move photos/videos into library `originals/` via **Wi‑Fi phone upload** (default), **MTP**, or **ADB**
+- **Feature:** Copy or move photos/videos into library `originals/` via **Wi‑Fi phone upload** (default), **MTP**, **ADB**, or **iPhone (USB)** (AFC on Linux)
 - **Wireframes:** [wireframes/app.html](../../wireframes/app.html) Step 1; phone page [wireframes/phone-upload.html](../../wireframes/phone-upload.html)
 - **Use case:** `ExtractMedia`
 - **Ports:** `DeviceRepository` (outbound), `FileSystem` (outbound)
 - **UI:** [main-wizard](../main-wizard/SPEC.md) Step 1
 - **Packaging:** Bundled native tools — [packaging/SPEC.md](../packaging/SPEC.md)
 
-## Connection method (Wi‑Fi, MTP, ADB)
+## Connection method (Wi‑Fi, MTP, ADB, iPhone USB)
 
 | Method | UI label | Default | Notes |
 |--------|----------|---------|--------|
 | **Wi‑Fi** | `Wi‑Fi` | **Yes** | No cable. Phone browser on same LAN uploads files during an extract **session**. Does not use `DeviceRepository`. |
 | **MTP** | `MTP` | No | USB file transfer mode; no USB debugging required. |
 | **ADB** | `ADB (cable)` | No | USB; requires USB debugging + authorized device. |
+| **AFC** | `iPhone (USB)` | No | **Linux only** (v1). Apple File Conduit over **usbmuxd**; DCIM-focused; system packages on `PATH` (no catalog download). |
 
 - User selects exactly one method via a **segmented toggle** on Step 1.
 - Selection is persisted for the session (v1 session-only is OK).
@@ -60,8 +61,18 @@ An **info** control (ⓘ) beside the connection method opens a panel or modal wi
 1. **Wi‑Fi:** PC and phone on the **same Wi‑Fi**; click **Start extract**; scan QR or open URL; pick files/folders on the phone. Allow firewall for the app port if prompted. Move is not available.
 2. **MTP:** plug phone → unlock → choose **File transfer / MTP** (not “charge only”). If libmtp was not downloaded, install it via your OS package manager when the app asks.
 3. **ADB (cable):** Developer options → USB debugging → accept RSA prompt on phone. SpaceMaker downloads `adb` when possible; otherwise install platform-tools and ensure `adb` is on `PATH`.
+4. **iPhone (USB):** **Linux only.** Install `usbmuxd`, `libimobiledevice`, and `ifuse`. On Arch/CachyOS, **plug in** the iPhone to start `usbmuxd` via udev (the unit has no `systemctl enable`). Unlock, tap **Trust**, keep unlocked during extract. **Camera (DCIM)** is the useful folder; iCloud-optimized photos may be absent on device.
 
 Copy is concise; link to future docs page optional.
+
+### iPhone USB tooling (AFC adapter)
+
+- **Protocol:** Apple File Conduit (AFC) via **usbmuxd** — not MTP, not ADB.
+- **Adapter:** `AfcDeviceRepository` — `idevice_id`, `ideviceinfo`, `idevicepair` (trust), `ifuse` mount, then directory walk + copy (same pattern as GVFS MTP).
+- **Delivery:** Like **libmtp** — no portable catalog download; resolve `idevice_id`, `idevicepair`, `ideviceinfo`, and `ifuse` from managed dir (if present) then **`PATH`**. User installs distro packages when missing.
+- **Platform:** **Linux only** for v1. On Windows/macOS, device API returns **501** with a clear message; UI shows setup unavailable.
+- **Daemon:** If `/run/usbmuxd` (or `/var/run/usbmuxd`) is missing, surface **usbmuxd not running** with hint to plug in the iPhone (udev) or `systemctl start usbmuxd` — not `enable`, and not a failed download.
+- **Move:** Delete on device via mounted path when supported; same per-file failure rules as MTP.
 
 ## Source folders (device scope)
 
@@ -81,7 +92,7 @@ Users choose **which device folders** to include before extract. v1 uses a **mul
 
 ## Triggers & routing
 
-- **Start (USB):** User selects library root, **MTP or ADB**, **source folders**, Copy or Move mode, connected device, clicks **Start extract**.
+- **Start (USB):** User selects library root, **MTP, ADB, or iPhone (USB)**, **source folders**, Copy or Move mode, connected device, clicks **Start extract**.
 - **Start (Wi‑Fi, Advanced):** User selects library root, **Wi‑Fi**, clicks **Start extract** — receive session opens (QR/URL).
 - **Start (Wi‑Fi, Easy):** [easy-mode](../easy-mode/SPEC.md) — receive session starts automatically when Easy loads (default library root; no Start button).
 - **Pause:** User clicks **Pause extract** — finish the **current file** transfer, then enter **`paused`**; no new files start until **Resume**.
@@ -191,6 +202,20 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 - **Then** device model or a friendly label is shown with **connected** indicator
 - **And** the device picker shows friendly labels, not bare serials unless no model is available
 
+### Scenario: iPhone detected via AFC (Linux)
+
+- **Given** **iPhone (USB)** is selected on Linux, `usbmuxd` is running, and a trusted iPhone is connected
+- **When** extract UI loads device status
+- **Then** the device name from `ideviceinfo` is shown with **Connected via iPhone USB**
+- **And** **Start extract** is enabled when library root, DCIM (or other selected folders), and device are valid
+
+### Scenario: iPhone USB unavailable on non-Linux
+
+- **Given** the user runs SpaceMaker on Windows or macOS
+- **When** the user selects **iPhone (USB)**
+- **Then** device listing fails with a clear **Linux only** message
+- **And** **Start extract** remains disabled
+
 ### Scenario: User selects source folders
 
 - **Given** Step 1 is idle and at least one device folder exists on the backend
@@ -278,7 +303,7 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 ## Validation rules
 
 - Library root must be writable.
-- Connection method must be `wifi`, `mtp`, or `adb` (internal enum); UI labels as above.
+- Connection method must be `wifi`, `mtp`, `adb`, or `afc` (internal enum); UI labels as above.
 - USB extract uses the repository implementation matching the selected method for the whole job (no mixing backends mid-run).
 - Wi‑Fi extract uses upload receive use case + `FileSystem` only (no `DeviceRepository`).
 - **Wi‑Fi:** Move mode must not be applied; at least one source folder is not required.
@@ -291,7 +316,8 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 |-------|--------|
 | Unit | Idempotency: existing dest size → skip |
 | Unit | Copy vs Move calls correct `DeviceRepository` methods |
-| Unit | Factory selects fake MTP vs fake ADB repo from user choice |
+| Unit | Factory selects fake MTP vs fake ADB vs fake AFC repo from user choice |
+| Unit | AFC: walk mounted DCIM paths, pull/delete via test mount (no real ifuse) |
 | Unit | Progress callback once per terminal file state |
 | Unit | Pause/stop: given running queue → pause stops after current file; stop leaves partial progress |
 | Unit | Folder filter: only paths under selected roots enter queue |
@@ -300,7 +326,8 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 
 ## Out of scope
 
-- iPhone / iOS **USB** extract
+- iPhone USB on **Windows/macOS** (Linux trial only)
+- Bundled/downloadable usbmuxd/ifuse in AppImage (system packages only)
 - Wi‑Fi ADB (follow-up)
 - Cloud relay or TLS for LAN upload (plain HTTP on LAN v1)
 - Per-album or arbitrary path picker (beyond the v1 folder checklist)

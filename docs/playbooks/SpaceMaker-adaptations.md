@@ -64,9 +64,10 @@ Local FastAPI + static UI in pywebview; no cloud dependency. **Home hub** is the
 ## Device extract (Wi‑Fi default, MTP/ADB cable)
 
 - **Photo backup** (Home tile): light UI, auto Wi‑Fi receive, convert-as-received (`ui_mode=easy` internally).
-- **USB photo backup** tile opens the three-step wizard (`ui_mode=advanced` internally). Wi‑Fi default in wizard when that module is extended; cable modes **MTP** and **ADB (cable)** with info (ⓘ) for setup steps.
-- Hexagonal: `DeviceRepository` port; adapters `MtpDeviceRepository`, `AdbDeviceRepository` (adbutils on all OSes for ADB).
+- **USB photo backup** tile opens the three-step wizard (`ui_mode=advanced` internally). Wi‑Fi default in wizard when that module is extended; cable modes **MTP**, **ADB (cable)**, and **iPhone (USB)** (Linux AFC trial) with info (ⓘ) for setup steps.
+- Hexagonal: `DeviceRepository` port; adapters `MtpDeviceRepository`, `AdbDeviceRepository`, `AfcDeviceRepository` (adbutils on all OSes for ADB).
 - **MTP:** One **libmtp** adapter on all OSes; download libmtp CLI when catalog provides it, else `PATH`.
+- **iPhone USB:** **AfcDeviceRepository** on Linux — `idevice_*` + `ifuse` on `PATH` (like libmtp when not in catalog); **usbmuxd** (Arch: udev starts it on plug-in, not `systemctl enable`).
 - **ADB:** **adbutils** + managed or `PATH` `adb` per OS/CPU.
 - **Convert:** managed or `PATH` ffmpeg, ffprobe, magick, exiftool — see `packaging/tool-catalog.json`.
 - **Legal:** ship privacy, disclaimer, third-party notice in portable binary + in-app About (`specs/legal/SPEC.md`).

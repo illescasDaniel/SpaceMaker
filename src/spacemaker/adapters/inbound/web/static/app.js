@@ -176,6 +176,9 @@
 		if (document.getElementById("btn-conn-adb").classList.contains("active")) {
 			return "adb";
 		}
+		if (document.getElementById("btn-conn-afc").classList.contains("active")) {
+			return "afc";
+		}
 		return "mtp";
 	}
 
@@ -506,7 +509,13 @@
 		if (method === "wifi") {
 			return "Wi‑Fi";
 		}
-		return method === "adb" ? "ADB" : "MTP";
+		if (method === "adb") {
+			return "ADB";
+		}
+		if (method === "afc") {
+			return "iPhone USB";
+		}
+		return "MTP";
 	}
 
 	function applyConnectionPanels(method) {
@@ -537,6 +546,7 @@
 		document.getElementById("btn-conn-wifi").classList.toggle("active", method === "wifi");
 		document.getElementById("btn-conn-mtp").classList.toggle("active", method === "mtp");
 		document.getElementById("btn-conn-adb").classList.toggle("active", method === "adb");
+		document.getElementById("btn-conn-afc").classList.toggle("active", method === "afc");
 		applyConnectionPanels(method);
 	}
 
@@ -646,8 +656,12 @@
 			ffprobe: "ffprobe",
 			magick: "magick (ImageMagick)",
 			exiftool: "exiftool",
-			"mtp-detect": "mtp-detect",
-			"mtp-getfile": "mtp-getfile",
+			"mtp-detect": "mtp-detect (libmtp)",
+			"mtp-getfile": "mtp-getfile (libmtp)",
+			idevice_id: "idevice_id (libimobiledevice)",
+			idevicepair: "idevicepair (libimobiledevice)",
+			ideviceinfo: "ideviceinfo (libimobiledevice)",
+			ifuse: "ifuse (libimobiledevice)",
 		};
 		return labels[toolId] || toolId;
 	}
@@ -1006,7 +1020,7 @@
 		}
 		var phase = next.extract.phase;
 		var p = next.extract.progress;
-		setStatusLine(status, extractPhaseLabel(phase, p));
+		setStatusLine(status, extractPhaseLabel(phase, p, !!next.extract_stopping));
 		if (fill) {
 			fill.style.width = p.percent + "%";
 		}
@@ -1029,16 +1043,20 @@
 		document.getElementById("btn-conn-wifi").disabled = extractActive;
 		document.getElementById("btn-conn-mtp").disabled = extractActive;
 		document.getElementById("btn-conn-adb").disabled = extractActive;
+		document.getElementById("btn-conn-afc").disabled = extractActive;
 		updateWifiUploadPanel(next);
 	}
 
-	function extractPhaseLabel(phase, progress) {
+	function extractPhaseLabel(phase, progress, extractStopping) {
 		var method = state && state.connection_method;
 		if (method === "wifi" && phase === "running") {
 			return "Receiving uploads…";
 		}
 		if (method === "wifi" && phase === "paused") {
 			return "Paused — not accepting uploads";
+		}
+		if (extractStopping && phase === "running") {
+			return "Stopping — finishing current file…";
 		}
 		if (phase === "running") {
 			return "In progress — " + progress.percent + "%";
@@ -1118,6 +1136,8 @@
 		var status = document.getElementById("convert-status");
 		var fill = document.getElementById("convert-progress-fill");
 		var btn = document.getElementById("btn-start-convert");
+		var btnStop = document.getElementById("btn-stop-convert");
+		var convertControls = next.convert_controls || {};
 		if (!status) {
 			return;
 		}
@@ -1132,6 +1152,8 @@
 				status,
 				"In progress — " + p.completed + " / " + p.total + " (" + p.percent + "%)",
 			);
+		} else if (next.convert.phase === "stopped") {
+			setStatusLine(status, "Stopped — " + p.completed + " / " + p.total + " processed");
 		} else if (next.convert.phase === "error") {
 			setStatusLine(status, "Failed — " + (next.last_error || "Convert stopped unexpectedly."));
 		} else if (next.convert.phase === "done" && p.total > 0) {
@@ -1164,7 +1186,12 @@
 			fill.style.width = p.percent + "%";
 		}
 		if (btn) {
+			btn.hidden = next.convert.phase === "running";
 			btn.disabled = !ready || next.convert.phase === "running";
+		}
+		if (btnStop) {
+			btnStop.hidden = !convertControls.stop;
+			btnStop.disabled = !convertControls.stop;
 		}
 		if (
 			next.last_error &&
@@ -2142,6 +2169,9 @@
 	document.getElementById("btn-conn-adb").addEventListener("click", function () {
 		switchConnectionMethod("adb");
 	});
+	document.getElementById("btn-conn-afc").addEventListener("click", function () {
+		switchConnectionMethod("afc");
+	});
 
 	var chipCopy = document.getElementById("chip-copy");
 	var chipMove = document.getElementById("chip-move");
@@ -2254,6 +2284,16 @@
 			.then(applyState)
 			.catch(function (err) {
 				showFormBanner(err.message || "Stop failed.");
+			});
+	});
+	document.getElementById("btn-stop-convert").addEventListener("click", function () {
+		if (!state || !state.convert_controls || !state.convert_controls.stop) {
+			return;
+		}
+		api("POST", "/api/convert/stop")
+			.then(applyState)
+			.catch(function (err) {
+				showFormBanner(err.message || "Stop convert failed.");
 			});
 	});
 	document.getElementById("btn-start-convert").addEventListener("click", function () {

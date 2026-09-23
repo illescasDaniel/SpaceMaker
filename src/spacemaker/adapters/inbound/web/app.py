@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import tempfile
+from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated
@@ -23,7 +25,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from spacemaker import __version__ as app_version
-from spacemaker.adapters.inbound.web.client_access import require_loopback, require_loopback_websocket
+from spacemaker.adapters.inbound.web.client_access import (
+	is_loopback_client_host,
+	require_loopback,
+	require_loopback_websocket,
+)
 from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
 from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_app, reveal_in_file_manager
 from spacemaker.application.file_share_manifest import EmptyShareSelectionError
@@ -39,7 +45,11 @@ from spacemaker.bootstrap.paths import (
 	pictures_directory,
 )
 from spacemaker.bootstrap.services import AppServices, repo_root
-from spacemaker.bootstrap.ui_shell import CONTENT_SECURITY_POLICY, NO_CACHE_HEADERS
+from spacemaker.bootstrap.ui_shell import (
+	CONTENT_SECURITY_POLICY,
+	CONTENT_SECURITY_POLICY_DESKTOP,
+	NO_CACHE_HEADERS,
+)
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.convert_policy import ConvertStartPolicy
@@ -155,7 +165,14 @@ def _no_cache_file(path: Path) -> FileResponse:
 
 
 def create_fastapi_app(services: AppServices) -> FastAPI:
-	app = FastAPI(title="SpaceMaker", version=app_version)
+	@asynccontextmanager
+	async def lifespan(app: FastAPI):
+		_ = app
+		yield
+		services.shutdown()
+
+	app = FastAPI(title="SpaceMaker", version=app_version, lifespan=lifespan)
+	app.state.services = services
 	app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 	@app.middleware("http")
@@ -166,7 +183,11 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			for key, value in NO_CACHE_HEADERS.items():
 				response.headers[key] = value
 		if path == "/" or path.startswith("/gallery") or path in {"/upload", "/receive", "/share"}:
-			response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+			client_host = request.client.host if request.client else None
+			if is_loopback_client_host(client_host):
+				response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY_DESKTOP
+			else:
+				response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
 		return response
 
 	def _spa_file(entry: SpaEntry) -> Path:
@@ -549,10 +570,17 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		require_loopback(request)
 		if connection_method is ConnectionMethod.WIFI:
 			return []
+		if connection_method is ConnectionMethod.AFC and sys.platform != "linux":
+			raise HTTPException(
+				status_code=501,
+				detail="iPhone (USB) extract is only available on Linux in this release",
+			)
 		try:
 			repo = services.devices_for(connection_method)
 			devices = repo.list_devices()
 		except FileNotFoundError as exc:
+			raise HTTPException(status_code=503, detail=str(exc)) from exc
+		except RuntimeError as exc:
 			raise HTTPException(status_code=503, detail=str(exc)) from exc
 		if services.reconcile_device_selection(connection_method):
 			services.push_state()
@@ -595,7 +623,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.post("/api/extract/stop")
 	def extract_stop(request: Request) -> dict[str, object]:
 		require_loopback(request)
-		services.stop_extract()
+		services.stop_extract_and_wait(timeout_seconds=300.0)
 		return services.enriched_snapshot()
 
 	@app.post("/api/convert/start")
@@ -612,16 +640,22 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			LibraryFolder.ORIGINALS,
 		)
 		if not can_start_convert(
-			extract_phase=services.session.extract_phase,
 			originals_count=originals,
+			convert_job_active=services._convert_job_active(),
 		):
 			raise HTTPException(
 				status_code=409,
 				detail=f"convert not available (originals={originals})",
 			)
-		if services.session.convert_phase is JobPhase.RUNNING:
+		if services._convert_job_active():
 			raise HTTPException(status_code=409, detail="convert already running")
 		services.start_convert(policy=ConvertStartPolicy.STOP_EXTRACT_FIRST)
+		return services.enriched_snapshot()
+
+	@app.post("/api/convert/stop")
+	def convert_stop(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		services.stop_convert_and_wait(timeout_seconds=300.0)
 		return services.enriched_snapshot()
 
 	@app.post("/api/error/move-to-converted")

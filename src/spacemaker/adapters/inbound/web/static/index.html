@@ -1337,6 +1337,7 @@
 		<div class="components-screen">
 			<h2>Setting up components</h2>
 			<p class="components-lead">SpaceMaker downloads pinned FFmpeg, ImageMagick, and other tools into a folder on your computer and uses those copies first. Stay on this screen until downloads finish. Continue only if a download failed and you already installed that tool on your system.</p>
+			<p class="folder-hint" id="components-iphone-packages"><strong>Linux — iPhone USB backup:</strong> install distro packages <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> (provides <code>idevice_id</code>, <code>idevicepair</code>, <code>ideviceinfo</code>, and <code>ifuse</code> on your <code>PATH</code>). Plug in the iPhone to start <code>usbmuxd</code>; unlock and tap <strong>Trust</strong> on the phone.</p>
 			<div id="components-tool-list"></div>
 			<p class="folder-hint" id="components-setup-hint" hidden></p>
 			<div class="components-actions">
@@ -1529,13 +1530,14 @@
 				</div>
 				<div class="label-row">
 					<p class="label" style="margin: 0;">Connection</p>
-					<button type="button" class="info-btn" id="btn-connection-info" title="How to transfer via Wi‑Fi, MTP, or ADB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
+					<button type="button" class="info-btn" id="btn-connection-info" title="How to transfer via Wi‑Fi, MTP, ADB, or iPhone USB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
 				</div>
 				<fieldset class="connection-toggle">
 					<legend class="sr-only">Device connection method</legend>
 					<button type="button" class="active" id="btn-conn-wifi">Wi‑Fi</button>
 					<button type="button" id="btn-conn-mtp">MTP</button>
 					<button type="button" id="btn-conn-adb">ADB<span class="rec">cable</span></button>
+					<button type="button" id="btn-conn-afc">iPhone<span class="rec">USB</span></button>
 				</fieldset>
 				<div class="info-panel" id="connection-info-panel" aria-hidden="true">
 					<h4>Wi‑Fi (default)</h4>
@@ -1544,6 +1546,8 @@
 					<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
 					<h4>ADB (cable)</h4>
 					<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install.</p>
+					<h4>iPhone (USB)</h4>
+					<p><strong>Linux only.</strong> Install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro (SpaceMaker uses your <code>PATH</code>, like libmtp). On Arch/CachyOS, plug in the iPhone to start <code>usbmuxd</code> (udev) — <code>systemctl enable usbmuxd</code> is not supported. Unlock, tap <strong>Trust</strong>, stay unlocked during extract. <strong>Camera (DCIM)</strong> is the useful folder; iCloud-optimized photos may be missing on the device.</p>
 				</div>
 				<div id="panel-usb" class="panel-hidden">
 					<p class="label">Device</p>
@@ -1627,7 +1631,10 @@
 				<div class="progress">
 					<div class="progress-fill" id="convert-progress-fill" style="width: 0%"></div>
 				</div>
-				<button type="button" class="btn btn-primary" id="btn-start-convert" disabled>Start convert</button>
+				<div class="extract-actions">
+					<button type="button" class="btn btn-primary" id="btn-start-convert" disabled>Start convert</button>
+					<button type="button" class="btn btn-secondary" id="btn-stop-convert" hidden>Stop convert</button>
+				</div>
 				<div class="alert alert-warn" id="alert-error" role="alert" hidden>
 					<span class="alert-icon" aria-hidden="true">⚠</span>
 					<div>

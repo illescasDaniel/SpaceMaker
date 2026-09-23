@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import os
 import socket
 import sys
 import threading
@@ -46,9 +48,18 @@ def _port_in_use(port: int) -> bool:
 		return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
-def run_server(*, port: int, host: str) -> None:
+def run_server(*, port: int, host: str, services_holder: list) -> None:
 	app = create_app(port=port, bind_host=host)
+	if services_holder:
+		services_holder[0] = app.state.services
 	uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+def _shutdown_services(services_holder: list) -> None:
+	if not services_holder or services_holder[0] is None:
+		return
+	with contextlib.suppress(Exception):
+		services_holder[0].shutdown()
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -76,9 +87,10 @@ def main(argv: list[str] | None = None) -> None:
 		print(f"Or use another port: uv run spacemaker --port {args.port + 1}", file=sys.stderr)
 		sys.exit(1)
 
+	services_holder: list = [None]
 	thread = threading.Thread(
 		target=run_server,
-		kwargs={"port": args.port, "host": args.host},
+		kwargs={"port": args.port, "host": args.host, "services_holder": services_holder},
 		daemon=True,
 		name="spacemaker-uvicorn",
 	)
@@ -94,7 +106,12 @@ def main(argv: list[str] | None = None) -> None:
 	time.sleep(0.3)
 	install_qt_webengine_shutdown_fix()
 	_apply_qt_window_icon()
-	webview.create_window(
+
+	def on_closing() -> bool:
+		_shutdown_services(services_holder)
+		return True
+
+	window = webview.create_window(
 		"SpaceMaker",
 		url,
 		js_api=DesktopApi(),
@@ -102,6 +119,10 @@ def main(argv: list[str] | None = None) -> None:
 		height=DESKTOP_WINDOW_HEIGHT,
 		min_size=DESKTOP_WINDOW_MIN_SIZE,
 	)
+	if window is None:
+		print("Could not create desktop window.", file=sys.stderr)
+		sys.exit(1)
+	window.events.closing += on_closing
 	gui = None if args.gui == "auto" else args.gui
 	try:
 		webview.start(
@@ -113,6 +134,9 @@ def main(argv: list[str] | None = None) -> None:
 		print(f"Desktop window unavailable ({exc}). Opening {url} in your browser.")
 		webbrowser.open(url)
 		thread.join()
+		return
+	_shutdown_services(services_holder)
+	os._exit(0)
 
 
 if __name__ == "__main__":

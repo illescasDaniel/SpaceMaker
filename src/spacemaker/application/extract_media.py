@@ -36,8 +36,11 @@ class ExtractMedia:
 			for p in self._devices.list_media_paths(device_id)
 			if path_matches_source_folders(p, selected) and not skip_media_path(p)
 		)
+		if control is not None and control.was_stopped():
+			return JobProgress(completed=0, total=len(paths))
 		total = len(paths)
 		completed = 0
+		self._emit(on_progress, completed, total)
 		for device_path in paths:
 			if control is not None and not control.before_next_file():
 				break

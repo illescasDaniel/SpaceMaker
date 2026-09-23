@@ -15,6 +15,8 @@ def test_given_fresh_app_when_get_index_then_returns_html() -> None:
 	assert response.status_code == 200
 	assert "text/html" in response.headers.get("content-type", "")
 	assert "SpaceMaker" in response.text
+	csp = response.headers.get("content-security-policy", "")
+	assert "unsafe-eval" in csp
 
 
 def test_given_devtools_probe_when_get_json_version_then_200() -> None:
@@ -46,7 +48,9 @@ def test_given_fresh_app_when_get_tools_status_then_lists_tools() -> None:
 	body = response.json()
 	assert body["tools_dir"]
 	assert isinstance(body["tools"], list)
-	assert len(body["tools"]) == 7
+	from spacemaker.bootstrap.bundled_tools import BundledTool
+
+	assert len(body["tools"]) == len(BundledTool)
 
 
 def test_given_fresh_app_when_websocket_connects_then_receives_state() -> None:
