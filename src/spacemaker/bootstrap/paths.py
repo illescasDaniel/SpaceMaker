@@ -78,6 +78,21 @@ def webengine_storage_path() -> str:
 	return str(base)
 
 
+def app_icon_path() -> Path | None:
+	"""PNG used for the desktop window / task switcher (dev tree + PyInstaller bundle)."""
+	candidates: list[Path] = []
+	if getattr(sys, "frozen", False):
+		meipass = getattr(sys, "_MEIPASS", None)
+		if meipass:
+			candidates.append(Path(meipass) / "packaging" / "assets" / "spacemaker-icon.png")
+	repo_root = Path(__file__).resolve().parents[3]
+	candidates.append(repo_root / "packaging" / "assets" / "spacemaker-icon.png")
+	for path in candidates:
+		if path.is_file():
+			return path
+	return None
+
+
 def managed_tools_dir() -> Path:
 	if sys.platform == "win32":
 		local = os.environ.get("LOCALAPPDATA", "")

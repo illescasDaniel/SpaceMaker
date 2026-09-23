@@ -9,6 +9,9 @@ cd "${repo}"
 echo "Syncing dev dependencies (includes PyInstaller)…"
 uv sync --group dev
 
+echo "Syncing brand icons…"
+uv run python scripts/packaging/sync_brand_icons.py
+
 echo "Building onefile installer artifact in dist/…"
 uv run pyinstaller packaging/spacemaker.spec --noconfirm
 

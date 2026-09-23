@@ -17,6 +17,7 @@ a = Analysis(
 	datas=[
 		(str(repo / "docs" / "legal"), "docs/legal"),
 		(str(repo / "packaging" / "tool-catalog.json"), "packaging"),
+		(str(repo / "packaging" / "assets" / "spacemaker-icon.png"), "packaging/assets"),
 		(
 			str(repo / "src" / "spacemaker" / "adapters" / "inbound" / "web" / "static"),
 			"spacemaker/adapters/inbound/web/static",

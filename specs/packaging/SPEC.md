@@ -47,7 +47,7 @@ When no portable catalog entry exists for a platform (common for libmtp), skip d
 | OS | CPU architectures | Artifact |
 |----|-------------------|----------|
 | **Windows** | x64 | `SpaceMaker.exe` (onefile) |
-| **Linux** | x64, arm64 | `SpaceMaker` binary (onefile) |
+| **Linux** | x64, arm64 | `SpaceMaker` binary (onefile) or `SpaceMaker-<version>-<arch>.AppImage` |
 | **macOS** | arm64, x64 | `SpaceMaker.app` or onefile binary |
 
 ## Runtime resolution

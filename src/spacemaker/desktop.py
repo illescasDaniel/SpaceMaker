@@ -13,9 +13,24 @@ from webview.errors import WebViewException
 
 from spacemaker.adapters.inbound.desktop_api import DesktopApi
 from spacemaker.adapters.inbound.qt_webengine_shutdown import install_qt_webengine_shutdown_fix
-from spacemaker.bootstrap.paths import webengine_storage_path
+from spacemaker.bootstrap.paths import app_icon_path, webengine_storage_path
 from spacemaker.bootstrap.services import create_app
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
+
+
+def _apply_qt_window_icon() -> None:
+	icon = app_icon_path()
+	if icon is None:
+		return
+	try:
+		from qtpy.QtGui import QIcon
+		from qtpy.QtWidgets import QApplication
+
+		app = QApplication.instance()
+		if app is not None:
+			app.setWindowIcon(QIcon(str(icon)))
+	except ImportError:
+		return
 
 
 def _port_in_use(port: int) -> bool:
@@ -71,6 +86,7 @@ def main(argv: list[str] | None = None) -> None:
 
 	time.sleep(0.3)
 	install_qt_webengine_shutdown_fix()
+	_apply_qt_window_icon()
 	webview.create_window(
 		"SpaceMaker",
 		url,

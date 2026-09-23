@@ -23,6 +23,24 @@ uv run pyinstaller packaging/spacemaker.spec --noconfirm
 
 Artifact: `dist/SpaceMaker` (onefile).
 
+## Linux AppImage (x64 / arm64)
+
+Double-clickable distribution on Linux (includes desktop entry + icon):
+
+```bash
+uv run task build-appimage
+```
+
+Output: `dist/SpaceMaker-<version>-<arch>.AppImage` (requires `curl` to fetch `appimagetool` on first build).
+
+Regenerate PNG icons (app, favicon, static web) from the master source:
+
+```bash
+uv run python scripts/packaging/sync_brand_icons.py
+```
+
+Master artwork: [assets/spacemaker-icon-source.png](assets/spacemaker-icon-source.png) (phone + PC + tool).
+
 ## Matrix
 
 | Platform | Notes |
