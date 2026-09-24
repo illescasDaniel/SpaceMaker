@@ -98,3 +98,10 @@ git config core.hooksPath .githooks
 
 This is a per-clone local setting (not stored in `.git/config` by default
 until you run it), so every clone/worktree needs to run it once.
+
+**Expected:** `git status` will usually show `graphify-out/graph.json` /
+`GRAPH_REPORT.md` as modified again right after a commit. This is harmless
+and permanent, not a bug — the embedded `built_at_commit` field can only
+ever reference the *parent* commit (a file can't contain the hash of the
+commit that contains it), and it gets re-touched a few seconds after the
+hook stages it. Don't try to "fix" it by re-committing.
