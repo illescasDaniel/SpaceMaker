@@ -938,9 +938,7 @@ class AppServices:
 		if not library_root:
 			return
 		resolved = policy or convert_start_policy(ui_mode=ui_mode)
-		if resolved is ConvertStartPolicy.STOP_EXTRACT_FIRST:
-			self.stop_extract_and_wait()
-		elif self._extract_job_active():
+		if resolved is ConvertStartPolicy.STOP_EXTRACT_FIRST and self._extract_job_active():
 			self.stop_extract_and_wait()
 		with self.session._lock:
 			originals = self.filesystem.count_files_in_folder(

@@ -134,6 +134,8 @@ def test_given_app_when_get_qr_svg_then_svg() -> None:
 	response = client.get("/api/gallery/qr.svg")
 	assert response.status_code == 200
 	assert "svg" in response.headers.get("content-type", "")
+	body = response.text
+	assert 'fill="#fff"' in body or 'fill="#ffffff"' in body
 
 
 def test_given_gallery_item_route_when_get_then_html_200() -> None:
@@ -333,6 +335,46 @@ def test_given_wifi_extract_running_with_originals_when_convert_start_then_stops
 	assert body["extract"]["phase"] == "stopped"
 	assert body["convert"]["phase"] in {"running", "done"}
 	assert body["wifi_upload"]["active"] is False
+
+
+def test_given_easy_mode_when_first_upload_then_wifi_session_stays_active(tmp_path) -> None:
+	library = tmp_path / "lib"
+	library.mkdir()
+
+	client = TestClient(create_app())
+	client.put(
+		"/api/settings",
+		json={
+			"library_root": str(library),
+			"ui_mode": "easy",
+			"connection_method": "wifi",
+			"transfer_mode": "copy",
+			"device_id": "",
+			"source_folders": [],
+		},
+	)
+	bootstrap = client.post("/api/easy/bootstrap")
+	assert bootstrap.status_code == 200
+	body = bootstrap.json()
+	assert body["wifi_upload"]["active"] is True
+	token = body["wifi_upload"]["upload_url"].split("t=")[1]
+
+	upload = client.post(
+		"/api/upload",
+		params={"t": token},
+		files=[("files", ("photo.jpg", b"hello", "image/jpeg"))],
+	)
+	assert upload.status_code == 200
+	assert (library / "originals" / "photo.jpg").is_file()
+
+	after = client.get("/api/settings").json()
+	assert after["extract"]["phase"] == "running"
+	assert after["wifi_upload"]["active"] is True
+	assert after["wifi_upload"]["upload_url"].split("t=")[1] == token
+
+	session = client.get("/api/upload/session", params={"t": token}).json()
+	assert session["accepts_uploads"] is True
+	assert session["active"] is True
 
 
 def test_given_easy_bootstrap_when_post_then_wifi_extract_running(tmp_path) -> None:

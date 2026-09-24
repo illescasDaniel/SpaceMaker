@@ -48,10 +48,16 @@
 			},
 			"ffmpeg": {
 				"strategy": "zip",
-				"url": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-7.1.1-essentials_build.zip",
-				"files": { "ffmpeg": "ffmpeg.exe", "ffprobe": "ffprobe.exe" }
+				"url": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+				"files": { "ffmpeg": "bin/ffmpeg.exe", "ffprobe": "bin/ffprobe.exe" }
 			},
-			"ffprobe": { "companion_of": "ffmpeg" }
+			"ffprobe": { "companion_of": "ffmpeg" },
+			"exiftool": {
+				"strategy": "zip_flatten",
+				"url": "https://sourceforge.net/projects/exiftool/files/exiftool-13.59_64.zip/download",
+				"prefix": "exiftool-13.59_64/",
+				"launcher": "exiftool(-k).exe"
+			}
 		},
 		"macos-aarch64": {
 			"adb": {

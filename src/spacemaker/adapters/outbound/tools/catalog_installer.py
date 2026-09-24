@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import shutil
 import stat
 import sys
 import tarfile
@@ -66,6 +67,8 @@ class CatalogToolInstaller:
 		try:
 			if strategy == "zip":
 				return self._install_archive(tool_id, entry, kind="zip")
+			if strategy == "zip_flatten":
+				return self._install_zip_flatten(tool_id, entry)
 			if strategy == "archive":
 				return self._install_archive(tool_id, entry, kind="tar")
 			if strategy == "file":
@@ -86,6 +89,53 @@ class CatalogToolInstaller:
 		dest = bundled_tool_path(BundledTool(tool_id), root=self._dest, platform_is_windows=self._windows)
 		dest.write_bytes(data)
 		self._make_executable(dest)
+		return ToolInstallResult(tool_id=tool_id, ok=True)
+
+	def _install_zip_flatten(self, tool_id: str, entry: dict[str, Any]) -> ToolInstallResult:
+		url = str(entry.get("url", ""))
+		prefix = str(entry.get("prefix", ""))
+		if not url:
+			return ToolInstallResult(tool_id=tool_id, ok=False, message="Missing download URL")
+		data = self._download_bytes(url)
+		if not self._checksum_ok(data, entry):
+			return ToolInstallResult(tool_id=tool_id, ok=False, message="Checksum mismatch")
+		members = self._archive_members(data, "zip")
+		written = 0
+		for name, payload in members.items():
+			if prefix and not name.startswith(prefix):
+				continue
+			relative = name[len(prefix) :] if prefix and name.startswith(prefix) else name
+			if not relative or relative.endswith("/"):
+				continue
+			dest = self._dest.joinpath(*relative.split("/"))
+			dest.parent.mkdir(parents=True, exist_ok=True)
+			dest.write_bytes(payload)
+			if not self._windows:
+				self._make_executable(dest)
+			written += 1
+		if written == 0:
+			return ToolInstallResult(tool_id=tool_id, ok=False, message="Archive extracted nothing")
+		launcher = entry.get("launcher")
+		if launcher:
+			launcher_path = self._dest / str(launcher)
+			primary = bundled_tool_path(
+				BundledTool(tool_id),
+				root=self._dest,
+				platform_is_windows=self._windows,
+			)
+			if launcher_path.is_file() and not primary.is_file():
+				shutil.copy2(launcher_path, primary)
+		primary = bundled_tool_path(
+			BundledTool(tool_id),
+			root=self._dest,
+			platform_is_windows=self._windows,
+		)
+		if not primary.is_file():
+			return ToolInstallResult(
+				tool_id=tool_id,
+				ok=False,
+				message=f"Expected {primary.name} after extract",
+			)
 		return ToolInstallResult(tool_id=tool_id, ok=True)
 
 	def _install_archive(self, tool_id: str, entry: dict[str, Any], *, kind: str) -> ToolInstallResult:
@@ -184,8 +234,14 @@ class CatalogToolInstaller:
 		return None
 
 	def _download_bytes(self, url: str) -> bytes:
-		response = httpx.get(url, timeout=300.0, follow_redirects=True)
-		response.raise_for_status()
+		try:
+			response = httpx.get(url, timeout=300.0, follow_redirects=True)
+			response.raise_for_status()
+		except httpx.HTTPStatusError as exc:
+			status = exc.response.status_code
+			if status == 404:
+				raise RuntimeError(f"Download not found (HTTP 404): {url}") from exc
+			raise RuntimeError(f"Download failed (HTTP {status}): {url}") from exc
 		return response.content
 
 	def _checksum_ok(self, data: bytes, entry: dict[str, Any]) -> bool:

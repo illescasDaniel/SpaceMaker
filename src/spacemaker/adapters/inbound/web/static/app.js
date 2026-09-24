@@ -28,6 +28,7 @@
 	var galleryItemPath = "";
 	var galleryItemKind = "image";
 	var galleryBrowsePaths = [];
+	var lastQrSrcByElementId = {};
 	function isAbsolutePath(path) {
 		if (!path) {
 			return false;
@@ -609,9 +610,7 @@
 			if (urlInput) {
 				urlInput.value = wifi.upload_url || "";
 			}
-			if (qrImg && wifi.qr_url) {
-				qrImg.src = wifi.qr_url + "&_=" + Date.now();
-			}
+			setQrImageSrc(qrImg, wifi.qr_url, "wifi-upload-qr");
 		} else {
 			idle.classList.remove("panel-hidden");
 			live.classList.add("panel-hidden");
@@ -738,12 +737,42 @@
 		});
 	}
 
+	function renderComponentsSetupHint(managedTools) {
+		var el = document.getElementById("components-setup-hint");
+		if (!el) {
+			return;
+		}
+		var hint = managedTools && managedTools.setup_hint;
+		if (!hint || !hint.command) {
+			el.hidden = true;
+			el.textContent = "";
+			return;
+		}
+		el.hidden = false;
+		el.replaceChildren();
+		if (hint.title) {
+			var title = document.createElement("strong");
+			title.textContent = hint.title;
+			el.appendChild(title);
+			el.appendChild(document.createElement("br"));
+		}
+		if (hint.detail) {
+			var detail = document.createElement("span");
+			detail.textContent = hint.detail + " ";
+			el.appendChild(detail);
+		}
+		var code = document.createElement("code");
+		code.textContent = hint.command;
+		el.appendChild(code);
+	}
+
 	function renderComponentsList(managedTools) {
 		if (!managedTools || !managedTools.tools) {
 			return;
 		}
 		fillToolStatusList(document.getElementById("components-tool-list"), managedTools.tools);
 		fillToolStatusList(document.getElementById("settings-tool-list"), managedTools.tools);
+		renderComponentsSetupHint(managedTools);
 		var settingsDir = document.getElementById("settings-managed-tools-dir");
 		if (settingsDir && managedTools.tools_dir) {
 			settingsDir.textContent = managedTools.tools_dir;
@@ -804,6 +833,22 @@
 		if (input) {
 			input.value = url || "";
 		}
+	}
+
+	function setQrImageSrc(img, qrUrl, cacheKey) {
+		if (!img) {
+			return;
+		}
+		var key = cacheKey || img.id || "";
+		if (!qrUrl) {
+			delete lastQrSrcByElementId[key];
+			return;
+		}
+		if (lastQrSrcByElementId[key] === qrUrl) {
+			return;
+		}
+		lastQrSrcByElementId[key] = qrUrl;
+		img.src = qrUrl + "&_=" + Date.now();
 	}
 
 	function updateReceiveUi(next) {
@@ -909,9 +954,7 @@
 		setQrUrlField("easy-qr-url", wifi.upload_url || "");
 		if (wifi.active && uploadQr) {
 			uploadQr.hidden = false;
-			if (wifi.qr_url) {
-				uploadQr.src = wifi.qr_url + "&_=" + Date.now();
-			}
+			setQrImageSrc(uploadQr, wifi.qr_url, "easy-upload-qr");
 			if (uploadWait) {
 				uploadWait.hidden = true;
 			}

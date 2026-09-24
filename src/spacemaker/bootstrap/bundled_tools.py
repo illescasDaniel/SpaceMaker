@@ -56,6 +56,24 @@ def _executable_file(path: Path) -> bool:
 	return path.is_file()
 
 
+def _windows_magick_from_common_install_dirs(
+	*,
+	roots: tuple[Path, ...] | None = None,
+) -> Path | None:
+	"""ImageMagick winget/installer often lands under Program Files without updating PATH."""
+	search_roots = roots
+	if search_roots is None:
+		search_roots = (Path(r"C:\Program Files"), Path(r"C:\Program Files (x86)"))
+	for base in search_roots:
+		if not base.is_dir():
+			continue
+		for folder in sorted(base.glob("ImageMagick-*"), reverse=True):
+			exe = folder / "magick.exe"
+			if exe.is_file():
+				return exe
+	return None
+
+
 def managed_tool_present(
 	tool: BundledTool,
 	*,
@@ -93,6 +111,10 @@ def resolve_tool_path(
 		found = lookup(search)
 		if found:
 			return Path(found)
+		if tool is BundledTool.MAGICK and platform_is_windows:
+			windows_magick = _windows_magick_from_common_install_dirs()
+			if windows_magick is not None:
+				return windows_magick
 	raise FileNotFoundError(
 		f"Tool not found: {tool.value} (not in {root} and not on PATH). Use Components setup or install manually.",
 	)

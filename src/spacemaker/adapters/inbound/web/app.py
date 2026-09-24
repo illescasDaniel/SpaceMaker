@@ -4,11 +4,9 @@ import asyncio
 import sys
 import tempfile
 from contextlib import asynccontextmanager
-from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
-import segno
 from fastapi import (
 	BackgroundTasks,
 	FastAPI,
@@ -30,6 +28,7 @@ from spacemaker.adapters.inbound.web.client_access import (
 	require_loopback,
 	require_loopback_websocket,
 )
+from spacemaker.adapters.inbound.web.qr_svg import encode_qr_svg
 from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
 from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_app, reveal_in_file_manager
 from spacemaker.application.file_share_manifest import EmptyShareSelectionError
@@ -267,9 +266,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.get("/api/gallery/qr.svg")
 	def gallery_qr() -> Response:
 		gallery_url = f"http://{lan_ip()}:{services.port}/gallery"
-		buffer = BytesIO()
-		segno.make(gallery_url).save(buffer, kind="svg", scale=8)
-		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
+		return Response(content=encode_qr_svg(gallery_url), media_type="image/svg+xml")
 
 	@app.get("/api/defaults")
 	def defaults(request: Request) -> dict[str, str]:
@@ -368,9 +365,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		page_url = services._receive_files_snapshot()["page_url"]
 		if not page_url:
 			raise HTTPException(status_code=404, detail="receive session not active")
-		buffer = BytesIO()
-		segno.make(str(page_url)).save(buffer, kind="svg", scale=8)
-		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
+		return Response(content=encode_qr_svg(str(page_url)), media_type="image/svg+xml")
 
 	@app.get("/api/share/qr.svg")
 	def share_qr(request: Request, t: str = "") -> Response:
@@ -380,9 +375,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		page_url = services._file_share_snapshot()["page_url"]
 		if not page_url:
 			raise HTTPException(status_code=404, detail="share session not active")
-		buffer = BytesIO()
-		segno.make(str(page_url)).save(buffer, kind="svg", scale=8)
-		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
+		return Response(content=encode_qr_svg(str(page_url)), media_type="image/svg+xml")
 
 	@app.get("/api/receive/session")
 	def receive_session_status(t: str = "") -> dict[str, object]:
@@ -506,9 +499,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if not services.wifi_token_valid(t):
 			raise HTTPException(status_code=404, detail="upload session not active")
 		upload_url = f"http://{lan_ip()}:{services.port}/upload?t={t}"
-		buffer = BytesIO()
-		segno.make(upload_url).save(buffer, kind="svg", scale=8)
-		return Response(content=buffer.getvalue(), media_type="image/svg+xml")
+		return Response(content=encode_qr_svg(upload_url), media_type="image/svg+xml")
 
 	@app.get("/api/upload/session")
 	def upload_session_status(t: str = "") -> dict[str, object]:

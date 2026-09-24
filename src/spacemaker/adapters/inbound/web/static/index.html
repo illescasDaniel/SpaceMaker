@@ -429,6 +429,7 @@
 			width: 100%;
 			height: 100%;
 			display: block;
+			background: #fff;
 		}
 
 		/* Gallery screen */
@@ -1011,7 +1012,7 @@
 		}
 
 		.easy-qr-wrap {
-			background: var(--surface);
+			background: #fff;
 			border: 1px solid var(--border);
 			border-radius: 12px;
 			padding: 0.5rem;
@@ -1043,6 +1044,9 @@
 		.qr-frame-compact {
 			display: block;
 			line-height: 0;
+			background: #fff;
+			border-radius: 8px;
+			padding: 0.25rem;
 		}
 
 		.qr-with-info-compact > .info-btn {
@@ -1052,8 +1056,10 @@
 		.easy-qr-wrap img {
 			width: 100%;
 			height: auto;
+			aspect-ratio: 1;
 			display: block;
 			margin: 0 auto;
+			background: #fff;
 		}
 
 		.easy-qr-wrap .folder-hint {
@@ -1337,7 +1343,7 @@
 	<section id="view-components" class="screen" aria-label="Required components">
 		<div class="components-screen">
 			<h2>Setting up components</h2>
-			<p class="components-lead">SpaceMaker downloads pinned FFmpeg, ImageMagick, and other tools into a folder on your computer and uses those copies first. Stay on this screen until downloads finish. Continue only if a download failed and you already installed that tool on your system.</p>
+			<p class="components-lead">SpaceMaker downloads pinned FFmpeg, ExifTool, adb, and other tools into a folder on your computer and uses those copies first. Stay on this screen until downloads finish. Continue only if a download failed and you already installed that tool on your system (see the hint below on Windows for ImageMagick).</p>
 			<p class="folder-hint" id="components-iphone-packages"><strong>Linux — iPhone USB backup:</strong> install distro packages <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> (provides <code>idevice_id</code>, <code>idevicepair</code>, <code>ideviceinfo</code>, and <code>ifuse</code> on your <code>PATH</code>). Plug in the iPhone to start <code>usbmuxd</code>; unlock and tap <strong>Trust</strong> on the phone.</p>
 			<div id="components-tool-list"></div>
 			<p class="folder-hint" id="components-setup-hint" hidden></p>
