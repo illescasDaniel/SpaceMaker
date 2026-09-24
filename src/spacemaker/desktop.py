@@ -14,10 +14,13 @@ import webview
 from webview.errors import WebViewException
 
 from spacemaker.adapters.inbound.desktop_api import DesktopApi
+from spacemaker.adapters.inbound.qt_native_style import install_qt_native_style
+from spacemaker.adapters.inbound.qt_webengine_gpu_flags import install_qt_webengine_gpu_flags
 from spacemaker.adapters.inbound.qt_webengine_shutdown import (
 	finalize_qt_after_webview,
 	install_qt_webengine_shutdown_fix,
 )
+from spacemaker.bootstrap.event_loop import uvicorn_loop_for_platform
 from spacemaker.bootstrap.paths import app_icon_path, webengine_storage_path
 from spacemaker.bootstrap.services import create_app
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
@@ -55,7 +58,7 @@ def run_server(*, port: int, host: str, services_holder: list) -> None:
 	app = create_app(port=port, bind_host=host)
 	if services_holder:
 		services_holder[0] = app.state.services
-	uvicorn.run(app, host=host, port=port, log_level="info")
+	uvicorn.run(app, host=host, port=port, log_level="info", loop=uvicorn_loop_for_platform())
 
 
 def _shutdown_services(services_holder: list) -> None:
@@ -66,6 +69,8 @@ def _shutdown_services(services_holder: list) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+	install_qt_webengine_gpu_flags()
+
 	parser = argparse.ArgumentParser(prog="spacemaker")
 	parser.add_argument("--port", type=int, default=8765)
 	parser.add_argument("--host", default="0.0.0.0", help="Bind host (0.0.0.0 enables LAN gallery)")
@@ -108,6 +113,7 @@ def main(argv: list[str] | None = None) -> None:
 
 	time.sleep(0.3)
 	install_qt_webengine_shutdown_fix()
+	install_qt_native_style()
 	_apply_qt_window_icon()
 
 	def on_closing() -> bool:

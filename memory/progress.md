@@ -62,3 +62,8 @@
 - [x] **Public README** — features, getting started, development; Home hub PNG + `uv run task readme-screenshot`
 - [x] **Gallery item prev/next** — timeline order; Font Awesome chevrons; grid-centered overlay controls
 - [x] **System UI theme** — `theme.css` + `prefers-color-scheme` on desktop and phone shells (no per-module light/dark)
+- [x] **QtWidgets native dialog style** — `windows11`/Fusion `QStyle` via `qt_native_style.py`
+- [x] **Windows WebEngine freeze/black-surface bug** — `QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu-compositing` (win32-only) in `qt_webengine_gpu_flags.py`; user-confirmed fixed. Two prior attempts (`--use-angle=d3d9`, `QSG_RHI_BACKEND=opengl`) ruled out, see `decisions.md`
+- [x] **Windows ProactorEventLoop ConnectionResetError noise** — uvicorn switched to SelectorEventLoop on win32 via `event_loop.uvicorn_loop_for_platform()` (`"asyncio:SelectorEventLoop"` string directly; a first attempt via a wrapper function broke startup entirely — see `decisions.md`)
+- [x] **Real-process smoke test** — `tests/integration/test_server_smoke.py` + `uv run task smoke`; boots `python -m spacemaker --server-only` for real and polls it, catching startup/wiring bugs `TestClient`-based tests can't see
+- [x] **`QDxgiVSyncService`/`QThreadStorage` shutdown warnings investigated** — confirmed benign/cosmetic, confirmed unrelated to (not fixed by) the WebEngine freeze fix; accepted, not pursuing further unless it becomes more than log noise — see `decisions.md`

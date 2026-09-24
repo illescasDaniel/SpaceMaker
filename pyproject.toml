@@ -80,7 +80,7 @@ lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = ["S603", "S607"]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S603"]
 "src/spacemaker/adapters/outbound/**" = ["S603", "S607"]
 "src/spacemaker/desktop.py" = ["S104"]
 "src/spacemaker/bootstrap/services.py" = ["S104"]
@@ -110,6 +110,7 @@ checks = { cmd = "python scripts/quality/checks.py", help = "quality gate (pass 
 format = { cmd = "uv run ruff check --fix src tests && uv run ruff format src tests", help = "format Python" }
 spacemaker = { cmd = "uv run spacemaker", help = "launch SpaceMaker desktop (pywebview + server)" }
 spacemaker-server = { cmd = "uv run spacemaker --server-only", help = "run API/UI in browser only" }
+smoke = { cmd = "uv run pytest tests/integration/test_server_smoke.py -v", help = "boot the real spacemaker process and verify it doesn't crash on startup (catches uvicorn/asyncio wiring bugs TestClient-based tests can't see)" }
 firewall-allow = { cmd = "bash scripts/firewall/allow-spacemaker-port.sh", help = "allow LAN gallery port in ufw/firewalld (run with sudo)" }
 build-installer = { cmd = "bash scripts/packaging/build_installer.sh", help = "Linux: pruned AppDir in dist/; other OS: PyInstaller onefile" }
 build-appimage = { cmd = "bash scripts/packaging/build_appimage.sh", help = "Linux AppImage (pruned AppDir + zstd squashfs) in dist/" }
