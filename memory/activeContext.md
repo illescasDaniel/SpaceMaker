@@ -6,14 +6,20 @@ _Last updated: 2026-09-24_
 
 ## Current focus
 
-Applied the `claude/graphrag-mkdocs-codebase-graph-891193` worktree onto `main`
-via `/apply-worktree`: agent-facing GraphRAG tooling — an MkDocs knowledge
-base (`docs/`) and a codebase dependency graph via the official **Graphify**
-tool (`graphifyy` on PyPI; CLI is `graphify`), wired into a version-controlled
-`.githooks/pre-commit` so the graph stays synced with every commit on both
-Windows and Linux. Dev-tooling, not a product feature, so it didn't go
-through the Phase Gate Protocol (wireframe/spec/architecture) — see
-`progress.md`.
+Mid-session: adopted Graphify's `diagnose multigraph` and `save-result`/
+`reflect` feedback loop (documented in `AGENTS.md`, committed), and now
+mirroring `.cursor/rules/*.mdc` into Claude Code's new `.claude/rules/`
+directory via per-file symlinks with a renamed `.md` extension — **not yet
+created**, next step for this session. See "Next steps" below.
+
+Before that: applied the `claude/graphrag-mkdocs-codebase-graph-891193`
+worktree onto `main` via `/apply-worktree`: agent-facing GraphRAG tooling — an
+MkDocs knowledge base (`docs/`) and a codebase dependency graph via the
+official **Graphify** tool (`graphifyy` on PyPI; CLI is `graphify`), wired
+into a version-controlled `.githooks/pre-commit` so the graph stays synced
+with every commit on both Windows and Linux. Dev-tooling, not a product
+feature, so it didn't go through the Phase Gate Protocol
+(wireframe/spec/architecture) — see `progress.md`.
 
 Immediately before that, on `main` itself: the `.claude/skills` symlink was
 repointed to a relative target (`../.cursor/skills`) for cross-machine
@@ -22,6 +28,8 @@ directory-symlink pitfall discovered along the way.
 
 ## Just changed
 
+- `AGENTS.md` — documented `graphify diagnose multigraph` (trigger-based, not routine) and the `save-result`/`reflect` query-outcome feedback loop, plus that `LESSONS.md` and `memory/decisions.md` are complementary, not redundant.
+- `.gitignore` — un-ignored `graphify-out/memory/*.md` and `graphify-out/reflections/LESSONS.md` so the feedback loop persists across sessions/branches instead of resetting per clone.
 - `mkdocs.yml`, `docs/index.md`, `docs/testing.md` — MkDocs site (material theme); nav is Home → Architecture → Testing. (`docs/database.md` was added then removed the same session — SpaceMaker has no database.)
 - `docs/ARCHITECTURE.md` — merged in an entry-point/routing/persistence analysis, a "Developer setup" section (`git config core.hooksPath .githooks`), and a note on the expected always-one-commit-behind `built_at_commit` drift.
 - `.githooks/pre-commit`, `.gitattributes`, `git config core.hooksPath .githooks` (**run this once per clone/worktree** — see README "Setup and run") — hook regenerates `graphify-out/graph.json` + `graphify-out/GRAPH_REPORT.md` (`graphify extract . --code-only` then `graphify cluster-only . --no-label --no-viz`), waits for the write to settle (Windows AV-scanning I/O lag), and only stages them when the diff is more than the commit-stamp/report-line noise — otherwise restores the committed version so `git status` stays clean.
@@ -43,9 +51,10 @@ directory-symlink pitfall discovered along the way.
 
 ## Next steps
 
-1. `docs/testing.md` is populated for real (BDD given/when/then, mocking standards); no other docs pages are pending.
-2. If the `graph.html` crash matters later (interactive visualization), investigate the native dependency behind Graphify's viz step on Python 3.14/Windows, or pin an older Python for that step.
-3. Not enabled yet, noted as a future option in `AGENTS.md`: `graphify extract` can index `docs/` (and PDFs) into the same graph via an LLM backend — revisit once the docs corpus is large enough that plain file reads stop being sufficient.
+1. **In progress this session:** create `.claude/rules/<name>.md` symlinks pointing at each `.cursor/rules/<name>.mdc` file (5 files: `agent-memory`, `graphrag-tools`, `hexagonal-python`, `playbooks`, `sdd`) — link name gets `.md` so Claude's `.md`-only discovery picks it up; target keeps `.mdc` so Cursor is untouched. On Windows use `mklink` (no `/D`, these are file not directory links) with a **relative** target, run from inside `.claude/rules/` via `cmd /c`. After creating, verify Claude actually loaded them (`/context` → **Memory files**, or ask Claude what a rule says) rather than assuming the symlink alone is sufficient.
+2. `docs/testing.md` is populated for real (BDD given/when/then, mocking standards); no other docs pages are pending.
+3. If the `graph.html` crash matters later (interactive visualization), investigate the native dependency behind Graphify's viz step on Python 3.14/Windows, or pin an older Python for that step.
+4. Not enabled yet, noted as a future option in `AGENTS.md`: `graphify extract` can index `docs/` (and PDFs) into the same graph via an LLM backend — revisit once the docs corpus is large enough that plain file reads stop being sufficient.
 
 ## Run
 

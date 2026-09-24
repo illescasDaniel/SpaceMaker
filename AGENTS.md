@@ -143,6 +143,34 @@ or spending tokens parsing the raw graph JSON. The graph is a generated
 artifact, not a substitute for the tests and specs that define correct
 behavior.
 
+**Graph fidelity check — `graphify diagnose multigraph`:** not a per-task
+step. Run it only after a big refactor (renames/moves that could confuse the
+extractor) or when a `graph-explain`/`graph-path`/`graph-query` result looks
+suspicious (missing edges, an unexpected empty answer). It reports edge
+collapse/dangling-endpoint risk against `graphify-out/graph.json`; a clean
+run is 0 collapsed edges and 0 dangling endpoints.
+
+**Query feedback loop — `save-result` / `reflect`:** after a
+`graph-explain`/`graph-path`/`graph-query` call that actually informed a
+real decision (not trivial one-off lookups), tag the outcome:
+
+```bash
+uv run graphify save-result --question "<question>" --answer "<short answer>" \
+  --type query --nodes "<Symbol1>" "<Symbol2>" --outcome useful|dead_end|corrected
+uv run graphify reflect   # regenerates graphify-out/reflections/LESSONS.md
+```
+
+This is deterministic bookkeeping, no LLM — `reflect` just aggregates tagged
+outcomes into a per-symbol/per-community "how reliable was this" summary.
+`graphify-out/memory/*.md` and `graphify-out/reflections/LESSONS.md` are
+git-tracked (see `.gitignore`) so the signal accumulates across sessions and
+branches instead of resetting per clone.
+
+`LESSONS.md` is **not** a replacement for `memory/decisions.md`: `LESSONS.md`
+is auto-generated, per-symbol "was this graph node useful when queried"
+signal; `decisions.md` is hand-written, per-decision "why we built it this
+way" narrative. They serve different questions and both stay.
+
 **Not enabled yet, possible future option:** `graphify extract` also
 supports indexing `docs/` (and PDFs) into the *same* graph via an LLM
 backend (`--code-only` is what currently opts us out of that). This would

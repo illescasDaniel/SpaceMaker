@@ -9,6 +9,9 @@
 - [x] `.githooks/pre-commit` (+ `core.hooksPath`, `.gitattributes` LF force) — regenerates `graphify-out/graph.json` + `graphify-out/GRAPH_REPORT.md` via `graphify extract . --code-only` + `graphify cluster-only . --no-label --no-viz`, auto-stages if changed. Verified end-to-end (`explain`/`path`/`query` all confirmed working).
 - [x] Consolidated `CLAUDE.md` into `AGENTS.md` (single instructions file, since other agents like Cursor don't read `CLAUDE.md`)
 
+- [x] `AGENTS.md` documents `diagnose multigraph` (trigger-based: big refactors / suspicious query results) and the `save-result`/`reflect` feedback loop; `graphify-out/memory/*.md` + `graphify-out/reflections/LESSONS.md` un-ignored so the loop persists across sessions/branches
+- [ ] `.claude/rules/` (new Claude Code feature) not yet wired to mirror `.cursor/rules/*.mdc` — planned as per-file symlinks with renamed `.md` extension (`.claude/rules/<name>.md` → `../../.cursor/rules/<name>.mdc`), since Claude only discovers `.md` files and only reads a `paths` frontmatter field (ignores `description`/`globs`/`alwaysApply`, all fine for today's alwaysApply:true rules)
+
 ### Open
 
 - [ ] `docs/database.md` / `docs/testing.md` still blank templates — fill in when those conventions are actually decided
