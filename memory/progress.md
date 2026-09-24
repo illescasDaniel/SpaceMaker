@@ -10,7 +10,7 @@
 - [x] Consolidated `CLAUDE.md` into `AGENTS.md` (single instructions file, since other agents like Cursor don't read `CLAUDE.md`)
 
 - [x] `AGENTS.md` documents `diagnose multigraph` (trigger-based: big refactors / suspicious query results) and the `save-result`/`reflect` feedback loop; `graphify-out/memory/*.md` + `graphify-out/reflections/LESSONS.md` un-ignored so the loop persists across sessions/branches
-- [ ] `.claude/rules/` (new Claude Code feature) not yet wired to mirror `.cursor/rules/*.mdc` — planned as per-file symlinks with renamed `.md` extension (`.claude/rules/<name>.md` → `../../.cursor/rules/<name>.mdc`), since Claude only discovers `.md` files and only reads a `paths` frontmatter field (ignores `description`/`globs`/`alwaysApply`, all fine for today's alwaysApply:true rules)
+- [x] `.claude/rules/*.md` — five hand-maintained native-format copies of `.cursor/rules/*.mdc` (symlinks tried first, didn't load in this environment; see `decisions.md`). Confirmed loading via the user's own `/context` → **Memory files**. `AGENTS.md` documents the dual-maintenance requirement.
 
 ### Open
 

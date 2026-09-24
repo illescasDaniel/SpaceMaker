@@ -179,8 +179,31 @@ directly. Not worth it yet at this doc corpus's size, and it costs an LLM
 API key + tokens + non-determinism — revisit if `docs/` grows enough that
 plain file reads stop being sufficient.
 
-Also mirrored as an always-on Cursor rule: `.cursor/rules/graphrag-tools.mdc`
-(pointer only — this section is the source of truth).
+Also mirrored as an always-on rule for both agents (pointer only — this
+section is the source of truth): `.cursor/rules/graphrag-tools.mdc` (Cursor)
+and `.claude/rules/graphrag-tools.md` (Claude Code).
+
+## Rules — Cursor vs Claude Code
+
+Both tools read this file (`AGENTS.md`) as project instructions, plus a set
+of always-on rules with the same content, kept in two parallel directories:
+
+- `.cursor/rules/*.mdc` — Cursor's format: YAML frontmatter with
+  `description`/`globs`/`alwaysApply`.
+- `.claude/rules/*.md` — Claude Code's format (see
+  [Claude Code's rules docs](https://code.claude.com/docs/en/memory#organize-rules-with-claude/rules/)):
+  plain markdown, no frontmatter needed for an always-on rule (Claude Code
+  only reads a `paths` field for path-scoped rules; every other frontmatter
+  key is silently ignored). Confirmed loading via `/context` → **Memory
+  files**.
+
+**These are hand-maintained duplicates, not symlinks.** A symlink was tried
+first and rejected: Claude Code only discovers files with a literal `.md`
+extension, so a symlink pointing at a `.mdc` file (even one renamed to end in
+`.md`) was not picked up in this environment — plain copies in the native
+format were required instead. When editing one of the five rules below,
+update both the `.cursor/rules/<name>.mdc` and `.claude/rules/<name>.md`
+copies; a mismatch between them is a bug, not an intentional fork.
 
 ## Skills
 
@@ -195,7 +218,9 @@ Project workflows:
 - `.cursor/skills/apply-worktree/` — merge agent worktree into main checkout + `uv run task checks`
 - `.cursor/skills/delete-worktree/` — remove isolated worktree after apply
 
-Always-on rules: `agent-memory.mdc`, `sdd.mdc`, `hexagonal-python.mdc`, `playbooks.mdc`, `graphrag-tools.mdc`.
+Always-on rules (see "Rules — Cursor vs Claude Code" above): `agent-memory`,
+`sdd`, `hexagonal-python`, `playbooks`, `graphrag-tools` — each present as
+both `.cursor/rules/<name>.mdc` and `.claude/rules/<name>.md`.
 
 ## Quality gate
 

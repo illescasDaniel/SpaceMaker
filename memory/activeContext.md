@@ -6,11 +6,17 @@ _Last updated: 2026-09-24_
 
 ## Current focus
 
-Mid-session: adopted Graphify's `diagnose multigraph` and `save-result`/
-`reflect` feedback loop (documented in `AGENTS.md`, committed), and now
-mirroring `.cursor/rules/*.mdc` into Claude Code's new `.claude/rules/`
-directory via per-file symlinks with a renamed `.md` extension — **not yet
-created**, next step for this session. See "Next steps" below.
+Adopted Graphify's `diagnose multigraph` and `save-result`/`reflect`
+feedback loop (documented in `AGENTS.md`, committed `b022d49`), then mirrored
+`.cursor/rules/*.mdc` into Claude Code's new `.claude/rules/` directory.
+Symlinks (both a blind directory link and per-file `.md`-renamed links)
+didn't load in this environment — replaced with five hand-maintained native
+`.md` copies, confirmed loading via the user's own `/context` → **Memory
+files**. `AGENTS.md` now documents the dual-maintenance requirement (edit
+both `.cursor/rules/<name>.mdc` and `.claude/rules/<name>.md` together). See
+`decisions.md` for the full symlink-vs-native-copy investigation. This
+session's memory-bank/AGENTS.md changes are not yet committed — that's the
+immediate next step.
 
 Before that: applied the `claude/graphrag-mkdocs-codebase-graph-891193`
 worktree onto `main` via `/apply-worktree`: agent-facing GraphRAG tooling — an
@@ -28,7 +34,8 @@ directory-symlink pitfall discovered along the way.
 
 ## Just changed
 
-- `AGENTS.md` — documented `graphify diagnose multigraph` (trigger-based, not routine) and the `save-result`/`reflect` query-outcome feedback loop, plus that `LESSONS.md` and `memory/decisions.md` are complementary, not redundant.
+- `.claude/rules/{agent-memory,graphrag-tools,hexagonal-python,playbooks,sdd}.md` — new, native-format copies of the matching `.cursor/rules/*.mdc` files (no frontmatter — always loaded, same effect as `alwaysApply: true`).
+- `AGENTS.md` — added "Rules — Cursor vs Claude Code" section (dual-maintenance requirement, why symlinks were rejected); documented `graphify diagnose multigraph` (trigger-based, not routine) and the `save-result`/`reflect` query-outcome feedback loop, plus that `LESSONS.md` and `memory/decisions.md` are complementary, not redundant.
 - `.gitignore` — un-ignored `graphify-out/memory/*.md` and `graphify-out/reflections/LESSONS.md` so the feedback loop persists across sessions/branches instead of resetting per clone.
 - `mkdocs.yml`, `docs/index.md`, `docs/testing.md` — MkDocs site (material theme); nav is Home → Architecture → Testing. (`docs/database.md` was added then removed the same session — SpaceMaker has no database.)
 - `docs/ARCHITECTURE.md` — merged in an entry-point/routing/persistence analysis, a "Developer setup" section (`git config core.hooksPath .githooks`), and a note on the expected always-one-commit-behind `built_at_commit` drift.
@@ -51,10 +58,10 @@ directory-symlink pitfall discovered along the way.
 
 ## Next steps
 
-1. **In progress this session:** create `.claude/rules/<name>.md` symlinks pointing at each `.cursor/rules/<name>.mdc` file (5 files: `agent-memory`, `graphrag-tools`, `hexagonal-python`, `playbooks`, `sdd`) — link name gets `.md` so Claude's `.md`-only discovery picks it up; target keeps `.mdc` so Cursor is untouched. On Windows use `mklink` (no `/D`, these are file not directory links) with a **relative** target, run from inside `.claude/rules/` via `cmd /c`. After creating, verify Claude actually loaded them (`/context` → **Memory files**, or ask Claude what a rule says) rather than assuming the symlink alone is sufficient.
-2. `docs/testing.md` is populated for real (BDD given/when/then, mocking standards); no other docs pages are pending.
-3. If the `graph.html` crash matters later (interactive visualization), investigate the native dependency behind Graphify's viz step on Python 3.14/Windows, or pin an older Python for that step.
-4. Not enabled yet, noted as a future option in `AGENTS.md`: `graphify extract` can index `docs/` (and PDFs) into the same graph via an LLM backend — revisit once the docs corpus is large enough that plain file reads stop being sufficient.
+1. `docs/testing.md` is populated for real (BDD given/when/then, mocking standards); no other docs pages are pending.
+2. If the `graph.html` crash matters later (interactive visualization), investigate the native dependency behind Graphify's viz step on Python 3.14/Windows, or pin an older Python for that step.
+3. Not enabled yet, noted as a future option in `AGENTS.md`: `graphify extract` can index `docs/` (and PDFs) into the same graph via an LLM backend — revisit once the docs corpus is large enough that plain file reads stop being sufficient.
+4. When editing any of the five always-on rules, remember to update **both** `.cursor/rules/<name>.mdc` and `.claude/rules/<name>.md` — no automation keeps them in sync, per `AGENTS.md` "Rules — Cursor vs Claude Code".
 
 ## Run
 
