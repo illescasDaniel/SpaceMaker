@@ -27,6 +27,9 @@ spacemaker = "spacemaker.desktop:main"
 
 [dependency-groups]
 dev = [
+	"graphifyy>=0.9.67",
+	"mkdocs>=1.6.1",
+	"mkdocs-material>=9.7.7",
 	"pyinstaller>=6.19",
 	"pytest>=9.1",
 	"pytest-cov>=7.1",
@@ -111,3 +114,9 @@ firewall-allow = { cmd = "bash scripts/firewall/allow-spacemaker-port.sh", help 
 build-installer = { cmd = "bash scripts/packaging/build_installer.sh", help = "Linux: pruned AppDir in dist/; other OS: PyInstaller onefile" }
 build-appimage = { cmd = "bash scripts/packaging/build_appimage.sh", help = "Linux AppImage (pruned AppDir + zstd squashfs) in dist/" }
 readme-screenshot = { cmd = "uv run python scripts/packaging/capture_readme_home_screenshot.py", help = "capture Home hub PNG for README" }
+docs-serve = { cmd = "uv run mkdocs serve", help = "serve the docs/ knowledge base at http://127.0.0.1:8000 (live-reloads on edit)" }
+docs-build = { cmd = "uv run mkdocs build", help = "static-build the docs site into site/ (also surfaces broken internal links)" }
+graph-update = { cmd = "uv run graphify extract . --code-only && uv run graphify cluster-only . --no-label --no-viz", help = "regenerate graphify-out/graph.json + GRAPH_REPORT.md by hand (same pipeline as .githooks/pre-commit; no API key needed)" }
+graph-explain = { cmd = "uv run graphify explain", help = "explain a symbol and its connections, e.g.: uv run task graph-explain \"create_fastapi_app\"" }
+graph-path = { cmd = "uv run graphify path", help = "shortest dependency path between two symbols, e.g.: uv run task graph-path \"desktop.main\" \"create_fastapi_app\"" }
+graph-query = { cmd = "uv run graphify query", help = "ask a free-form question over the graph, e.g.: uv run task graph-query \"how does the desktop app start the web server\"" }

@@ -104,6 +104,51 @@ Release builds are **portable executables** (Linux **AppImage** primary; optiona
 | `docs/playbooks/fast-tests.md` | pytest layout, speed, naming |
 | `docs/playbooks/SpaceMaker-adaptations.md` | This repo's overrides (folders, conversion, UI) |
 
+## Codebase knowledge tools (orient before editing)
+
+Two tools exist so you do not need to read large swaths of the codebase up
+front. Use them before making non-trivial changes — but they don't skip any
+Phase Gate: wireframe → spec → architecture → tests → implementation
+approvals are still required for features and architectural changes.
+
+**Semantic knowledge base (MkDocs)** — architecture rationale, domain
+concepts, and per-area notes live in `docs/`, served as a browsable site:
+
+```bash
+uv run task docs-serve   # or: uv run mkdocs serve
+uv run task docs-build   # static build to site/; also surfaces broken internal links
+```
+
+Open the printed local URL and read the relevant section (see
+`docs/index.md`) for the area you're about to touch. If a section is still a
+stub, fall back to `docs/ARCHITECTURE.md`, `specs/`, and
+`docs/playbooks/`.
+
+**Structural knowledge graph (Graphify)** — the codebase is also indexed as
+a queryable knowledge graph by [Graphify](https://github.com/Graphify-Labs/graphify)
+(`graphify-out/graph.json` + `graphify-out/GRAPH_REPORT.md`, regenerated and
+staged by `.githooks/pre-commit`; see "Developer setup" in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)).
+
+To map dependencies before editing code, do **not** read the raw
+`graph.json` file. Instead, use Graphify's CLI (taskipy wrappers pass
+extra args through):
+
+```bash
+uv run task graph-explain "<symbol>"          # or: uv run graphify explain "<symbol>"
+uv run task graph-path "<source>" "<target>"  # or: uv run graphify path "<source>" "<target>"
+uv run task graph-query "<question>"          # or: uv run graphify query "<question>"
+uv run task graph-update                      # regenerate by hand, without committing
+```
+
+This shows the blast radius of a change without reading every related file
+or spending tokens parsing the raw graph JSON. The graph is a generated
+artifact, not a substitute for the tests and specs that define correct
+behavior.
+
+Also mirrored as an always-on Cursor rule: `.cursor/rules/graphrag-tools.mdc`
+(pointer only — this section is the source of truth).
+
 ## Skills
 
 Project workflows:
@@ -117,7 +162,7 @@ Project workflows:
 - `.cursor/skills/apply-worktree/` — merge agent worktree into main checkout + `uv run task checks`
 - `.cursor/skills/delete-worktree/` — remove isolated worktree after apply
 
-Always-on rules: `agent-memory.mdc`, `sdd.mdc`, `hexagonal-python.mdc`, `playbooks.mdc`.
+Always-on rules: `agent-memory.mdc`, `sdd.mdc`, `hexagonal-python.mdc`, `playbooks.mdc`, `graphrag-tools.mdc`.
 
 ## Quality gate
 

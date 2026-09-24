@@ -1,5 +1,20 @@
 # Progress
 
+## GraphRAG agent tooling (DX/dev-tooling, not a product feature — no Phase Gate)
+
+### Done
+
+- [x] MkDocs knowledge base: `mkdocs.yml` (material theme), `docs/index.md` template, `docs/database.md` / `docs/testing.md` stubs
+- [x] Tried a custom `ast`-based `scripts/agent_tools/generate_code_graph.py` + `knowledge_graph.json`, then ripped it out in favor of the official **Graphify** tool (`graphifyy` on PyPI; CLI binary `graphify`)
+- [x] `.githooks/pre-commit` (+ `core.hooksPath`, `.gitattributes` LF force) — regenerates `graphify-out/graph.json` + `graphify-out/GRAPH_REPORT.md` via `graphify extract . --code-only` + `graphify cluster-only . --no-label --no-viz`, auto-stages if changed. Verified end-to-end (`explain`/`path`/`query` all confirmed working).
+- [x] Consolidated `CLAUDE.md` into `AGENTS.md` (single instructions file, since other agents like Cursor don't read `CLAUDE.md`)
+
+### Open
+
+- [ ] `docs/database.md` / `docs/testing.md` still blank templates — fill in when those conventions are actually decided
+- [ ] `graph.html` generation (`cluster-only` without `--no-viz`) segfaults on this machine (Windows, Python 3.14.6) — worth an upstream report if the interactive visualization is ever wanted
+- [ ] No `graphify install --platform agents` (or similar native installer) was used — instructions were hand-written into `AGENTS.md` instead; revisit if Graphify ships a more current native AGENTS.md integration
+
 ## Initial setup (wireframe gate)
 
 ### Done

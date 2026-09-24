@@ -1,0 +1,16 @@
+#!/bin/sh
+# Regenerate the Graphify knowledge graph artifacts and stage them if changed.
+# Installed via: git config core.hooksPath .githooks
+#
+# --code-only / --no-label / --no-viz: keep this fully offline and API-key-free
+# (no LLM backend required) and avoid a native graph.html rendering crash seen
+# on some platforms. See docs/ARCHITECTURE.md "Developer setup".
+
+set -e
+
+uv run graphify extract . --code-only
+uv run graphify cluster-only . --no-label --no-viz
+
+if [ -n "$(git status --porcelain -- graphify-out/graph.json graphify-out/GRAPH_REPORT.md)" ]; then
+	git add graphify-out/graph.json graphify-out/GRAPH_REPORT.md
+fi

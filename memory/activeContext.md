@@ -2,35 +2,45 @@ _Last updated: 2026-09-24_
 
 ## Branch
 
-`main`
+`claude/graphrag-mkdocs-codebase-graph-891193` (worktree)
 
 ## Current focus
 
-Saved a large batch of previously-uncommitted local work via `/save-changes`. Verified all tests pass on Windows (164 pass, 5 skipped as POSIX-only) and the full quality gate (`uv run task checks`) runs natively on Windows and is green (ruff, ty, pytest). Committed in logical groups: Windows dev/test compatibility, QR dark-theme/flash fix + Windows component setup (exiftool download, ImageMagick PATH fallback, winget hints) + Easy-mode Wi‑Fi session fix, Qt WebEngine shutdown hardening, and the `.claude/skills` symlink. See `decisions.md` (2026-09-24 entries) for what each group covers and why.
+Built agent-facing GraphRAG tooling: an MkDocs knowledge base (`docs/`) and a
+codebase dependency graph via the official **Graphify** tool (`graphifyy` on
+PyPI; CLI is `graphify`), wired into a version-controlled `.githooks/pre-commit`
+so the graph stays synced with every commit on both Windows and Linux. This is
+dev-tooling, not a product feature, so it didn't go through the Phase Gate
+Protocol (wireframe/spec/architecture) — see `progress.md`.
 
-## Just changed (now committed, see decisions.md)
+## Just changed (not yet committed)
 
-- Windows compat: `bootstrap/paths.py` `display_user_path` normalises separators to `/`; `scripts/quality/checks.py` dispatches through `bash` on `win32`; platform-appropriate stub filenames / `@_skip_on_windows` markers across several unit tests.
-- QR codes: `adapters/inbound/web/qr_svg.py` (opaque black/white SVG, replacing theme-matched colors) + `app.js` `setQrImageSrc()` dedup so `<img src>` isn't reassigned every poll; `index.html` `aspect-ratio: 1` + `background: #fff` around QR images.
-- Windows component setup: `packaging/tool-catalog.json` exiftool entry + fixed ffmpeg URL; `catalog_installer.py` `zip_flatten` strategy + clearer 404 errors; `bundled_tools.py` ImageMagick Program-Files fallback; new `bootstrap/platform_setup_hints.py` (winget command surfaced in Components UI via `managed_tools.py` `setup_hint` + `app.js` `renderComponentsSetupHint`).
-- `bootstrap/services.py` — `start_convert` only stops an active extract job under `STOP_EXTRACT_FIRST`, fixing Easy-mode dropping the Wi‑Fi upload session on the first convert-as-received trigger.
-- `adapters/inbound/qt_webengine_shutdown.py` + `desktop.py` — much more thorough WebEngine/Qt teardown (idempotent, disconnects webchannel/nav-handler/interceptor, deletes top-level widgets) plus a `finalize_qt_after_webview()` pass after pywebview's loop exits; Windows gets longer drain rounds and real sleeps for `QDxgiVSyncService`.
-- `.claude/skills` — real Windows symlink → `.cursor/skills` so Claude Code's project-skill discovery sees this repo's Cursor-authored skills.
+- `mkdocs.yml`, `docs/index.md`, `docs/database.md`, `docs/testing.md` — new MkDocs site (material theme); nav is Home → Architecture → Database → Testing.
+- `docs/ARCHITECTURE.md` — merged in an entry-point/routing/persistence analysis + a "Developer setup" section (`git config core.hooksPath .githooks`). **Note:** an earlier `docs/architecture.md` (lowercase) collided case-insensitively with this file on Windows and briefly overwrote it — recovered from git history and merged; watch for this on any future new doc filename that differs only by case.
+- Custom `scripts/agent_tools/generate_code_graph.py` + `knowledge_graph.json` — built, tested, then deleted/ripped out per explicit instruction to use the real Graphify tool instead.
+- `pyproject.toml` / `uv.lock` — added `mkdocs`, `mkdocs-material`, `graphifyy` to the `dev` dependency group.
+- `.githooks/pre-commit`, `.gitattributes`, `git config core.hooksPath .githooks` — hook regenerates `graphify-out/graph.json` + `graphify-out/GRAPH_REPORT.md` (`graphify extract . --code-only` then `graphify cluster-only . --no-label --no-viz`) and `git add`s them if changed. Verified by direct invocation (not a real commit).
+- `.gitignore` — ignores `graphify-out/*` except `graph.json`/`GRAPH_REPORT.md`, and `site/` (mkdocs build output).
+- `CLAUDE.md` deleted; its content merged into `AGENTS.md` under a new "Codebase knowledge tools" section, since the user also uses Cursor and other agents that don't read `CLAUDE.md`.
+
+## Gotchas discovered this session
+
+- The task's package name `graphify` doesn't exist on PyPI (404) — the real package is `graphifyy` (double-y); the CLI binary it installs is named `graphify`. Verified via PyPI JSON + the upstream GitHub repo (121k★, YC-backed) before installing.
+- `uv run graphify cluster-only . --no-label` (without `--no-viz`) segfaults on this machine — the `graph.html` visualization step is the likely culprit on Windows + Python 3.14.6. Always pass `--no-viz` here.
+- There's no bare `graphify` "build" command and no LLM-free single-command build — the no-API-key pipeline is two steps: `graphify extract <path> --code-only` (AST-only, writes `graph.json`) then `graphify cluster-only <path> --no-label --no-viz` (writes `GRAPH_REPORT.md`).
+- Default Graphify output dir is `graphify-out/`, not the repo root.
+- `uv add`/some `graphify` subprocess calls got denied once each by Claude Code's own auto-mode permission classifier ("Untrusted Code Integration" / "Code from External") — not a hard block, just needed the user to approve or a retry; don't assume every such call will be denied.
 
 ## Next steps
 
-1. **Easy mode import issues — where to review** — spec draft pending (open-folder API partially via `/api/library/open-folder`); wireframe already approved 2026-09-23.
-2. No other known blockers from this session; tree should be clean after this save.
+1. Consider whether to commit this work (nothing has been committed yet this session — all changes are in the working tree).
+2. `docs/database.md` / `docs/testing.md` are intentionally still blank — fill in only when those conventions are actually decided (per explicit instruction not to infer them).
+3. If the graph.html crash matters later (interactive visualization), investigate the native dependency behind Graphify's viz step on Python 3.14/Windows, or pin an older Python for that step.
 
 ## Run
 
 ```bash
 uv run task spacemaker
-uv run pytest        # 164 passed, 5 skipped (Windows)
-uv run task checks   # ruff + ty + pytest, works natively on Windows
+uv run mkdocs serve                 # docs site at http://127.0.0.1:8000/
+uv run graphify explain "<symbol>"  # or: path "<a>" "<b>", query "<question>"
 ```
-
-## Notes for Claude Code specifically (this machine)
-
-- Project skills live at `.cursor/skills/` (Cursor's convention); Claude Code only auto-discovers `.claude/skills/`. Fixed via a real OS symlink `.claude/skills -> .cursor/skills` (needs an elevated shell to (re)create on a fresh clone — `New-Item -ItemType SymbolicLink -Path ".claude\skills" -Target ".cursor\skills"` after `mkdir .claude`).
-- No `.claude/skills` fallback exists for instructions files: Claude Code already reads `AGENTS.md` directly when there's no `CLAUDE.md`, confirmed by this session loading `AGENTS.md` with no `CLAUDE.md` present — a `CLAUDE.md -> AGENTS.md` symlink is unnecessary and was intentionally skipped.
