@@ -143,6 +143,14 @@ or spending tokens parsing the raw graph JSON. The graph is a generated
 artifact, not a substitute for the tests and specs that define correct
 behavior.
 
+**Not enabled yet, possible future option:** `graphify extract` also
+supports indexing `docs/` (and PDFs) into the *same* graph via an LLM
+backend (`--code-only` is what currently opts us out of that). This would
+let `explain`/`path`/`query` connect prose concepts to code symbols
+directly. Not worth it yet at this doc corpus's size, and it costs an LLM
+API key + tokens + non-determinism — revisit if `docs/` grows enough that
+plain file reads stop being sufficient.
+
 Also mirrored as an always-on Cursor rule: `.cursor/rules/graphrag-tools.mdc`
 (pointer only — this section is the source of truth).
 
