@@ -14,7 +14,10 @@ import webview
 from webview.errors import WebViewException
 
 from spacemaker.adapters.inbound.desktop_api import DesktopApi
-from spacemaker.adapters.inbound.qt_webengine_shutdown import install_qt_webengine_shutdown_fix
+from spacemaker.adapters.inbound.qt_webengine_shutdown import (
+	finalize_qt_after_webview,
+	install_qt_webengine_shutdown_fix,
+)
 from spacemaker.bootstrap.paths import app_icon_path, webengine_storage_path
 from spacemaker.bootstrap.services import create_app
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
@@ -135,7 +138,10 @@ def main(argv: list[str] | None = None) -> None:
 		webbrowser.open(url)
 		thread.join()
 		return
+	finalize_qt_after_webview()
 	_shutdown_services(services_holder)
+	# Hard exit: uvicorn runs on a daemon thread we cannot join without refactoring
+	# run_server(); Qt may also leave native threads that block sys.exit(0).
 	os._exit(0)
 
 
