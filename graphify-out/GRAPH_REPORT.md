@@ -1,4 +1,4 @@
-# Graph Report - graphrag-mkdocs-codebase-graph-891193  (2026-09-24)
+# Graph Report - SpaceMaker  (2026-09-24)
 
 ## Corpus Check
 - cluster-only mode — file stats not available
@@ -9,7 +9,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `9ba1701c`
+- Built from commit: `6a23e560`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

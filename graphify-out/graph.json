@@ -14259,6 +14259,7 @@
       "label": "pre-commit",
       "_origin": "ast",
       "community": 69,
+      "community_name": "Community 69",
       "file_type": "code",
       "metadata": {
         "language": "bash",
@@ -14273,6 +14274,7 @@
       "label": "pre-commit script",
       "_origin": "ast",
       "community": 69,
+      "community_name": "Community 69",
       "file_type": "code",
       "metadata": {
         "language": "bash",
@@ -56561,5 +56563,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "c5b9e237def417a0b9feb4ec9b8cb232aca40e23"
+  "built_at_commit": "6a23e5602c447bff8e7a2b02a2006d7ea1bf3006"
 }
