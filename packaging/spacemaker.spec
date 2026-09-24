@@ -10,6 +10,14 @@ icon = repo / "packaging" / "assets" / "spacemaker-icon.png"
 
 block_cipher = None
 
+# Native pywebview backend per OS (edgechromium=Windows, cocoa=macOS); Qt WebEngine
+# is Linux-only (bundled there via the AppImage flow, not this onefile spec) — never
+# bundle backends other than the one this build's OS actually uses.
+_unused_gui_backends = {
+	"win32": ["webview.platforms.cocoa", "webview.platforms.gtk", "webview.platforms.qt"],
+	"darwin": ["webview.platforms.edgechromium", "webview.platforms.gtk", "webview.platforms.qt"],
+}.get(sys.platform, ["webview.platforms.cocoa", "webview.platforms.edgechromium"])
+
 a = Analysis(
 	[str(repo / "src" / "spacemaker" / "desktop.py")],
 	pathex=[str(src)],
@@ -29,11 +37,9 @@ a = Analysis(
 	runtime_hooks=[],
 	excludes=[
 		"webview.platforms.cef",
-		"webview.platforms.cocoa",
-		"webview.platforms.edgechromium",
-		"webview.platforms.gtk",
 		"webview.platforms.mshtml",
 		"webview.platforms.winforms",
+		*_unused_gui_backends,
 	],
 	win_no_prefer_redirects=False,
 	win_private_assemblies=False,

@@ -8,10 +8,12 @@ import sys
 import threading
 import time
 import webbrowser
+from typing import cast
 
 import uvicorn
 import webview
 from webview.errors import WebViewException
+from webview.guilib import GUIType
 
 from spacemaker.adapters.inbound.desktop_api import DesktopApi
 from spacemaker.adapters.inbound.qt_native_style import install_qt_native_style
@@ -48,6 +50,17 @@ def _apply_qt_window_icon() -> None:
 		return
 
 
+def _default_gui_backend() -> str:
+	"""Native WebView2/WKWebView on Windows/macOS (no Qt needed); Qt WebEngine on Linux,
+	where it is bundled to pin a known Chromium version instead of the host's webkit2gtk.
+	"""
+	if sys.platform == "win32":
+		return "edgechromium"
+	if sys.platform == "darwin":
+		return "cocoa"
+	return "qt"
+
+
 def _port_in_use(port: int) -> bool:
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
 		sock.settimeout(0.4)
@@ -69,19 +82,22 @@ def _shutdown_services(services_holder: list) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-	install_qt_webengine_gpu_flags()
-
 	parser = argparse.ArgumentParser(prog="spacemaker")
 	parser.add_argument("--port", type=int, default=8765)
 	parser.add_argument("--host", default="0.0.0.0", help="Bind host (0.0.0.0 enables LAN gallery)")
 	parser.add_argument("--server-only", action="store_true", help="Run API/UI in browser without pywebview")
 	parser.add_argument(
 		"--gui",
-		choices=("qt", "gtk", "auto"),
-		default="qt",
-		help="pywebview backend (default qt for cross-platform packaging)",
+		choices=("qt", "gtk", "edgechromium", "cocoa", "auto"),
+		default=None,
+		help="pywebview backend (default: edgechromium on Windows, cocoa on macOS, qt on Linux)",
 	)
 	args = parser.parse_args(argv)
+	gui = args.gui or _default_gui_backend()
+	use_qt = gui == "qt"
+
+	if use_qt:
+		install_qt_webengine_gpu_flags()
 
 	if _port_in_use(args.port):
 		print(
@@ -112,9 +128,10 @@ def main(argv: list[str] | None = None) -> None:
 		return
 
 	time.sleep(0.3)
-	install_qt_webengine_shutdown_fix()
-	install_qt_native_style()
-	_apply_qt_window_icon()
+	if use_qt:
+		install_qt_webengine_shutdown_fix()
+		install_qt_native_style()
+		_apply_qt_window_icon()
 
 	def on_closing() -> bool:
 		_shutdown_services(services_holder)
@@ -132,10 +149,9 @@ def main(argv: list[str] | None = None) -> None:
 		print("Could not create desktop window.", file=sys.stderr)
 		sys.exit(1)
 	window.events.closing += on_closing
-	gui = None if args.gui == "auto" else args.gui
 	try:
 		webview.start(
-			gui=gui,
+			gui=None if gui == "auto" else cast(GUIType, gui),
 			private_mode=False,
 			storage_path=webengine_storage_path(),
 		)
@@ -144,7 +160,8 @@ def main(argv: list[str] | None = None) -> None:
 		webbrowser.open(url)
 		thread.join()
 		return
-	finalize_qt_after_webview()
+	if use_qt:
+		finalize_qt_after_webview()
 	_shutdown_services(services_holder)
 	# Hard exit: uvicorn runs on a daemon thread we cannot join without refactoring
 	# run_server(); Qt may also leave native threads that block sys.exit(0).

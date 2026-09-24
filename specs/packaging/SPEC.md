@@ -13,7 +13,9 @@
 
 End users receive a **portable desktop build** per OS. It contains the Python runtime, web UI, legal markdown, and app icon. It does **not** contain adb, libmtp, ffmpeg, ffprobe, magick, or exiftool.
 
-On **Linux**, the primary release artifact is a **pruned relocatable AppDir** packed as an AppImage (managed CPython + venv + Qt WebEngine for pywebview). PyInstaller onefile remains optional for dev or non-Linux targets.
+The desktop shell's pywebview backend is native per OS: **WebView2** (`edgechromium`) on Windows, **WKWebView** (`cocoa`) on macOS — no Qt on either. **Qt WebEngine** (`qt`) is Linux-only, kept there so the app pins a known Chromium version instead of depending on the host distro's `webkit2gtk`. `pyqt6`/`pyqt6-webengine`/`qtpy` are Linux-only dependencies.
+
+On **Linux**, the primary release artifact is a **pruned relocatable AppDir** packed as an AppImage (managed CPython + venv + Qt WebEngine for pywebview). PyInstaller onefile remains optional for dev or non-Linux targets and never bundles Qt.
 
 On first launch (or when a tool is missing from the managed folder), SpaceMaker **downloads pinned builds** from upstream or PyPI wheel sources into the standard per-user data directory:
 
