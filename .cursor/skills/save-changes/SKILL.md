@@ -17,7 +17,7 @@ Hand off a dirty tree: refresh `memory/`, commit, push. Do **not** force-push, s
 ## Steps
 
 1. **Memory (before staging)**
-   - Follow `.cursor/rules/agent-memory.mdc`.
+   - Follow `.cursor/skills/agent-memory/SKILL.md`.
    - `progress.md` — check off completed work; add newly discovered tasks/bugs. Do not invent worktree-cleanup tasks.
    - `activeContext.md` — rewrite so the next session can start: branch, focus, just changed, next steps, no stale blockers.
    - `decisions.md` — append-only, newest first, only for significant technical choices made in this work. Skip if none.

@@ -105,3 +105,7 @@ and permanent, not a bug — the embedded `built_at_commit` field can only
 ever reference the *parent* commit (a file can't contain the hash of the
 commit that contains it), and it gets re-touched a few seconds after the
 hook stages it. Don't try to "fix" it by re-committing.
+
+See [agent-tooling.md](agent-tooling.md) for advanced Graphify commands,
+the Cursor/Claude Code rule-pairing scheme, and other Windows/tooling
+gotchas.

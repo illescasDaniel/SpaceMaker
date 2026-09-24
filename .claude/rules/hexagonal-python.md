@@ -1,6 +1,26 @@
+---
+paths: ["src/spacemaker/**"]
+---
 # Hexagonal Architecture (Python)
 
-## Inside core (`src/spacemaker/domain`, `ports`, `application`)
+## Placement
+
+| What | Where |
+|------|--------|
+| Entities, enums, errors | `src/spacemaker/domain/` |
+| Outbound ports | `src/spacemaker/ports/outbound/` |
+| Use case impl | `src/spacemaker/application/` |
+| FastAPI, static UI, WS | `src/spacemaker/adapters/inbound/web/` |
+| FFmpeg, adb, FS | `src/spacemaker/adapters/outbound/` |
+| Wiring | `src/spacemaker/bootstrap/` |
+| pywebview entry | `src/spacemaker/desktop.py` |
+
+## Naming
+
+- Outbound: `DeviceRepository`, `MediaConverter`, `FileSystem` (Protocol suffix optional)
+- Inbound: use case classes in `application/` (no separate `ports/inbound/` tree today)
+
+## Inside core (`domain`, `ports`, `application`)
 
 - Domain entities, value objects, errors
 - Outbound ports (`DeviceRepository`, `MediaConverter`, `FileSystem`, …)
@@ -9,6 +29,8 @@
 **Must NOT import:** FastAPI, uvicorn, pywebview, subprocess wrappers tied to ffmpeg/adb, or concrete adapter modules.
 
 **May import:** stdlib; `typing`; other `spacemaker.domain` / `spacemaker.ports` / `spacemaker.application` as appropriate.
+
+Verify with ripgrep when unsure.
 
 ## Adapters (`src/spacemaker/adapters/`)
 

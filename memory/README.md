@@ -9,6 +9,7 @@ Per-branch project state used as an AI agent memory bank. The folder is **tracke
 | `progress.md` | Macro checklist — what is done, what is pending, open bugs. |
 | `activeContext.md` | Session scratchpad — current focus, blockers, touched files, immediate next steps. |
 | `decisions.md` | Technical log — significant technical, structural, or dependency decisions and their rationale (newest first, append-only). |
+| `archive.md` | Finished history moved out of `progress.md`/`activeContext.md` — not read at session start. |
 
 ## Starting a new feature branch
 
@@ -16,8 +17,8 @@ Per-branch project state used as an AI agent memory bank. The folder is **tracke
 
 - New branch: give `progress.md` a fresh section for the feature/version, clear the Done list, and carry forward only Open items still relevant to the new branch.
 - `activeContext.md`: rewrite with the branch name, the new feature as current focus, no blockers, and only relevant next steps carried over.
-- You can do this manually or ask the AI agent — it follows `.cursor/rules/agent-memory.mdc`.
+- You can do this manually or ask the AI agent — it follows `.cursor/skills/agent-memory/SKILL.md`.
 
 ## Out of scope for memory
 
-Do not track worktree cleanup or deletion in `progress.md` / `activeContext.md` — that is local per-developer hygiene and creates merge noise when committed. See `.cursor/rules/agent-memory.mdc`.
+Do not track worktree cleanup or deletion in `progress.md` / `activeContext.md` — that is local per-developer hygiene and creates merge noise when committed. See `.cursor/skills/agent-memory/SKILL.md`.
