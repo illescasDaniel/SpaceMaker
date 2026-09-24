@@ -104,6 +104,56 @@ Release builds are **portable executables** (Linux **AppImage** primary; optiona
 | `docs/playbooks/fast-tests.md` | pytest layout, speed, naming |
 | `docs/playbooks/SpaceMaker-adaptations.md` | This repo's overrides (folders, conversion, UI) |
 
+## Codebase knowledge tools (orient before editing)
+
+Two tools exist so you do not need to read large swaths of the codebase up
+front. Use them before making non-trivial changes — but they don't skip any
+Phase Gate: wireframe → spec → architecture → tests → implementation
+approvals are still required for features and architectural changes.
+
+**Semantic knowledge base (MkDocs)** — architecture rationale, domain
+concepts, and per-area notes live as plain Markdown under `docs/`. **As an
+agent, read those `.md` files directly** (`docs/index.md`,
+`docs/ARCHITECTURE.md`, `docs/testing.md`, `docs/playbooks/`) — don't run
+`mkdocs serve` and browse rendered HTML just to read them; that's slower and
+adds nothing a direct file read doesn't already give you. `mkdocs serve` /
+`uv run task docs-serve` is for **humans** browsing the same content as a
+searchable site; `uv run task docs-build` is worth running after editing
+`docs/` since it also surfaces broken internal links.
+
+**Structural knowledge graph (Graphify)** — the codebase is also indexed as
+a queryable knowledge graph by [Graphify](https://github.com/Graphify-Labs/graphify)
+(`graphify-out/graph.json` + `graphify-out/GRAPH_REPORT.md`, regenerated and
+staged by `.githooks/pre-commit`; see "Developer setup" in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)).
+
+To map dependencies before editing code, do **not** read the raw
+`graph.json` file. Instead, use Graphify's CLI (taskipy wrappers pass
+extra args through):
+
+```bash
+uv run task graph-explain "<symbol>"          # or: uv run graphify explain "<symbol>"
+uv run task graph-path "<source>" "<target>"  # or: uv run graphify path "<source>" "<target>"
+uv run task graph-query "<question>"          # or: uv run graphify query "<question>"
+uv run task graph-update                      # regenerate by hand, without committing
+```
+
+This shows the blast radius of a change without reading every related file
+or spending tokens parsing the raw graph JSON. The graph is a generated
+artifact, not a substitute for the tests and specs that define correct
+behavior.
+
+**Not enabled yet, possible future option:** `graphify extract` also
+supports indexing `docs/` (and PDFs) into the *same* graph via an LLM
+backend (`--code-only` is what currently opts us out of that). This would
+let `explain`/`path`/`query` connect prose concepts to code symbols
+directly. Not worth it yet at this doc corpus's size, and it costs an LLM
+API key + tokens + non-determinism — revisit if `docs/` grows enough that
+plain file reads stop being sufficient.
+
+Also mirrored as an always-on Cursor rule: `.cursor/rules/graphrag-tools.mdc`
+(pointer only — this section is the source of truth).
+
 ## Skills
 
 Project workflows:
@@ -117,7 +167,7 @@ Project workflows:
 - `.cursor/skills/apply-worktree/` — merge agent worktree into main checkout + `uv run task checks`
 - `.cursor/skills/delete-worktree/` — remove isolated worktree after apply
 
-Always-on rules: `agent-memory.mdc`, `sdd.mdc`, `hexagonal-python.mdc`, `playbooks.mdc`.
+Always-on rules: `agent-memory.mdc`, `sdd.mdc`, `hexagonal-python.mdc`, `playbooks.mdc`, `graphrag-tools.mdc`.
 
 ## Quality gate
 

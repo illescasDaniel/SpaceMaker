@@ -6,33 +6,57 @@ _Last updated: 2026-09-24_
 
 ## Current focus
 
-Follow-up fix (commit `87b2196`): the `.claude/skills` symlink committed in the previous save-changes batch pointed at an absolute Windows path baked to this machine/user, breaking it for any other machine or OS. Repointed to a relative target and verified portability via a throwaway `git worktree` at a different path. Also diagnosed and documented a `New-Item -ItemType SymbolicLink` pitfall on Windows (wrong file/dir reparse-point type) hit while manually recreating the link locally — `git checkout` itself is unaffected. See `decisions.md` (2026-09-24, top entry) for details.
+Applied the `claude/graphrag-mkdocs-codebase-graph-891193` worktree onto `main`
+via `/apply-worktree`: agent-facing GraphRAG tooling — an MkDocs knowledge
+base (`docs/`) and a codebase dependency graph via the official **Graphify**
+tool (`graphifyy` on PyPI; CLI is `graphify`), wired into a version-controlled
+`.githooks/pre-commit` so the graph stays synced with every commit on both
+Windows and Linux. Dev-tooling, not a product feature, so it didn't go
+through the Phase Gate Protocol (wireframe/spec/architecture) — see
+`progress.md`.
 
-Before that: saved a large batch of previously-uncommitted local work via `/save-changes`. Verified all tests pass on Windows (164 pass, 5 skipped as POSIX-only) and the full quality gate (`uv run task checks`) runs natively on Windows and is green (ruff, ty, pytest). Committed in logical groups: Windows dev/test compatibility, QR dark-theme/flash fix + Windows component setup (exiftool download, ImageMagick PATH fallback, winget hints) + Easy-mode Wi‑Fi session fix, Qt WebEngine shutdown hardening, and the `.claude/skills` symlink. See `decisions.md` (2026-09-24 entries) for what each group covers and why.
+Immediately before that, on `main` itself: the `.claude/skills` symlink was
+repointed to a relative target (`../.cursor/skills`) for cross-machine
+portability (commit `87b2196`) — see `decisions.md` for the `New-Item`
+directory-symlink pitfall discovered along the way.
 
-## Just changed (now committed, see decisions.md)
+## Just changed
 
-- Windows compat: `bootstrap/paths.py` `display_user_path` normalises separators to `/`; `scripts/quality/checks.py` dispatches through `bash` on `win32`; platform-appropriate stub filenames / `@_skip_on_windows` markers across several unit tests.
-- QR codes: `adapters/inbound/web/qr_svg.py` (opaque black/white SVG, replacing theme-matched colors) + `app.js` `setQrImageSrc()` dedup so `<img src>` isn't reassigned every poll; `index.html` `aspect-ratio: 1` + `background: #fff` around QR images.
-- Windows component setup: `packaging/tool-catalog.json` exiftool entry + fixed ffmpeg URL; `catalog_installer.py` `zip_flatten` strategy + clearer 404 errors; `bundled_tools.py` ImageMagick Program-Files fallback; new `bootstrap/platform_setup_hints.py` (winget command surfaced in Components UI via `managed_tools.py` `setup_hint` + `app.js` `renderComponentsSetupHint`).
-- `bootstrap/services.py` — `start_convert` only stops an active extract job under `STOP_EXTRACT_FIRST`, fixing Easy-mode dropping the Wi‑Fi upload session on the first convert-as-received trigger.
-- `adapters/inbound/qt_webengine_shutdown.py` + `desktop.py` — much more thorough WebEngine/Qt teardown (idempotent, disconnects webchannel/nav-handler/interceptor, deletes top-level widgets) plus a `finalize_qt_after_webview()` pass after pywebview's loop exits; Windows gets longer drain rounds and real sleeps for `QDxgiVSyncService`.
-- `.claude/skills` — real Windows symlink → `.cursor/skills` (relative target `../.cursor/skills`, commit `87b2196`) so Claude Code's project-skill discovery sees this repo's Cursor-authored skills, portably across machines/OS. See `decisions.md` (2026-09-24, "relative target, and `New-Item` directory-symlink pitfall").
+- `mkdocs.yml`, `docs/index.md`, `docs/testing.md` — MkDocs site (material theme); nav is Home → Architecture → Testing. (`docs/database.md` was added then removed the same session — SpaceMaker has no database.)
+- `docs/ARCHITECTURE.md` — merged in an entry-point/routing/persistence analysis, a "Developer setup" section (`git config core.hooksPath .githooks`), and a note on the expected always-one-commit-behind `built_at_commit` drift.
+- `.githooks/pre-commit`, `.gitattributes`, `git config core.hooksPath .githooks` (**run this once per clone/worktree** — see README "Setup and run") — hook regenerates `graphify-out/graph.json` + `graphify-out/GRAPH_REPORT.md` (`graphify extract . --code-only` then `graphify cluster-only . --no-label --no-viz`), waits for the write to settle (Windows AV-scanning I/O lag), and only stages them when the diff is more than the commit-stamp/report-line noise — otherwise restores the committed version so `git status` stays clean.
+- `pyproject.toml` / `uv.lock` — added `mkdocs`, `mkdocs-material`, `graphifyy` to the `dev` dependency group; new taskipy tasks `docs-serve`, `docs-build`, `graph-update`, `graph-explain`, `graph-path`, `graph-query`.
+- `.cursor/rules/graphrag-tools.mdc` — always-on pointer to `AGENTS.md`'s "Codebase knowledge tools" section.
+- `CLAUDE.md` deleted; its content merged into `AGENTS.md`, since this repo is also driven from Cursor and other agents that don't read `CLAUDE.md`.
+- README.md — documents `git config core.hooksPath .githooks` as required setup, plus pointers to the docs site and graph CLI tasks.
+- A custom `ast`-based `scripts/agent_tools/generate_code_graph.py` was built, tested, then deleted in favor of the real Graphify tool once available.
+
+## Gotchas discovered this session
+
+- The task's package name `graphify` doesn't exist on PyPI (404) — the real package is `graphifyy` (double-y); the CLI binary it installs is named `graphify`. Verified via PyPI JSON + the upstream GitHub repo (121k★, YC-backed) before installing.
+- `uv run graphify cluster-only . --no-label` (without `--no-viz`) segfaults intermittently on this machine — the `graph.html` visualization step is the likely culprit on Windows + Python 3.14.6. Always pass `--no-viz`.
+- No bare `graphify` "build" command and no single-command LLM-free build — the no-API-key pipeline is two steps: `graphify extract <path> --code-only` then `graphify cluster-only <path> --no-label --no-viz`. Default output dir is `graphify-out/`, not the repo root.
+- `graphify-out/graph.json` / `GRAPH_REPORT.md` will always drift by exactly one commit's worth of `built_at_commit` right after a commit that has real changes — inherent, not a bug (see `decisions.md`). The pre-commit hook now avoids staging *pure* no-op drift, but a real graph change still legitimately shows the one-behind stamp.
+- `cluster-only` can exit before its own label-backfill write has fully settled on disk — the hook polls size/mtime until stable before comparing, rather than trusting the process's exit as "done".
+- `uv add` / some `graphify` subprocess calls got denied once each by Claude Code's own auto-mode permission classifier ("Untrusted Code Integration" / "Code from External") — not a hard block, just needed approval or a retry.
+- An earlier `docs/architecture.md` (lowercase) collided case-insensitively with `docs/ARCHITECTURE.md` on this Windows filesystem and briefly overwrote it — recovered from git history and merged. Watch for this with any new doc filename differing only by case.
 
 ## Next steps
 
-1. **Easy mode import issues — where to review** — spec draft pending (open-folder API partially via `/api/library/open-folder`); wireframe already approved 2026-09-23.
-2. No other known blockers from this session; tree should be clean after this save.
+1. `docs/testing.md` is populated for real (BDD given/when/then, mocking standards); no other docs pages are pending.
+2. If the `graph.html` crash matters later (interactive visualization), investigate the native dependency behind Graphify's viz step on Python 3.14/Windows, or pin an older Python for that step.
+3. Not enabled yet, noted as a future option in `AGENTS.md`: `graphify extract` can index `docs/` (and PDFs) into the same graph via an LLM backend — revisit once the docs corpus is large enough that plain file reads stop being sufficient.
 
 ## Run
 
 ```bash
 uv run task spacemaker
-uv run pytest        # 164 passed, 5 skipped (Windows)
-uv run task checks   # ruff + ty + pytest, works natively on Windows
+uv run task docs-serve              # docs site at http://127.0.0.1:8000/ (humans; agents read docs/*.md directly)
+uv run task graph-explain "<symbol>" # or: graph-path "<a>" "<b>", graph-query "<question>"
+uv run task checks                  # ruff + ty + pytest, works natively on Windows
 ```
 
 ## Notes for Claude Code specifically (this machine)
 
 - Project skills live at `.cursor/skills/` (Cursor's convention); Claude Code only auto-discovers `.claude/skills/`. Fixed via a real OS symlink `.claude/skills -> ../.cursor/skills` (relative target, portable across machines/OS). `git checkout` recreates it correctly on any clone. To recreate manually on Windows, use `cmd /c "mklink /D skills ..\.cursor\skills"` from inside `.claude/` — not `New-Item -ItemType SymbolicLink`, which can mistype it as a file symlink (untraversable by `cd`/Explorer) even for a valid directory target.
-- No `.claude/skills` fallback exists for instructions files: Claude Code already reads `AGENTS.md` directly when there's no `CLAUDE.md`, confirmed by this session loading `AGENTS.md` with no `CLAUDE.md` present — a `CLAUDE.md -> AGENTS.md` symlink is unnecessary and was intentionally skipped.
+- No `.claude/skills`-style fallback is needed for instructions files: Claude Code already reads `AGENTS.md` directly when there's no `CLAUDE.md` (confirmed by direct testing) — which is now moot anyway since `CLAUDE.md` was deleted and merged into `AGENTS.md` this session.

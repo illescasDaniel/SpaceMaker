@@ -16,6 +16,16 @@ node_modules/
 htmlcov/
 coverage/
 
+# MkDocs build output
+site/
+
+# Graphify local cache/intermediate files; graph.json + GRAPH_REPORT.md are
+# intentionally tracked (kept in sync by .githooks/pre-commit) — see
+# docs/ARCHITECTURE.md "Developer setup".
+graphify-out/*
+!graphify-out/graph.json
+!graphify-out/GRAPH_REPORT.md
+
 # Local dev tool symlinks (see tools/README.md); release CI ships real binaries.
 tools/*
 !tools/README.md
