@@ -28,11 +28,19 @@ migrate or link it here as this site matures.
 Inbound HTTP/FastAPI surface: endpoints, request/response shapes, and the use cases
 they invoke.
 
-### Database Schema
+### Persistence
 
-Persistent state and on-disk formats (if/when introduced). Currently SpaceMaker is
-filesystem-based — document the `originals/` / `converted/` / `error/` / `invalid/`
-library layout here as it evolves.
+There is no database — SpaceMaker is filesystem-based. See
+`docs/ARCHITECTURE.md` "Persistence: no database" for the
+`originals/` / `converted/` / `error/` / `invalid/` library layout and how
+runtime state is held. If a database is ever introduced, give it its own
+`docs/database.md` page (schema rules, migration protocol) and add it to
+`mkdocs.yml` nav at that point.
+
+### Testing
+
+BDD given/when/then conventions, mocking standards, and the quality gate —
+see `docs/testing.md`.
 
 ### AI Prompts
 

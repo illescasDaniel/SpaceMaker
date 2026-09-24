@@ -112,17 +112,14 @@ Phase Gate: wireframe → spec → architecture → tests → implementation
 approvals are still required for features and architectural changes.
 
 **Semantic knowledge base (MkDocs)** — architecture rationale, domain
-concepts, and per-area notes live in `docs/`, served as a browsable site:
-
-```bash
-uv run task docs-serve   # or: uv run mkdocs serve
-uv run task docs-build   # static build to site/; also surfaces broken internal links
-```
-
-Open the printed local URL and read the relevant section (see
-`docs/index.md`) for the area you're about to touch. If a section is still a
-stub, fall back to `docs/ARCHITECTURE.md`, `specs/`, and
-`docs/playbooks/`.
+concepts, and per-area notes live as plain Markdown under `docs/`. **As an
+agent, read those `.md` files directly** (`docs/index.md`,
+`docs/ARCHITECTURE.md`, `docs/testing.md`, `docs/playbooks/`) — don't run
+`mkdocs serve` and browse rendered HTML just to read them; that's slower and
+adds nothing a direct file read doesn't already give you. `mkdocs serve` /
+`uv run task docs-serve` is for **humans** browsing the same content as a
+searchable site; `uv run task docs-build` is worth running after editing
+`docs/` since it also surfaces broken internal links.
 
 **Structural knowledge graph (Graphify)** — the codebase is also indexed as
 a queryable knowledge graph by [Graphify](https://github.com/Graphify-Labs/graphify)

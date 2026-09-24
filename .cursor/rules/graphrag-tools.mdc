@@ -11,8 +11,10 @@ and `AGENTS.md` ever disagree, `AGENTS.md` wins.
 
 ## Before making a non-trivial change
 
-1. Check `docs/` (via `uv run task docs-serve`, or read the files directly)
-   for the *why* — architecture rationale, domain concepts.
+1. Check `docs/` for the *why* — architecture rationale, domain concepts.
+   **As an agent, read the `.md` files directly** (`docs/index.md`,
+   `docs/ARCHITECTURE.md`, `docs/testing.md`); `uv run task docs-serve` is
+   for humans browsing the rendered site, not for you.
 2. Check the Graphify knowledge graph for the *what calls what* — do **not**
    read raw `graphify-out/graph.json`:
    ```bash

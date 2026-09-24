@@ -86,6 +86,19 @@ uv run task spacemaker        # desktop (pywebview + local server)
 uv run task spacemaker-server # API/UI in browser only (no file picker)
 ```
 
+Run once per clone/worktree so Git uses this repo's version-controlled hooks
+(works identically on Windows and Linux; not `.git/hooks/`, so it's shared
+and survives a fresh clone):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This keeps the [Graphify](https://github.com/Graphify-Labs/graphify)
+knowledge graph (`graphify-out/graph.json` + `graphify-out/GRAPH_REPORT.md`)
+in sync on every commit — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+"Developer setup".
+
 Contributor tool resolution: set **`SPACEMAKER_DEV=1`**, or override the managed folder with **`SPACEMAKER_TOOLS_DIR`**. See [tools/README.md](tools/README.md).
 
 On first launch the app downloads pinned CLIs into your user data folder unless dev/PATH rules apply. See [specs/packaging/SPEC.md](specs/packaging/SPEC.md).
@@ -120,6 +133,8 @@ Uses an isolated temp profile and offscreen Qt WebEngine (same 1200×900 viewpor
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — hexagonal layers and runtime flow
 - [AGENTS.md](AGENTS.md) — spec-driven development, phase gates, agent workflow
 - [specs/](specs/) — feature specifications and acceptance criteria
+- `uv run task docs-serve` — browsable docs site (architecture, testing conventions) at `http://127.0.0.1:8000`
+- `uv run task graph-explain "<symbol>"` — dependency graph lookups (also `graph-path`, `graph-query`); see [AGENTS.md](AGENTS.md) "Codebase knowledge tools"
 
 ## License
 
