@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -6,6 +7,10 @@ from spacemaker.adapters.outbound.media.tool_runner import ToolExecutionError, T
 from spacemaker.bootstrap.bundled_tools import BundledTool
 
 
+_skip_on_windows = pytest.mark.skipif(sys.platform == "win32", reason="Uses POSIX shell scripts")
+
+
+@_skip_on_windows
 def test_given_nonzero_exit_when_run_then_raises_with_stderr(
 	tmp_path: Path,
 	monkeypatch: pytest.MonkeyPatch,
@@ -25,6 +30,7 @@ def test_given_nonzero_exit_when_run_then_raises_with_stderr(
 		runner.run(BundledTool.MAGICK, ["-version"])
 
 
+@_skip_on_windows
 def test_given_managed_ffmpeg_without_hw_when_path_allowed_then_prefers_system_ffmpeg(
 	tmp_path: Path,
 	monkeypatch: pytest.MonkeyPatch,

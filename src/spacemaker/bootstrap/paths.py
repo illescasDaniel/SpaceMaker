@@ -62,7 +62,7 @@ def display_user_path(path: str, *, trailing_slash: bool = False) -> str:
 	if resolved == home:
 		display = "~"
 	elif resolved.startswith(home + os.sep):
-		display = "~" + resolved[len(home) :]
+		display = "~" + resolved[len(home) :].replace(os.sep, "/")
 	else:
 		display = resolved
 	if trailing_slash and not display.endswith("/"):

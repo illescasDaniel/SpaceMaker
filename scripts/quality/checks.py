@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Dispatch quality gate to checks.sh (Unix)."""
+"""Dispatch quality gate to checks.sh (via bash on Windows)."""
 
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +20,12 @@ def main(argv: list[str] | None = None) -> int:
 	args, rest = parser.parse_known_args(argv)
 	script = _REPO / "scripts" / "quality" / "checks.sh"
 	cmd = [str(script)]
+	if sys.platform == "win32":
+		bash = shutil.which("bash")
+		if not bash:
+			print("checks.sh needs bash (e.g. Git Bash) on Windows PATH", file=sys.stderr)
+			return 1
+		cmd = [bash, str(script)]
 	if args.fix:
 		cmd.append("--fix")
 	if args.quiet:

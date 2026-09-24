@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from spacemaker.application.managed_tools import ManagedToolsService
@@ -31,9 +32,11 @@ def test_given_catalog_installs_when_ensure_then_places_file(tmp_path: Path, mon
 
 	def fake_install(tool_id: str) -> ToolInstallResult:
 		installer.installed.append(tool_id)
-		path = bundled_tool_path(BundledTool.ADB, root=dest, platform_is_windows=False)
+		is_windows = sys.platform == "win32"
+		path = bundled_tool_path(BundledTool.ADB, root=dest, platform_is_windows=is_windows)
 		path.write_text("stub")
-		path.chmod(0o755)
+		if not is_windows:
+			path.chmod(0o755)
 		return ToolInstallResult(tool_id=tool_id, ok=True)
 
 	installer.install = fake_install  # type: ignore[method-assign]

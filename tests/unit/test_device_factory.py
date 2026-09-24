@@ -16,9 +16,13 @@ def test_given_afc_when_device_repository_for_then_afc_repo():
 
 
 def test_given_adb_when_device_repository_for_then_adb_repo(tmp_path, monkeypatch):
-	adb = tmp_path / "adb"
-	adb.write_text("#!/bin/sh\n", encoding="utf-8")
-	adb.chmod(0o755)
+	import sys
+
+	adb_name = "adb.exe" if sys.platform == "win32" else "adb"
+	adb = tmp_path / adb_name
+	adb.write_text("stub", encoding="utf-8")
+	if sys.platform != "win32":
+		adb.chmod(0o755)
 	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(tmp_path))
 	repo = device_repository_for(ConnectionMethod.ADB)
 	assert isinstance(repo, AdbDeviceRepository)

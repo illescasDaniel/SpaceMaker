@@ -1,4 +1,7 @@
+import sys
 from pathlib import Path
+
+import pytest
 
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
 from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMediaConverter
@@ -6,6 +9,9 @@ from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaP
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.domain.library import LibraryFolder
+
+
+_skip_on_windows = pytest.mark.skipif(sys.platform == "win32", reason="Uses POSIX shell scripts")
 
 
 def _install_tool_scripts(tools: Path) -> None:
@@ -34,6 +40,7 @@ def _install_tool_scripts(tools: Path) -> None:
 	exiftool.chmod(0o755)
 
 
+@_skip_on_windows
 def test_given_dng_when_magick_cannot_read_then_converts_embedded_preview(tmp_path: Path) -> None:
 	tools = tmp_path / "tools"
 	tools.mkdir()
