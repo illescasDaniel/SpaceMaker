@@ -60,7 +60,11 @@ at the top of each section.
 - [x] **Windows WebEngine freeze/black-surface bug** — `QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu-compositing` (win32-only) in `qt_webengine_gpu_flags.py`; user-confirmed fixed. Two prior attempts (`--use-angle=d3d9`, `QSG_RHI_BACKEND=opengl`) ruled out, see `decisions.md`
 - [x] **Windows ProactorEventLoop ConnectionResetError noise** — uvicorn switched to SelectorEventLoop on win32 via `event_loop.uvicorn_loop_for_platform()` (`"asyncio:SelectorEventLoop"` string directly; a first attempt via a wrapper function broke startup entirely — see `decisions.md`)
 - [x] **Real-process smoke test** — `tests/integration/test_server_smoke.py` + `uv run task smoke`; boots `python -m spacemaker --server-only` for real and polls it, catching startup/wiring bugs `TestClient`-based tests can't see
-- [x] **`QDxgiVSyncService`/`QThreadStorage` shutdown warnings investigated** — confirmed benign/cosmetic, confirmed unrelated to (not fixed by) the WebEngine freeze fix; accepted, not pursuing further unless it becomes more than log noise — see `decisions.md`
+- [x] **`QDxgiVSyncService`/`QThreadStorage` shutdown warnings** — confirmed benign/cosmetic, confirmed unrelated to (not fixed by) the WebEngine freeze fix; teardown timing left as-is, but the two known-benign lines are now filtered via a `qInstallMessageHandler` wrapper in `qt_webengine_shutdown.py` so they no longer print; user-confirmed — see `decisions.md`
+
+### 2026-09-24 — Windows desktop-bug dogfooding round (freeze, event-loop noise, shutdown warnings, native style)
+
+Fixed three Windows-only desktop/server bugs found while dogfooding `uv run task spacemaker` (Chromium/Qt-WebEngine GPU-compositor freeze fixed by `--disable-gpu-compositing`; noisy `ConnectionResetError` tracebacks fixed by pointing uvicorn's `loop=` at `"asyncio:SelectorEventLoop"` directly, after a first attempt using a wrapper function broke the app outright — root-caused and fixed, verified against a new `tests/integration/test_server_smoke.py` real-process smoke test; non-native pywebview dialogs themed via `qt_native_style.py`). Landed as commit `176db11`. Full root causes in `decisions.md`.
 
 ## activeContext threads (concluded)
 

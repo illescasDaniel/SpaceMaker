@@ -21,6 +21,37 @@ def _shutdown_finalize_passes() -> int:
 	return 6 if sys.platform == "win32" else 3
 
 
+_BENIGN_SHUTDOWN_WARNING_PREFIXES = (
+	"QDxgiVSyncService not destroyed in time",
+	"QThreadStorage: entry",
+)
+
+
+def _is_benign_shutdown_warning(message: str) -> bool:
+	"""Match known-benign async WebEngine/Qt teardown log noise (see memory/decisions.md)."""
+	return message.startswith(_BENIGN_SHUTDOWN_WARNING_PREFIXES)
+
+
+def install_benign_shutdown_warning_filter() -> None:
+	"""Silence known-benign async WebEngine/Qt shutdown log noise without touching teardown timing."""
+	try:
+		from qtpy import QtCore
+	except ImportError:
+		return
+
+	previous_handler = QtCore.qInstallMessageHandler(None)
+
+	def handler(msg_type, context, message) -> None:
+		if _is_benign_shutdown_warning(message):
+			return
+		if previous_handler is not None:
+			previous_handler(msg_type, context, message)
+		else:
+			sys.stderr.write(f"{message}\n")
+
+	QtCore.qInstallMessageHandler(handler)
+
+
 def _drain_qt_events(app, *, rounds: int | None = None) -> None:
 	from qtpy import QtCore
 
@@ -153,6 +184,8 @@ def install_qt_webengine_shutdown_fix() -> None:
 
 	if not getattr(qt_platform, "is_webengine", False):
 		return
+
+	install_benign_shutdown_warning_filter()
 
 	def close_event(self, event) -> None:
 		should_cancel = self.pywebview_window.events.closing.set()
