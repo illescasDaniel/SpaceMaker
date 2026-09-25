@@ -27,7 +27,18 @@
 	var calendarSelectedDay = null;
 	var galleryItemPath = "";
 	var galleryItemKind = "image";
-	var galleryBrowsePaths = [];
+	var galleryItemNeighbors = { prev: null, next: null };
+	var galleryMonthBlocks = [];
+	var galleryNextCursor = null;
+	var galleryHasMore = false;
+	var galleryLoadingMore = false;
+	var galleryMountedTileCount = 0;
+	var galleryWindowListenersBound = false;
+	var galleryWindowCheckScheduled = false;
+	var galleryIntersectionObserver = null;
+	var GALLERY_PAGE_LIMIT = 150;
+	var GALLERY_TILE_BUDGET = 1200;
+	var GALLERY_VIEWPORT_BUFFER_MULTIPLIER = 3;
 	var lastQrSrcByElementId = {};
 	function isAbsolutePath(path) {
 		if (!path) {
@@ -89,16 +100,18 @@
 		stage.textContent = "";
 		var mediaUrl = "/media/" + encodeURI(payload.relative_path);
 		var label = meta.filename || payload.relative_path;
+		var video;
+		var noPreview;
 		if (payload.kind === "video") {
 			if (payload.preview_in_browser) {
-				var video = document.createElement("video");
+				video = document.createElement("video");
 				video.controls = true;
 				video.preload = "metadata";
 				video.src = mediaUrl;
 				video.setAttribute("aria-label", label);
 				stage.appendChild(video);
 			} else {
-				var noPreview = document.createElement("p");
+				noPreview = document.createElement("p");
 				noPreview.className = "status-line gallery-no-preview";
 				noPreview.textContent =
 					"No in-browser preview for this codec (e.g. HEVC). Use Open on desktop or download the file.";
@@ -113,11 +126,12 @@
 	}
 
 	function warnIfStaleShell(settings) {
+		var homeBanner;
 		if (!isDesktopShell() || !settings) {
 			return;
 		}
 		if (settings.ui_shell_version === EXPECTED_UI_SHELL_VERSION) {
-			var homeBanner = document.getElementById("home-form-banner");
+			homeBanner = document.getElementById("home-form-banner");
 			if (homeBanner) {
 				homeBanner.hidden = true;
 				homeBanner.textContent = "";
@@ -129,7 +143,7 @@
 			"UI and server do not match. Quit every SpaceMaker window, stop any process on port " +
 			port +
 			", then run: uv run task spacemaker";
-		var homeBanner = document.getElementById("home-form-banner");
+		homeBanner = document.getElementById("home-form-banner");
 		if (homeBanner) {
 			homeBanner.textContent = message;
 			homeBanner.hidden = false;
@@ -150,18 +164,10 @@
 			return;
 		}
 		var currentId = active.id.replace(/^view-/, "");
-		if (
-			currentId === "gallery" ||
-			currentId === "gallery-item" ||
-			currentId === "settings" ||
-			currentId === "legal"
-		) {
+		if (currentId === "gallery" || currentId === "gallery-item" || currentId === "settings" || currentId === "legal") {
 			return;
 		}
-		var target =
-			!next.active_module || next.active_module === "home"
-				? "home"
-				: moduleToViewId(next.active_module);
+		var target = !next.active_module || next.active_module === "home" ? "home" : moduleToViewId(next.active_module);
 		if (currentId !== target) {
 			showView(target, { skipHistory: true });
 		}
@@ -322,6 +328,7 @@
 		uiMode = mode === "advanced" ? "advanced" : "easy";
 		var btnEasy = document.getElementById("btn-ui-easy");
 		var btnAdvanced = document.getElementById("btn-ui-advanced");
+		var active;
 		if (btnEasy) {
 			btnEasy.classList.toggle("active", uiMode === "easy");
 		}
@@ -329,7 +336,7 @@
 			btnAdvanced.classList.toggle("active", uiMode === "advanced");
 		}
 		if (!options.skipViewSwitch && !toolsBlockMainApp(state)) {
-			var active = document.querySelector(".screen.active");
+			active = document.querySelector(".screen.active");
 			if (active && (active.id === "view-easy" || active.id === "view-wizard")) {
 				showView("home", { skipHistory: true });
 			}
@@ -385,9 +392,7 @@
 		if (!fab || !isDesktopShell()) {
 			return;
 		}
-		var onGallery =
-			resolvedViewId === "gallery" ||
-			resolvedViewId === "gallery-item";
+		var onGallery = resolvedViewId === "gallery" || resolvedViewId === "gallery-item";
 		fab.hidden = !onGallery;
 		if (!onGallery) {
 			closeGalleryPhonePopup();
@@ -412,8 +417,7 @@
 				var tab = b.getAttribute("data-view");
 				b.classList.toggle(
 					"active",
-					tab === "gallery" && resolved.indexOf("gallery") === 0 ||
-						tab === "home" && isMainHubView(resolved),
+					(tab === "gallery" && resolved.indexOf("gallery") === 0) || (tab === "home" && isMainHubView(resolved)),
 				);
 			});
 			if (isMainHubView(resolved) || resolved === "gallery") {
@@ -438,32 +442,26 @@
 		}
 	}
 
-	function pathsFromTimelineGroups(groups) {
-		var paths = [];
-		if (!groups) {
-			return paths;
-		}
-		groups.forEach(function (g) {
-			(g.items || []).forEach(function (item) {
-				paths.push(item.relative_path);
-			});
-		});
-		return paths;
-	}
-
-	function ensureGalleryBrowsePaths() {
-		if (galleryBrowsePaths.length) {
-			return Promise.resolve(galleryBrowsePaths);
-		}
-		return api("GET", "/api/gallery/timeline")
-			.then(function (groups) {
-				galleryBrowsePaths = pathsFromTimelineGroups(groups);
-				return galleryBrowsePaths;
+	function fetchGalleryNeighbor(path, direction) {
+		return api("GET", "/api/gallery/item/neighbor?path=" + encodeURIComponent(path) + "&direction=" + direction)
+			.then(function (payload) {
+				return payload.relative_path || null;
 			})
 			.catch(function () {
-				galleryBrowsePaths = [];
-				return galleryBrowsePaths;
+				return null;
 			});
+	}
+
+	function refreshGalleryItemNeighbors(path) {
+		return Promise.all([fetchGalleryNeighbor(path, "prev"), fetchGalleryNeighbor(path, "next")]).then(
+			function (results) {
+				if (path !== galleryItemPath) {
+					return; // a newer navigation started while these were in flight
+				}
+				galleryItemNeighbors = { prev: results[0], next: results[1] };
+				updateGalleryItemNav();
+			},
+		);
 	}
 
 	function updateGalleryItemNav() {
@@ -472,38 +470,25 @@
 		if (!prevBtn || !nextBtn) {
 			return;
 		}
-		if (!galleryItemPath || !galleryBrowsePaths.length) {
-			prevBtn.disabled = true;
-			nextBtn.disabled = true;
-			return;
-		}
-		var idx = galleryBrowsePaths.indexOf(galleryItemPath);
-		if (idx === -1) {
-			prevBtn.disabled = true;
-			nextBtn.disabled = true;
-			return;
-		}
-		prevBtn.disabled = idx <= 0;
-		nextBtn.disabled = idx >= galleryBrowsePaths.length - 1;
+		prevBtn.disabled = !galleryItemNeighbors.prev;
+		nextBtn.disabled = !galleryItemNeighbors.next;
 	}
 
 	function shiftGalleryItem(delta) {
-		var idx = galleryBrowsePaths.indexOf(galleryItemPath);
-		if (idx === -1) {
+		var target = delta < 0 ? galleryItemNeighbors.prev : galleryItemNeighbors.next;
+		if (!target) {
 			return;
 		}
-		var target = idx + delta;
-		if (target < 0 || target >= galleryBrowsePaths.length) {
-			return;
-		}
-		showGalleryItem(galleryBrowsePaths[target]);
+		showGalleryItem(target);
 	}
 
 	function showGalleryItem(relativePath, options) {
 		galleryItemPath = relativePath;
+		galleryItemNeighbors = { prev: null, next: null };
+		updateGalleryItemNav();
 		showView("gallery-item", options || {});
 		loadGalleryItemDetail();
-		ensureGalleryBrowsePaths().then(updateGalleryItemNav);
+		refreshGalleryItemNeighbors(relativePath);
 	}
 
 	function routeFromPath() {
@@ -667,9 +652,7 @@
 			return;
 		}
 		showFormBanner(
-			"Some components are missing (" +
-				missing.join(", ") +
-				"). Open Components setup or install them on your PATH.",
+			"Some components are missing (" + missing.join(", ") + "). Open Components setup or install them on your PATH.",
 		);
 	}
 
@@ -743,6 +726,8 @@
 			return;
 		}
 		var hint = managedTools && managedTools.setup_hint;
+		var title;
+		var detail;
 		if (!hint || !hint.command) {
 			el.hidden = true;
 			el.textContent = "";
@@ -751,13 +736,13 @@
 		el.hidden = false;
 		el.replaceChildren();
 		if (hint.title) {
-			var title = document.createElement("strong");
+			title = document.createElement("strong");
 			title.textContent = hint.title;
 			el.appendChild(title);
 			el.appendChild(document.createElement("br"));
 		}
 		if (hint.detail) {
-			var detail = document.createElement("span");
+			detail = document.createElement("span");
 			detail.textContent = hint.detail + " ";
 			el.appendChild(detail);
 		}
@@ -860,6 +845,8 @@
 		var destHint = document.getElementById("receive-dest-hint");
 		var rf = next.receive_files || {};
 		var rp = rf.progress || { completed: 0, percent: 0, total: 0 };
+		var transferPct;
+		var fileCount;
 		if (session.active && uploadQr) {
 			uploadQr.hidden = false;
 			if (session.qr_url) {
@@ -876,14 +863,10 @@
 			}
 		}
 		if (transferStatus) {
-			transferStatus.textContent = easyFileCountLabel(
-				rp.completed,
-				"file received",
-				"files received",
-			);
+			transferStatus.textContent = easyFileCountLabel(rp.completed, "file received", "files received");
 		}
 		if (transferFill) {
-			var transferPct = rp.total > 0 ? rp.percent : rp.completed > 0 ? 100 : 0;
+			transferPct = rp.total > 0 ? rp.percent : rp.completed > 0 ? 100 : 0;
 			transferFill.style.width = transferPct + "%";
 		}
 		var destDisplay = next.documents_receive_root_display || next.documents_receive_root;
@@ -892,7 +875,7 @@
 		}
 		var openWrap = document.getElementById("receive-open-wrap");
 		if (openWrap) {
-			var fileCount = next.documents_receive_file_count;
+			fileCount = next.documents_receive_file_count;
 			if (typeof fileCount !== "number") {
 				fileCount = rp.completed;
 			}
@@ -948,6 +931,11 @@
 		var cp = next.convert.progress || { completed: 0, total: 0, percent: 0 };
 		var photoLibraryHint = document.getElementById("photo-library-hint");
 		var libDisplay = next.library_root_display || next.library_root;
+		var transferPct;
+		var issues;
+		var errN;
+		var invN;
+		var parts;
 		if (photoLibraryHint && libDisplay) {
 			photoLibraryHint.textContent = "Photos and videos are saved under " + libDisplay;
 		}
@@ -971,20 +959,15 @@
 			}
 		}
 		if (transferStatus) {
-			transferStatus.textContent = easyFileCountLabel(
-				ep.completed,
-				"file received",
-				"files received",
-			);
+			transferStatus.textContent = easyFileCountLabel(ep.completed, "file received", "files received");
 		}
 		if (transferFill) {
-			var transferPct = ep.total > 0 ? ep.percent : ep.completed > 0 ? 100 : 0;
+			transferPct = ep.total > 0 ? ep.percent : ep.completed > 0 ? 100 : 0;
 			transferFill.style.width = transferPct + "%";
 		}
 		if (convertStatus) {
 			if (next.convert.phase === "running") {
-				convertStatus.textContent =
-					"In progress — " + cp.completed + " / " + cp.total + " (" + cp.percent + "%)";
+				convertStatus.textContent = "In progress — " + cp.completed + " / " + cp.total + " (" + cp.percent + "%)";
 			} else if (next.convert.phase === "error") {
 				convertStatus.textContent = "Failed — " + (next.last_error || "see Advanced for details");
 			} else if (next.last_error) {
@@ -1009,10 +992,10 @@
 		}
 		var importIssues = document.getElementById("easy-import-issues");
 		if (importIssues) {
-			var issues = next.image_import_issues || {};
-			var errN = issues.errors || 0;
-			var invN = issues.invalid || 0;
-			var parts = [];
+			issues = next.image_import_issues || {};
+			errN = issues.errors || 0;
+			invN = issues.invalid || 0;
+			parts = [];
 			if (errN > 0) {
 				parts.push(errN + (errN === 1 ? " image failed to convert" : " images failed to convert"));
 			}
@@ -1107,7 +1090,10 @@
 			bar.setAttribute("aria-valuenow", String(p.percent));
 		}
 		if (counts) {
-			if ((next.connection_method || "") === "wifi" && (phase === "running" || phase === "paused" || phase === "stopped" || phase === "done")) {
+			if (
+				(next.connection_method || "") === "wifi" &&
+				(phase === "running" || phase === "paused" || phase === "stopped" || phase === "done")
+			) {
 				counts.textContent = p.completed + " files received";
 			} else {
 				counts.textContent = p.completed + " / " + p.total + " files";
@@ -1227,10 +1213,7 @@
 		var bucketErrorCount = (next.library_counts || {}).error || 0;
 		var bucketInvalidCount = (next.library_counts || {}).invalid || 0;
 		if (next.convert.phase === "running") {
-			setStatusLine(
-				status,
-				"In progress — " + p.completed + " / " + p.total + " (" + p.percent + "%)",
-			);
+			setStatusLine(status, "In progress — " + p.completed + " / " + p.total + " (" + p.percent + "%)");
 		} else if (next.convert.phase === "stopped") {
 			setStatusLine(status, "Stopped — " + p.completed + " / " + p.total + " processed");
 		} else if (next.convert.phase === "error") {
@@ -1248,9 +1231,7 @@
 		} else if ((extractPhase === "running" || extractPhase === "paused") && ready) {
 			setStatusLine(
 				status,
-				"Extract active — " +
-					originals +
-					" file(s) in originals/; Start convert will stop extract and convert them",
+				"Extract active — " + originals + " file(s) in originals/; Start convert will stop extract and convert them",
 			);
 		} else if (extractPhase === "running" || extractPhase === "paused") {
 			setStatusLine(status, "Waiting — add files to originals/ to convert during extract");
@@ -1572,6 +1553,7 @@
 			.then(function (payload) {
 				var meta = payload.metadata || {};
 				var rows;
+				var mp4Ok;
 				galleryItemKind = payload.kind === "video" ? "video" : "image";
 				if (title) {
 					title.textContent = meta.filename || payload.relative_path;
@@ -1579,7 +1561,7 @@
 				renderGalleryItemStage(stage, payload, meta);
 				if (friendly) {
 					if (payload.kind === "video") {
-						var mp4Ok = state && state.video_friendly_export_available;
+						mp4Ok = state && state.video_friendly_export_available;
 						friendly.hidden = !mp4Ok;
 						friendly.textContent = "Download as MP4";
 					} else {
@@ -1597,10 +1579,7 @@
 								? [meta.camera_make, meta.camera_model].filter(Boolean).join(" · ")
 								: "—",
 						],
-						[
-							"Dimensions",
-							meta.width && meta.height ? meta.width + " × " + meta.height : "—",
-						],
+						["Dimensions", meta.width && meta.height ? meta.width + " × " + meta.height : "—"],
 						["File size", formatFileSize(meta.file_size_bytes)],
 					];
 					if (payload.kind === "video") {
@@ -1631,52 +1610,262 @@
 			});
 	}
 
-	function loadGallery() {
-		api("GET", "/api/gallery/timeline")
-			.then(function (groups) {
-				var host = document.getElementById("timeline-view");
-				var currentYear = null;
-				var yearBlock = null;
-				var yTitle;
-				galleryBrowsePaths = pathsFromTimelineGroups(groups);
-				updateGalleryItemNav();
-				if (!host) {
-					return;
-				}
-				host.innerHTML = "";
-				if (!groups.length) {
-					host.innerHTML = '<p class="status-line">No media in converted/ yet.</p>';
-					return;
-				}
-				groups.forEach(function (g) {
-					if (g.year !== currentYear) {
-						currentYear = g.year;
-						yearBlock = document.createElement("div");
-						yearBlock.className = "year-block";
-						yTitle = document.createElement("h3");
-						yTitle.className = "year-title";
-						yTitle.textContent = String(g.year);
-						yearBlock.appendChild(yTitle);
-						host.appendChild(yearBlock);
+	function galleryDateParts(iso) {
+		var d = new Date(iso);
+		return { year: d.getFullYear(), month: d.getMonth() + 1 };
+	}
+
+	function buildGalleryMonthBlockElement(block) {
+		var wrap = document.createElement("div");
+		var yTitle;
+		var mLabel;
+		var grid;
+		wrap.className = "month-block";
+		if (block.showYear) {
+			yTitle = document.createElement("h3");
+			yTitle.className = "year-title";
+			yTitle.textContent = String(block.year);
+			wrap.appendChild(yTitle);
+		}
+		mLabel = document.createElement("p");
+		mLabel.className = "month-label";
+		mLabel.textContent = monthName(block.month);
+		wrap.appendChild(mLabel);
+		grid = document.createElement("div");
+		grid.className = "thumb-grid";
+		block.items.forEach(function (item) {
+			appendThumbCell(grid, item);
+		});
+		wrap.appendChild(grid);
+		return wrap;
+	}
+
+	function appendGalleryTimelineItems(items) {
+		var host = document.getElementById("timeline-view");
+		var sentinel = document.getElementById("gallery-scroll-sentinel");
+		if (!host) {
+			return;
+		}
+		items.forEach(function (item) {
+			var parts = galleryDateParts(item.captured_at);
+			var lastBlock = galleryMonthBlocks[galleryMonthBlocks.length - 1];
+			if (!lastBlock || lastBlock.year !== parts.year || lastBlock.month !== parts.month) {
+				lastBlock = {
+					year: parts.year,
+					month: parts.month,
+					showYear: !lastBlock || lastBlock.year !== parts.year,
+					items: [],
+					el: null,
+					placeholderEl: null,
+					mounted: true,
+				};
+				galleryMonthBlocks.push(lastBlock);
+				lastBlock.el = buildGalleryMonthBlockElement(lastBlock);
+				host.insertBefore(lastBlock.el, sentinel);
+			}
+			lastBlock.items.push(item);
+			if (lastBlock.mounted) {
+				appendThumbCell(lastBlock.el.querySelector(".thumb-grid"), item);
+				galleryMountedTileCount += 1;
+			}
+		});
+	}
+
+	function unmountGalleryMonthBlock(block) {
+		var height = block.el.getBoundingClientRect().height;
+		var placeholder = document.createElement("div");
+		placeholder.className = "month-placeholder";
+		placeholder.style.height = height + "px";
+		block.el.replaceWith(placeholder);
+		block.placeholderEl = placeholder;
+		block.el = null;
+		block.mounted = false;
+		galleryMountedTileCount -= block.items.length;
+	}
+
+	function remountGalleryMonthBlock(block) {
+		var built = buildGalleryMonthBlockElement(block);
+		block.placeholderEl.replaceWith(built);
+		block.el = built;
+		block.placeholderEl = null;
+		block.mounted = true;
+		galleryMountedTileCount += block.items.length;
+	}
+
+	function enforceGalleryWindow() {
+		if (!galleryMonthBlocks.length || !window.innerHeight) {
+			return;
+		}
+		var buffer = window.innerHeight * GALLERY_VIEWPORT_BUFFER_MULTIPLIER;
+		var i;
+		var block;
+		var rect;
+		for (i = 0; i < galleryMonthBlocks.length && galleryMountedTileCount > GALLERY_TILE_BUDGET; i += 1) {
+			block = galleryMonthBlocks[i];
+			if (!block.mounted) {
+				continue;
+			}
+			rect = block.el.getBoundingClientRect();
+			if (rect.bottom < -buffer) {
+				unmountGalleryMonthBlock(block);
+			} else {
+				break;
+			}
+		}
+		for (i = 0; i < galleryMonthBlocks.length; i += 1) {
+			block = galleryMonthBlocks[i];
+			if (block.mounted) {
+				continue;
+			}
+			rect = block.placeholderEl.getBoundingClientRect();
+			if (rect.bottom >= -buffer && rect.top <= window.innerHeight + buffer) {
+				remountGalleryMonthBlock(block);
+			}
+		}
+	}
+
+	function scheduleGalleryWindowCheck() {
+		if (galleryWindowCheckScheduled) {
+			return;
+		}
+		galleryWindowCheckScheduled = true;
+		window.requestAnimationFrame(function () {
+			galleryWindowCheckScheduled = false;
+			enforceGalleryWindow();
+		});
+	}
+
+	function ensureGalleryWindowListeners() {
+		if (galleryWindowListenersBound) {
+			return;
+		}
+		galleryWindowListenersBound = true;
+		window.addEventListener("scroll", scheduleGalleryWindowCheck, { passive: true });
+		window.addEventListener("resize", scheduleGalleryWindowCheck);
+	}
+
+	function setGalleryLoadingMoreVisible(visible) {
+		var el = document.getElementById("gallery-loading-more");
+		if (el) {
+			el.hidden = !visible;
+		}
+	}
+
+	function hideGallerySentinel() {
+		var el = document.getElementById("gallery-scroll-sentinel");
+		if (el) {
+			el.hidden = true;
+		}
+		if (galleryIntersectionObserver) {
+			galleryIntersectionObserver.disconnect();
+		}
+	}
+
+	function ensureGallerySentinel() {
+		var host = document.getElementById("timeline-view");
+		var loading;
+		var sentinel;
+		if (!host) {
+			return;
+		}
+		loading = document.createElement("p");
+		loading.className = "status-line gallery-loading-more";
+		loading.id = "gallery-loading-more";
+		loading.hidden = true;
+		loading.innerHTML = '<span class="gallery-loading-spinner" aria-hidden="true"></span> Loading more…';
+		sentinel = document.createElement("div");
+		sentinel.id = "gallery-scroll-sentinel";
+		host.appendChild(loading);
+		host.appendChild(sentinel);
+	}
+
+	function setupGalleryIntersectionObserver() {
+		var sentinel = document.getElementById("gallery-scroll-sentinel");
+		if (!sentinel || typeof IntersectionObserver === "undefined") {
+			return;
+		}
+		if (galleryIntersectionObserver) {
+			galleryIntersectionObserver.disconnect();
+		}
+		galleryIntersectionObserver = new IntersectionObserver(
+			function (entries) {
+				entries.forEach(function (entry) {
+					if (entry.isIntersecting && galleryHasMore && !galleryLoadingMore) {
+						fetchGalleryTimelinePage();
 					}
-					var mLabel = document.createElement("p");
-					mLabel.className = "month-label";
-					mLabel.textContent = monthName(g.month);
-					yearBlock.appendChild(mLabel);
-					var grid = document.createElement("div");
-					grid.className = "thumb-grid";
-					g.items.forEach(function (item) {
-						appendThumbCell(grid, item);
-					});
-					yearBlock.appendChild(grid);
 				});
+			},
+			{ rootMargin: "600px 0px" },
+		);
+		galleryIntersectionObserver.observe(sentinel);
+	}
+
+	function showGalleryTimelineMessage(message) {
+		var host = document.getElementById("timeline-view");
+		if (host) {
+			host.innerHTML = '<p class="status-line">' + message + "</p>";
+		}
+	}
+
+	function fetchGalleryTimelinePage() {
+		var isFirstPage = galleryMonthBlocks.length === 0;
+		var url = "/api/gallery/timeline?limit=" + GALLERY_PAGE_LIMIT;
+		if (galleryLoadingMore) {
+			return;
+		}
+		if (galleryNextCursor) {
+			url += "&cursor=" + encodeURIComponent(galleryNextCursor);
+		}
+		galleryLoadingMore = true;
+		setGalleryLoadingMoreVisible(true);
+		api("GET", url)
+			.then(function (payload) {
+				var items = payload.items || [];
+				galleryLoadingMore = false;
+				setGalleryLoadingMoreVisible(false);
+				galleryNextCursor = payload.next_cursor || null;
+				galleryHasMore = Boolean(galleryNextCursor);
+				if (isFirstPage && !items.length) {
+					showGalleryTimelineMessage("No media in converted/ yet.");
+					galleryHasMore = false;
+					return;
+				}
+				appendGalleryTimelineItems(items);
+				if (!galleryHasMore) {
+					hideGallerySentinel();
+				}
+				scheduleGalleryWindowCheck();
 			})
 			.catch(function () {
-				var host = document.getElementById("timeline-view");
-				if (host) {
-					host.innerHTML = '<p class="status-line">Could not load gallery.</p>';
+				galleryLoadingMore = false;
+				setGalleryLoadingMoreVisible(false);
+				galleryHasMore = false;
+				hideGallerySentinel();
+				if (isFirstPage) {
+					showGalleryTimelineMessage("Could not load gallery.");
 				}
 			});
+	}
+
+	function loadGallery() {
+		var host = document.getElementById("timeline-view");
+		if (!host) {
+			return;
+		}
+		if (galleryIntersectionObserver) {
+			galleryIntersectionObserver.disconnect();
+			galleryIntersectionObserver = null;
+		}
+		galleryMonthBlocks = [];
+		galleryNextCursor = null;
+		galleryHasMore = true;
+		galleryLoadingMore = false;
+		galleryMountedTileCount = 0;
+		host.innerHTML = "";
+		ensureGallerySentinel();
+		ensureGalleryWindowListeners();
+		setupGalleryIntersectionObserver();
+		fetchGalleryTimelinePage();
 	}
 
 	function daysInMonth(year, month) {
@@ -1866,7 +2055,11 @@
 			document.querySelectorAll(".lan-firewall-port").forEach(function (el) {
 				el.textContent = portText;
 			});
-			applyGalleryFirewallHints(info, document.getElementById("gallery-lan-hint"), document.getElementById("gallery-firewall-warn"));
+			applyGalleryFirewallHints(
+				info,
+				document.getElementById("gallery-lan-hint"),
+				document.getElementById("gallery-firewall-warn"),
+			);
 			applyGalleryFirewallHints(
 				info,
 				document.getElementById("gallery-popup-lan-hint"),
@@ -1965,18 +2158,13 @@
 			if (!galleryItemPath) {
 				return;
 			}
-			if (
-				!window.confirm(
-					"Delete this file from converted/ on this computer? This cannot be undone.",
-				)
-			) {
+			if (!window.confirm("Delete this file from converted/ on this computer? This cannot be undone.")) {
 				return;
 			}
 			api("DELETE", "/api/gallery/item?path=" + encodeURIComponent(galleryItemPath))
 				.then(function () {
 					galleryItemPath = "";
 					showView("gallery");
-					loadGallery();
 				})
 				.catch(function (err) {
 					window.alert(err.message || "Could not delete this file.");
@@ -1991,518 +2179,507 @@
 	}
 
 	function bootstrapDesktopShell() {
-	document.querySelectorAll(".view-tabs button").forEach(function (btn) {
-		btn.addEventListener("click", function () {
-			var v = btn.getAttribute("data-view");
-			if (v === "home") {
+		document.querySelectorAll(".view-tabs button").forEach(function (btn) {
+			btn.addEventListener("click", function () {
+				var v = btn.getAttribute("data-view");
+				if (v === "home") {
+					goHomeHub();
+					return;
+				}
+				showView(v);
+			});
+		});
+
+		document.querySelectorAll("[data-module]").forEach(function (tile) {
+			tile.addEventListener("click", function () {
+				var moduleId = tile.getAttribute("data-module");
+				if (moduleId) {
+					enterModule(moduleId);
+				}
+			});
+		});
+		document.querySelectorAll(".breadcrumb-home").forEach(function (btn) {
+			btn.addEventListener("click", function () {
 				goHomeHub();
-				return;
-			}
-			showView(v);
+			});
 		});
-	});
+		onClick("btn-open-documents-folder", function () {
+			api("POST", "/api/documents/open-folder").catch(function (err) {
+				showFormBanner(err.message || "Could not open documents folder.");
+			});
+		});
 
-	document.querySelectorAll("[data-module]").forEach(function (tile) {
-		tile.addEventListener("click", function () {
-			var moduleId = tile.getAttribute("data-module");
-			if (moduleId) {
-				enterModule(moduleId);
-			}
-		});
-	});
-	document.querySelectorAll(".breadcrumb-home").forEach(function (btn) {
-		btn.addEventListener("click", function () {
-			goHomeHub();
-		});
-	});
-	onClick("btn-open-documents-folder", function () {
-		api("POST", "/api/documents/open-folder").catch(function (err) {
-			showFormBanner(err.message || "Could not open documents folder.");
-		});
-	});
-
-	function mergeShareSelection(extra) {
-		var base = state && state.share_selection ? state.share_selection.slice() : [];
-		var seen = {};
-		var merged = [];
-		var i;
-		var p;
-		var key;
-		function addPath(path) {
-			if (!path || !String(path).trim()) {
-				return;
-			}
-			key = String(path).trim();
-			if (seen[key]) {
-				return;
-			}
-			seen[key] = true;
-			merged.push(key);
-		}
-		for (i = 0; i < base.length; i++) {
-			addPath(base[i]);
-		}
-		if (extra) {
-			if (Array.isArray(extra)) {
-				for (i = 0; i < extra.length; i++) {
-					addPath(extra[i]);
+		function mergeShareSelection(extra) {
+			var base = state && state.share_selection ? state.share_selection.slice() : [];
+			var seen = {};
+			var merged = [];
+			var i;
+			var p;
+			var key;
+			function addPath(path) {
+				if (!path || !String(path).trim()) {
+					return;
 				}
-			} else {
-				addPath(extra);
+				key = String(path).trim();
+				if (seen[key]) {
+					return;
+				}
+				seen[key] = true;
+				merged.push(key);
 			}
-		}
-		return merged;
-	}
-
-	function refreshShareSelection(paths) {
-		return api("POST", "/api/share/selection", { paths: paths })
-			.then(applyState)
-			.catch(function (err) {
-				if (paths && paths.length) {
-					window.alert(err.message || "Could not update the share list.");
+			for (i = 0; i < base.length; i++) {
+				addPath(base[i]);
+			}
+			if (extra) {
+				if (Array.isArray(extra)) {
+					for (i = 0; i < extra.length; i++) {
+						addPath(extra[i]);
+					}
 				} else {
-					showFormBanner(err.message || "Could not update the share list.");
+					addPath(extra);
 				}
-				throw err;
-			});
-	}
+			}
+			return merged;
+		}
 
-	onClick("btn-share-clear", function () {
-		refreshShareSelection([]);
-	});
-	onClick("btn-share-add-files", function () {
-		if (!(window.pywebview && window.pywebview.api && window.pywebview.api.choose_files)) {
-			showFormBanner("Use the desktop app to pick files.");
-			return;
-		}
-		var current = (state && state.share_selection && state.share_selection[0]) || "";
-		Promise.resolve(window.pywebview.api.choose_files(current))
-			.then(function (picked) {
-				if (!picked || !picked.length) {
-					return null;
-				}
-				return refreshShareSelection(mergeShareSelection(picked));
-			})
-			.catch(function () {
-				showFormBanner("Could not open the file picker.");
-			});
-	});
-	onClick("btn-share-add-folder", function () {
-		if (!(window.pywebview && window.pywebview.api && window.pywebview.api.choose_share_folder)) {
-			showFormBanner("Use the desktop app to pick a folder.");
-			return;
-		}
-		var current = (state && state.share_selection && state.share_selection[state.share_selection.length - 1]) || "";
-		Promise.resolve(window.pywebview.api.choose_share_folder(current))
-			.then(function (folder) {
-				if (!folder || !String(folder).trim()) {
-					return null;
-				}
-				var countPromise = window.pywebview.api.share_folder_file_count
-					? Promise.resolve(window.pywebview.api.share_folder_file_count(folder))
-					: Promise.resolve(1);
-				return countPromise.then(function (count) {
-					if (count < 1) {
-						window.alert(
-							"This folder has no files. Choose a folder that contains at least one file.",
-						);
-						return null;
+		function refreshShareSelection(paths) {
+			return api("POST", "/api/share/selection", { paths: paths })
+				.then(applyState)
+				.catch(function (err) {
+					if (paths && paths.length) {
+						window.alert(err.message || "Could not update the share list.");
+					} else {
+						showFormBanner(err.message || "Could not update the share list.");
 					}
-					var merged = mergeShareSelection(folder);
-					if (
-						state &&
-						state.share_selection &&
-						merged.length === state.share_selection.length
-					) {
-						return null;
-					}
-					return refreshShareSelection(merged);
+					throw err;
 				});
-			})
-			.catch(function () {
-				showFormBanner("Could not open the folder picker.");
-			});
-	});
+		}
 
-	function rememberMainViewBeforeFooterPage() {
-		var active = document.querySelector(".screen.active");
-		if (
-			active &&
-			(active.id === "view-home" ||
-				active.id === "view-easy" ||
-				active.id === "view-wizard" ||
-				active.id === "view-receive-files" ||
-				active.id === "view-send-files" ||
-				active.id === "view-gallery" ||
-				active.id === "view-gallery-item")
-		) {
-			lastMainView =
-				active.id === "view-gallery-item" || active.id === "view-gallery" ? "gallery" : "home";
-		}
-	}
-
-	document.getElementById("btn-footer-settings").addEventListener("click", function () {
-		rememberMainViewBeforeFooterPage();
-		if (state && state.managed_tools) {
-			renderComponentsList(state.managed_tools);
-		}
-		showView("settings");
-	});
-	document.getElementById("btn-footer-legal").addEventListener("click", function () {
-		rememberMainViewBeforeFooterPage();
-		showView("legal");
-	});
-	document.getElementById("btn-settings-back").addEventListener("click", function () {
-		if (state && toolsBlockMainApp(state)) {
-			showView("components", { skipHistory: true });
-			return;
-		}
-		showView(lastMainView === "gallery" ? "gallery" : "home");
-	});
-	document.getElementById("btn-legal-back").addEventListener("click", function () {
-		showView(lastMainView === "gallery" ? "gallery" : "home");
-	});
-	onClick("btn-components-continue", function () {
-		api("POST", "/api/tools/components-continue")
-			.then(function (payload) {
-				sessionStorage.setItem(COMPONENTS_DISMISS_KEY, "1");
-				renderComponentsList(payload);
-				return api("GET", "/api/settings");
-			})
-			.then(applyState)
-			.then(function () {
-				showView("home");
-				return null;
-			})
-			.catch(function (err) {
-				showFormBanner(err.message || "Could not continue setup.");
-			});
-	});
-	onClick("btn-components-retry", function () {
-		runComponentsEnsure().catch(function (err) {
-			showFormBanner(err.message || "Could not retry downloads.");
+		onClick("btn-share-clear", function () {
+			refreshShareSelection([]);
 		});
-	});
-	onClick("btn-settings-delete-tools", function () {
-		if (
-			!window.confirm(
-				"Delete all downloaded components? System packages will not be removed.",
-			)
-		) {
-			return;
-		}
-		api("DELETE", "/api/tools/downloaded")
-			.then(function (payload) {
-				sessionStorage.removeItem(COMPONENTS_DISMISS_KEY);
-				renderComponentsList(payload);
-				return api("GET", "/api/settings");
-			})
-			.then(applyState)
-			.then(function () {
-				if (state && toolsBlockMainApp(state)) {
-					showView("components", { skipHistory: true });
-				}
-			})
-			.then(applyState)
-			.catch(function (err) {
-				showFormBanner(err.message || "Could not delete downloaded components.");
-			});
-	});
-	onClick("btn-settings-retry-downloads", function () {
-		runComponentsEnsure().catch(function (err) {
-			showFormBanner(err.message || "Could not retry downloads.");
-		});
-	});
-
-	bindGalleryUi();
-
-	document.getElementById("btn-lan-firewall-info").addEventListener("click", function () {
-		var panel = document.getElementById("lan-firewall-info-panel");
-		var open = panel.classList.toggle("visible");
-		panel.setAttribute("aria-hidden", open ? "false" : "true");
-		this.setAttribute("aria-expanded", open ? "true" : "false");
-	});
-
-	document.getElementById("btn-connection-info").addEventListener("click", function () {
-		var panel = document.getElementById("connection-info-panel");
-		var open = panel.classList.toggle("visible");
-		panel.setAttribute("aria-hidden", open ? "false" : "true");
-		this.setAttribute("aria-expanded", open ? "true" : "false");
-	});
-	bindInfoPanelToggle("btn-easy-qr-info", "easy-qr-info-panel");
-	bindInfoPanelToggle("btn-receive-qr-info", "receive-qr-info-panel");
-	bindInfoPanelToggle("btn-send-qr-info", "send-qr-info-panel");
-	bindInfoPanelToggle("btn-wifi-qr-info", "wifi-qr-info-panel");
-
-	function switchConnectionMethod(method) {
-		syncConnectionButtons(method);
-		deviceLabels = {};
-		var sel = document.getElementById("select-device");
-		if (sel) {
-			sel.innerHTML = "";
-		}
-		if (method === "wifi") {
-			validateStep1Form(true);
-			return pushSettings();
-		}
-		return loadDevices().then(function () {
-			return pushSettings();
-		});
-	}
-
-	document.getElementById("btn-conn-wifi").addEventListener("click", function () {
-		switchConnectionMethod("wifi");
-	});
-	document.getElementById("btn-conn-mtp").addEventListener("click", function () {
-		switchConnectionMethod("mtp");
-	});
-	document.getElementById("btn-conn-adb").addEventListener("click", function () {
-		switchConnectionMethod("adb");
-	});
-	document.getElementById("btn-conn-afc").addEventListener("click", function () {
-		switchConnectionMethod("afc");
-	});
-
-	var chipCopy = document.getElementById("chip-copy");
-	var chipMove = document.getElementById("chip-move");
-	chipCopy.addEventListener("click", function () {
-		if (selectedConnectionMethod() === "wifi") {
-			return;
-		}
-		chipCopy.classList.add("selected");
-		chipMove.classList.remove("selected");
-		pushSettings();
-	});
-	chipMove.addEventListener("click", function () {
-		if (chipMove.disabled) {
-			return;
-		}
-		chipMove.classList.add("selected");
-		chipCopy.classList.remove("selected");
-		pushSettings();
-	});
-
-	var libraryInput = document.getElementById("input-library-root");
-	libraryInput.addEventListener("input", function () {
-		validateStep1Form(true);
-		if (state) {
-			updateExtractButtons(state);
-		}
-	});
-	libraryInput.addEventListener("change", function () {
-		validateStep1Form(true);
-		pushSettings();
-	});
-	document.getElementById("select-device").addEventListener("change", function () {
-		validateStep1Form(true);
-		pushSettings();
-	});
-	document.getElementById("btn-browse-library").addEventListener("click", function () {
-		var lib = document.getElementById("input-library-root");
-		var current = lib ? lib.value.trim() : "";
-		if (window.pywebview && window.pywebview.api && window.pywebview.api.choose_library_folder) {
-			Promise.resolve(window.pywebview.api.choose_library_folder(current))
-				.then(function (path) {
-					if (path && lib) {
-						lib.value = path;
-						validateStep1Form(true);
-						return pushSettings();
+		onClick("btn-share-add-files", function () {
+			if (!(window.pywebview && window.pywebview.api && window.pywebview.api.choose_files)) {
+				showFormBanner("Use the desktop app to pick files.");
+				return;
+			}
+			var current = (state && state.share_selection && state.share_selection[0]) || "";
+			Promise.resolve(window.pywebview.api.choose_files(current))
+				.then(function (picked) {
+					if (!picked || !picked.length) {
+						return null;
 					}
-					return null;
+					return refreshShareSelection(mergeShareSelection(picked));
+				})
+				.catch(function () {
+					showFormBanner("Could not open the file picker.");
+				});
+		});
+		onClick("btn-share-add-folder", function () {
+			if (!(window.pywebview && window.pywebview.api && window.pywebview.api.choose_share_folder)) {
+				showFormBanner("Use the desktop app to pick a folder.");
+				return;
+			}
+			var current = (state && state.share_selection && state.share_selection[state.share_selection.length - 1]) || "";
+			Promise.resolve(window.pywebview.api.choose_share_folder(current))
+				.then(function (folder) {
+					if (!folder || !String(folder).trim()) {
+						return null;
+					}
+					var countPromise = window.pywebview.api.share_folder_file_count
+						? Promise.resolve(window.pywebview.api.share_folder_file_count(folder))
+						: Promise.resolve(1);
+					return countPromise.then(function (count) {
+						if (count < 1) {
+							window.alert("This folder has no files. Choose a folder that contains at least one file.");
+							return null;
+						}
+						var merged = mergeShareSelection(folder);
+						if (state && state.share_selection && merged.length === state.share_selection.length) {
+							return null;
+						}
+						return refreshShareSelection(merged);
+					});
 				})
 				.catch(function () {
 					showFormBanner("Could not open the folder picker.");
 				});
-			return;
-		}
-		showFormBanner("Browse works in the desktop app. Type an absolute path, or run uv run task spacemaker.");
-		if (lib) {
-			lib.focus();
-		}
-	});
-	document.querySelectorAll("#folder-picker input").forEach(function (box) {
-		box.addEventListener("change", pushSettings);
-	});
+		});
 
-	document.getElementById("btn-start-extract").addEventListener("click", function () {
-		if (!validateStep1Form(true).ok) {
-			showFormBanner("Fix the highlighted fields before starting extract.");
-			return;
-		}
-		var btnStart = document.getElementById("btn-start-extract");
-		if (btnStart) {
-			btnStart.hidden = true;
-			btnStart.disabled = true;
-		}
-		pushSettings()
-			.then(function () {
-				return api("POST", "/api/extract/start");
-			})
-			.then(applyState)
-			.catch(function (err) {
-				showFormBanner(err.message || "Extract could not start.");
-				if (state) {
-					updateExtractButtons(state);
-				}
-			});
-	});
-	document.getElementById("btn-pause-extract").addEventListener("click", function () {
-		if (!state || !state.extract_controls || !state.extract_controls.pause) {
-			return;
-		}
-		api("POST", "/api/extract/pause")
-			.then(applyState)
-			.catch(function (err) {
-				showFormBanner(err.message || "Pause failed.");
-			});
-	});
-	document.getElementById("btn-resume-extract").addEventListener("click", function () {
-		if (!state || !state.extract_controls || !state.extract_controls.resume) {
-			return;
-		}
-		api("POST", "/api/extract/resume")
-			.then(applyState)
-			.catch(function (err) {
-				showFormBanner(err.message || "Resume failed.");
-			});
-	});
-	document.getElementById("btn-stop-extract").addEventListener("click", function () {
-		if (!state || !state.extract_controls || !state.extract_controls.stop) {
-			return;
-		}
-		api("POST", "/api/extract/stop")
-			.then(applyState)
-			.catch(function (err) {
-				showFormBanner(err.message || "Stop failed.");
-			});
-	});
-	document.getElementById("btn-stop-convert").addEventListener("click", function () {
-		if (!state || !state.convert_controls || !state.convert_controls.stop) {
-			return;
-		}
-		api("POST", "/api/convert/stop")
-			.then(applyState)
-			.catch(function (err) {
-				showFormBanner(err.message || "Stop convert failed.");
-			});
-	});
-	document.getElementById("btn-start-convert").addEventListener("click", function () {
-		if (!canStartConvert(state || {})) {
-			showFormBanner("Convert is not ready yet — check library path and originals/ folder.");
-			return;
-		}
-		var sync = extractIsActive(state || {}) ? Promise.resolve(state) : pushSettings();
-		sync
-			.then(function () {
-				return api("POST", "/api/convert/start");
-			})
-			.then(applyState)
-			.catch(function (err) {
-				showFormBanner(err.message || "Convert could not start.");
-			});
-	});
-	document.getElementById("btn-move-errors").addEventListener("click", function () {
-		api("POST", "/api/error/move-to-converted")
-			.then(function () {
-				return api("GET", "/api/settings");
-			})
-			.then(applyState);
-	});
-	onClick("btn-open-gallery", function () {
-		showView("gallery");
-	});
-	onClick("btn-easy-view-gallery", function () {
-		showView("gallery");
-	});
-	onClick("btn-gallery-phone-help", function (ev) {
-		ev.stopPropagation();
-		toggleGalleryPhonePopup();
-	});
-	onClick("btn-gallery-phone-popup-close", function () {
-		closeGalleryPhonePopup();
-	});
-	document.addEventListener("click", function (ev) {
-		var popup = document.getElementById("gallery-phone-popup");
-		var fab = document.getElementById("btn-gallery-phone-help");
-		if (!popup || popup.classList.contains("panel-hidden")) {
-			return;
-		}
-		if (popup.contains(ev.target) || (fab && fab.contains(ev.target))) {
-			return;
-		}
-		closeGalleryPhonePopup();
-	});
-
-	api("GET", "/api/defaults")
-		.then(function (defaults) {
-			defaultLibraryRoot = defaults.default_library_root || "";
-			var lib = document.getElementById("input-library-root");
-			if (lib) {
-				lib.placeholder = defaultLibraryRoot;
+		function rememberMainViewBeforeFooterPage() {
+			var active = document.querySelector(".screen.active");
+			if (
+				active &&
+				(active.id === "view-home" ||
+					active.id === "view-easy" ||
+					active.id === "view-wizard" ||
+					active.id === "view-receive-files" ||
+					active.id === "view-send-files" ||
+					active.id === "view-gallery" ||
+					active.id === "view-gallery-item")
+			) {
+				lastMainView = active.id === "view-gallery-item" || active.id === "view-gallery" ? "gallery" : "home";
 			}
-			return api("GET", "/api/settings");
-		})
-		.then(function (settings) {
-			if (!settings.library_root && defaultLibraryRoot) {
-				settings.library_root = defaultLibraryRoot;
-				return api("PUT", "/api/settings", {
-					library_root: defaultLibraryRoot,
-					ui_mode: settings.ui_mode || "easy",
-					connection_method: settings.connection_method,
-					transfer_mode: settings.transfer_mode,
-					device_id: settings.device_id,
-					device_label: settings.device_label,
-					source_folders: settings.source_folders || ["dcim", "pictures", "movies"],
+		}
+
+		document.getElementById("btn-footer-settings").addEventListener("click", function () {
+			rememberMainViewBeforeFooterPage();
+			if (state && state.managed_tools) {
+				renderComponentsList(state.managed_tools);
+			}
+			showView("settings");
+		});
+		document.getElementById("btn-footer-legal").addEventListener("click", function () {
+			rememberMainViewBeforeFooterPage();
+			showView("legal");
+		});
+		document.getElementById("btn-settings-back").addEventListener("click", function () {
+			if (state && toolsBlockMainApp(state)) {
+				showView("components", { skipHistory: true });
+				return;
+			}
+			showView(lastMainView === "gallery" ? "gallery" : "home");
+		});
+		document.getElementById("btn-legal-back").addEventListener("click", function () {
+			showView(lastMainView === "gallery" ? "gallery" : "home");
+		});
+		onClick("btn-components-continue", function () {
+			api("POST", "/api/tools/components-continue")
+				.then(function (payload) {
+					sessionStorage.setItem(COMPONENTS_DISMISS_KEY, "1");
+					renderComponentsList(payload);
+					return api("GET", "/api/settings");
+				})
+				.then(applyState)
+				.then(function () {
+					showView("home");
+					return null;
+				})
+				.catch(function (err) {
+					showFormBanner(err.message || "Could not continue setup.");
 				});
+		});
+		onClick("btn-components-retry", function () {
+			runComponentsEnsure().catch(function (err) {
+				showFormBanner(err.message || "Could not retry downloads.");
+			});
+		});
+		onClick("btn-settings-delete-tools", function () {
+			if (!window.confirm("Delete all downloaded components? System packages will not be removed.")) {
+				return;
 			}
-			return settings;
-		})
-		.then(applyState)
-		.then(function () {
-			warnIfStaleShell(state);
-			if (state && toolsBlockMainApp(state)) {
-				maybeShowComponentsScreen(state);
-				return runComponentsEnsure()
-					.then(function () {
-						return api("GET", "/api/settings");
-					})
-					.then(applyState);
+			api("DELETE", "/api/tools/downloaded")
+				.then(function (payload) {
+					sessionStorage.removeItem(COMPONENTS_DISMISS_KEY);
+					renderComponentsList(payload);
+					return api("GET", "/api/settings");
+				})
+				.then(applyState)
+				.then(function () {
+					if (state && toolsBlockMainApp(state)) {
+						showView("components", { skipHistory: true });
+					}
+				})
+				.then(applyState)
+				.catch(function (err) {
+					showFormBanner(err.message || "Could not delete downloaded components.");
+				});
+		});
+		onClick("btn-settings-retry-downloads", function () {
+			runComponentsEnsure().catch(function (err) {
+				showFormBanner(err.message || "Could not retry downloads.");
+			});
+		});
+
+		bindGalleryUi();
+
+		document.getElementById("btn-lan-firewall-info").addEventListener("click", function () {
+			var panel = document.getElementById("lan-firewall-info-panel");
+			var open = panel.classList.toggle("visible");
+			panel.setAttribute("aria-hidden", open ? "false" : "true");
+			this.setAttribute("aria-expanded", open ? "true" : "false");
+		});
+
+		document.getElementById("btn-connection-info").addEventListener("click", function () {
+			var panel = document.getElementById("connection-info-panel");
+			var open = panel.classList.toggle("visible");
+			panel.setAttribute("aria-hidden", open ? "false" : "true");
+			this.setAttribute("aria-expanded", open ? "true" : "false");
+		});
+		bindInfoPanelToggle("btn-easy-qr-info", "easy-qr-info-panel");
+		bindInfoPanelToggle("btn-receive-qr-info", "receive-qr-info-panel");
+		bindInfoPanelToggle("btn-send-qr-info", "send-qr-info-panel");
+		bindInfoPanelToggle("btn-wifi-qr-info", "wifi-qr-info-panel");
+
+		function switchConnectionMethod(method) {
+			syncConnectionButtons(method);
+			deviceLabels = {};
+			var sel = document.getElementById("select-device");
+			if (sel) {
+				sel.innerHTML = "";
 			}
-			return null;
-		})
-		.then(function () {
-			if (state && toolsBlockMainApp(state)) {
-				maybeShowComponentsScreen(state);
-				return null;
+			if (method === "wifi") {
+				validateStep1Form(true);
+				return pushSettings();
 			}
-			routeFromPath();
-			if (isGalleryEntryPath()) {
-				return null;
+			return loadDevices().then(function () {
+				return pushSettings();
+			});
+		}
+
+		document.getElementById("btn-conn-wifi").addEventListener("click", function () {
+			switchConnectionMethod("wifi");
+		});
+		document.getElementById("btn-conn-mtp").addEventListener("click", function () {
+			switchConnectionMethod("mtp");
+		});
+		document.getElementById("btn-conn-adb").addEventListener("click", function () {
+			switchConnectionMethod("adb");
+		});
+		document.getElementById("btn-conn-afc").addEventListener("click", function () {
+			switchConnectionMethod("afc");
+		});
+
+		var chipCopy = document.getElementById("chip-copy");
+		var chipMove = document.getElementById("chip-move");
+		chipCopy.addEventListener("click", function () {
+			if (selectedConnectionMethod() === "wifi") {
+				return;
 			}
-			if (state && state.active_module && state.active_module !== "home") {
-				showView(moduleToViewId(state.active_module), { skipHistory: true });
-			} else {
-				showView("home", { skipHistory: true });
+			chipCopy.classList.add("selected");
+			chipMove.classList.remove("selected");
+			pushSettings();
+		});
+		chipMove.addEventListener("click", function () {
+			if (chipMove.disabled) {
+				return;
 			}
-			if (state && state.active_module === "usb_photo_backup" && selectedConnectionMethod() !== "wifi") {
-				return loadDevices();
-			}
-			return null;
-		})
-		.then(function () {
-			if (isGalleryEntryPath()) {
-				return null;
-			}
+			chipMove.classList.add("selected");
+			chipCopy.classList.remove("selected");
+			pushSettings();
+		});
+
+		var libraryInput = document.getElementById("input-library-root");
+		libraryInput.addEventListener("input", function () {
 			validateStep1Form(true);
 			if (state) {
 				updateExtractButtons(state);
 			}
-		})
-		.then(loadServerInfo)
-		.catch(function (err) {
-			showFormBanner(err.message || "Failed to load settings.");
 		});
-	connectWs();
+		libraryInput.addEventListener("change", function () {
+			validateStep1Form(true);
+			pushSettings();
+		});
+		document.getElementById("select-device").addEventListener("change", function () {
+			validateStep1Form(true);
+			pushSettings();
+		});
+		document.getElementById("btn-browse-library").addEventListener("click", function () {
+			var lib = document.getElementById("input-library-root");
+			var current = lib ? lib.value.trim() : "";
+			if (window.pywebview && window.pywebview.api && window.pywebview.api.choose_library_folder) {
+				Promise.resolve(window.pywebview.api.choose_library_folder(current))
+					.then(function (path) {
+						if (path && lib) {
+							lib.value = path;
+							validateStep1Form(true);
+							return pushSettings();
+						}
+						return null;
+					})
+					.catch(function () {
+						showFormBanner("Could not open the folder picker.");
+					});
+				return;
+			}
+			showFormBanner("Browse works in the desktop app. Type an absolute path, or run uv run task spacemaker.");
+			if (lib) {
+				lib.focus();
+			}
+		});
+		document.querySelectorAll("#folder-picker input").forEach(function (box) {
+			box.addEventListener("change", pushSettings);
+		});
+
+		document.getElementById("btn-start-extract").addEventListener("click", function () {
+			if (!validateStep1Form(true).ok) {
+				showFormBanner("Fix the highlighted fields before starting extract.");
+				return;
+			}
+			var btnStart = document.getElementById("btn-start-extract");
+			if (btnStart) {
+				btnStart.hidden = true;
+				btnStart.disabled = true;
+			}
+			pushSettings()
+				.then(function () {
+					return api("POST", "/api/extract/start");
+				})
+				.then(applyState)
+				.catch(function (err) {
+					showFormBanner(err.message || "Extract could not start.");
+					if (state) {
+						updateExtractButtons(state);
+					}
+				});
+		});
+		document.getElementById("btn-pause-extract").addEventListener("click", function () {
+			if (!state || !state.extract_controls || !state.extract_controls.pause) {
+				return;
+			}
+			api("POST", "/api/extract/pause")
+				.then(applyState)
+				.catch(function (err) {
+					showFormBanner(err.message || "Pause failed.");
+				});
+		});
+		document.getElementById("btn-resume-extract").addEventListener("click", function () {
+			if (!state || !state.extract_controls || !state.extract_controls.resume) {
+				return;
+			}
+			api("POST", "/api/extract/resume")
+				.then(applyState)
+				.catch(function (err) {
+					showFormBanner(err.message || "Resume failed.");
+				});
+		});
+		document.getElementById("btn-stop-extract").addEventListener("click", function () {
+			if (!state || !state.extract_controls || !state.extract_controls.stop) {
+				return;
+			}
+			api("POST", "/api/extract/stop")
+				.then(applyState)
+				.catch(function (err) {
+					showFormBanner(err.message || "Stop failed.");
+				});
+		});
+		document.getElementById("btn-stop-convert").addEventListener("click", function () {
+			if (!state || !state.convert_controls || !state.convert_controls.stop) {
+				return;
+			}
+			api("POST", "/api/convert/stop")
+				.then(applyState)
+				.catch(function (err) {
+					showFormBanner(err.message || "Stop convert failed.");
+				});
+		});
+		document.getElementById("btn-start-convert").addEventListener("click", function () {
+			if (!canStartConvert(state || {})) {
+				showFormBanner("Convert is not ready yet — check library path and originals/ folder.");
+				return;
+			}
+			var sync = extractIsActive(state || {}) ? Promise.resolve(state) : pushSettings();
+			sync
+				.then(function () {
+					return api("POST", "/api/convert/start");
+				})
+				.then(applyState)
+				.catch(function (err) {
+					showFormBanner(err.message || "Convert could not start.");
+				});
+		});
+		document.getElementById("btn-move-errors").addEventListener("click", function () {
+			api("POST", "/api/error/move-to-converted")
+				.then(function () {
+					return api("GET", "/api/settings");
+				})
+				.then(applyState);
+		});
+		onClick("btn-open-gallery", function () {
+			showView("gallery");
+		});
+		onClick("btn-easy-view-gallery", function () {
+			showView("gallery");
+		});
+		onClick("btn-gallery-phone-help", function (ev) {
+			ev.stopPropagation();
+			toggleGalleryPhonePopup();
+		});
+		onClick("btn-gallery-phone-popup-close", function () {
+			closeGalleryPhonePopup();
+		});
+		document.addEventListener("click", function (ev) {
+			var popup = document.getElementById("gallery-phone-popup");
+			var fab = document.getElementById("btn-gallery-phone-help");
+			if (!popup || popup.classList.contains("panel-hidden")) {
+				return;
+			}
+			if (popup.contains(ev.target) || (fab && fab.contains(ev.target))) {
+				return;
+			}
+			closeGalleryPhonePopup();
+		});
+
+		api("GET", "/api/defaults")
+			.then(function (defaults) {
+				defaultLibraryRoot = defaults.default_library_root || "";
+				var lib = document.getElementById("input-library-root");
+				if (lib) {
+					lib.placeholder = defaultLibraryRoot;
+				}
+				return api("GET", "/api/settings");
+			})
+			.then(function (settings) {
+				if (!settings.library_root && defaultLibraryRoot) {
+					settings.library_root = defaultLibraryRoot;
+					return api("PUT", "/api/settings", {
+						library_root: defaultLibraryRoot,
+						ui_mode: settings.ui_mode || "easy",
+						connection_method: settings.connection_method,
+						transfer_mode: settings.transfer_mode,
+						device_id: settings.device_id,
+						device_label: settings.device_label,
+						source_folders: settings.source_folders || ["dcim", "pictures", "movies"],
+					});
+				}
+				return settings;
+			})
+			.then(applyState)
+			.then(function () {
+				warnIfStaleShell(state);
+				if (state && toolsBlockMainApp(state)) {
+					maybeShowComponentsScreen(state);
+					return runComponentsEnsure()
+						.then(function () {
+							return api("GET", "/api/settings");
+						})
+						.then(applyState);
+				}
+				return null;
+			})
+			.then(function () {
+				if (state && toolsBlockMainApp(state)) {
+					maybeShowComponentsScreen(state);
+					return null;
+				}
+				routeFromPath();
+				if (isGalleryEntryPath()) {
+					return null;
+				}
+				if (state && state.active_module && state.active_module !== "home") {
+					showView(moduleToViewId(state.active_module), { skipHistory: true });
+				} else {
+					showView("home", { skipHistory: true });
+				}
+				if (state && state.active_module === "usb_photo_backup" && selectedConnectionMethod() !== "wifi") {
+					return loadDevices();
+				}
+				return null;
+			})
+			.then(function () {
+				if (isGalleryEntryPath()) {
+					return null;
+				}
+				validateStep1Form(true);
+				if (state) {
+					updateExtractButtons(state);
+				}
+			})
+			.then(loadServerInfo)
+			.catch(function (err) {
+				showFormBanner(err.message || "Failed to load settings.");
+			});
+		connectWs();
 	}
 
 	if (isMobileGalleryShell()) {

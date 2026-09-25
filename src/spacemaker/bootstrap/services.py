@@ -7,13 +7,13 @@ import threading
 import time
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
 from spacemaker.adapters.inbound.web.session import AppSession
 from spacemaker.adapters.outbound.device.factory import device_repository_for
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
+from spacemaker.adapters.outbound.gallery.sqlite_index import SqliteGalleryIndex
 from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMediaConverter
 from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaProbe
 from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
@@ -42,6 +42,7 @@ from spacemaker.application.library_image_issues import count_image_files_in_lib
 from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
+from spacemaker.application.sync_gallery_index import SyncGalleryIndex
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.app_meta import app_release_info
 from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path, tools_install_root
@@ -93,8 +94,6 @@ class AppServices:
 	def __init__(self, *, port: int = 8765, bind_host: str = "0.0.0.0") -> None:
 		self.port = port
 		self.bind_host = bind_host
-		self._captured_at_cache_key = ""
-		self._captured_at_cache: dict[str, datetime] = {}
 		self.session = AppSession(library_root=normalize_library_root(default_library_root()))
 		self.filesystem = LocalFileSystem()
 		self.managed_tools = ManagedToolsService(
@@ -105,7 +104,9 @@ class AppServices:
 		self.probe = SubprocessMediaProbe(self.runner)
 		self.converter = SubprocessMediaConverter(self.runner)
 		self.error_recovery = ErrorRecovery(self.filesystem)
-		self.gallery = GenerateGallery(self.filesystem)
+		self.gallery_index = SqliteGalleryIndex()
+		self.sync_gallery_index = SyncGalleryIndex(self.filesystem, self.probe, self.gallery_index)
+		self.gallery = GenerateGallery(self.gallery_index)
 		self.get_gallery_item = GetGalleryItem(self.filesystem, self.probe)
 		self.delete_gallery_item = DeleteGalleryItem(self.filesystem)
 		self.export_friendly = ExportFriendlyMedia(self.filesystem, self.converter, self.probe)
@@ -160,34 +161,12 @@ class AppServices:
 				count += 1
 		return count
 
-	def invalidate_gallery_metadata_cache(self) -> None:
-		self._captured_at_cache_key = ""
-		self._captured_at_cache = {}
-
 	def remove_gallery_item(self, library_root: str, relative_path: str) -> bool:
 		removed = self.delete_gallery_item.run(library_root, relative_path)
 		if removed:
-			self.invalidate_gallery_metadata_cache()
+			self.gallery_index.remove(library_root, relative_path)
 			self.push_state()
 		return removed
-
-	def captured_at_map(self, library_root: str) -> dict[str, datetime]:
-		if not library_root:
-			return {}
-		if library_root == self._captured_at_cache_key and self._captured_at_cache:
-			return self._captured_at_cache
-		root = self.filesystem.library_path(library_root, LibraryFolder.CONVERTED, "")
-		paths = self.filesystem.list_files_recursive(root)
-		out: dict[str, datetime] = {}
-		for rel in paths:
-			full = Path(self.filesystem.library_path(library_root, LibraryFolder.CONVERTED, rel))
-			if not full.is_file():
-				continue
-			captured = self.probe.captured_at(str(full))
-			out[rel] = captured if captured is not None else datetime.fromtimestamp(full.stat().st_mtime)
-		self._captured_at_cache_key = library_root
-		self._captured_at_cache = out
-		return out
 
 	def bind_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
 		self._event_loop = loop
@@ -966,7 +945,7 @@ class AppServices:
 
 	def _run_convert(self, library_root: str, *, concurrent_with_extract: bool = False) -> None:
 		control = self._convert_control
-		self.invalidate_gallery_metadata_cache()
+		self.sync_gallery_index.run(library_root)
 		try:
 			use_case = self.convert_use_case()
 			cumulative_completed = 0
@@ -1006,7 +985,7 @@ class AppServices:
 					break
 				with self.session._lock:
 					self.session.convert_progress = JobProgress(cumulative_completed, cumulative_completed + remaining)
-				self.invalidate_gallery_metadata_cache()
+				self.sync_gallery_index.run(library_root)
 				self.push_state()
 			progress = JobProgress(completed=cumulative_completed, total=cumulative_completed + remaining)
 			with self.session._lock:
@@ -1047,7 +1026,7 @@ class AppServices:
 				self.session.last_error = str(exc)
 		finally:
 			self._convert_future = None
-		self.invalidate_gallery_metadata_cache()
+		self.sync_gallery_index.run(library_root)
 		self.push_state()
 
 

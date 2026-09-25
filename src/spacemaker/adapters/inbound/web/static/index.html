@@ -478,7 +478,7 @@
 
 		.gallery-main { width: 100%; }
 
-		.year-block { margin-bottom: 1.5rem; }
+		.month-block { margin-bottom: 1.5rem; }
 
 		.year-title {
 			font-size: 1.25rem;
@@ -498,6 +498,34 @@
 			display: grid;
 			grid-template-columns: repeat(auto-fill, minmax(min(104px, 26vw), 1fr));
 			gap: clamp(0.5rem, 2vw, 1rem);
+		}
+
+		.month-placeholder {
+			width: 100%;
+		}
+
+		.gallery-loading-more {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			justify-content: center;
+			padding: 1rem 0;
+		}
+
+		.gallery-loading-more[hidden] {
+			display: none;
+		}
+
+		.gallery-loading-spinner {
+			width: 14px;
+			height: 14px;
+			border-radius: 50%;
+			border: 2px solid var(--border);
+			border-top-color: var(--muted);
+		}
+
+		#gallery-scroll-sentinel {
+			height: 1px;
 		}
 
 		@media (min-width: 640px) {
@@ -1784,6 +1812,7 @@
 				<div class="gallery-item-stage" id="gallery-item-stage"></div>
 				<button type="button" class="gallery-item-nav gallery-item-nav-next" id="btn-gallery-item-next" aria-label="Next photo" disabled><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
 			</div>
+			<!-- biome-ignore lint/a11y/useHeadingContent: filled via textContent by loadGalleryItemDetail() in app.js -->
 			<h2 class="gallery-item-title" id="gallery-item-title"></h2>
 			<dl class="gallery-meta" id="gallery-item-meta"></dl>
 			<div class="gallery-item-actions">

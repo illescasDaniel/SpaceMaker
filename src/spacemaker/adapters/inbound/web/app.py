@@ -661,36 +661,34 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if not services.session.library_root:
 			raise HTTPException(status_code=400, detail="library_root required")
 		moved = services.error_recovery.move_all_errors_to_converted(services.session.library_root)
-		services.invalidate_gallery_metadata_cache()
+		services.sync_gallery_index.run(services.session.library_root)
 		services.push_state()
 		return {"moved": moved}
 
 	@app.get("/api/gallery/timeline")
-	def gallery_timeline() -> list[dict[str, object]]:
+	def gallery_timeline(cursor: str | None = None, limit: int = 150) -> dict[str, object]:
 		root = _session_library_root(services)
 		if not root:
-			return []
-		groups = services.gallery.list_timeline(root, captured_at_for=services.captured_at_map(root))
-		return [
-			{
-				"year": group.year,
-				"month": group.month,
-				"items": [_gallery_item_dict(item) for item in group.items],
-			}
-			for group in groups
-		]
+			return {"items": [], "next_cursor": None}
+		bounded_limit = max(1, min(limit, 500))
+		if cursor is None:
+			services.sync_gallery_index.run(root)
+		try:
+			page = services.gallery.list_timeline_page(root, cursor=cursor, limit=bounded_limit)
+		except ValueError as exc:
+			raise HTTPException(status_code=400, detail="invalid cursor") from exc
+		return {
+			"items": [_gallery_item_dict(item) for item in page.items],
+			"next_cursor": page.next_cursor,
+		}
 
 	@app.get("/api/gallery/calendar")
 	def gallery_calendar(year: int, month: int) -> dict[str, object]:
 		root = _session_library_root(services)
 		if not root:
 			return {"year": year, "month": month, "days_with_media": []}
-		days = services.gallery.calendar_days(
-			root,
-			year,
-			month,
-			captured_at_for=services.captured_at_map(root),
-		)
+		services.sync_gallery_index.run(root)
+		days = services.gallery.calendar_days(root, year, month)
 		return {"year": year, "month": month, "days_with_media": days}
 
 	@app.get("/api/gallery/item")
@@ -700,11 +698,11 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			raise HTTPException(status_code=404, detail="library not configured")
 		if not is_safe_gallery_relative_path(path):
 			raise HTTPException(status_code=403, detail="invalid path")
-		captured_map = services.captured_at_map(root)
+		indexed = services.gallery_index.get(root, path)
 		detail = services.get_gallery_item.get(
 			root,
 			path,
-			captured_at=captured_map.get(path),
+			captured_at=indexed.captured_at if indexed is not None else None,
 		)
 		if detail is None:
 			raise HTTPException(status_code=404, detail="not found")
@@ -786,19 +784,25 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		root = _session_library_root(services)
 		if not root:
 			return {"year": year, "month": month, "day": day, "items": []}
-		items = services.gallery.list_day(
-			root,
-			year,
-			month,
-			day,
-			captured_at_for=services.captured_at_map(root),
-		)
+		items = services.gallery.list_day(root, year, month, day)
 		return {
 			"year": year,
 			"month": month,
 			"day": day,
 			"items": [_gallery_item_dict(item) for item in items],
 		}
+
+	@app.get("/api/gallery/item/neighbor")
+	def gallery_item_neighbor(path: str, direction: str) -> dict[str, object]:
+		root = _session_library_root(services)
+		if not root:
+			raise HTTPException(status_code=404, detail="library not configured")
+		if not is_safe_gallery_relative_path(path):
+			raise HTTPException(status_code=403, detail="invalid path")
+		if direction not in ("prev", "next"):
+			raise HTTPException(status_code=400, detail="invalid direction")
+		found = services.gallery.neighbor(root, path, direction=direction)
+		return {"relative_path": found.relative_path if found is not None else None}
 
 	@app.get("/thumbs/{relative_path:path}")
 	def thumb_file(relative_path: str) -> FileResponse:

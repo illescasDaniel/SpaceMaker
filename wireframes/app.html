@@ -483,6 +483,22 @@
 			background: linear-gradient(135deg, var(--surface2), var(--border));
 		}
 
+		.gallery-loading-more {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			justify-content: center;
+			padding: 1rem 0;
+		}
+
+		.gallery-loading-spinner {
+			width: 14px;
+			height: 14px;
+			border-radius: 50%;
+			border: 2px solid var(--border);
+			border-top-color: var(--muted);
+		}
+
 		.thumb img,
 		.thumb .thumb-fill {
 			width: 100%;
@@ -1702,6 +1718,10 @@
 							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
 						</div>
 					</div>
+					<!-- Infinite scroll: shown while the next page of items is being fetched, at the bottom of the loaded grid. Large libraries load in pages rather than all at once. -->
+					<p class="status-line gallery-loading-more">
+						<span class="gallery-loading-spinner" aria-hidden="true"></span> Loading more…
+					</p>
 				</div>
 				<div id="calendar-view" class="calendar-panel" aria-hidden="true">
 					<div class="calendar-nav">

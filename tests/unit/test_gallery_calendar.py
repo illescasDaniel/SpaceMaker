@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from tests.unit.fakes import FakeFileSystem
+from tests.unit.fakes import FakeGalleryIndex
 
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.domain.gallery import days_in_month, gallery_item, items_for_day
-from spacemaker.domain.library import LibraryFolder
+from spacemaker.domain.gallery_index import GalleryIndexRow
 from spacemaker.domain.media import MediaKind
 
 
@@ -41,14 +41,39 @@ def test_given_video_filename_when_gallery_item_then_kind_video():
 	assert item.kind is MediaKind.VIDEO
 
 
-def test_given_converted_and_originals_when_calendar_days_then_converted_only():
+def test_given_indexed_items_when_calendar_days_then_matches_index():
 	# given
-	fs = FakeFileSystem()
 	library = "/lib"
-	fs.files[f"{library}/{LibraryFolder.CONVERTED.value}/a.avif"] = 1
-	fs.files[f"{library}/{LibraryFolder.ORIGINALS.value}/b.jpg"] = 1
-	at = {"a.avif": datetime(2025, 3, 7)}
+	index = FakeGalleryIndex()
+	rows = [
+		GalleryIndexRow(
+			relative_path="a.avif", captured_at=datetime(2025, 3, 7), kind=MediaKind.IMAGE, mtime=1, size=1
+		),
+		GalleryIndexRow(
+			relative_path="b.avif", captured_at=datetime(2025, 4, 1), kind=MediaKind.IMAGE, mtime=1, size=1
+		),
+	]
+	index.apply_sync(library, upserts=rows, removed=[])
 	# when
-	days = GenerateGallery(fs).calendar_days(library, 2025, 3, captured_at_for=at)
+	days = GenerateGallery(index).calendar_days(library, 2025, 3)
 	# then
 	assert days == [7]
+
+
+def test_given_indexed_items_when_list_day_then_matches_index():
+	# given
+	library = "/lib"
+	index = FakeGalleryIndex()
+	rows = [
+		GalleryIndexRow(
+			relative_path="a.avif", captured_at=datetime(2025, 3, 7, 9), kind=MediaKind.IMAGE, mtime=1, size=1
+		),
+		GalleryIndexRow(
+			relative_path="b.avif", captured_at=datetime(2025, 3, 8, 9), kind=MediaKind.IMAGE, mtime=1, size=1
+		),
+	]
+	index.apply_sync(library, upserts=rows, removed=[])
+	# when
+	items = GenerateGallery(index).list_day(library, 2025, 3, 7)
+	# then
+	assert [item.relative_path for item in items] == ["a.avif"]

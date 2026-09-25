@@ -1,62 +1,27 @@
 from __future__ import annotations
 
-from datetime import datetime
+from typing import Literal
 
-from spacemaker.domain.gallery import (
-	GalleryItem,
-	MonthGroup,
-	days_in_month,
-	gallery_item,
-	group_timeline,
-	items_for_day,
-)
-from spacemaker.domain.library import LibraryFolder
-from spacemaker.ports.outbound.filesystem import FileSystemPort
+from spacemaker.domain.gallery import GalleryItem
+from spacemaker.domain.gallery_index import GalleryCursor, GalleryPage
+from spacemaker.ports.outbound.gallery_index import GalleryIndexPort
 
 
 class GenerateGallery:
-	def __init__(self, filesystem: FileSystemPort) -> None:
-		self._filesystem = filesystem
+	def __init__(self, index: GalleryIndexPort) -> None:
+		self._index = index
 
-	def list_items(
-		self,
-		library_root: str,
-		*,
-		captured_at_for: dict[str, datetime] | None = None,
-	) -> list[GalleryItem]:
-		converted_root = self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, "")
-		paths = self._filesystem.list_files_recursive(converted_root)
-		fallback = datetime.fromtimestamp(0)
-		lookup = captured_at_for or {}
-		return [gallery_item(relative_path=rel, captured_at=lookup.get(rel, fallback)) for rel in paths]
+	def list_timeline_page(self, library_root: str, *, cursor: str | None, limit: int) -> GalleryPage:
+		decoded = GalleryCursor.decode(cursor) if cursor else None
+		return self._index.page(library_root, cursor=decoded, limit=limit)
 
-	def list_timeline(
-		self,
-		library_root: str,
-		*,
-		captured_at_for: dict[str, datetime] | None = None,
-	) -> list[MonthGroup]:
-		return group_timeline(self.list_items(library_root, captured_at_for=captured_at_for))
+	def calendar_days(self, library_root: str, year: int, month: int) -> list[int]:
+		return self._index.days_with_media(library_root, year, month)
 
-	def calendar_days(
-		self,
-		library_root: str,
-		year: int,
-		month: int,
-		*,
-		captured_at_for: dict[str, datetime] | None = None,
-	) -> list[int]:
-		items = self.list_items(library_root, captured_at_for=captured_at_for)
-		return sorted(days_in_month(items, year, month))
+	def list_day(self, library_root: str, year: int, month: int, day: int) -> list[GalleryItem]:
+		return self._index.items_for_day(library_root, year, month, day)
 
-	def list_day(
-		self,
-		library_root: str,
-		year: int,
-		month: int,
-		day: int,
-		*,
-		captured_at_for: dict[str, datetime] | None = None,
-	) -> list[GalleryItem]:
-		items = self.list_items(library_root, captured_at_for=captured_at_for)
-		return items_for_day(items, year, month, day)
+	def neighbor(
+		self, library_root: str, relative_path: str, *, direction: Literal["prev", "next"]
+	) -> GalleryItem | None:
+		return self._index.neighbor(library_root, relative_path, direction=direction)
