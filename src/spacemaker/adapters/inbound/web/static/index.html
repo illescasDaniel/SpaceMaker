@@ -1375,6 +1375,63 @@
 			border-bottom: 1px solid var(--border);
 		}
 
+		.transfer-session {
+			padding-bottom: 2rem;
+		}
+
+		.transfer-item-list {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			background: var(--surface);
+			overflow: hidden;
+		}
+
+		.transfer-item {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.75rem;
+			padding: 0.65rem 0.85rem;
+			border-bottom: 1px solid var(--border);
+			font-size: 0.9rem;
+		}
+
+		.transfer-item:last-child {
+			border-bottom: none;
+		}
+
+		.transfer-item-meta {
+			display: flex;
+			flex-direction: column;
+			gap: 0.15rem;
+			min-width: 0;
+			flex: 1;
+		}
+
+		.transfer-item-name {
+			font-weight: 600;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.transfer-item-from {
+			font-size: 0.75rem;
+			color: var(--muted);
+		}
+
+		.transfer-dl {
+			margin-top: 0;
+			flex-shrink: 0;
+			padding: 0.35rem 0.65rem;
+			font-size: 0.82rem;
+			text-decoration: none;
+			display: inline-block;
+		}
+
 		.share-server-only {
 			font-size: 0.9rem;
 			color: var(--muted);
@@ -1539,6 +1596,16 @@
 					</svg>
 					<span class="module-tile-title">Send files</span>
 				</button>
+				<button type="button" class="module-tile" data-module="transfer_files">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="10" y="8" width="12" height="20" rx="2"/>
+						<rect x="26" y="18" width="12" height="20" rx="2"/>
+						<path d="M16 32v4M32 14v-4"/>
+						<path d="M13 36h6M29 10h6"/>
+						<path d="M22 24h4"/>
+					</svg>
+					<span class="module-tile-title">Transfer files</span>
+				</button>
 			</div>
 		</div>
 	</section>
@@ -1658,6 +1725,41 @@
 				</div>
 			</div>
 			<p class="easy-lead" id="send-share-lead">Choose files or folders on this PC. Your phone can download files or zipped folders from the page opened by the QR code.</p>
+		</div>
+	</section>
+
+	<section id="view-transfer-files" class="screen" aria-label="Transfer files">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current" aria-current="page">Transfer files</span>
+		</nav>
+		<div class="easy-screen">
+			<div class="qr-with-info">
+				<div class="easy-qr-wrap qr-frame">
+					<img id="transfer-qr" alt="QR code for shared transfer session" hidden />
+					<p class="folder-hint" id="transfer-qr-wait">Starting transfer session…</p>
+				</div>
+				<button type="button" class="info-btn" id="btn-transfer-qr-info" title="Show transfer URL" aria-expanded="false" aria-controls="transfer-qr-info-panel">i</button>
+			</div>
+			<div class="info-panel" id="transfer-qr-info-panel" aria-hidden="true">
+				<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
+				<input class="field" type="text" readonly id="transfer-qr-url" aria-label="Transfer files page URL" value="" />
+			</div>
+			<p class="easy-lead">Scan this QR with any phone on the same Wi‑Fi. Everyone in the session can upload and download until you return to Home.</p>
+			<p class="folder-hint">Files stay in a temporary session only. Closing this module deletes everything that was uploaded.</p>
+		</div>
+		<div class="share-picker transfer-session">
+			<p class="share-server-only panel-hidden" id="transfer-server-only-hint">
+				Open SpaceMaker in the desktop app to add files and folders from this PC.
+			</p>
+			<div class="share-picker-actions" id="transfer-picker-actions">
+				<button type="button" class="btn btn-secondary" id="btn-transfer-add-files">Add files</button>
+				<button type="button" class="btn btn-secondary" id="btn-transfer-add-folder">Add folder</button>
+			</div>
+			<p class="label" style="margin: 0 0 0.5rem;">Session files</p>
+			<ul class="transfer-item-list" id="transfer-item-list" aria-label="Shared session files"></ul>
+			<p class="status-line" id="transfer-item-status" style="margin-top: 0.75rem;">0 items in session</p>
 		</div>
 	</section>
 

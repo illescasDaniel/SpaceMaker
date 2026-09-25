@@ -6,9 +6,9 @@ Open items only. Finished work: `memory/archive.md`.
 
 - [x] Phase 0 wireframe — desktop hub tile + `#view-transfer-files`; phone `phone-transfer.html` (approved 2026-09-25)
 - [x] Phase 1 spec — `specs/transfer-files/SPEC.md` + home-modules fifth tile (approved 2026-09-25)
-- [x] Phase 2 architecture — domain + ContentHasher port + StageTransferItem (awaiting approval)
-- [ ] Phase 3 tests
-- [ ] Phase 4 implementation
+- [x] Phase 2 architecture — domain + ContentHasher port + StageTransferItem (approved 2026-09-25)
+- [x] Phase 3 tests — unit tests for naming/hash, staging, session wipe
+- [x] Phase 4 implementation — AppServices, APIs, desktop + phone UI
 
 ## SpaceMaker app
 
