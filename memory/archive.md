@@ -5,6 +5,13 @@ at session start — see `.cursor/skills/agent-memory/SKILL.md`. Kept for
 reference; entries are grouped by the area they came from, newest additions
 at the top of each section.
 
+## GraphRAG agent tooling — `webnav` MCP server for JS/HTML/CSS (2026-09-25)
+
+### Done
+
+- [x] Added `webnav` MCP server mirroring `codenav`'s shape for the project's web static assets, multiplexing `typescript-language-server` (`.js`/`.mjs`/`.cjs`) and `vscode-html-language-server`/`vscode-css-language-server` (`.html`/`.css`), both from `vscode-langservers-extracted`. Factored the previously codenav-only `LspClient` out to `mcp-servers/_shared/lsp_client.py` so both servers share one implementation; added `jsconfig.json` (`allowJs`, `checkJs: false`, `include` globs) so `typescript-language-server` has a project to resolve. `.claudeignore`/`.cursorignore` added to keep `node_modules/` out of both tools' context.
+- [x] Found and fixed a real cold-start bug: `search_symbol` returned zero matches for any file not yet opened in that session, because `typescript-language-server`'s `workspace/symbol` only searches files sent through `textDocument/didOpen` — `jsconfig.json`'s `include` list alone doesn't make tsserver eagerly index at startup. Fixed by having `_get_ts_client()` (`mcp-servers/webnav_mcp/server.py`) eager-open every file matched by `jsconfig.json`'s `include` globs once, right after the ts-server starts. Verified live (killed the running process, confirmed a fresh cold PID, `search_symbol` succeeded as the very first call for two different untouched symbols). Full decision record: `memory/decisions.md` "2026-09-25 — New `webnav` MCP server".
+
 ## SpaceMaker app — Gallery performance at 50k+ items (2026-09-25)
 
 ### Done

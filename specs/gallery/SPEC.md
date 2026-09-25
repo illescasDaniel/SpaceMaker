@@ -25,6 +25,7 @@
 - **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
 - **Performance:** cached thumbs; a persisted, incrementally-synced index (derived from `converted/` + EXIF/probe metadata, never a source of truth by itself) backs timeline/calendar/day queries so response time does not scale with total library size. Timeline loads via cursor-paginated pages with infinite scroll. Smooth, responsive scrolling at **50,000+ items**, with a bounded mounted-tile working set (not the full library) regardless of scroll distance.
 - **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, `max-height: 55vh` on desktop; phone shell ~50vh). **Previous** / **Next** overlay buttons on the preview move to the adjacent item in **timeline order** (newest-first, same as the grid); disabled at the first/last item. Metadata block under preview includes **On disk** (absolute path, full-width wrap). Actions depend on shell:
+- **Progressive preview loading:** the preview area reserves its final size up front (never renders at zero/near-zero size). The item's existing thumbnail (`GET /thumbs/{relative_path}` — same one used in the grid) fills it immediately as a placeholder, with a loading indicator over it, while the full-size preview loads in the background; the full preview then replaces the thumbnail. This applies on initial open and on every **Previous**/**Next** step.
   - **Desktop app** (`index.html`): **Open** (default app), **Open containing folder**, **Download as JPEG** / **MP4**, **Delete**.
   - **Standalone phone gallery** (`gallery_mobile.html`): **Download**, **Download as JPEG** / **MP4**, **Delete**.
 - Export progress in an on-page alert with progress bar.
@@ -135,6 +136,14 @@
 - **And** **Previous** opens the prior item in timeline order
 - **And** the control for the boundary item is disabled (no wrap)
 - **And** this works via a per-item neighbor lookup, without requiring the full library's item list to be loaded client-side
+
+### Scenario: Full preview loads progressively from the thumbnail
+
+- **Given** the gallery item page is opening, or the user has just chosen **Previous**/**Next**
+- **When** the full-size preview has not finished loading yet
+- **Then** the item's existing thumbnail (`GET /thumbs/{relative_path}`) fills the preview area immediately, with a loading indicator over it
+- **And** the preview area is already at its final size — it does not render at zero or near-zero size while waiting
+- **And** once the full-size preview loads, it replaces the thumbnail and the loading indicator is removed
 
 ### Scenario: Delete gallery item from disk
 

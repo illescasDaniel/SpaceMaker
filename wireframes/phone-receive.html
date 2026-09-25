@@ -33,6 +33,18 @@
 				--warn-bg: #3d3200;
 			}
 		}
+		:root {
+			/* Motion vocabulary — shared with wireframes/app.html. */
+			--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+			--dur-fast: 120ms;
+			--dur-base: 200ms;
+		}
+		@media (prefers-reduced-motion: reduce) {
+			:root {
+				--dur-fast: 0.001ms;
+				--dur-base: 0.001ms;
+			}
+		}
 		* { box-sizing: border-box; }
 		body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
 		.wireframe-banner {
@@ -51,33 +63,41 @@
 		.btn {
 			font: inherit; display: block; width: 100%; border: none; border-radius: 8px;
 			padding: 0.7rem 1rem; cursor: pointer; font-weight: 600; margin-top: 0.45rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
 		}
+		.btn:active { transform: scale(0.97); }
 		.btn-primary { background: var(--accent-dim); color: #fff; }
 		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
 		.hint { font-size: 0.8rem; color: var(--muted); margin: 0.85rem 0 0; }
 		.alert { background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; margin-bottom: 1rem; }
-		.state-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 1rem; }
+		.state-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin: 0 0 1rem; padding: 0; border: 0; }
+		.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 		.state-tabs button {
 			font: inherit; font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px;
 			border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 		.state-tabs button.active { background: var(--accent-dim); color: #fff; border-color: transparent; }
 		.panel-hidden { display: none; }
+		.card { animation: panel-fade-in var(--dur-base) var(--ease-standard); }
+		@keyframes panel-fade-in { from { opacity: 0; } to { opacity: 1; } }
 		.sent-count { font-size: 0.9rem; font-weight: 600; margin: 0 0 0.75rem; }
 	</style>
 </head>
 <body>
-	<div class="wireframe-banner">Design preview — phone page for <strong>Receive files</strong> (any file type → Documents/SpaceMaker).</div>
+	<div class="wireframe-banner">Design preview — phone page for <strong>Receive files</strong> (any file type → Documents/SpaceMaker). Motion: state-tab swaps fade in, buttons ease on press (120–200ms, reduced-motion aware).</div>
 	<div class="page">
-		<div class="state-tabs" role="group" aria-label="Wireframe state mock">
+		<fieldset class="state-tabs">
+			<legend class="sr-only">Wireframe state mock</legend>
 			<button type="button" class="active" data-state="ready">Ready</button>
 			<button type="button" data-state="uploading">Uploading</button>
 			<button type="button" data-state="paused">Paused</button>
-		</div>
-		<div class="state-tabs" role="group" aria-label="Device hint mock">
+		</fieldset>
+		<fieldset class="state-tabs">
+			<legend class="sr-only">Device hint mock</legend>
 			<button type="button" class="active" data-device="android">Android hint</button>
 			<button type="button" data-device="ios">iPhone hint</button>
-		</div>
+		</fieldset>
 		<p class="logo">Space<span>Maker</span></p>
 		<p class="sub">Send any files to your PC.</p>
 		<p class="sent-count">2 files sent to your PC</p>

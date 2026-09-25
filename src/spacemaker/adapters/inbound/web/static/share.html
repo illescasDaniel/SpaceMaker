@@ -25,6 +25,11 @@
 			border-radius: var(--radius);
 			padding: 0.5rem 0;
 			margin-bottom: 0.75rem;
+			animation: panel-fade-in var(--dur-base) var(--ease-standard);
+		}
+		@keyframes panel-fade-in {
+			from { opacity: 0; }
+			to { opacity: 1; }
 		}
 		.file-row {
 			display: flex;
@@ -34,6 +39,7 @@
 			padding: 0.65rem 1rem;
 			border-bottom: 1px solid var(--border);
 			font-size: 0.9rem;
+			transition: opacity var(--dur-base) var(--ease-standard);
 		}
 		.file-row:last-child { border-bottom: none; }
 		.file-name {
@@ -53,6 +59,10 @@
 			background: var(--accent-dim);
 			color: #fff;
 			flex-shrink: 0;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+		}
+		.btn-dl:active {
+			transform: scale(0.95);
 		}
 		.empty { color: var(--muted); font-size: 0.9rem; padding: 1rem; text-align: center; }
 		.hidden { display: none; }

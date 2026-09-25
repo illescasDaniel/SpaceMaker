@@ -34,3 +34,22 @@
 		--disabled: #5c6b82;
 	}
 }
+
+/* Motion vocabulary — shared across desktop shell, mobile gallery, and phone pages.
+   Only user-caused state changes get motion (nav, hover/press, list add/remove,
+   async state swap); no page-load intros, no decorative/looping animation. */
+:root {
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--dur-fast: 120ms;
+	--dur-base: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--dur-fast: 0.001ms;
+		--dur-base: 0.001ms;
+	}
+	.gallery-item-spinner {
+		animation: none;
+	}
+}

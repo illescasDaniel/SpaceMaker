@@ -14,6 +14,7 @@ Source of truth for behavior. Wireframes: [wireframes/app.html](../wireframes/ap
 | [gallery/SPEC.md](gallery/SPEC.md) | Timeline/calendar, `converted/` only, LAN + QR |
 | [packaging/SPEC.md](packaging/SPEC.md) | AppImage (Linux), managed CLI downloads per OS/arch |
 | [legal/SPEC.md](legal/SPEC.md) | Privacy, disclaimer, third-party notice in release + UI |
+| [ui-motion/SPEC.md](ui-motion/SPEC.md) | Shared motion vocabulary, screen/hover/press/list transitions, reduced-motion |
 
 **Phase gate:** Spec approval required before domain/ports (Phase 2).
 

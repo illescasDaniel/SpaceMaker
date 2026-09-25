@@ -35,6 +35,22 @@
 			}
 		}
 
+		:root {
+			/* Motion vocabulary — shared with wireframes/app.html. Only
+			   user-caused state changes get motion: press feedback,
+			   state/panel swaps. No page-load intros. */
+			--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+			--dur-fast: 120ms;
+			--dur-base: 200ms;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			:root {
+				--dur-fast: 0.001ms;
+				--dur-base: 0.001ms;
+			}
+		}
+
 		* { box-sizing: border-box; }
 
 		body {
@@ -93,6 +109,11 @@
 			cursor: pointer;
 			font-weight: 600;
 			margin-top: 0.45rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+		}
+
+		.btn:active {
+			transform: scale(0.97);
 		}
 
 		.btn-primary { background: var(--accent-dim); color: #fff; }
@@ -121,7 +142,21 @@
 			display: flex;
 			gap: 0.35rem;
 			flex-wrap: wrap;
-			margin-bottom: 1rem;
+			margin: 0 0 1rem;
+			padding: 0;
+			border: 0;
+		}
+
+		.sr-only {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
 		}
 
 		.state-tabs button {
@@ -133,6 +168,7 @@
 			background: var(--surface2);
 			color: var(--muted);
 			cursor: pointer;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.state-tabs button.active {
@@ -142,21 +178,30 @@
 		}
 
 		.panel-hidden { display: none; }
+
+		.card { animation: panel-fade-in var(--dur-base) var(--ease-standard); }
+
+		@keyframes panel-fade-in {
+			from { opacity: 0; }
+			to { opacity: 1; }
+		}
 	</style>
 </head>
 <body>
-	<div class="wireframe-banner">Wireframe — light phone upload (Easy). Toggle states or device hint below.</div>
+	<div class="wireframe-banner">Wireframe — light phone upload (Easy). Toggle states or device hint below. Motion: state-tab swaps fade in, buttons ease on press (120–200ms, reduced-motion aware).</div>
 
 	<div class="page">
-		<div class="state-tabs" role="group" aria-label="Wireframe state mock">
+		<fieldset class="state-tabs">
+			<legend class="sr-only">Wireframe state mock</legend>
 			<button type="button" class="active" data-state="ready">Ready</button>
 			<button type="button" data-state="uploading">Uploading</button>
 			<button type="button" data-state="paused">Paused</button>
-		</div>
-		<div class="state-tabs" role="group" aria-label="Device hint mock">
+		</fieldset>
+		<fieldset class="state-tabs">
+			<legend class="sr-only">Device hint mock</legend>
 			<button type="button" class="active" data-device="android">Android hint</button>
 			<button type="button" data-device="ios">iPhone hint</button>
-		</div>
+		</fieldset>
 
 		<p class="logo">Space<span>Maker</span></p>
 		<p class="sub">Send photos and videos to your PC.</p>

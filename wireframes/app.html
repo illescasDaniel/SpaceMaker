@@ -41,6 +41,23 @@
 			}
 		}
 
+		:root {
+			/* Motion vocabulary — minimal, native-feel. Only state changes the
+			   user directly causes get motion: nav, hover/press, list add/remove,
+			   async state swap. No page-load intros, no decorative/looping motion. */
+			--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+			--dur-fast: 120ms;
+			--dur-base: 200ms;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			:root {
+				--dur-fast: 0.001ms;
+				--dur-base: 0.001ms;
+			}
+			.gallery-item-spinner { animation: none; }
+		}
+
 		* { box-sizing: border-box; }
 
 		body {
@@ -104,6 +121,7 @@
 			padding: 0.4rem 0.9rem;
 			border-radius: 6px;
 			cursor: pointer;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.view-tabs button.active {
@@ -112,7 +130,25 @@
 		}
 
 		.screen { display: none; padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
-		.screen.active { display: block; }
+		.screen.active {
+			display: block;
+			animation: screen-fade-in var(--dur-base) var(--ease-standard);
+		}
+
+		@keyframes screen-fade-in {
+			from { opacity: 0; transform: translateY(4px); }
+			to { opacity: 1; transform: translateY(0); }
+		}
+
+		/* Gallery item opens like a lightbox (zoom + fade), not a page navigation. */
+		#view-gallery-item.screen.active {
+			animation: gallery-item-in var(--dur-base) var(--ease-standard);
+		}
+
+		@keyframes gallery-item-in {
+			from { opacity: 0; transform: scale(0.94); }
+			to { opacity: 1; transform: scale(1); }
+		}
 
 		/* Wizard */
 		.wizard-intro {
@@ -153,11 +189,16 @@
 			flex-direction: column;
 			gap: 0.75rem;
 			min-height: 280px;
+			transition: opacity var(--dur-base) var(--ease-standard);
 		}
 
 		.step-card.disabled {
 			opacity: 0.55;
 			pointer-events: none;
+		}
+
+		.step-num {
+			transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
 		}
 
 		.step-header {
@@ -220,6 +261,7 @@
 			font-size: 0.85rem;
 			background: var(--surface2);
 			color: var(--text);
+			transition: background-color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 		}
 
 		button.chip {
@@ -325,7 +367,11 @@
 			cursor: pointer;
 			font-weight: 600;
 			margin-top: auto;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard), opacity var(--dur-fast) var(--ease-standard);
 		}
+
+		.btn:active:not(:disabled) { transform: scale(0.97); }
+		.btn:disabled { transition: opacity var(--dur-base) var(--ease-standard); }
 
 		.btn-primary { background: var(--accent-dim); color: #fff; }
 		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
@@ -353,6 +399,7 @@
 			height: 100%;
 			background: linear-gradient(90deg, var(--accent-dim), var(--accent));
 			border-radius: 4px;
+			transition: width var(--dur-base) var(--ease-standard);
 		}
 
 		.folder-hint {
@@ -435,6 +482,7 @@
 			color: var(--muted);
 			padding: 0.45rem 0.9rem;
 			cursor: pointer;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.toggle-group button.active {
@@ -477,6 +525,14 @@
 			border-radius: 8px;
 			border: 1px solid var(--border);
 			overflow: hidden;
+			transition: opacity var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-standard);
+		}
+
+		.thumb-link:hover { transform: scale(1.03); }
+
+		.thumb.thumb-removing {
+			opacity: 0;
+			transform: scale(0.85);
 		}
 
 		.thumb-fill {
@@ -557,6 +613,7 @@
 			color: var(--muted);
 			border: none;
 			cursor: default;
+			transition: background-color var(--dur-fast) var(--ease-standard), outline-color var(--dur-fast) var(--ease-standard);
 		}
 
 		.cal-cell.weekday {
@@ -614,16 +671,6 @@
 			margin-bottom: 1rem;
 		}
 
-		.gallery-item-stage-wrap > .gallery-item-stage,
-		.gallery-item-stage-wrap > .gallery-item-nav {
-			grid-area: 1 / 1;
-		}
-
-		.gallery-item-stage-wrap .gallery-item-stage {
-			margin-bottom: 0;
-			min-width: 0;
-		}
-
 		.gallery-item-nav {
 			z-index: 2;
 			align-self: center;
@@ -643,6 +690,7 @@
 			cursor: pointer;
 			font: inherit;
 			font-size: 1rem;
+			transition: border-color var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard), opacity var(--dur-base) var(--ease-standard);
 		}
 
 		.gallery-item-nav:hover:not(:disabled) {
@@ -662,25 +710,84 @@
 		}
 
 		.gallery-item-stage {
+			position: relative;
 			background: var(--surface2);
 			border: 1px solid var(--border);
 			border-radius: var(--radius);
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			min-height: 200px;
+			width: 100%;
+			aspect-ratio: 4 / 3;
 			max-height: 70vh;
 			overflow: hidden;
 			margin-bottom: 1rem;
 		}
 
-		.gallery-item-stage img,
-		.gallery-item-stage video {
+		.gallery-item-stage-wrap > .gallery-item-stage,
+		.gallery-item-stage-wrap > .gallery-item-nav {
+			grid-area: 1 / 1;
+		}
+
+		.gallery-item-stage-wrap .gallery-item-stage {
+			margin-bottom: 0;
+			min-width: 0;
+		}
+
+		/* Wraps the current photo/video; slides and fades on prev/next navigation. */
+		.gallery-item-media {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: transform var(--dur-base) var(--ease-standard), opacity var(--dur-base) var(--ease-standard);
+		}
+
+		.gallery-item-media.slide-out-next { transform: translateX(-28px); opacity: 0; }
+		.gallery-item-media.slide-out-prev { transform: translateX(28px); opacity: 0; }
+		.gallery-item-media.slide-in-next-start { transform: translateX(28px); opacity: 0; }
+		.gallery-item-media.slide-in-prev-start { transform: translateX(-28px); opacity: 0; }
+
+		/* Blurred thumbnail fills the frame instantly so the layout never collapses to 0px while the full asset loads. */
+		.gallery-item-thumb {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			filter: blur(16px) saturate(1.05) brightness(0.92);
+			transform: scale(1.1);
+			transition: opacity var(--dur-base) var(--ease-standard);
+		}
+
+		.gallery-item-thumb.hidden { opacity: 0; }
+
+		.gallery-item-spinner {
+			position: absolute;
+			width: 34px;
+			height: 34px;
+			border-radius: 50%;
+			border: 3px solid color-mix(in srgb, var(--text) 18%, transparent);
+			border-top-color: var(--accent);
+			animation: gallery-item-spin 0.8s linear infinite;
+			transition: opacity var(--dur-fast) var(--ease-standard);
+		}
+
+		.gallery-item-spinner.hidden { opacity: 0; }
+
+		@keyframes gallery-item-spin {
+			to { transform: rotate(360deg); }
+		}
+
+		.gallery-item-full {
+			position: relative;
 			max-width: 100%;
-			max-height: 70vh;
+			max-height: 100%;
 			object-fit: contain;
 			display: block;
+			opacity: 0;
+			transition: opacity var(--dur-base) var(--ease-standard);
 		}
+
+		.gallery-item-full.loaded { opacity: 1; }
 
 		.gallery-item-title {
 			margin: 0 0 0.75rem;
@@ -750,7 +857,15 @@
 			margin-top: 0.35rem;
 		}
 
-		.info-panel.visible { display: block; }
+		.info-panel.visible {
+			display: block;
+			animation: panel-fade-in var(--dur-fast) var(--ease-standard);
+		}
+
+		@keyframes panel-fade-in {
+			from { opacity: 0; }
+			to { opacity: 1; }
+		}
 
 		.info-panel h4 {
 			margin: 0.5rem 0 0.25rem;
@@ -769,6 +884,7 @@
 			padding: 0.5rem 0.6rem;
 			cursor: pointer;
 			font-size: 0.85rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.connection-toggle button.active {
@@ -883,6 +999,7 @@
 			border-radius: 6px;
 			cursor: pointer;
 			font-size: 0.85rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.ui-mode-toggle button.active {
@@ -1082,6 +1199,12 @@
 			padding: 1rem;
 			box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 			z-index: 41;
+			animation: popup-rise-in var(--dur-base) var(--ease-standard);
+		}
+
+		@keyframes popup-rise-in {
+			from { opacity: 0; transform: translateY(6px) scale(0.97); }
+			to { opacity: 1; transform: translateY(0) scale(1); }
 		}
 
 		.gallery-phone-popup .qr-placeholder {
@@ -1132,10 +1255,17 @@
 			color: var(--text);
 			text-align: center;
 			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+			transition: border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
 		}
 
 		.module-tile:hover {
 			border-color: var(--accent);
+			transform: translateY(-2px);
+			box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+		}
+
+		.module-tile:active {
+			transform: scale(0.97);
 		}
 
 		.module-tile-icon {
@@ -1269,6 +1399,10 @@
 		<strong>Design preview (static HTML)</strong> — open this file in your browser (File → Open, or drag onto a browser window).
 		Click each Home tile to review layout. Phone pages: <code>wireframes/phone-receive.html</code>, <code>wireframes/phone-share.html</code>.
 		Not the live app (<code>uv run task spacemaker</code>).
+		<br>
+		<strong>Motion notes:</strong> shared vocabulary is <code>--ease-standard</code> / <code>--dur-fast</code> (120ms) / <code>--dur-base</code> (200ms), defined once in <code>:root</code>.
+		Motion only on user-caused state changes: navigation cross-fade, hover/press feedback, list add/remove, async state swaps (progress fill, panel show/hide).
+		No page-load intros, no decorative/looping animation. A <code>prefers-reduced-motion: reduce</code> block collapses everything to near-instant.
 	</div>
 
 	<div class="app-shell">
@@ -1692,6 +1826,7 @@
 				<button type="button" id="btn-calendar">Calendar</button>
 			</fieldset>
 		</div>
+		<p class="wireframe-demo-row">Wireframe demo: <button type="button" id="btn-demo-remove-thumb">Remove a thumbnail (delete animation)</button></p>
 
 		<div class="gallery-layout">
 			<div class="gallery-main">
@@ -1753,7 +1888,11 @@
 			<div class="gallery-item-stage-wrap">
 				<button type="button" class="gallery-item-nav gallery-item-nav-prev" id="btn-gallery-item-prev" aria-label="Previous photo">←</button>
 				<div class="gallery-item-stage" id="gallery-item-stage">
-					<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%232a3440' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='24' text-anchor='middle' dominant-baseline='middle'%3EPreview%3C/text%3E%3C/svg%3E" alt="2025/September/IMG_0042.avif" />
+					<div class="gallery-item-media" id="gallery-item-media">
+						<img class="gallery-item-thumb hidden" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%232a3440' width='800' height='600'/%3E%3C/svg%3E" alt="" aria-hidden="true" />
+						<div class="gallery-item-spinner hidden" aria-hidden="true"></div>
+						<img class="gallery-item-full loaded" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%232a3440' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='24' text-anchor='middle' dominant-baseline='middle'%3EPreview%3C/text%3E%3C/svg%3E" alt="2025/September/IMG_0042.avif" />
+					</div>
 				</div>
 				<button type="button" class="gallery-item-nav gallery-item-nav-next" id="btn-gallery-item-next" aria-label="Next photo">→</button>
 			</div>
@@ -1871,23 +2010,118 @@
 			}
 		}
 
+		// Demo dataset driving the gallery item screen: enough items to show prev/next
+		// navigation, each with its own placeholder colour and metadata.
+		var galleryDemoItems = [
+			{ name: '2025/September/IMG_0042.avif', captured: 'September 4, 2025, 14:32', camera: 'Samsung · SM-S921B', dims: '4032 × 3024', size: '1.2 MB', location: '52.5200° N, 13.4050° E', color: '2a3440', type: 'image' },
+			{ name: '2025/September/IMG_0043.avif', captured: 'September 4, 2025, 14:35', camera: 'Samsung · SM-S921B', dims: '4032 × 3024', size: '1.4 MB', location: '52.5200° N, 13.4050° E', color: '35405a', type: 'image' },
+			{ name: '2025/September/IMG_0044.avif', captured: 'September 4, 2025, 15:02', camera: 'Samsung · SM-S921B', dims: '3024 × 4032', size: '0.9 MB', location: '52.5201° N, 13.4051° E', color: '405a35', type: 'image' },
+			{ name: '2025/September/CLIP_0007.mp4', captured: 'September 4, 2025, 15:10', camera: 'Samsung · SM-S921B', dims: '1920 × 1080', size: '18.4 MB', location: '—', color: '5a3540', type: 'video' },
+		];
+		var galleryDemoIndex = 0;
+
+		function svgDataUri(svgMarkup) {
+			return 'data:image/svg+xml,' + encodeURIComponent(svgMarkup);
+		}
+
+		function placeholderSvg(color, label) {
+			return svgDataUri('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="#' + color + '" width="800" height="600"/><text x="50%" y="50%" fill="#8b9cb3" font-size="24" text-anchor="middle" dominant-baseline="middle">' + label + '</text></svg>');
+		}
+
+		// Renders the current demo item. `direction` ('next'/'prev'/undefined) picks which
+		// side the new frame slides in from; omit it for a fresh open (no slide).
+		// The blurred placeholder below stands in for the real GET /thumbs/{relative_path}
+		// JPEG (already generated for every item) — production wires that thumbnail as the
+		// instant placeholder, not a freshly-generated blur.
+		function renderGalleryItem(direction) {
+			var item = galleryDemoItems[galleryDemoIndex];
+			var stage = document.getElementById('gallery-item-stage');
+			var titleEl = document.querySelector('.gallery-item-title');
+			var metaEl = document.querySelector('.gallery-meta');
+			var friendly = document.getElementById('btn-wireframe-friendly');
+			var isVideo = item.type === 'video';
+
+			var mediaClass = 'gallery-item-media';
+			if (direction === 'next') mediaClass += ' slide-in-next-start';
+			if (direction === 'prev') mediaClass += ' slide-in-prev-start';
+
+			stage.innerHTML =
+				'<div class="' + mediaClass + '" id="gallery-item-media">' +
+					'<img class="gallery-item-thumb" src="' + placeholderSvg(item.color, 'Loading…') + '" alt="" aria-hidden="true" />' +
+					'<div class="gallery-item-spinner" aria-hidden="true"></div>' +
+					(isVideo
+						? '<video class="gallery-item-full" controls aria-label="' + item.name + '"></video>'
+						: '<img class="gallery-item-full" alt="' + item.name + '" />') +
+				'</div>';
+
+			titleEl.textContent = item.name;
+			metaEl.innerHTML =
+				'<dt>Captured</dt><dd>' + item.captured + '</dd>' +
+				'<dt>Camera</dt><dd>' + item.camera + '</dd>' +
+				'<dt>Dimensions</dt><dd>' + item.dims + '</dd>' +
+				'<dt>File size</dt><dd>' + item.size + '</dd>' +
+				'<dt>Location</dt><dd>' + item.location + '</dd>';
+			if (friendly) {
+				friendly.textContent = isVideo ? 'Download as MP4' : 'Download as JPEG';
+			}
+
+			document.getElementById('btn-gallery-item-prev').disabled = galleryDemoIndex === 0;
+			document.getElementById('btn-gallery-item-next').disabled = galleryDemoIndex === galleryDemoItems.length - 1;
+
+			var media = document.getElementById('gallery-item-media');
+			if (direction) {
+				// Force layout so the slide-in-start transform is applied before we clear it,
+				// otherwise the browser coalesces both states and skips the animation.
+				void media.offsetWidth;
+				media.classList.remove('slide-in-next-start', 'slide-in-prev-start');
+			}
+
+			// Simulate the full-resolution asset arriving after a short network delay: the
+			// blurred thumbnail + spinner are visible immediately, then cross-fade out.
+			window.setTimeout(function () {
+				var fullEl = stage.querySelector('.gallery-item-full');
+				var thumbEl = stage.querySelector('.gallery-item-thumb');
+				var spinnerEl = stage.querySelector('.gallery-item-spinner');
+				if (!fullEl) return;
+				var fullSrc = placeholderSvg(item.color, isVideo ? 'Video' : 'Preview');
+				if (isVideo) {
+					fullEl.poster = fullSrc;
+				} else {
+					fullEl.src = fullSrc;
+				}
+				fullEl.classList.add('loaded');
+				if (thumbEl) thumbEl.classList.add('hidden');
+				if (spinnerEl) spinnerEl.classList.add('hidden');
+			}, 550);
+		}
+
+		function goToGalleryDemoItem(newIndex, direction) {
+			if (newIndex < 0 || newIndex >= galleryDemoItems.length) return;
+			var media = document.getElementById('gallery-item-media');
+			if (media) {
+				media.classList.add(direction === 'next' ? 'slide-out-next' : 'slide-out-prev');
+				window.setTimeout(function () {
+					galleryDemoIndex = newIndex;
+					renderGalleryItem(direction);
+				}, 160);
+			} else {
+				galleryDemoIndex = newIndex;
+				renderGalleryItem(direction);
+			}
+		}
+
 		document.querySelectorAll('.thumb-link[data-item-demo]').forEach(function (btn) {
 			btn.addEventListener('click', function () {
-				var stage = document.getElementById('gallery-item-stage');
-				var friendly = document.getElementById('btn-wireframe-friendly');
-				if (btn.getAttribute('data-item-demo') === 'video') {
-					stage.innerHTML = '<video controls poster="" aria-label="Sample video"><source type="video/mp4" /></video>';
-					if (friendly) {
-						friendly.textContent = 'Download as MP4';
-					}
-				} else {
-					stage.innerHTML = '<img src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'800\' height=\'600\'%3E%3Crect fill=\'%232a3440\' width=\'800\' height=\'600\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' fill=\'%238b9cb3\' font-size=\'24\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3EPreview%3C/text%3E%3C/svg%3E" alt="Sample image" />';
-					if (friendly) {
-						friendly.textContent = 'Download as JPEG';
-					}
-				}
+				galleryDemoIndex = btn.getAttribute('data-item-demo') === 'video' ? 3 : 0;
+				renderGalleryItem();
 				showView('gallery-item');
 			});
+		});
+		document.getElementById('btn-gallery-item-prev').addEventListener('click', function () {
+			goToGalleryDemoItem(galleryDemoIndex - 1, 'prev');
+		});
+		document.getElementById('btn-gallery-item-next').addEventListener('click', function () {
+			goToGalleryDemoItem(galleryDemoIndex + 1, 'next');
 		});
 		document.getElementById('btn-gallery-item-back').addEventListener('click', function () {
 			showView('gallery');
@@ -1944,6 +2178,13 @@
 		});
 		document.getElementById('btn-gallery-phone-help').addEventListener('click', function () {
 			document.getElementById('gallery-phone-popup').classList.toggle('panel-hidden');
+		});
+
+		document.getElementById('btn-demo-remove-thumb').addEventListener('click', function () {
+			var thumb = document.querySelector('#timeline-view .thumb');
+			if (!thumb) return;
+			thumb.classList.add('thumb-removing');
+			thumb.addEventListener('transitionend', function () { thumb.remove(); }, { once: true });
 		});
 
 		document.getElementById('btn-wireframe-show-components').addEventListener('click', function () {

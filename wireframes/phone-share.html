@@ -27,6 +27,18 @@
 				--accent-dim: #228be6;
 			}
 		}
+		:root {
+			/* Motion vocabulary — shared with wireframes/app.html. */
+			--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+			--dur-fast: 120ms;
+			--dur-base: 200ms;
+		}
+		@media (prefers-reduced-motion: reduce) {
+			:root {
+				--dur-fast: 0.001ms;
+				--dur-base: 0.001ms;
+			}
+		}
 		* { box-sizing: border-box; }
 		body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
 		.wireframe-banner {
@@ -42,27 +54,34 @@
 		.logo span { color: var(--accent); }
 		.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
 		.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 1rem; margin-bottom: 0.75rem; }
-		.row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.65rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+		.row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.65rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; transition: opacity var(--dur-base) var(--ease-standard); }
+		.row.row-removing { opacity: 0; }
 		.row:last-child { border-bottom: none; }
 		.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-		.dl { font: inherit; border: none; border-radius: 6px; padding: 0.35rem 0.65rem; cursor: pointer; font-weight: 600; background: var(--accent-dim); color: #fff; flex-shrink: 0; }
-		.state-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 1rem; }
+		.dl { font: inherit; border: none; border-radius: 6px; padding: 0.35rem 0.65rem; cursor: pointer; font-weight: 600; background: var(--accent-dim); color: #fff; flex-shrink: 0; transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard); }
+		.dl:active { transform: scale(0.95); }
+		.state-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin: 0 0 1rem; padding: 0; border: 0; }
+		.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 		.state-tabs button {
 			font: inherit; font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px;
 			border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 		.state-tabs button.active { background: var(--accent-dim); color: #fff; border-color: transparent; }
 		.panel-hidden { display: none; }
+		.card { animation: panel-fade-in var(--dur-base) var(--ease-standard); }
+		@keyframes panel-fade-in { from { opacity: 0; } to { opacity: 1; } }
 		.empty { color: var(--muted); font-size: 0.9rem; padding: 1rem; text-align: center; }
 	</style>
 </head>
 <body>
-	<div class="wireframe-banner">Design preview — phone page for <strong>Send files</strong> (download list from PC share).</div>
+	<div class="wireframe-banner">Design preview — phone page for <strong>Send files</strong> (download list from PC share). Motion: state-tab swaps fade in, download buttons ease on press (120–200ms, reduced-motion aware).</div>
 	<div class="page">
-		<div class="state-tabs" role="group" aria-label="Wireframe state mock">
+		<fieldset class="state-tabs">
+			<legend class="sr-only">Wireframe state mock</legend>
 			<button type="button" class="active" data-state="list">File list</button>
 			<button type="button" data-state="ended">Link expired</button>
-		</div>
+		</fieldset>
 		<p class="logo">Space<span>Maker</span></p>
 		<p class="sub">Download files shared from your PC.</p>
 		<div id="panel-list" class="card">

@@ -2,24 +2,30 @@ _Last updated: 2026-09-25_
 
 ## Branch
 
-`claude/qt-dependency-assessment-knsl0c`
+`main`
 
 ## Current focus
 
-Gallery performance at 50k+ items is done: the full SDD feature (SQLite-backed
-derived index, incremental sync, cursor pagination, frontend infinite scroll +
-DOM windowing) plus two follow-up bugs found after the fact (the "Loading
-more…" spinner staying visible permanently, and the gallery briefly
-duplicating after deleting an item from the detail page). Full detail moved to
-`memory/archive.md` ("SpaceMaker app — Gallery performance at 50k+ items
-(2026-09-25)"); the SDD decision record is in `memory/decisions.md`. Nothing
-left to do on this thread. Being committed and pushed now via `/save-changes`.
+No active thread. Just finished: gallery item detail motion (open animation,
+prev/next slide transitions, real-thumbnail-first progressive loading) —
+full SDD cycle, all gates approved in chat, implemented and verified live in
+a browser session (zero console errors, clean Biome lint). Also fixed a
+`.gallery-item-stage` horizontal-centering regression found during
+verification (CSS `aspect-ratio`/`max-height`/missing-`width` interaction).
+See `memory/decisions.md` (2026-09-25) for both.
+
+Files touched: `src/spacemaker/adapters/inbound/web/static/{app.js,
+index.html,shell-gallery.css,theme.css}`, `wireframes/app.html`,
+`specs/ui-motion/SPEC.md`, `specs/gallery/SPEC.md`, `specs/README.md`.
+
+The separate, pre-existing `webnav` MCP thread (JS/HTML/CSS code nav +
+cold-`search_symbol` fix) is also finished and moved to `memory/archive.md`.
 
 ## Next steps
 
-- No active thread. Next open items (see `memory/progress.md`): Easy mode
-  import issues (wireframe approved, spec in progress), and confirming the
-  native pywebview backends on real Windows/macOS hardware.
+- No open thread from this session. Longer-standing open items: see
+  `memory/progress.md` (Easy mode import issues; confirming native pywebview
+  backends on real Windows/macOS hardware).
 
 ## Run
 
@@ -40,6 +46,7 @@ uv run task smoke                   # real-process server smoke test (subset of 
   (`confirm()` returns `false`), so exercising a destructive-action UI button
   (e.g. gallery delete) end-to-end needs `window.confirm = () => true`
   monkey-patched first, or calling the underlying API directly.
-- No `npm`/`node` on PATH in this sandbox — Biome checks for web/JS changes
-  can't be run here; say so rather than skipping silently.
+- No `npm`/`node` on PATH in some sandboxes — check before assuming Biome
+  can't run; a recent session had `node_modules/.bin/` populated and
+  webnav's Node-based language servers ran fine.
 - Older finished threads: `memory/archive.md` and `docs/agent-tooling.md`.

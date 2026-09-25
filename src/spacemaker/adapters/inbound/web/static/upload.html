@@ -25,6 +25,11 @@
 			border-radius: var(--radius);
 			padding: 1rem;
 			margin-bottom: 0.75rem;
+			animation: panel-fade-in var(--dur-base) var(--ease-standard);
+		}
+		@keyframes panel-fade-in {
+			from { opacity: 0; }
+			to { opacity: 1; }
 		}
 		.btn {
 			font: inherit;
@@ -36,6 +41,10 @@
 			cursor: pointer;
 			font-weight: 600;
 			margin-top: 0.45rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+		}
+		.btn:active {
+			transform: scale(0.97);
 		}
 		.btn-primary { background: var(--accent-dim); color: #fff; }
 		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
@@ -96,7 +105,7 @@
 			if (!el) {
 				return;
 			}
-			if (!body || !body.active) {
+			if (!body?.active) {
 				el.hidden = true;
 				return;
 			}

@@ -64,6 +64,7 @@
 			padding: 0.4rem 0.9rem;
 			border-radius: 6px;
 			cursor: pointer;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.view-tabs button.active {
@@ -72,7 +73,22 @@
 		}
 
 		.screen { display: none; padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
-		.screen.active { display: block; }
+		.screen.active { display: block; animation: screen-fade-in var(--dur-base) var(--ease-standard); }
+
+		@keyframes screen-fade-in {
+			from { opacity: 0; transform: translateY(4px); }
+			to { opacity: 1; transform: translateY(0); }
+		}
+
+		/* Gallery item opens like a photo (zoom + fade), not a page navigation. */
+		#view-gallery-item.screen.active {
+			animation: gallery-item-in var(--dur-base) var(--ease-standard);
+		}
+
+		@keyframes gallery-item-in {
+			from { opacity: 0; transform: scale(0.94); }
+			to { opacity: 1; transform: scale(1); }
+		}
 
 		/* Wizard */
 		.wizard-intro {
@@ -113,6 +129,7 @@
 			flex-direction: column;
 			gap: 0.75rem;
 			min-height: 280px;
+			transition: opacity var(--dur-base) var(--ease-standard);
 		}
 
 		.step-card.disabled {
@@ -136,6 +153,7 @@
 			justify-content: center;
 			font-weight: 700;
 			font-size: 0.85rem;
+			transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
 		}
 
 		.step-card.active-step .step-num {
@@ -180,6 +198,7 @@
 			font-size: 0.85rem;
 			background: var(--surface2);
 			color: var(--text);
+			transition: border-color var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard), opacity var(--dur-fast) var(--ease-standard);
 		}
 
 		button.chip {
@@ -285,7 +304,11 @@
 			cursor: pointer;
 			font-weight: 600;
 			margin-top: auto;
+			transition: background-color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard), opacity var(--dur-fast) var(--ease-standard);
 		}
+
+		.btn:active:not(:disabled) { transform: scale(0.97); }
+		.btn:disabled { opacity: 0.6; }
 
 		.btn-primary { background: var(--accent-dim); color: #fff; }
 		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
@@ -313,6 +336,7 @@
 			height: 100%;
 			background: linear-gradient(90deg, var(--accent-dim), var(--accent));
 			border-radius: 4px;
+			transition: width var(--dur-base) var(--ease-standard);
 		}
 
 		.folder-hint {
@@ -333,7 +357,7 @@
 		}
 
 		.alert[hidden] {
-			display: none !important;
+			display: none;
 		}
 
 		.alert {
@@ -364,7 +388,7 @@
 		}
 
 		.field-error[hidden] {
-			display: none !important;
+			display: none;
 		}
 
 		.field.field-invalid {
@@ -383,7 +407,7 @@
 		}
 
 		.form-banner[hidden] {
-			display: none !important;
+			display: none;
 		}
 
 		.alert-warn {
@@ -456,6 +480,7 @@
 			color: var(--muted);
 			padding: 0.45rem 0.9rem;
 			cursor: pointer;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.toggle-group button.active {
@@ -547,6 +572,12 @@
 			border-radius: 8px;
 			border: 1px solid var(--border);
 			overflow: hidden;
+			transition: opacity var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-standard);
+		}
+
+		.thumb.thumb-removing {
+			opacity: 0;
+			transform: scale(0.85);
 		}
 
 		.thumb-link {
@@ -583,16 +614,6 @@
 			margin-bottom: 1rem;
 		}
 
-		.gallery-item-stage-wrap > .gallery-item-stage,
-		.gallery-item-stage-wrap > .gallery-item-nav {
-			grid-area: 1 / 1;
-		}
-
-		.gallery-item-stage-wrap .gallery-item-stage {
-			margin-bottom: 0;
-			min-width: 0;
-		}
-
 		.gallery-item-nav {
 			z-index: 2;
 			align-self: center;
@@ -611,6 +632,7 @@
 			box-shadow: 0 2px 12px color-mix(in srgb, var(--text) 16%, transparent);
 			cursor: pointer;
 			font: inherit;
+			transition: border-color var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard), opacity var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
 		}
 
 		.gallery-item-nav .fa-solid {
@@ -622,6 +644,10 @@
 		.gallery-item-nav:hover:not(:disabled) {
 			border-color: var(--accent);
 			background: var(--surface2);
+		}
+
+		.gallery-item-nav:active:not(:disabled) {
+			transform: scale(0.94);
 		}
 
 		.gallery-item-nav:disabled {
@@ -636,25 +662,85 @@
 		}
 
 		.gallery-item-stage {
+			position: relative;
 			background: var(--surface2);
 			border: 1px solid var(--border);
 			border-radius: var(--radius);
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			padding: 0.5rem;
+			width: 100%;
+			aspect-ratio: 4 / 3;
+			max-height: 55vh;
+			overflow: hidden;
 			margin-bottom: 1rem;
 		}
 
-		.gallery-item-stage img,
-		.gallery-item-stage video {
+		.gallery-item-stage-wrap > .gallery-item-stage,
+		.gallery-item-stage-wrap > .gallery-item-nav {
+			grid-area: 1 / 1;
+		}
+
+		.gallery-item-stage-wrap .gallery-item-stage {
+			margin-bottom: 0;
+			min-width: 0;
+		}
+
+		/* Wraps the current photo/video; slides and fades on prev/next navigation. */
+		.gallery-item-media {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: transform var(--dur-base) var(--ease-standard), opacity var(--dur-base) var(--ease-standard);
+		}
+
+		.gallery-item-media.slide-out-next { transform: translateX(-28px); opacity: 0; }
+		.gallery-item-media.slide-out-prev { transform: translateX(28px); opacity: 0; }
+		.gallery-item-media.slide-in-next-start { transform: translateX(28px); opacity: 0; }
+		.gallery-item-media.slide-in-prev-start { transform: translateX(-28px); opacity: 0; }
+
+		/* The existing GET /thumbs/{relative_path} thumbnail fills the frame instantly so the
+		   layout never collapses while the full-size preview loads. */
+		.gallery-item-thumb {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			filter: blur(16px) saturate(1.05) brightness(0.92);
+			transform: scale(1.1);
+			transition: opacity var(--dur-base) var(--ease-standard);
+		}
+
+		.gallery-item-thumb.hidden { opacity: 0; }
+
+		.gallery-item-spinner {
+			position: absolute;
+			width: 34px;
+			height: 34px;
+			border-radius: 50%;
+			border: 3px solid color-mix(in srgb, var(--text) 18%, transparent);
+			border-top-color: var(--accent);
+			animation: gallery-item-spin 0.8s linear infinite;
+			transition: opacity var(--dur-fast) var(--ease-standard);
+		}
+
+		.gallery-item-spinner.hidden { opacity: 0; }
+
+		@keyframes gallery-item-spin {
+			to { transform: rotate(360deg); }
+		}
+
+		.gallery-item-full {
+			position: relative;
 			max-width: 100%;
-			max-height: 55vh;
-			width: auto;
-			height: auto;
+			max-height: 100%;
 			object-fit: contain;
 			display: block;
+			opacity: 0;
+			transition: opacity var(--dur-base) var(--ease-standard);
 		}
+
+		.gallery-item-full.loaded { opacity: 1; }
 
 		.gallery-item-title {
 			margin: 0 0 0.75rem;
@@ -724,6 +810,7 @@
 			height: 100%;
 			object-fit: cover;
 			display: block;
+			transition: transform var(--dur-fast) var(--ease-standard);
 		}
 
 		.thumb-badge {
@@ -743,7 +830,12 @@
 			max-width: min(520px, 100%);
 		}
 
-		.calendar-panel.visible { display: block; }
+		.calendar-panel.visible { display: block; animation: panel-fade-in var(--dur-base) var(--ease-standard); }
+
+		@keyframes panel-fade-in {
+			from { opacity: 0; }
+			to { opacity: 1; }
+		}
 
 		.calendar-nav {
 			display: flex;
@@ -777,6 +869,7 @@
 			color: var(--muted);
 			border: none;
 			padding: 0;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.cal-cell.weekday {
@@ -831,7 +924,7 @@
 			margin-top: 0.35rem;
 		}
 
-		.info-panel.visible { display: block; }
+		.info-panel.visible { display: block; animation: panel-fade-in var(--dur-base) var(--ease-standard); }
 
 		.info-panel h4 {
 			margin: 0.5rem 0 0.25rem;
@@ -850,6 +943,7 @@
 			padding: 0.5rem 0.6rem;
 			cursor: pointer;
 			font-size: 0.85rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.connection-toggle button.active {
@@ -1017,6 +1111,7 @@
 			border-radius: 6px;
 			cursor: pointer;
 			font-size: 0.85rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.ui-mode-toggle button.active {
@@ -1059,11 +1154,6 @@
 			gap: 0.5rem;
 		}
 
-		.qr-with-info .easy-qr-wrap,
-		.qr-with-info .qr-frame-compact {
-			margin-bottom: 0;
-		}
-
 		.qr-with-info > .info-btn {
 			flex-shrink: 0;
 			margin-top: 0.35rem;
@@ -1075,6 +1165,11 @@
 			background: #fff;
 			border-radius: 8px;
 			padding: 0.25rem;
+		}
+
+		.qr-with-info .easy-qr-wrap,
+		.qr-with-info .qr-frame-compact {
+			margin-bottom: 0;
 		}
 
 		.qr-with-info-compact > .info-btn {
@@ -1092,6 +1187,10 @@
 
 		.easy-qr-wrap .folder-hint {
 			margin: 0.35rem 0 0;
+		}
+
+		.thumb-link:hover img {
+			transform: scale(1.03);
 		}
 
 		.qr-section {
@@ -1219,10 +1318,17 @@
 			color: var(--text);
 			text-align: center;
 			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+			transition: border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
 		}
 
 		.module-tile:hover {
 			border-color: var(--accent);
+			transform: translateY(-2px);
+			box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+		}
+
+		.module-tile:active {
+			transform: scale(0.97);
 		}
 
 		.module-tile-icon {
@@ -1293,14 +1399,19 @@
 			display: flex;
 			align-items: center;
 			justify-content: center;
+			transition: filter var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
 		}
 
 		.gallery-phone-fab:hover {
 			filter: brightness(1.05);
 		}
 
+		.gallery-phone-fab:active {
+			transform: scale(0.94);
+		}
+
 		.gallery-phone-fab[hidden] {
-			display: none !important;
+			display: none;
 		}
 
 		.gallery-phone-popup {
@@ -1314,6 +1425,12 @@
 			padding: 1rem;
 			box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 			z-index: 41;
+			animation: popup-rise-in var(--dur-base) var(--ease-standard);
+		}
+
+		@keyframes popup-rise-in {
+			from { opacity: 0; transform: translateY(8px); }
+			to { opacity: 1; transform: translateY(0); }
 		}
 
 		.gallery-phone-popup .qr-placeholder {
