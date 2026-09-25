@@ -501,7 +501,7 @@ class AppServices:
 			library_root=library_root,
 		):
 			self.start_extract()
-		self._maybe_start_convert_drain()
+		self.maybe_start_convert_drain()
 
 	def start_receive_files_session(self) -> None:
 		self.filesystem.ensure_parent_directory(str(Path(self._documents_receive_root) / "placeholder"))
@@ -688,7 +688,6 @@ class AppServices:
 				control.after_file()
 		if outcome.disposition.value in {"saved", "skipped"}:
 			self.record_wifi_upload_progress()
-			self._maybe_start_convert_drain()
 
 	def push_state(self) -> None:
 		self.broadcast({"type": "state", "state": self.enriched_snapshot()})
@@ -913,7 +912,12 @@ class AppServices:
 			self.session.active_module = AppModule.PHOTO_BACKUP
 		self.bootstrap_photo_backup()
 
-	def _maybe_start_convert_drain(self) -> None:
+	def maybe_start_convert_drain(self) -> None:
+		# Callers that ingest multiple files per request (e.g. the /api/upload
+		# route) should call this once after the whole batch is saved, not per
+		# file: starting the convert job before every file has landed in
+		# originals/ makes its initial total (and displayed progress) reflect
+		# only whatever was on disk at that instant, not the full batch.
 		with self.session._lock:
 			ui_mode = self.session.ui_mode
 			convert_phase = self.session.convert_phase
@@ -965,29 +969,48 @@ class AppServices:
 		self.invalidate_gallery_metadata_cache()
 		try:
 			use_case = self.convert_use_case()
+			cumulative_completed = 0
 
-			def on_progress(progress: JobProgress) -> None:
-				with self.session._lock:
-					self.session.convert_progress = progress
-				self.push_state()
+			while True:
+				# Each use_case.run() call scans originals/ fresh and reports progress
+				# starting from (0, <files in that scan>). Offset by everything already
+				# completed in earlier drain passes so the UI shows one running total
+				# (e.g. 0/2, 1/2, 2/2) instead of resetting to 0/1 per pass.
+				base_completed = cumulative_completed
 
-			progress = use_case.run(library_root, control=control, on_progress=on_progress)
-			with self.session._lock:
-				remaining = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
-				extract_phase = self.session.extract_phase
-			if (control is None or not control.was_stopped()) and should_requeue_convert_drain(
-				concurrent_with_extract=concurrent_with_extract,
-				remaining_originals=remaining,
-			):
+				def on_progress(progress: JobProgress, *, _base: int = base_completed) -> None:
+					with self.session._lock:
+						self.session.convert_progress = JobProgress(
+							completed=_base + progress.completed,
+							total=_base + progress.total,
+						)
+					self.push_state()
+
+				batch_progress = use_case.run(library_root, control=control, on_progress=on_progress)
+				cumulative_completed += batch_progress.completed
 				with self.session._lock:
-					self.session.convert_progress = progress
-					self.session.convert_phase = JobPhase.IDLE
+					remaining = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
+					extract_phase = self.session.extract_phase
+				# Files uploaded while this same job was converting land in originals/
+				# after use_case.run()'s own scan started, so drain them here in a loop
+				# rather than recursing into start_convert(): that would re-enter while
+				# self._convert_future (this job) is still not-done, so
+				# _convert_job_active() would block it from actually starting anything.
+				if not (
+					(control is None or not control.was_stopped())
+					and should_requeue_convert_drain(
+						concurrent_with_extract=concurrent_with_extract,
+						remaining_originals=remaining,
+					)
+				):
+					break
+				with self.session._lock:
+					self.session.convert_progress = JobProgress(cumulative_completed, cumulative_completed + remaining)
 				self.invalidate_gallery_metadata_cache()
 				self.push_state()
-				self.start_convert(policy=ConvertStartPolicy.CONCURRENT_WITH_EXTRACT)
-				return
+			progress = JobProgress(completed=cumulative_completed, total=cumulative_completed + remaining)
 			with self.session._lock:
-				if progress.total == 0 and remaining > 0:
+				if batch_progress.total == 0 and remaining > 0:
 					self.session.convert_phase = JobPhase.ERROR
 					self.session.last_error = (
 						f"convert found no files under {library_root}/originals "

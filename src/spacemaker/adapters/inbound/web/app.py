@@ -527,30 +527,36 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if not files:
 			raise HTTPException(status_code=400, detail="no files")
 		results: list[dict[str, str]] = []
-		for upload in files:
-			raw_name = upload.filename or "upload.bin"
-			suffix = Path(raw_name).suffix
-			with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-				temp_path = tmp.name
-				size = 0
-				while True:
-					chunk = await upload.read(1024 * 1024)
-					if not chunk:
-						break
-					tmp.write(chunk)
-					size += len(chunk)
-			try:
-				services.handle_wifi_upload(t, raw_name, temp_path, size)
-				results.append({"file": raw_name, "status": "ok"})
-			except PermissionError as exc:
-				services.filesystem.delete_file(temp_path)
-				raise HTTPException(status_code=409, detail=str(exc)) from exc
-			except ValueError as exc:
-				services.filesystem.delete_file(temp_path)
-				raise HTTPException(status_code=400, detail=str(exc)) from exc
-			except Exception:
-				services.filesystem.delete_file(temp_path)
-				raise
+		try:
+			for upload in files:
+				raw_name = upload.filename or "upload.bin"
+				suffix = Path(raw_name).suffix
+				with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+					temp_path = tmp.name
+					size = 0
+					while True:
+						chunk = await upload.read(1024 * 1024)
+						if not chunk:
+							break
+						tmp.write(chunk)
+						size += len(chunk)
+				try:
+					services.handle_wifi_upload(t, raw_name, temp_path, size)
+					results.append({"file": raw_name, "status": "ok"})
+				except PermissionError as exc:
+					services.filesystem.delete_file(temp_path)
+					raise HTTPException(status_code=409, detail=str(exc)) from exc
+				except ValueError as exc:
+					services.filesystem.delete_file(temp_path)
+					raise HTTPException(status_code=400, detail=str(exc)) from exc
+				except Exception:
+					services.filesystem.delete_file(temp_path)
+					raise
+		finally:
+			# Once per batch, after every file in this request has landed in
+			# originals/ — not per file — so the convert job's initial total
+			# covers the whole batch instead of just whatever was saved first.
+			services.maybe_start_convert_drain()
 		return {"uploaded": len(results), "files": results}
 
 	@app.get("/api/devices")
