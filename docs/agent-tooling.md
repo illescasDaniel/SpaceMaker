@@ -13,14 +13,46 @@ as a language server) as MCP tools: `search_symbol`, `definition`,
 `ty` is Astral's name for the underlying tool it wraps, not this project's
 server.
 
-It's a purpose-built client (`mcp-servers/codenav_mcp/lsp_client.py`), not a
-generic LSP bridge: `mcp-language-server`'s name-based `definition`/
-`references` tools were tried first and don't resolve symbols against `ty`,
-even though `ty`'s own `workspace/symbol` implementation answers those same
-queries correctly when asked directly over LSP. Run it standalone for manual
-testing with `uv run python mcp-servers/codenav_mcp/server.py`; point it at
-a different workspace via the `CODENAV_MCP_WORKSPACE` env var (defaults to
-the current working directory).
+It's a purpose-built client, not a generic LSP bridge: `mcp-language-
+server`'s name-based `definition`/`references` tools were tried first and
+don't resolve symbols against `ty`, even though `ty`'s own `workspace/
+symbol` implementation answers those same queries correctly when asked
+directly over LSP. Run it standalone for manual testing with `uv run python
+mcp-servers/codenav_mcp/server.py`; point it at a different workspace via
+the `CODENAV_MCP_WORKSPACE` env var (defaults to the current working
+directory).
+
+The generic JSON-RPC/LSP wire protocol (subprocess framing, request/
+response dispatch, document sync) lives in `mcp-servers/_shared/lsp_client.py`
+as `LspClient`, shared with `webnav` below. Only the `ty`-specific launch
+command (`mcp-servers/codenav_mcp/ty_command.py`) and languageId are
+codenav's own.
+
+## `webnav` MCP server
+
+`mcp-servers/webnav_mcp/` gives the same kind of navigation for the
+project's JS/HTML/CSS (`search_symbol`, `definition`, `references`, `hover`,
+`diagnostics`), multiplexing three Node-based language servers behind one
+MCP tool set, routed by file extension:
+
+- `.js`/`.mjs`/`.cjs` → `typescript-language-server` (via `allowJs`/
+  `jsconfig.json` at the repo root — no TypeScript conversion needed)
+- `.html` → `vscode-html-language-server`
+- `.css` → `vscode-css-language-server`
+
+Both come from the `vscode-langservers-extracted` npm package. `npm install`
+(already required for Biome) pulls all three binaries into `node_modules/
+.bin/`; `mcp-servers/webnav_mcp/lang_command.py` resolves them there first,
+falling back to `PATH` and then `npx` — same fallback chain as codenav's ty
+resolver.
+
+`search_symbol` only covers JS: the HTML/CSS language servers don't
+implement a useful `workspace/symbol`. `jsconfig.json` has `checkJs: false`
+by default (the existing `app.js` is large and untyped; flip it per-file
+with a `// @ts-check` comment to opt a file into stricter `diagnostics`).
+Run it standalone for manual testing with `uv run python
+mcp-servers/webnav_mcp/server.py`; point it at a different workspace via
+the `WEBNAV_MCP_WORKSPACE` env var.
 
 ## Rules — Cursor vs Claude Code
 

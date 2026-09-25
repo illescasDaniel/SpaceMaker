@@ -44,6 +44,7 @@ Two tools exist so you don't need to read large swaths of the codebase up front 
 
 - **Docs (the *why*):** read `docs/*.md` directly (`docs/index.md`, `docs/ARCHITECTURE.md`, `docs/testing.md`, `docs/agent-tooling.md`, `docs/playbooks/`). `uv run task docs-serve` is for humans browsing the rendered site, not for you.
 - **`codenav` MCP (the *what calls what*):** for finding a symbol's definition, its usages, or its type — use the `codenav` MCP tools (`search_symbol`, `definition`, `references`, `hover`, `diagnostics`) instead of grepping. It's backed by `ty`'s language server, so it resolves through real type inference (imports, dependency-injected parameters, dataclass fields, etc.) rather than text matching, and is faster and more deterministic than a broad grep for this kind of lookup. Reserve grep for things codenav can't answer (free-text search across comments/strings/config). See `docs/agent-tooling.md` for why it's a purpose-built server rather than a generic LSP bridge.
+- **`webnav` MCP (same idea, for JS/HTML/CSS):** same tool shape as `codenav`, for the project's web static assets (`src/spacemaker/adapters/inbound/web/static/`, `wireframes/`) — backed by `typescript-language-server`/`vscode-langservers-extracted`. `search_symbol` is JS-only. See `docs/agent-tooling.md`.
 
 ## Where to look
 

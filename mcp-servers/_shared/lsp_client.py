@@ -1,7 +1,10 @@
-"""Minimal async LSP client, written specifically for talking to `ty server`.
+"""Minimal async LSP client: generic JSON-RPC/LSP wire protocol plumbing.
 
-Not a general-purpose LSP library: framing, initialize params, and the
-handful of requests used here are only verified against ty's behavior.
+Not a general-purpose LSP library: framing and the handful of requests used
+here cover only what codenav/webnav's MCP tools need. Language-server-
+specific bits (how to launch the server, its languageId, any non-default
+initialize capabilities) are the caller's responsibility — pass a `command`
+and `language_id` in.
 """
 
 from __future__ import annotations
@@ -10,8 +13,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import shutil
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -24,18 +25,6 @@ class NotStartedError(RuntimeError):
 	pass
 
 
-def resolve_ty_command(workspace_root: Path) -> list[str]:
-	venv_bin = "Scripts" if sys.platform == "win32" else "bin"
-	venv_exe = "ty.exe" if sys.platform == "win32" else "ty"
-	candidate = workspace_root / ".venv" / venv_bin / venv_exe
-	if candidate.is_file():
-		return [str(candidate), "server"]
-	on_path = shutil.which("ty")
-	if on_path:
-		return [on_path, "server"]
-	return ["uv", "run", "ty", "server"]
-
-
 @dataclass
 class OpenFile:
 	uri: str
@@ -45,9 +34,10 @@ class OpenFile:
 
 
 @dataclass
-class TyLspClient:
+class LspClient:
 	workspace_root: Path
-	command: list[str] = field(default_factory=list)
+	command: list[str]
+	language_id: str
 	_proc: asyncio.subprocess.Process | None = field(default=None, init=False)
 	_next_id: int = field(default=0, init=False)
 	_pending: dict[int, asyncio.Future] = field(default_factory=dict, init=False)
@@ -57,14 +47,10 @@ class TyLspClient:
 	_stderr_task: asyncio.Task | None = field(default=None, init=False)
 	_started: bool = field(default=False, init=False)
 
-	def __post_init__(self) -> None:
-		if not self.command:
-			self.command = resolve_ty_command(self.workspace_root)
-
 	@property
 	def _running_proc(self) -> asyncio.subprocess.Process:
 		if self._proc is None:
-			raise NotStartedError("TyLspClient.start() must be awaited before use")
+			raise NotStartedError("LspClient.start() must be awaited before use")
 		return self._proc
 
 	async def start(self) -> None:
@@ -106,7 +92,7 @@ class TyLspClient:
 			await self._request("shutdown", {}, timeout=5)
 			self._notify("exit", {})
 		except Exception:
-			logger.debug("ty server didn't respond to shutdown in time; terminating it directly", exc_info=True)
+			logger.debug("language server didn't respond to shutdown in time; terminating it directly", exc_info=True)
 		if self._reader_task:
 			self._reader_task.cancel()
 		if self._stderr_task:
@@ -119,7 +105,7 @@ class TyLspClient:
 	async def _read_loop(self) -> None:
 		proc = self._running_proc
 		if proc.stdout is None:
-			raise NotStartedError("ty server subprocess has no stdout pipe")
+			raise NotStartedError("language server subprocess has no stdout pipe")
 		stream = proc.stdout
 		while True:
 			header = b""
@@ -142,9 +128,9 @@ class TyLspClient:
 	async def _drain_stderr(self) -> None:
 		proc = self._running_proc
 		if proc.stderr is None:
-			raise NotStartedError("ty server subprocess has no stderr pipe")
+			raise NotStartedError("language server subprocess has no stderr pipe")
 		async for _line in proc.stderr:
-			pass  # ty's own stderr logging isn't surfaced; nothing to act on here
+			pass  # the language server's own stderr logging isn't surfaced; nothing to act on here
 
 	def _dispatch(self, msg: dict[str, Any]) -> None:
 		if "id" in msg and "method" not in msg:
@@ -162,7 +148,7 @@ class TyLspClient:
 	def _send(self, obj: dict[str, Any]) -> None:
 		proc = self._running_proc
 		if proc.stdin is None:
-			raise NotStartedError("ty server subprocess has no stdin pipe")
+			raise NotStartedError("language server subprocess has no stdin pipe")
 		body = json.dumps(obj).encode("utf-8")
 		header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
 		proc.stdin.write(header + body)
@@ -206,7 +192,7 @@ class TyLspClient:
 				{
 					"textDocument": {
 						"uri": uri,
-						"languageId": "python",
+						"languageId": self.language_id,
 						"version": 1,
 						"text": text,
 					}

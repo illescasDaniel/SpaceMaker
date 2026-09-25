@@ -3,6 +3,10 @@
     "codenav": {
       "command": "uv",
       "args": ["run", "python", "mcp-servers/codenav_mcp/server.py"]
+    },
+    "webnav": {
+      "command": "uv",
+      "args": ["run", "python", "mcp-servers/webnav_mcp/server.py"]
     }
   }
 }
