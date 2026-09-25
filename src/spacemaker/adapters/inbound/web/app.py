@@ -521,8 +521,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	async def transfer_upload(
 		files: Annotated[list[UploadFile], File()],
 		t: Annotated[str, Query()] = "",
-		as_folder: Annotated[str, Form(default="")] = "",
-		folder_name: Annotated[str, Form(default="")] = "",
+		as_folder: Annotated[str, Form()] = "",
+		folder_name: Annotated[str, Form()] = "",
 	) -> dict[str, object]:
 		if not services.transfer_token_valid(t):
 			raise HTTPException(status_code=403, detail="transfer session ended")
