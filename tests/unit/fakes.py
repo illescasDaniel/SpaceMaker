@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
+from spacemaker.domain.gallery import GalleryItem
+from spacemaker.domain.gallery_index import FileStat, GalleryCursor, GalleryIndexRow, GalleryPage
 from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.library import LibraryFolder
 from spacemaker.domain.library_paths import skip_library_relative_path
@@ -15,6 +18,7 @@ from spacemaker.ports.outbound.device_repository import DeviceInfo
 @dataclass
 class FakeFileSystem:
 	files: dict[str, int] = field(default_factory=dict)
+	mtimes: dict[str, float] = field(default_factory=dict)
 	dirs: set[str] = field(default_factory=set)
 
 	def ensure_library_folders(self, library_root: str) -> None:
@@ -23,6 +27,9 @@ class FakeFileSystem:
 
 	def file_size(self, path: str) -> int:
 		return self.files.get(path, 0)
+
+	def file_stat(self, path: str) -> FileStat:
+		return FileStat(mtime=self.mtimes.get(path, 0.0), size=self.files.get(path, 0))
 
 	def exists(self, path: str) -> bool:
 		return path in self.files
@@ -125,6 +132,8 @@ class FakeMediaProbe:
 	readable_images: set[str] = field(default_factory=set)
 	valid_images: set[str] = field(default_factory=set)
 	valid_videos: set[str] = field(default_factory=set)
+	captured_at_map: dict[str, datetime] = field(default_factory=dict)
+	captured_at_calls: list[str] = field(default_factory=list)
 
 	def probe_video(self, path: str) -> VideoProbe | None:
 		return self.videos.get(path)
@@ -139,7 +148,8 @@ class FakeMediaProbe:
 		return path in self.valid_videos
 
 	def captured_at(self, path: str) -> datetime | None:
-		return None
+		self.captured_at_calls.append(path)
+		return self.captured_at_map.get(path)
 
 	def display_metadata(self, path: str) -> GalleryDisplayMetadata:
 		p = Path(path)
@@ -211,3 +221,73 @@ class FakeMediaConverter:
 
 	def bind_filesystem(self, fs: FakeFileSystem) -> None:
 		self._fs = fs
+
+
+@dataclass
+class FakeGalleryIndex:
+	rows: dict[str, dict[str, GalleryIndexRow]] = field(default_factory=dict)
+
+	def _bucket(self, library_root: str) -> dict[str, GalleryIndexRow]:
+		return self.rows.setdefault(library_root, {})
+
+	def _sorted_rows(self, library_root: str) -> list[GalleryIndexRow]:
+		return sorted(self._bucket(library_root).values(), key=lambda r: (r.captured_at, r.relative_path), reverse=True)
+
+	def snapshot_stats(self, library_root: str) -> dict[str, FileStat]:
+		return {rel: FileStat(mtime=row.mtime, size=row.size) for rel, row in self._bucket(library_root).items()}
+
+	def apply_sync(self, library_root: str, *, upserts: list[GalleryIndexRow], removed: list[str]) -> None:
+		bucket = self._bucket(library_root)
+		for row in upserts:
+			bucket[row.relative_path] = row
+		for relative_path in removed:
+			bucket.pop(relative_path, None)
+
+	def remove(self, library_root: str, relative_path: str) -> None:
+		self._bucket(library_root).pop(relative_path, None)
+
+	def get(self, library_root: str, relative_path: str) -> GalleryIndexRow | None:
+		return self._bucket(library_root).get(relative_path)
+
+	def page(self, library_root: str, *, cursor: GalleryCursor | None, limit: int) -> GalleryPage:
+		rows = self._sorted_rows(library_root)
+		if cursor is not None:
+			key = (cursor.captured_at, cursor.relative_path)
+			rows = [r for r in rows if (r.captured_at, r.relative_path) < key]
+		page_rows = rows[:limit]
+		next_cursor = None
+		if len(rows) > limit:
+			last = page_rows[-1]
+			next_cursor = GalleryCursor(captured_at=last.captured_at, relative_path=last.relative_path).encode()
+		return GalleryPage(items=tuple(r.as_item() for r in page_rows), next_cursor=next_cursor)
+
+	def days_with_media(self, library_root: str, year: int, month: int) -> list[int]:
+		return sorted(
+			{
+				r.captured_at.day
+				for r in self._bucket(library_root).values()
+				if r.captured_at.year == year and r.captured_at.month == month
+			}
+		)
+
+	def items_for_day(self, library_root: str, year: int, month: int, day: int) -> list[GalleryItem]:
+		return [
+			r.as_item()
+			for r in self._sorted_rows(library_root)
+			if r.captured_at.year == year and r.captured_at.month == month and r.captured_at.day == day
+		]
+
+	def neighbor(
+		self, library_root: str, relative_path: str, *, direction: Literal["prev", "next"]
+	) -> GalleryItem | None:
+		rows = self._sorted_rows(library_root)
+		index = next((i for i, r in enumerate(rows) if r.relative_path == relative_path), None)
+		if index is None:
+			return None
+		target = index + 1 if direction == "next" else index - 1
+		if target < 0 or target >= len(rows):
+			return None
+		return rows[target].as_item()
+
+	def count(self, library_root: str) -> int:
+		return len(self._bucket(library_root))

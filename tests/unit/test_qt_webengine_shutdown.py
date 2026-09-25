@@ -1,6 +1,12 @@
-from qtpy import QtCore
+import pytest
 
 from spacemaker.adapters.inbound import qt_webengine_shutdown as shutdown
+
+
+qtpy = pytest.importorskip(
+	"qtpy", reason="qtpy is a sys_platform == 'linux'-only dependency (see pyproject.toml); not installed here"
+)
+QtCore = qtpy.QtCore
 
 
 def test_given_no_qapplication_when_finalize_then_does_not_raise():

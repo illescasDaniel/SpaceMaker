@@ -7,13 +7,13 @@ import threading
 import time
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
 from spacemaker.adapters.inbound.web.session import AppSession
 from spacemaker.adapters.outbound.device.factory import device_repository_for
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
+from spacemaker.adapters.outbound.gallery.sqlite_index import SqliteGalleryIndex
 from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMediaConverter
 from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaProbe
 from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
@@ -42,6 +42,7 @@ from spacemaker.application.library_image_issues import count_image_files_in_lib
 from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
+from spacemaker.application.sync_gallery_index import SyncGalleryIndex
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.app_meta import app_release_info
 from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path, tools_install_root
@@ -93,8 +94,6 @@ class AppServices:
 	def __init__(self, *, port: int = 8765, bind_host: str = "0.0.0.0") -> None:
 		self.port = port
 		self.bind_host = bind_host
-		self._captured_at_cache_key = ""
-		self._captured_at_cache: dict[str, datetime] = {}
 		self.session = AppSession(library_root=normalize_library_root(default_library_root()))
 		self.filesystem = LocalFileSystem()
 		self.managed_tools = ManagedToolsService(
@@ -105,7 +104,9 @@ class AppServices:
 		self.probe = SubprocessMediaProbe(self.runner)
 		self.converter = SubprocessMediaConverter(self.runner)
 		self.error_recovery = ErrorRecovery(self.filesystem)
-		self.gallery = GenerateGallery(self.filesystem)
+		self.gallery_index = SqliteGalleryIndex()
+		self.sync_gallery_index = SyncGalleryIndex(self.filesystem, self.probe, self.gallery_index)
+		self.gallery = GenerateGallery(self.gallery_index)
 		self.get_gallery_item = GetGalleryItem(self.filesystem, self.probe)
 		self.delete_gallery_item = DeleteGalleryItem(self.filesystem)
 		self.export_friendly = ExportFriendlyMedia(self.filesystem, self.converter, self.probe)
@@ -160,34 +161,12 @@ class AppServices:
 				count += 1
 		return count
 
-	def invalidate_gallery_metadata_cache(self) -> None:
-		self._captured_at_cache_key = ""
-		self._captured_at_cache = {}
-
 	def remove_gallery_item(self, library_root: str, relative_path: str) -> bool:
 		removed = self.delete_gallery_item.run(library_root, relative_path)
 		if removed:
-			self.invalidate_gallery_metadata_cache()
+			self.gallery_index.remove(library_root, relative_path)
 			self.push_state()
 		return removed
-
-	def captured_at_map(self, library_root: str) -> dict[str, datetime]:
-		if not library_root:
-			return {}
-		if library_root == self._captured_at_cache_key and self._captured_at_cache:
-			return self._captured_at_cache
-		root = self.filesystem.library_path(library_root, LibraryFolder.CONVERTED, "")
-		paths = self.filesystem.list_files_recursive(root)
-		out: dict[str, datetime] = {}
-		for rel in paths:
-			full = Path(self.filesystem.library_path(library_root, LibraryFolder.CONVERTED, rel))
-			if not full.is_file():
-				continue
-			captured = self.probe.captured_at(str(full))
-			out[rel] = captured if captured is not None else datetime.fromtimestamp(full.stat().st_mtime)
-		self._captured_at_cache_key = library_root
-		self._captured_at_cache = out
-		return out
 
 	def bind_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
 		self._event_loop = loop
@@ -501,7 +480,7 @@ class AppServices:
 			library_root=library_root,
 		):
 			self.start_extract()
-		self._maybe_start_convert_drain()
+		self.maybe_start_convert_drain()
 
 	def start_receive_files_session(self) -> None:
 		self.filesystem.ensure_parent_directory(str(Path(self._documents_receive_root) / "placeholder"))
@@ -688,7 +667,6 @@ class AppServices:
 				control.after_file()
 		if outcome.disposition.value in {"saved", "skipped"}:
 			self.record_wifi_upload_progress()
-			self._maybe_start_convert_drain()
 
 	def push_state(self) -> None:
 		self.broadcast({"type": "state", "state": self.enriched_snapshot()})
@@ -913,7 +891,12 @@ class AppServices:
 			self.session.active_module = AppModule.PHOTO_BACKUP
 		self.bootstrap_photo_backup()
 
-	def _maybe_start_convert_drain(self) -> None:
+	def maybe_start_convert_drain(self) -> None:
+		# Callers that ingest multiple files per request (e.g. the /api/upload
+		# route) should call this once after the whole batch is saved, not per
+		# file: starting the convert job before every file has landed in
+		# originals/ makes its initial total (and displayed progress) reflect
+		# only whatever was on disk at that instant, not the full batch.
 		with self.session._lock:
 			ui_mode = self.session.ui_mode
 			convert_phase = self.session.convert_phase
@@ -962,32 +945,51 @@ class AppServices:
 
 	def _run_convert(self, library_root: str, *, concurrent_with_extract: bool = False) -> None:
 		control = self._convert_control
-		self.invalidate_gallery_metadata_cache()
+		self.sync_gallery_index.run(library_root)
 		try:
 			use_case = self.convert_use_case()
+			cumulative_completed = 0
 
-			def on_progress(progress: JobProgress) -> None:
-				with self.session._lock:
-					self.session.convert_progress = progress
-				self.push_state()
+			while True:
+				# Each use_case.run() call scans originals/ fresh and reports progress
+				# starting from (0, <files in that scan>). Offset by everything already
+				# completed in earlier drain passes so the UI shows one running total
+				# (e.g. 0/2, 1/2, 2/2) instead of resetting to 0/1 per pass.
+				base_completed = cumulative_completed
 
-			progress = use_case.run(library_root, control=control, on_progress=on_progress)
-			with self.session._lock:
-				remaining = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
-				extract_phase = self.session.extract_phase
-			if (control is None or not control.was_stopped()) and should_requeue_convert_drain(
-				concurrent_with_extract=concurrent_with_extract,
-				remaining_originals=remaining,
-			):
+				def on_progress(progress: JobProgress, *, _base: int = base_completed) -> None:
+					with self.session._lock:
+						self.session.convert_progress = JobProgress(
+							completed=_base + progress.completed,
+							total=_base + progress.total,
+						)
+					self.push_state()
+
+				batch_progress = use_case.run(library_root, control=control, on_progress=on_progress)
+				cumulative_completed += batch_progress.completed
 				with self.session._lock:
-					self.session.convert_progress = progress
-					self.session.convert_phase = JobPhase.IDLE
-				self.invalidate_gallery_metadata_cache()
+					remaining = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
+					extract_phase = self.session.extract_phase
+				# Files uploaded while this same job was converting land in originals/
+				# after use_case.run()'s own scan started, so drain them here in a loop
+				# rather than recursing into start_convert(): that would re-enter while
+				# self._convert_future (this job) is still not-done, so
+				# _convert_job_active() would block it from actually starting anything.
+				if not (
+					(control is None or not control.was_stopped())
+					and should_requeue_convert_drain(
+						concurrent_with_extract=concurrent_with_extract,
+						remaining_originals=remaining,
+					)
+				):
+					break
+				with self.session._lock:
+					self.session.convert_progress = JobProgress(cumulative_completed, cumulative_completed + remaining)
+				self.sync_gallery_index.run(library_root)
 				self.push_state()
-				self.start_convert(policy=ConvertStartPolicy.CONCURRENT_WITH_EXTRACT)
-				return
+			progress = JobProgress(completed=cumulative_completed, total=cumulative_completed + remaining)
 			with self.session._lock:
-				if progress.total == 0 and remaining > 0:
+				if batch_progress.total == 0 and remaining > 0:
 					self.session.convert_phase = JobPhase.ERROR
 					self.session.last_error = (
 						f"convert found no files under {library_root}/originals "
@@ -1024,7 +1026,7 @@ class AppServices:
 				self.session.last_error = str(exc)
 		finally:
 			self._convert_future = None
-		self.invalidate_gallery_metadata_cache()
+		self.sync_gallery_index.run(library_root)
 		self.push_state()
 
 

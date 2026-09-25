@@ -1,10 +1,9 @@
 # SpaceMaker — Agent Knowledge Base
 
 This site is the semantic knowledge base for AI agents and contributors working on
-SpaceMaker. It complements the structural knowledge graph produced by
-[Graphify](https://github.com/Graphify-Labs/graphify) (`graph.json` /
-`GRAPH_REPORT.md`) — the graph describes *what calls what*; these pages
-describe *why*.
+SpaceMaker. It complements the `codenav` MCP server (see
+[agent-tooling.md](agent-tooling.md)), which answers *what calls what*
+through `ty`'s type-resolved code navigation; these pages describe *why*.
 
 Serve locally with:
 

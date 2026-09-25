@@ -43,14 +43,7 @@ Keep `activeContext.md` short — move finished threads to `memory/archive.md` r
 Two tools exist so you don't need to read large swaths of the codebase up front — neither skips a Phase Gate.
 
 - **Docs (the *why*):** read `docs/*.md` directly (`docs/index.md`, `docs/ARCHITECTURE.md`, `docs/testing.md`, `docs/agent-tooling.md`, `docs/playbooks/`). `uv run task docs-serve` is for humans browsing the rendered site, not for you.
-- **Graphify knowledge graph (the *what calls what*):** never read raw `graphify-out/graph.json`; use:
-  ```bash
-  uv run task graph-explain "<symbol>"
-  uv run task graph-path "<source>" "<target>"
-  uv run task graph-query "<question>"
-  uv run task graph-update   # regenerate by hand, without committing
-  ```
-  Advanced commands (fidelity check, query feedback loop): `docs/agent-tooling.md`.
+- **`codenav` MCP (the *what calls what*):** for finding a symbol's definition, its usages, or its type — use the `codenav` MCP tools (`search_symbol`, `definition`, `references`, `hover`, `diagnostics`) instead of grepping. It's backed by `ty`'s language server, so it resolves through real type inference (imports, dependency-injected parameters, dataclass fields, etc.) rather than text matching, and is faster and more deterministic than a broad grep for this kind of lookup. Reserve grep for things codenav can't answer (free-text search across comments/strings/config). See `docs/agent-tooling.md` for why it's a purpose-built server rather than a generic LSP bridge.
 
 ## Where to look
 

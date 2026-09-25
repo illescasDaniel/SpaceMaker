@@ -4,6 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
+from spacemaker.domain.gallery_index import FileStat
 from spacemaker.domain.library import LIBRARY_FOLDERS, LibraryFolder
 from spacemaker.domain.library_paths import SKIPPED_LIBRARY_DIR_NAMES, skip_library_relative_path
 
@@ -17,6 +18,10 @@ class LocalFileSystem:
 
 	def file_size(self, path: str) -> int:
 		return Path(path).stat().st_size
+
+	def file_stat(self, path: str) -> FileStat:
+		stat = Path(path).stat()
+		return FileStat(mtime=stat.st_mtime, size=stat.st_size)
 
 	def exists(self, path: str) -> bool:
 		return Path(path).is_file()

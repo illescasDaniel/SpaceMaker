@@ -23,7 +23,7 @@
 - **Mobile:** layout must remain usable at ~320px width.
 - **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`.
 - **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
-- **Performance:** cached thumbs; perceived fast scroll on 1k+ items target.
+- **Performance:** cached thumbs; a persisted, incrementally-synced index (derived from `converted/` + EXIF/probe metadata, never a source of truth by itself) backs timeline/calendar/day queries so response time does not scale with total library size. Timeline loads via cursor-paginated pages with infinite scroll. Smooth, responsive scrolling at **50,000+ items**, with a bounded mounted-tile working set (not the full library) regardless of scroll distance.
 - **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, `max-height: 55vh` on desktop; phone shell ~50vh). **Previous** / **Next** overlay buttons on the preview move to the adjacent item in **timeline order** (newest-first, same as the grid); disabled at the first/last item. Metadata block under preview includes **On disk** (absolute path, full-width wrap). Actions depend on shell:
   - **Desktop app** (`index.html`): **Open** (default app), **Open containing folder**, **Download as JPEG** / **MP4**, **Delete**.
   - **Standalone phone gallery** (`gallery_mobile.html`): **Download**, **Download as JPEG** / **MP4**, **Delete**.
@@ -33,6 +33,7 @@
 
 - Primary date: EXIF `DateTimeOriginal` or filesystem mtime fallback.
 - Timezone: local machine timezone for display.
+- Persisted in a local SQLite index (`{library_root}/.index.sqlite`), a derived cache kept in sync with `converted/` via incremental mtime/size diffing on each gallery open — safe to delete at any time; a missing or corrupt index rebuilds automatically.
 
 ## LAN & QR
 
@@ -55,6 +56,43 @@
 - **When** timeline view loads
 - **Then** years appear as section headers
 - **And** months appear as subheaders with thumbnails beneath
+
+### Scenario: Large library loads incrementally
+
+- **Given** `converted/` contains far more items than fit on screen (tens of thousands)
+- **When** timeline view is opened
+- **Then** only an initial page of items renders immediately
+- **And** scrolling near the bottom loads and appends more pages automatically
+- **And** time to first render does not depend on total library size
+
+### Scenario: Mounted gallery tiles stay bounded during a long scroll
+
+- **Given** the user scrolls continuously through a large library
+- **When** previously loaded month blocks scroll far out of view
+- **Then** their rendered tiles are unmounted and a placeholder holds their scroll space
+- **And** scrolling back up re-renders them with no visible layout jump
+- **And** the number of mounted tiles stays within a bounded working set regardless of how far the user has scrolled
+
+### Scenario: Incremental index sync after a single change
+
+- **Given** a large library with a populated gallery index
+- **When** one file is deleted or added in `converted/`
+- **Then** only that file's index entry is updated or removed
+- **And** the rest of the library's metadata is not re-probed
+
+### Scenario: Gallery index rebuilds after being missing or corrupt
+
+- **Given** the gallery index file is missing or unreadable
+- **When** the gallery is opened
+- **Then** the index is rebuilt automatically from `converted/` and EXIF/probe metadata
+- **And** no error is shown to the user
+
+### Scenario: Calendar and day views stay fast at scale
+
+- **Given** a library with tens of thousands of items
+- **When** the user opens Calendar view or selects a day
+- **Then** the month's days-with-media and the selected day's items are computed directly from the index
+- **And** response time does not depend on total library size
 
 ### Scenario: Calendar highlights days with media
 
@@ -96,6 +134,7 @@
 - **And** **Next** opens the next item in timeline order (older when viewing newest-first)
 - **And** **Previous** opens the prior item in timeline order
 - **And** the control for the boundary item is disabled (no wrap)
+- **And** this works via a per-item neighbor lookup, without requiring the full library's item list to be loaded client-side
 
 ### Scenario: Delete gallery item from disk
 
@@ -152,11 +191,13 @@
 | Missing file on disk after index | Remove from index on next refresh; no 500 page |
 | Corrupt media | Show broken placeholder; optional move to invalid via separate admin action (out of scope v1) |
 | LAN blocked by firewall | Show note in Step 3; gallery still works locally in pywebview |
+| Gallery index file missing or corrupt | Rebuilt automatically from `converted/` + EXIF/probe metadata on next load; no user-facing error |
 
 ## Validation rules
 
 - Index only readable files (optional probe; skip unreadable with log).
 - URLs for media must be path-safe (no directory traversal).
+- Gallery index (`.index.sqlite`) is a derived cache only; deleting it never loses media, it triggers a full rebuild from `converted/` on next load.
 
 ## Testing strategy
 
@@ -170,6 +211,12 @@
 | Integration | GET `/gallery/item/…` SPA 200; GET `/api/gallery/item`; export POST + download |
 | Unit | Path safety; friendly-format skip; export cache naming |
 | Unit | SPA path helper / snapshot includes `visualize` step state (see main-wizard spec) |
+| Unit | Index sync diff: added/changed/removed files computed from mtime/size comparison against the index |
+| Unit | Keyset pagination cursor stability, including ties on identical `captured_at` |
+| Unit | Calendar/day queries return correct results directly from the index at month/day boundaries |
+| Unit | Neighbor (prev/next) lookup at both boundaries returns no wrap |
+| Integration | `GET /api/gallery/timeline` paginates via cursor/limit; a second page continues after the first with no duplicates or gaps |
+| Integration | `GET /api/gallery/item/neighbor` returns the correct adjacent item, and null at boundaries |
 | Out of scope | Visual snapshot tests until UI stable |
 
 ## Out of scope

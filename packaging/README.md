@@ -41,6 +41,8 @@ Reference sizes (x86_64, WebEngine floor): AppDir ~675 MB unpacked → AppImag
 
 ## Windows / macOS: PyInstaller onefile
 
+Uses the OS's native pywebview backend (WebView2 on Windows, WKWebView on macOS) — no Qt bundled; PyQt6/qtpy are Linux-only dependencies.
+
 ```bash
 uv sync --group dev
 uv run pyinstaller packaging/spacemaker.spec --noconfirm

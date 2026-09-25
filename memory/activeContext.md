@@ -1,50 +1,45 @@
-_Last updated: 2026-09-24_
+_Last updated: 2026-09-25_
 
 ## Branch
 
-`main`
+`claude/qt-dependency-assessment-knsl0c`
 
 ## Current focus
 
-Suppressed the two known-benign `QDxgiVSyncService`/`QThreadStorage` Qt shutdown
-warnings on Windows (previously investigated and left as-is, see `decisions.md`).
-User re-reported them, confirmed on questioning they're still just console noise
-(no hang/crash/bad exit), so the fix is a targeted log filter, not a re-opening of
-the async-DXGI-teardown-race investigation:
+Gallery performance at 50k+ items is done: the full SDD feature (SQLite-backed
+derived index, incremental sync, cursor pagination, frontend infinite scroll +
+DOM windowing) plus two follow-up bugs found after the fact (the "Loading
+more…" spinner staying visible permanently, and the gallery briefly
+duplicating after deleting an item from the detail page). Full detail moved to
+`memory/archive.md` ("SpaceMaker app — Gallery performance at 50k+ items
+(2026-09-25)"); the SDD decision record is in `memory/decisions.md`. Nothing
+left to do on this thread. Being committed and pushed now via `/save-changes`.
 
-- `qt_webengine_shutdown.py`: new `_is_benign_shutdown_warning()` (pure predicate)
-  and `install_benign_shutdown_warning_filter()` (`QtCore.qInstallMessageHandler`
-  wrapper that drops only the two known message prefixes, forwards everything else
-  to the previously-installed handler). Wired in from
-  `install_qt_webengine_shutdown_fix()`. No change to `finalize_qt_after_webview()`,
-  `finish_quit()`, or any drain/sleep timing.
-- Tests added to `tests/unit/test_qt_webengine_shutdown.py` (4 new cases: predicate
-  matching + handler forwarding via a monkeypatched `qInstallMessageHandler`).
-- Verified: `uv run task checks` green (ruff, ty, 182 tests incl. the 4 new ones);
-  user ran the real desktop app, closed the window, confirmed the two lines are
-  gone and the window still closes promptly.
-- `memory/decisions.md` updated (new entry, narrows the earlier "not pursuing
-  further" decision).
+## Next steps
 
-No domain/port/architecture change — stayed entirely inside the existing inbound
-desktop adapter, so no new Phase Gate was needed (same precedent as the prior
-shutdown-hardening commits).
-
-## Next steps (this thread)
-
-None — this thread is complete, being committed now via `/save-changes`.
+- No active thread. Next open items (see `memory/progress.md`): Easy mode
+  import issues (wireframe approved, spec in progress), and confirming the
+  native pywebview backends on real Windows/macOS hardware.
 
 ## Run
 
 ```bash
 uv run task spacemaker
-uv run task docs-serve              # docs site at http://127.0.0.1:8000/ (humans; agents read docs/*.md directly)
-uv run task graph-explain "<symbol>" # or: graph-path "<a>" "<b>", graph-query "<question>"
+uv run task spacemaker-server       # browser-only, no pywebview window
 uv run task checks                  # ruff + ty + pytest, works natively on Windows
 uv run task smoke                   # real-process server smoke test (subset of checks)
 ```
 
 ## Notes for Claude Code specifically (this machine)
 
-- Project skills live at `.cursor/skills/` (Cursor's convention); Claude Code only auto-discovers `.claude/skills/`. Fixed via a real OS symlink `.claude/skills -> ../.cursor/skills` (relative target, portable across machines/OS). `git checkout` recreates it correctly on any clone.
-- Older finished threads (Graphify/MkDocs adoption, the `.claude/skills` symlink fix, Windows desktop-bug dogfooding, gotchas): `memory/archive.md` and `docs/agent-tooling.md`.
+- Project skills live at `.cursor/skills/` (Cursor's convention); Claude Code only
+  auto-discovers `.claude/skills/`. Fixed via a real OS symlink
+  `.claude/skills -> ../.cursor/skills` (relative target, portable across
+  machines/OS). `git checkout` recreates it correctly on any clone.
+- This sandboxed browser auto-suppresses native `confirm()`/`alert()` dialogs
+  (`confirm()` returns `false`), so exercising a destructive-action UI button
+  (e.g. gallery delete) end-to-end needs `window.confirm = () => true`
+  monkey-patched first, or calling the underlying API directly.
+- No `npm`/`node` on PATH in this sandbox — Biome checks for web/JS changes
+  can't be run here; say so rather than skipping silently.
+- Older finished threads: `memory/archive.md` and `docs/agent-tooling.md`.

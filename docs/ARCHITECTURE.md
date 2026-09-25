@@ -59,16 +59,24 @@ explicit HTML entry routes (`/`, `/gallery`, `/upload`, `/receive`, `/share`).
 A single `/ws` WebSocket endpoint pushes state updates to connected clients.
 Request bodies are typed with Pydantic `BaseModel`s.
 
-## Persistence: no database
+## Persistence: filesystem + derived SQLite index
 
-There is no database. State is:
+There is no database of record — the filesystem remains the source of truth.
+State is:
 
 - **Filesystem-based**, through the `FileSystem` port (`LocalFileSystem`
   adapter) — the library root's `originals/` / `converted/` / `error/` /
   `invalid/` folders are the persistence layer for media.
+- **A derived, fully-rebuildable SQLite index**
+  (`{library_root}/.index.sqlite`, via the `GalleryIndexPort` /
+  `SqliteGalleryIndex` adapter) that caches gallery metadata (captured date,
+  kind, mtime, size) for fast keyset-paginated timeline, calendar, and
+  neighbor queries at large library sizes. It is incrementally synced against
+  the filesystem by diffing mtime/size (`SyncGalleryIndex`), and is safe to
+  delete at any time — it rebuilds itself from `converted/` + EXIF/ffprobe on
+  next gallery load.
 - **In-process/in-memory** for session/runtime state (`AppSession`, held on
-  `AppServices.session`), plus a small metadata cache that is explicitly
-  invalidated on writes.
+  `AppServices.session`).
 - Long-running work (extract/convert) runs on a `ThreadPoolExecutor` owned by
   `AppServices`, tracked via `Future` handles rather than a job table.
 
@@ -87,25 +95,5 @@ There is no database. State is:
 
 ## Developer setup
 
-After cloning, point Git at the repo's version-controlled hooks so the
-Graphify knowledge graph (`graph.json` / `GRAPH_REPORT.md`) regenerates and
-gets staged automatically on commit (works identically on Windows and
-Linux — see `.githooks/pre-commit`):
-
-```bash
-git config core.hooksPath .githooks
-```
-
-This is a per-clone local setting (not stored in `.git/config` by default
-until you run it), so every clone/worktree needs to run it once.
-
-**Expected:** `git status` will usually show `graphify-out/graph.json` /
-`GRAPH_REPORT.md` as modified again right after a commit. This is harmless
-and permanent, not a bug — the embedded `built_at_commit` field can only
-ever reference the *parent* commit (a file can't contain the hash of the
-commit that contains it), and it gets re-touched a few seconds after the
-hook stages it. Don't try to "fix" it by re-committing.
-
-See [agent-tooling.md](agent-tooling.md) for advanced Graphify commands,
-the Cursor/Claude Code rule-pairing scheme, and other Windows/tooling
-gotchas.
+See [agent-tooling.md](agent-tooling.md) for the `codenav` MCP server, the
+Cursor/Claude Code rule-pairing scheme, and other Windows/tooling gotchas.

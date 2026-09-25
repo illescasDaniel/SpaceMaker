@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from spacemaker.domain.gallery_index import FileStat
 from spacemaker.domain.library import LibraryFolder
 
 
@@ -9,6 +10,8 @@ class FileSystemPort(Protocol):
 	def ensure_library_folders(self, library_root: str) -> None: ...
 
 	def file_size(self, path: str) -> int: ...
+
+	def file_stat(self, path: str) -> FileStat: ...
 
 	def exists(self, path: str) -> bool: ...
 

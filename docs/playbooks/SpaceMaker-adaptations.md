@@ -61,6 +61,8 @@ Progress: WebSocket `gallery_export` events while encoding; UI alert on the item
 
 Local FastAPI + static UI in pywebview; no cloud dependency. **Home hub** is the launch screen; optional LAN gallery URL + QR and tokenized upload/receive/share pages (specs).
 
+**pywebview backend per OS:** native WebView2 (`edgechromium`) on Windows, native WKWebView (`cocoa`) on macOS — no Qt on either. **Qt WebEngine** (`qt`) stays Linux-only, so the AppImage keeps pinning a known Chromium version instead of depending on the host distro's `webkit2gtk`. `--gui` overrides the default for dev/testing; PyQt6/qtpy are Linux-only dependencies (`pyproject.toml` `sys_platform == 'linux'` markers).
+
 ## Device extract (Wi‑Fi default, MTP/ADB cable)
 
 - **Photo backup** (Home tile): centered Easy layout, auto Wi‑Fi receive, convert-as-received (`ui_mode=easy` internally). **Theme:** all web shells follow OS light/dark (`static/theme.css`).

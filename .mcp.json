@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "codenav": {
+      "command": "uv",
+      "args": ["run", "python", "mcp-servers/codenav_mcp/server.py"]
+    }
+  }
+}
