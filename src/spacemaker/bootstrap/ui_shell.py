@@ -1,6 +1,6 @@
 """Desktop / phone web UI shell version (bump when static assets change materially)."""
 
-UI_SHELL_VERSION = "2026.09.gallery-nav"
+UI_SHELL_VERSION = "2026.09.transfer-files"
 
 _CSP_COMMON = (
 	"default-src 'self'; "

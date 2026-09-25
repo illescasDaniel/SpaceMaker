@@ -13,6 +13,7 @@ from typing import Protocol
 from spacemaker.adapters.inbound.web.session import AppSession
 from spacemaker.adapters.outbound.device.factory import device_repository_for
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
+from spacemaker.adapters.outbound.filesystem.sha256_hasher import Sha256ContentHasher
 from spacemaker.adapters.outbound.gallery.sqlite_index import SqliteGalleryIndex
 from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMediaConverter
 from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaProbe
@@ -43,6 +44,11 @@ from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.sync_gallery_index import SyncGalleryIndex
+from spacemaker.application.transfer_session import (
+	EMPTY_TRANSFER_FOLDER_MESSAGE,
+	EmptyTransferFolderError,
+	StageTransferItem,
+)
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.app_meta import app_release_info
 from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path, tools_install_root
@@ -67,6 +73,7 @@ from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode
 from spacemaker.domain.source_folders import SourceFolder, parse_source_folders
+from spacemaker.domain.transfer_session import TransferOrigin, TransferSessionItem
 from spacemaker.domain.ui_mode import UiMode
 from spacemaker.domain.video_encode import HardwareVideoEncoder
 
@@ -123,6 +130,10 @@ class AppServices:
 		self._lan_session_kind: LanSessionKind = LanSessionKind.NONE
 		self._receive_upload_token: str = ""
 		self._share_session_token: str = ""
+		self._transfer_session_token: str = ""
+		self._transfer_items: list[TransferSessionItem] = []
+		self._transfer_staging_root: str = ""
+		self._transfer_lock = threading.Lock()
 		self._wifi_uploads_in_flight = 0
 		self._receive_uploads_in_flight = 0
 		self._receive_control: ExtractJobControl | None = None
@@ -133,6 +144,8 @@ class AppServices:
 		self._convert_future: Future[None] | None = None
 		self.receive_uploaded = ReceiveUploadedMedia(self.filesystem)
 		self.receive_documents = ReceiveUploadedDocuments(self.filesystem)
+		self.content_hasher = Sha256ContentHasher()
+		self.stage_transfer = StageTransferItem(self.filesystem, self.content_hasher)
 		self._documents_receive_root = default_documents_receive_root()
 
 	def devices_for(self, method: ConnectionMethod):
@@ -247,6 +260,7 @@ class AppServices:
 	def shutdown(self, *, timeout_seconds: float = 10.0) -> None:
 		self.stop_extract_and_wait(timeout_seconds=timeout_seconds)
 		self.stop_convert_and_wait(timeout_seconds=timeout_seconds)
+		self._clear_transfer_session()
 		self._executor.shutdown(wait=False, cancel_futures=True)
 
 	def enriched_snapshot(self) -> dict[str, object]:
@@ -304,6 +318,7 @@ class AppServices:
 		base["wifi_upload"] = self._wifi_upload_snapshot()
 		base["receive_files_session"] = self._receive_files_snapshot()
 		base["file_share"] = self._file_share_snapshot()
+		base["transfer_files_session"] = self._transfer_files_snapshot()
 		base["documents_receive_root"] = self._documents_receive_root
 		base["documents_receive_root_display"] = display_user_path(
 			self._documents_receive_root,
@@ -408,6 +423,48 @@ class AppServices:
 				and secrets.compare_digest(self._share_session_token, token)
 			)
 
+	def transfer_token_valid(self, token: str) -> bool:
+		if not token:
+			return False
+		with self._wifi_token_lock:
+			return (
+				self._lan_session_kind is LanSessionKind.TRANSFER_FILES
+				and bool(self._transfer_session_token)
+				and secrets.compare_digest(self._transfer_session_token, token)
+			)
+
+	def _transfer_files_snapshot(self) -> dict[str, object]:
+		from spacemaker.bootstrap.lan import lan_ip
+
+		with self._wifi_token_lock:
+			token = self._transfer_session_token
+			kind = self._lan_session_kind
+		with self._transfer_lock:
+			items = list(self._transfer_items)
+		active = kind is LanSessionKind.TRANSFER_FILES and bool(token)
+		if not active:
+			return {"active": False, "page_url": "", "qr_url": "", "item_count": 0, "items": []}
+		host = lan_ip()
+		page_url = f"http://{host}:{self.port}/transfer?t={token}"
+		return {
+			"active": True,
+			"page_url": page_url,
+			"qr_url": f"/api/transfer/qr.svg?t={token}",
+			"item_count": len(items),
+			"items": [self._transfer_item_row(item) for item in items],
+		}
+
+	def _transfer_item_row(self, item: TransferSessionItem) -> dict[str, str]:
+		origin_label = "PC" if item.origin is TransferOrigin.PC else "Phone"
+		return {
+			"id": item.file_id,
+			"name": item.display_name,
+			"kind": item.kind.value,
+			"origin": item.origin.value,
+			"origin_label": origin_label,
+			"download_name": item.display_name,
+		}
+
 	def _clear_receive_session(self) -> None:
 		with self._wifi_token_lock:
 			self._receive_upload_token = ""
@@ -424,6 +481,23 @@ class AppServices:
 			if self._lan_session_kind is LanSessionKind.SEND_FILES:
 				self._lan_session_kind = LanSessionKind.NONE
 
+	def _wipe_transfer_staging(self) -> None:
+		import shutil
+
+		root = self._transfer_staging_root
+		self._transfer_staging_root = ""
+		with self._transfer_lock:
+			self._transfer_items = []
+		if root and Path(root).is_dir():
+			shutil.rmtree(root, ignore_errors=True)
+
+	def _clear_transfer_session(self) -> None:
+		with self._wifi_token_lock:
+			self._transfer_session_token = ""
+			if self._lan_session_kind is LanSessionKind.TRANSFER_FILES:
+				self._lan_session_kind = LanSessionKind.NONE
+		self._wipe_transfer_staging()
+
 	def stop_active_lan_session(self) -> None:
 		with self.session._lock:
 			module = self.session.active_module
@@ -436,6 +510,7 @@ class AppServices:
 			self.stop_extract()
 		self._clear_receive_session()
 		self._clear_share_session()
+		self._clear_transfer_session()
 		self._share_entries = []
 
 	def enter_module(self, module: AppModule) -> None:
@@ -456,12 +531,202 @@ class AppServices:
 			self._share_selection = []
 			self._share_entries = []
 			self._clear_share_session()
+		elif module is AppModule.TRANSFER_FILES:
+			self.start_transfer_files_session()
 
 	def leave_module_for_home(self) -> None:
 		self.stop_active_lan_session()
 		self._share_selection = []
 		with self.session._lock:
 			self.session.active_module = AppModule.HOME
+
+	def start_transfer_files_session(self) -> None:
+		import tempfile
+
+		self._wipe_transfer_staging()
+		self._transfer_staging_root = tempfile.mkdtemp(prefix="spacemaker-transfer-")
+		token = secrets.token_urlsafe(24)
+		with self._wifi_token_lock:
+			self._transfer_session_token = token
+			self._lan_session_kind = LanSessionKind.TRANSFER_FILES
+		self.push_state()
+
+	def transfer_manifest(self, token: str) -> list[dict[str, str]]:
+		if not self.transfer_token_valid(token):
+			return []
+		with self._transfer_lock:
+			items = list(self._transfer_items)
+		return [self._transfer_item_row(item) for item in items]
+
+	def resolve_transfer_download(self, token: str, file_id: str) -> TransferSessionItem | None:
+		if not self.transfer_token_valid(token) or not file_id:
+			return None
+		with self._transfer_lock:
+			for item in self._transfer_items:
+				if item.file_id == file_id and Path(item.staged_path).is_file():
+					return item
+		return None
+
+	def _next_transfer_file_id(self) -> str:
+		return f"t{uuid.uuid4().hex[:12]}"
+
+	def handle_transfer_upload_file(
+		self,
+		token: str,
+		*,
+		requested_name: str,
+		temp_path: str,
+		origin: TransferOrigin,
+	) -> TransferSessionItem | None:
+		if not self.transfer_token_valid(token):
+			raise PermissionError("transfer session ended")
+		staging = self._transfer_staging_root
+		if not staging:
+			raise PermissionError("transfer session ended")
+		file_id = self._next_transfer_file_id()
+		with self._transfer_lock:
+			existing = list(self._transfer_items)
+		outcome = self.stage_transfer.stage_file(
+			staging,
+			file_id=file_id,
+			requested_name=requested_name,
+			temp_path=temp_path,
+			origin=origin,
+			existing=existing,
+		)
+		if outcome.disposition.value == "added" and outcome.item is not None:
+			with self._transfer_lock:
+				self._transfer_items.append(outcome.item)
+			self.push_state()
+			return outcome.item
+		self.push_state()
+		return outcome.item
+
+	def handle_transfer_upload_folder_files(
+		self,
+		token: str,
+		*,
+		folder_name: str,
+		relative_files: list[tuple[str, str]],
+		origin: TransferOrigin,
+	) -> TransferSessionItem | None:
+		"""Stage a phone folder upload: relative_files is (relative_path, temp_path) pairs."""
+		import os
+		import shutil
+		import tempfile
+
+		from spacemaker.application.file_share_manifest import write_folder_zip
+		from spacemaker.domain.transfer_session import TransferItemKind, folder_zip_display_name
+
+		if not self.transfer_token_valid(token):
+			raise PermissionError("transfer session ended")
+		if not relative_files:
+			raise EmptyTransferFolderError(EMPTY_TRANSFER_FOLDER_MESSAGE)
+		staging = self._transfer_staging_root
+		if not staging:
+			raise PermissionError("transfer session ended")
+		work = Path(tempfile.mkdtemp(prefix="spacemaker-transfer-folder-"))
+		zip_temp: str | None = None
+		try:
+			for rel, temp_path in relative_files:
+				dest = work / rel.replace("\\", "/")
+				dest.parent.mkdir(parents=True, exist_ok=True)
+				shutil.copy2(temp_path, dest)
+				Path(temp_path).unlink(missing_ok=True)
+			fd, zip_name = tempfile.mkstemp(prefix="spacemaker-transfer-", suffix=".zip")
+			os.close(fd)
+			zip_temp = zip_name
+			write_folder_zip(work, Path(zip_temp))
+			file_id = self._next_transfer_file_id()
+			with self._transfer_lock:
+				existing = list(self._transfer_items)
+			outcome = self.stage_transfer.stage_file(
+				staging,
+				file_id=file_id,
+				requested_name=folder_zip_display_name(folder_name),
+				temp_path=zip_temp,
+				origin=origin,
+				existing=existing,
+				kind=TransferItemKind.FOLDER_ZIP,
+			)
+			zip_temp = None
+			if outcome.disposition.value == "added" and outcome.item is not None:
+				with self._transfer_lock:
+					self._transfer_items.append(outcome.item)
+			self.push_state()
+			return outcome.item
+		finally:
+			shutil.rmtree(work, ignore_errors=True)
+			if zip_temp is not None:
+				Path(zip_temp).unlink(missing_ok=True)
+
+	def add_transfer_paths_from_desktop(self, paths: list[str]) -> None:
+		import os
+		import tempfile
+
+		if not self.transfer_token_valid(self._transfer_session_token):
+			raise PermissionError("transfer session ended")
+		staging = self._transfer_staging_root
+		if not staging:
+			raise PermissionError("transfer session ended")
+		had_empty_folder = False
+		for raw in paths:
+			text = raw.strip()
+			if not text:
+				continue
+			path = Path(text).expanduser().resolve()
+			if path.is_dir():
+				if count_shareable_files_in_root(path) == 0:
+					had_empty_folder = True
+					continue
+				fd, zip_temp = tempfile.mkstemp(prefix="spacemaker-transfer-", suffix=".zip")
+				os.close(fd)
+				try:
+					file_id = self._next_transfer_file_id()
+					with self._transfer_lock:
+						existing = list(self._transfer_items)
+					outcome = self.stage_transfer.stage_folder_as_zip(
+						staging,
+						file_id=file_id,
+						folder_path=str(path),
+						origin=TransferOrigin.PC,
+						existing=existing,
+						zip_temp_path=zip_temp,
+					)
+					if outcome.disposition.value == "added" and outcome.item is not None:
+						with self._transfer_lock:
+							self._transfer_items.append(outcome.item)
+				except EmptyTransferFolderError:
+					had_empty_folder = True
+					Path(zip_temp).unlink(missing_ok=True)
+			elif path.is_file():
+				fd, temp_name = tempfile.mkstemp(prefix="spacemaker-transfer-", suffix=path.suffix)
+				os.close(fd)
+				temp_path = Path(temp_name)
+				try:
+					temp_path.write_bytes(path.read_bytes())
+					file_id = self._next_transfer_file_id()
+					with self._transfer_lock:
+						existing = list(self._transfer_items)
+					outcome = self.stage_transfer.stage_file(
+						staging,
+						file_id=file_id,
+						requested_name=path.name,
+						temp_path=str(temp_path),
+						origin=TransferOrigin.PC,
+						existing=existing,
+					)
+					if outcome.disposition.value == "added" and outcome.item is not None:
+						with self._transfer_lock:
+							self._transfer_items.append(outcome.item)
+				except Exception:
+					temp_path.unlink(missing_ok=True)
+					raise
+		self.push_state()
+		if had_empty_folder and not paths:
+			raise EmptyTransferFolderError(EMPTY_TRANSFER_FOLDER_MESSAGE)
+		if had_empty_folder and len(paths) == 1:
+			raise EmptyTransferFolderError(EMPTY_TRANSFER_FOLDER_MESSAGE)
 
 	def bootstrap_photo_backup(self) -> None:
 		with self.session._lock:

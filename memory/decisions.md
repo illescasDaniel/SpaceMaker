@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-25 — Transfer files: ephemeral staging + SHA-256 name collision; fifth Home module
+
+- **Context:** New bidirectional LAN session (PC + phones upload/download). User chose keep Receive/Send and add a fifth Home tile; same display name with different content gets auto-suffix (`report (2).pdf`). Spec approved 2026-09-25.
+- **Decision:** Session bytes live only under an ephemeral staging root (not Documents, not library). `ContentHasher` outbound port (`sha256_file`) feeds `StageTransferItem`; domain `allocate_transfer_display_name` skips when name+hash match and otherwise suffixes before the final extension. Folders become one `FOLDER_ZIP` row via existing `write_folder_zip`. `AppModule.TRANSFER_FILES` / `LanSessionKind.TRANSFER_FILES` added. HTTP/UI wiring deferred to Phase 4 after architecture approval.
+- **Rationale:** Hash-on-collision matches the approved spec without path-only skip (receive/send). A dedicated hasher port keeps hashing out of domain and out of FastAPI handlers. Reusing share’s zip helper avoids a second zip implementation.
+
 ## 2026-09-25 — Gallery item detail: real-thumbnail-first progressive loading, photo-app open animation, slide transitions on prev/next; fixed a `.gallery-item-stage` centering regression
 
 - **Context:** User asked for the gallery photo-detail flow to feel like an app, not a website: opening a photo should animate like an entrance rather than a hard cut; prev/next navigation should slide; and while the full image/video is still loading, the preview area should show the item's real thumbnail plus a spinner instead of collapsing to near-zero height and jumping once the full media arrives. Confirmed with the user that every saved photo already gets a generated thumbnail in production (`SubprocessThumbnailGenerator`, served at `GET /thumbs/{relative_path}`), so the placeholder is the real thumbnail, not a synthetic blur. Full SDD cycle run: Phase 0 wireframe (`wireframes/app.html`) approved ("i like this, that's the idea... design is fine, let's advance"), Phase 1 spec (`specs/ui-motion/SPEC.md`, `specs/gallery/SPEC.md`) approved ("proceed"), Phase 2 architecture approved ("okay") before Phase 4 touched production code.

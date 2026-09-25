@@ -319,6 +319,8 @@
 				return "receive-files";
 			case "send_files":
 				return "send-files";
+			case "transfer_files":
+				return "transfer-files";
 			default:
 				return "home";
 		}
@@ -337,7 +339,8 @@
 			resolved === "easy" ||
 			resolved === "wizard" ||
 			resolved === "receive-files" ||
-			resolved === "send-files"
+			resolved === "send-files" ||
+			resolved === "transfer-files"
 		);
 	}
 
@@ -984,6 +987,82 @@
 		}
 	}
 
+	function transferDownloadUrl(token, fileId) {
+		return (
+			"/api/transfer/download?t=" + encodeURIComponent(token || "") + "&file_id=" + encodeURIComponent(fileId || "")
+		);
+	}
+
+	function updateTransferUi(next) {
+		var session = next.transfer_files_session || {};
+		var uploadQr = document.getElementById("transfer-qr");
+		var uploadWait = document.getElementById("transfer-qr-wait");
+		var list = document.getElementById("transfer-item-list");
+		var status = document.getElementById("transfer-item-status");
+		var serverHint = document.getElementById("transfer-server-only-hint");
+		var hasDesktop = !!window.pywebview?.api;
+		var items = session.items || [];
+		var token = "";
+		var pageUrl = session.page_url || "";
+		if (pageUrl) {
+			try {
+				token = new URL(pageUrl).searchParams.get("t") || "";
+			} catch (_err) {
+				token = "";
+			}
+		}
+		if (serverHint) {
+			serverHint.classList.toggle("panel-hidden", hasDesktop);
+		}
+		if (session.active && uploadQr) {
+			uploadQr.hidden = false;
+			if (session.qr_url) {
+				uploadQr.src = session.qr_url + "&_=" + Date.now();
+			}
+			if (uploadWait) {
+				uploadWait.hidden = true;
+			}
+		} else if (uploadQr) {
+			uploadQr.hidden = true;
+			if (uploadWait) {
+				uploadWait.hidden = false;
+				uploadWait.textContent = "Waiting to start transfer session…";
+			}
+		}
+		setQrUrlField("transfer-qr-url", pageUrl);
+		if (list) {
+			list.innerHTML = "";
+			items.forEach(function (item) {
+				var li = document.createElement("li");
+				li.className = "transfer-item";
+				var meta = document.createElement("span");
+				meta.className = "transfer-item-meta";
+				var name = document.createElement("span");
+				name.className = "transfer-item-name";
+				name.textContent = item.name || "";
+				var from = document.createElement("span");
+				from.className = "transfer-item-from";
+				from.textContent =
+					(item.kind === "folder_zip" ? "folder · " : "") +
+					"from " +
+					(item.origin_label || (item.origin === "pc" ? "PC" : "Phone"));
+				meta.appendChild(name);
+				meta.appendChild(from);
+				var link = document.createElement("a");
+				link.className = "btn btn-secondary transfer-dl";
+				link.textContent = "Download";
+				link.href = transferDownloadUrl(token, item.id);
+				link.setAttribute("download", item.download_name || item.name || "");
+				li.appendChild(meta);
+				li.appendChild(link);
+				list.appendChild(li);
+			});
+		}
+		if (status) {
+			status.textContent = items.length === 1 ? "1 item in session" : items.length + " items in session";
+		}
+	}
+
 	function updateEasyUi(next) {
 		var wifi = next.wifi_upload || {};
 		var uploadQr = document.getElementById("easy-upload-qr");
@@ -1127,6 +1206,7 @@
 		updateEasyUi(next);
 		updateReceiveUi(next);
 		updateSendUi(next);
+		updateTransferUi(next);
 		if (next.managed_tools) {
 			renderComponentsList(next.managed_tools);
 		}
@@ -2373,6 +2453,60 @@
 				});
 		});
 
+		function addTransferPaths(paths) {
+			if (!paths?.length) {
+				return Promise.resolve(null);
+			}
+			return api("POST", "/api/transfer/add", { paths: paths })
+				.then(applyState)
+				.catch(function (err) {
+					window.alert(err.message || "Could not add to the transfer session.");
+					throw err;
+				});
+		}
+
+		onClick("btn-transfer-add-files", function () {
+			if (!window.pywebview?.api?.choose_files) {
+				showFormBanner("Use the desktop app to pick files.");
+				return;
+			}
+			Promise.resolve(window.pywebview.api.choose_files(""))
+				.then(function (picked) {
+					if (!picked?.length) {
+						return null;
+					}
+					return addTransferPaths(picked);
+				})
+				.catch(function () {
+					showFormBanner("Could not open the file picker.");
+				});
+		});
+		onClick("btn-transfer-add-folder", function () {
+			if (!window.pywebview?.api?.choose_share_folder) {
+				showFormBanner("Use the desktop app to pick a folder.");
+				return;
+			}
+			Promise.resolve(window.pywebview.api.choose_share_folder(""))
+				.then(function (folder) {
+					if (!folder || !String(folder).trim()) {
+						return null;
+					}
+					var countPromise = window.pywebview.api.share_folder_file_count
+						? Promise.resolve(window.pywebview.api.share_folder_file_count(folder))
+						: Promise.resolve(1);
+					return countPromise.then(function (count) {
+						if (count < 1) {
+							window.alert("This folder has no files. Choose a folder that contains at least one file.");
+							return null;
+						}
+						return addTransferPaths([folder]);
+					});
+				})
+				.catch(function () {
+					showFormBanner("Could not open the folder picker.");
+				});
+		});
+
 		function rememberMainViewBeforeFooterPage() {
 			var active = document.querySelector(".screen.active");
 			if (
@@ -2382,6 +2516,7 @@
 					active.id === "view-wizard" ||
 					active.id === "view-receive-files" ||
 					active.id === "view-send-files" ||
+					active.id === "view-transfer-files" ||
 					active.id === "view-gallery" ||
 					active.id === "view-gallery-item")
 			) {
@@ -2476,6 +2611,7 @@
 		bindInfoPanelToggle("btn-easy-qr-info", "easy-qr-info-panel");
 		bindInfoPanelToggle("btn-receive-qr-info", "receive-qr-info-panel");
 		bindInfoPanelToggle("btn-send-qr-info", "send-qr-info-panel");
+		bindInfoPanelToggle("btn-transfer-qr-info", "transfer-qr-info-panel");
 		bindInfoPanelToggle("btn-wifi-qr-info", "wifi-qr-info-panel");
 
 		function switchConnectionMethod(method) {

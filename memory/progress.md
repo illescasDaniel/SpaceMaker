@@ -2,6 +2,14 @@
 
 Open items only. Finished work: `memory/archive.md`.
 
+## Transfer files (in flight)
+
+- [x] Phase 0 wireframe — desktop hub tile + `#view-transfer-files`; phone `phone-transfer.html` (approved 2026-09-25)
+- [x] Phase 1 spec — `specs/transfer-files/SPEC.md` + home-modules fifth tile (approved 2026-09-25)
+- [x] Phase 2 architecture — domain + ContentHasher port + StageTransferItem (approved 2026-09-25)
+- [x] Phase 3 tests — unit tests for naming/hash, staging, session wipe
+- [x] Phase 4 implementation — AppServices, APIs, desktop + phone UI
+
 ## SpaceMaker app
 
 - [ ] **Easy mode import issues — where to review** — wireframe approved 2026-09-23; spec draft (open-folder API partially via `/api/library/open-folder`)
