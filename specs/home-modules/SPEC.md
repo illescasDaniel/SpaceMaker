@@ -4,7 +4,7 @@
 
 - **Feature:** Home hub with module tiles; header **Home | Gallery**
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-home`, module screens. **Wireframe approved** 2026-09-23 (hub, breadcrumbs, QR + ⓘ); **updated** 2026-09-25 (fifth tile **Transfer files** — wireframe approved).
-- **Spec approved:** 2026-09-23; **update pending** (fifth module — see [transfer-files](../transfer-files/SPEC.md))
+- **Spec approved:** 2026-09-23; **updated** 2026-09-25 (fifth module — see [transfer-files](../transfer-files/SPEC.md))
 - **Architecture approved:** 2026-09-23
 - **Related:** [easy-mode](../easy-mode/SPEC.md), [main-wizard](../main-wizard/SPEC.md), [receive-files](../receive-files/SPEC.md), [send-files](../send-files/SPEC.md), [transfer-files](../transfer-files/SPEC.md)
 

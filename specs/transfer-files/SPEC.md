@@ -4,7 +4,7 @@
 
 - **Feature:** Shared Wi‑Fi QR session where the PC and any phones that scan can both upload and download; all session files are deleted when the session ends
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-home` (fifth tile), `#view-transfer-files`; phone [wireframes/phone-transfer.html](../../wireframes/phone-transfer.html). **Wireframe approved** 2026-09-25
-- **Spec approved:** _(pending)_
+- **Spec approved:** 2026-09-25
 - **Architecture approved:** _(pending)_
 - **Related:** [home-modules](../home-modules/SPEC.md), [receive-files](../receive-files/SPEC.md), [send-files](../send-files/SPEC.md)
 
