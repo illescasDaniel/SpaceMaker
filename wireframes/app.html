@@ -1312,6 +1312,61 @@
 			border-bottom: 1px solid var(--border);
 		}
 
+		.transfer-session {
+			padding-bottom: 2rem;
+		}
+
+		.transfer-item-list {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			background: var(--surface);
+			overflow: hidden;
+		}
+
+		.transfer-item {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.75rem;
+			padding: 0.65rem 0.85rem;
+			border-bottom: 1px solid var(--border);
+			font-size: 0.9rem;
+		}
+
+		.transfer-item:last-child {
+			border-bottom: none;
+		}
+
+		.transfer-item-meta {
+			display: flex;
+			flex-direction: column;
+			gap: 0.15rem;
+			min-width: 0;
+			flex: 1;
+		}
+
+		.transfer-item-name {
+			font-weight: 600;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.transfer-item-from {
+			font-size: 0.75rem;
+			color: var(--muted);
+		}
+
+		.transfer-dl {
+			margin-top: 0;
+			flex-shrink: 0;
+			padding: 0.35rem 0.65rem;
+			font-size: 0.82rem;
+		}
+
 		.wireframe-review-hint {
 			text-align: center;
 			font-size: 0.85rem;
@@ -1490,6 +1545,16 @@
 					</svg>
 					<span class="module-tile-title">Send files</span>
 				</button>
+				<button type="button" class="module-tile" data-module="transfer_files">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="10" y="8" width="12" height="20" rx="2"/>
+						<rect x="26" y="18" width="12" height="20" rx="2"/>
+						<path d="M16 32v4M32 14v-4"/>
+						<path d="M13 36h6M29 10h6"/>
+						<path d="M22 24h4"/>
+					</svg>
+					<span class="module-tile-title">Transfer files</span>
+				</button>
 			</div>
 			<p class="wireframe-review-hint">Tap a tile to preview that screen. Use <strong>Home</strong> in the breadcrumb to return.</p>
 		</div>
@@ -1640,6 +1705,74 @@
 				<button type="button" class="info-btn" title="Show share URL">i</button>
 			</div>
 			<p class="easy-lead">Choose files or folders on this PC. Your phone opens the QR page to download files or zipped folders.</p>
+		</div>
+	</section>
+
+	<section id="view-transfer-files" class="screen" aria-label="Transfer files">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current">Transfer files</span>
+		</nav>
+		<div class="easy-screen">
+			<div class="qr-with-info">
+				<div class="easy-qr-wrap qr-frame">
+					<div class="qr-placeholder" role="img" aria-label="QR code for shared transfer session">
+					<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+						<rect width="21" height="21" fill="#fff"/>
+						<rect x="1" y="1" width="7" height="7" fill="#111"/>
+						<rect x="13" y="1" width="7" height="7" fill="#111"/>
+						<rect x="1" y="13" width="7" height="7" fill="#111"/>
+						<rect x="3" y="3" width="3" height="3" fill="#fff"/>
+						<rect x="15" y="3" width="3" height="3" fill="#fff"/>
+						<rect x="3" y="15" width="3" height="3" fill="#fff"/>
+						<rect x="10" y="10" width="1" height="1" fill="#111"/>
+						<rect x="12" y="8" width="2" height="1" fill="#111"/>
+					</svg>
+					</div>
+				</div>
+				<button type="button" class="info-btn" title="Show transfer URL">i</button>
+			</div>
+			<p class="easy-lead">Scan this QR with any phone on the same Wi‑Fi. Everyone in the session can upload and download until you return to Home.</p>
+			<p class="folder-hint">Files stay in a temporary session only. Closing this module deletes everything that was uploaded.</p>
+		</div>
+		<div class="share-picker transfer-session">
+			<div class="share-picker-actions">
+				<button type="button" class="btn btn-secondary">Add files</button>
+				<button type="button" class="btn btn-secondary">Add folder</button>
+			</div>
+			<p class="label" style="margin: 0 0 0.5rem;">Session files</p>
+			<ul class="transfer-item-list" aria-label="Shared session files">
+				<li class="transfer-item">
+					<span class="transfer-item-meta">
+						<span class="transfer-item-name">notes.txt</span>
+						<span class="transfer-item-from">from this PC</span>
+					</span>
+					<button type="button" class="btn btn-secondary transfer-dl">Download</button>
+				</li>
+				<li class="transfer-item">
+					<span class="transfer-item-meta">
+						<span class="transfer-item-name">vacation.zip</span>
+						<span class="transfer-item-from">folder · from Phone</span>
+					</span>
+					<button type="button" class="btn btn-secondary transfer-dl">Download</button>
+				</li>
+				<li class="transfer-item">
+					<span class="transfer-item-meta">
+						<span class="transfer-item-name">report.pdf</span>
+						<span class="transfer-item-from">from Phone</span>
+					</span>
+					<button type="button" class="btn btn-secondary transfer-dl">Download</button>
+				</li>
+				<li class="transfer-item">
+					<span class="transfer-item-meta">
+						<span class="transfer-item-name">report (2).pdf</span>
+						<span class="transfer-item-from">from Tablet · same name, different file</span>
+					</span>
+					<button type="button" class="btn btn-secondary transfer-dl">Download</button>
+				</li>
+			</ul>
+			<p class="status-line" style="margin-top: 0.75rem;">4 items in session</p>
 		</div>
 	</section>
 
@@ -1982,6 +2115,7 @@
 			if (module === 'usb_photo_backup') return 'wizard';
 			if (module === 'receive_files') return 'receive-files';
 			if (module === 'send_files') return 'send-files';
+			if (module === 'transfer_files') return 'transfer-files';
 			return 'home';
 		}
 
