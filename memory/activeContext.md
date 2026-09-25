@@ -1,4 +1,4 @@
-_Last updated: 2026-09-24_
+_Last updated: 2026-09-25_
 
 ## Branch
 
@@ -6,11 +6,25 @@ _Last updated: 2026-09-24_
 
 ## Current focus
 
-Dropped Qt as a forced dependency on Windows/macOS — pywebview now uses each OS's
-native backend there (WebView2 `edgechromium` on Windows, WKWebView `cocoa` on
-macOS), no Qt bundling needed. Linux keeps Qt WebEngine (AppImage still pins a
-known Chromium version instead of the host's `webkit2gtk`). See `memory/decisions.md`
-("Native pywebview backend on Windows/macOS; Qt WebEngine kept Linux-only").
+User is now testing this branch on real Windows hardware. Fixed a live crash they hit:
+`reveal_in_file_manager` (`src/spacemaker/adapters/outbound/host/open_paths.py`) used
+`subprocess.run(["explorer", "/select,", ...], check=True)`, but `explorer.exe`
+routinely exits 1 even when it successfully opens Explorer with the file selected —
+`check=True` turned that into a 500 from `POST /api/gallery/open`. Changed to
+`check=False`; no test coverage change needed (this is a return-code-reliability fix,
+not new behavior).
+
+Next: investigating a second user-reported bug — uploading a folder from a phone via
+Photo Backup only uploads a single picture instead of the whole folder. Not yet
+diagnosed; likely in the Photo Backup upload handler (inbound web route or its
+inbound multi-file iteration) or the phone-side client. See `memory/progress.md`.
+
+Earlier in this branch: dropped Qt as a forced dependency on Windows/macOS —
+pywebview now uses each OS's native backend there (WebView2 `edgechromium` on
+Windows, WKWebView `cocoa` on macOS), no Qt bundling needed. Linux keeps Qt
+WebEngine (AppImage still pins a known Chromium version instead of the host's
+`webkit2gtk`). See `memory/decisions.md` ("Native pywebview backend on
+Windows/macOS; Qt WebEngine kept Linux-only").
 
 - `src/spacemaker/desktop.py`: new `_default_gui_backend()` (edgechromium/cocoa/qt
   per `sys.platform`); `--gui` still overrides. Qt-only setup

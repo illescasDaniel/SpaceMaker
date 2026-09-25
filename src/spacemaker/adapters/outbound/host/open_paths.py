@@ -25,7 +25,10 @@ def reveal_in_file_manager(path: str) -> None:
 	if sys.platform == "darwin":
 		subprocess.run(["open", "-R", str(target)], check=True)
 	elif sys.platform == "win32":
-		subprocess.run(["explorer", "/select,", str(target)], check=True)
+		# explorer.exe's exit code is not a reliable success indicator (it
+		# commonly returns 1 even after successfully opening and selecting
+		# the file), so don't raise on non-zero here.
+		subprocess.run(["explorer", "/select,", str(target)], check=False)
 	else:
 		open_path = str(target) if target.is_dir() else str(target.parent)
 		subprocess.run(["xdg-open", open_path], check=True)
