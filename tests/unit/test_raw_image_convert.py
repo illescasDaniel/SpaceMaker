@@ -16,6 +16,8 @@ _skip_on_windows = pytest.mark.skipif(sys.platform == "win32", reason="Uses POSI
 
 def _install_tool_scripts(tools: Path) -> None:
 	magick = tools / "magick"
+	# POSIX /bin/sh (dash): no bash ${@: -1}. Fail encode when source is DNG so
+	# SubprocessMediaConverter takes the embedded-preview fallback path.
 	magick.write_text(
 		"#!/bin/sh\n"
 		'if [ "$1" = "identify" ]; then\n'
@@ -23,7 +25,8 @@ def _install_tool_scripts(tools: Path) -> None:
 		"  exit 0\n"
 		"fi\n"
 		'if [ "$1" = "-version" ]; then exit 0; fi\n'
-		'dest="${@: -1}"\n'
+		'case "$1" in *.dng) exit 1 ;; esac\n'
+		"for dest; do :; done\n"
 		'echo "fake-avif" > "$dest"\n'
 		"exit 0\n",
 	)
