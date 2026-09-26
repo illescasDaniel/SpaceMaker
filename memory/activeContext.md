@@ -6,31 +6,27 @@ _Last updated: 2026-09-26_
 
 ## Current focus
 
-Gallery orphan cache cleanup. Spec approved. **Phase 2 domain helpers landed —
-waiting on explicit architecture approval** before tests / use-case / adapter
-wiring (SDD gate).
+Gallery orphan cache cleanup — **implemented** (spec + architecture approved;
+Phases 3–4 done). Ready for review / merge.
 
-## Architecture (Phase 2)
+## Just changed
 
-No new ports — `FileSystemPort` already covers exists/delete. Domain:
-
-- [`gallery_cache_paths.py`](src/spacemaker/domain/gallery_cache_paths.py):
-  `thumbnail_path`, `export_cache_path`, `export_cache_paths_for_relative`,
-  `is_legacy_hash_export_filename`
-- [`library_paths.py`](src/spacemaker/domain/library_paths.py):
-  `THUMBNAILS_DIR_NAME` / `EXPORTS_DIR_NAME` constants
-- Legacy `export_cache_filename` kept until Phase 4 rewires
-  `ExportFriendlyMedia` / delete / sync
+- Domain: `gallery_cache_paths.py` (injective thumb/export paths); removed
+  legacy `export_cache_filename`
+- Application: `gallery_cache_cleanup.py`; `DeleteGalleryItem`,
+  `SyncGalleryIndex`, `ExportFriendlyMedia` wired for GC + path-mirrored
+  exports
+- Adapter: `SubprocessThumbnailGenerator` uses `thumbnail_path`
+- Tests: cache paths, delete, sync orphan/changed/legacy sweep, export reuse
 
 ## Next steps
 
-1. User: reply **architecture approved** (or requested changes).
-2. Then: Phases 3–4 — unit tests + ExportFriendlyMedia / thumb generator /
-   DeleteGalleryItem / SyncGalleryIndex + remove legacy hash helper.
+- PR review / merge of #4
+- No further code planned on this thread unless review feedback
 
 ## Run
 
 ```bash
-uv run task spacemaker
 uv run task checks
+uv run pytest tests/unit/test_gallery_cache_paths.py tests/unit/test_delete_gallery_item.py tests/unit/test_sync_gallery_index.py tests/unit/test_gallery_export.py
 ```
