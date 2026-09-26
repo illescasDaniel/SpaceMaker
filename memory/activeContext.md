@@ -6,23 +6,17 @@ _Last updated: 2026-09-26_
 
 ## Current focus
 
-**USB file transfer** — new Home module (SDD). Phase 0 wireframe only.
+**USB file transfer** — SDD Phase 1 spec written; awaiting **spec approval**.
 
-Interpreted user “afp” as **AFC / iPhone USB** (same stack as USB photo backup), not network AFP.
+Wireframe approved 2026-09-26.
 
 ## Just changed
 
-- `wireframes/app.html` — USB file transfer polish per design feedback: no step “1”; iPhone limit banner only on AFC; destination / mode / pause-stop copy behind ⓘ panels
-- Earlier: Home tile + `#view-usb-file-transfer`; `wireframes/README.md`; memory
+- `specs/usb-file-transfer/SPEC.md` — new feature spec
+- `specs/home-modules/SPEC.md` — fifth tile + routing
+- `specs/README.md`, `specs/receive-files/SPEC.md`, `docs/playbooks/SpaceMaker-adaptations.md`
 
 ## Next steps
 
-1. **Stop for design approval** — user reviews wireframe, replies wireframe approved (or changes).
-2. After approval → Phase 1 `specs/usb-file-transfer/SPEC.md` only, then stop again.
-
-## Run
-
-```bash
-xdg-open wireframes/app.html
-# then tap “USB file transfer” on the Home hub
-```
+1. User reviews `specs/usb-file-transfer/SPEC.md` — reply **spec approved** (or changes).
+2. After approval → Phase 2 domain/ports only, then stop for architecture approval.

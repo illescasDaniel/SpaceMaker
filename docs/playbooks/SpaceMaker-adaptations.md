@@ -67,6 +67,7 @@ Local FastAPI + static UI in pywebview; no cloud dependency. **Home hub** is the
 
 - **Photo backup** (Home tile): centered Easy layout, auto Wi‑Fi receive, convert-as-received (`ui_mode=easy` internally). **Theme:** all web shells follow OS light/dark (`static/theme.css`).
 - **USB photo backup** tile opens the three-step wizard (`ui_mode=advanced` internally). Wi‑Fi default in wizard when that module is extended; cable modes **MTP**, **ADB (cable)**, and **iPhone (USB)** (Linux AFC trial) with info (ⓘ) for setup steps.
+- **USB file transfer** tile: cable-only **MTP / ADB / iPhone USB (AFC)** copy or move of **any** files into `documents_directory()/SpaceMaker/` (same root as Receive files). No convert, no gallery, no `originals/`. Spec: [specs/usb-file-transfer/SPEC.md](../../specs/usb-file-transfer/SPEC.md).
 - Hexagonal: `DeviceRepository` port; adapters `MtpDeviceRepository`, `AdbDeviceRepository`, `AfcDeviceRepository` (adbutils on all OSes for ADB).
 - **MTP:** One **libmtp** adapter on all OSes; download libmtp CLI when catalog provides it, else `PATH`.
 - **iPhone USB:** **AfcDeviceRepository** on Linux — `idevice_*` + `ifuse` on `PATH` (like libmtp when not in catalog); **usbmuxd** (Arch: udev starts it on plug-in, not `systemctl enable`).
