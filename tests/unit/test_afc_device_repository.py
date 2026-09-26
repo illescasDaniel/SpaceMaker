@@ -17,6 +17,20 @@ def test_given_dcim_heic_when_list_media_paths_then_lists_relative(tmp_path: Pat
 	assert paths == ["DCIM/100APPLE/IMG_0001.HEIC"]
 
 
+def test_given_dcim_pdf_when_list_file_paths_then_includes_any_type(tmp_path: Path) -> None:
+	# given
+	dcim = tmp_path / "DCIM" / "100APPLE"
+	dcim.mkdir(parents=True)
+	(dcim / "scan.pdf").write_bytes(b"%PDF")
+	(dcim / "IMG_0001.HEIC").write_bytes(b"x" * 64)
+	repo = AfcDeviceRepository(test_mounts={"phone-udid": tmp_path})
+	# when
+	paths = repo.list_file_paths("phone-udid")
+	# then
+	assert "DCIM/100APPLE/scan.pdf" in paths
+	assert "DCIM/100APPLE/IMG_0001.HEIC" in paths
+
+
 def test_given_photodata_when_list_media_paths_then_skips_non_camera_folders(tmp_path: Path) -> None:
 	dcim = tmp_path / "DCIM" / "100APPLE"
 	dcim.mkdir(parents=True)
