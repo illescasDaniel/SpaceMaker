@@ -992,8 +992,17 @@
 		var transferFill = document.getElementById("easy-transfer-fill");
 		var convertStatus = document.getElementById("easy-convert-status");
 		var convertFill = document.getElementById("easy-convert-fill");
+		var convertProgressBlock = document.getElementById("easy-convert-progress-block");
+		var compressOffStatus = document.getElementById("easy-compress-off-status");
+		var compressCheckbox = document.getElementById("easy-compress-checkbox");
+		var compressLabel = document.getElementById("easy-compress-pref-label");
+		var compressToolsHint = document.getElementById("easy-compress-tools-hint");
 		var viewGalleryWrap = document.getElementById("easy-view-gallery-wrap");
 		var converted = next.library_counts?.converted || 0;
+		var compress = next.compress_media || {};
+		var compressOn = compress.enabled !== false;
+		var compressControlEnabled = compress.control_enabled !== false;
+		var toolsAvailable = compress.tools_available !== false;
 		var ep = next.extract.progress || { completed: 0, percent: 0 };
 		var cp = next.convert.progress || { completed: 0, total: 0, percent: 0 };
 		var photoLibraryHint = document.getElementById("photo-library-hint");
@@ -1005,6 +1014,22 @@
 		var parts;
 		if (photoLibraryHint && libDisplay) {
 			photoLibraryHint.textContent = "Photos and videos are saved under " + libDisplay;
+		}
+		if (compressCheckbox && document.activeElement !== compressCheckbox) {
+			compressCheckbox.checked = compressOn;
+			compressCheckbox.disabled = !compressControlEnabled;
+		}
+		if (compressLabel) {
+			compressLabel.classList.toggle("is-disabled", !compressControlEnabled);
+		}
+		if (compressToolsHint) {
+			compressToolsHint.classList.toggle("panel-hidden", toolsAvailable);
+		}
+		if (convertProgressBlock) {
+			convertProgressBlock.classList.toggle("panel-hidden", !compressOn);
+		}
+		if (compressOffStatus) {
+			compressOffStatus.classList.toggle("panel-hidden", compressOn);
 		}
 		setQrUrlField("easy-qr-url", wifi.upload_url || "");
 		if (wifi.active && uploadQr) {
@@ -1063,10 +1088,10 @@
 			errN = issues.errors || 0;
 			invN = issues.invalid || 0;
 			parts = [];
-			if (errN > 0) {
+			if (compressOn && errN > 0) {
 				parts.push(errN + (errN === 1 ? " image failed to convert" : " images failed to convert"));
 			}
-			if (invN > 0) {
+			if (compressOn && invN > 0) {
 				parts.push(invN + (invN === 1 ? " unsupported image" : " unsupported images"));
 			}
 			if (parts.length) {
@@ -1429,6 +1454,7 @@
 	function pushSettings() {
 		var sel = document.getElementById("select-device");
 		var modeCopy = document.getElementById("chip-copy");
+		var compressCheckbox = document.getElementById("easy-compress-checkbox");
 		var deviceId = sel ? sel.value : "";
 		var body = {
 			library_root: libraryRootForSave(),
@@ -1439,6 +1465,11 @@
 			device_label: deviceLabels[deviceId] || "",
 			source_folders: selectedFolders(),
 		};
+		/* Only send when the control is enabled — avoid overwriting a stored
+		   preference while tools are unavailable (checkbox forced off). */
+		if (compressCheckbox && !compressCheckbox.disabled) {
+			body.compress_media = compressCheckbox.checked;
+		}
 		return api("PUT", "/api/settings", body)
 			.then(function (data) {
 				clearFormBanner();
@@ -2474,9 +2505,19 @@
 			this.setAttribute("aria-expanded", open ? "true" : "false");
 		});
 		bindInfoPanelToggle("btn-easy-qr-info", "easy-qr-info-panel");
+		bindInfoPanelToggle("btn-easy-compress-info", "easy-compress-info-panel");
 		bindInfoPanelToggle("btn-receive-qr-info", "receive-qr-info-panel");
 		bindInfoPanelToggle("btn-send-qr-info", "send-qr-info-panel");
 		bindInfoPanelToggle("btn-wifi-qr-info", "wifi-qr-info-panel");
+		var easyCompressCheckbox = document.getElementById("easy-compress-checkbox");
+		if (easyCompressCheckbox) {
+			easyCompressCheckbox.addEventListener("change", function () {
+				if (easyCompressCheckbox.disabled) {
+					return;
+				}
+				pushSettings();
+			});
+		}
 
 		function switchConnectionMethod(method) {
 			syncConnectionButtons(method);

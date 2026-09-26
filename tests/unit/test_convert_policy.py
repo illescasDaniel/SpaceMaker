@@ -32,5 +32,15 @@ def test_given_running_convert_when_should_auto_drain_then_false():
 	)
 
 
+def test_given_compress_media_off_when_should_auto_drain_then_false():
+	# given / when / then
+	assert not should_auto_drain_after_upload(
+		ui_mode=UiMode.EASY,
+		convert_phase=JobPhase.IDLE,
+		originals_count=2,
+		compress_media=False,
+	)
+
+
 def test_given_concurrent_and_remaining_when_should_requeue_then_true():
 	assert should_requeue_convert_drain(concurrent_with_extract=True, remaining_originals=1)

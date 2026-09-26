@@ -39,6 +39,47 @@ def test_given_fresh_app_when_get_settings_then_defaults() -> None:
 	assert body["extract_controls"]["stop"] is False
 	assert "managed_tools" in body
 	assert "tools_dir" in body["managed_tools"]
+	assert "compress_media" in body
+	assert set(body["compress_media"]) >= {"enabled", "control_enabled", "tools_available"}
+
+
+def test_given_tools_available_when_put_compress_media_off_then_persists(monkeypatch) -> None:
+	# given
+	client = TestClient(create_app())
+	monkeypatch.setattr(
+		client.app.state.services.compression_tools,
+		"available",
+		lambda: True,
+	)
+
+	# when
+	response = client.put("/api/settings", json={"compress_media": False, "library_root": ""})
+
+	# then
+	assert response.status_code == 200
+	assert response.json()["compress_media"]["enabled"] is False
+	assert response.json()["compress_media"]["control_enabled"] is True
+	again = client.get("/api/settings").json()["compress_media"]
+	assert again["enabled"] is False
+
+
+def test_given_tools_unavailable_when_put_compress_media_on_then_stays_off(monkeypatch) -> None:
+	# given
+	client = TestClient(create_app())
+	monkeypatch.setattr(
+		client.app.state.services.compression_tools,
+		"available",
+		lambda: False,
+	)
+
+	# when
+	response = client.put("/api/settings", json={"compress_media": True, "library_root": ""})
+
+	# then
+	body = response.json()["compress_media"]
+	assert body["enabled"] is False
+	assert body["control_enabled"] is False
+	assert body["tools_available"] is False
 
 
 def test_given_fresh_app_when_get_tools_status_then_lists_tools() -> None:

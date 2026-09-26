@@ -18,7 +18,9 @@ from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMe
 from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaProbe
 from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
+from spacemaker.adapters.outbound.preferences.json_store import JsonUserPreferences
 from spacemaker.adapters.outbound.tools.catalog_installer import CatalogToolInstaller
+from spacemaker.adapters.outbound.tools.compression_capability import ManagedCompressionTools
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.delete_gallery_item import DeleteGalleryItem
 from spacemaker.application.easy_session import should_auto_start_wifi_extract
@@ -51,9 +53,11 @@ from spacemaker.bootstrap.paths import (
 	default_library_root,
 	display_user_path,
 	normalize_library_root,
+	user_preferences_path,
 )
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
 from spacemaker.domain.app_module import AppModule, LanSessionKind
+from spacemaker.domain.compress_media import CompressMediaPreference, resolve_compress_media_preference
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.convert_policy import (
 	ConvertStartPolicy,
@@ -100,6 +104,8 @@ class AppServices:
 			CatalogToolInstaller(repo_root=repo_root()),
 			dest_dir=tools_install_root(),
 		)
+		self.user_preferences = JsonUserPreferences(user_preferences_path())
+		self.compression_tools = ManagedCompressionTools(self.managed_tools)
 		self.runner = ToolRunner(path_fallback_allowed=self.managed_tools.permit_path_fallback)
 		self.probe = SubprocessMediaProbe(self.runner)
 		self.converter = SubprocessMediaConverter(self.runner)
@@ -316,8 +322,26 @@ class AppServices:
 			base["library_root_display"] = display_user_path(default_library_root(), trailing_slash=True)
 		base["share_selection"] = list(self._share_selection)
 		base["ui_shell_version"] = UI_SHELL_VERSION
+		compress = self.compress_media_preference()
+		base["compress_media"] = {
+			"enabled": compress.enabled,
+			"control_enabled": compress.control_enabled,
+			"tools_available": compress.tools_available,
+		}
 		base.update(app_release_info())
 		return base
+
+	def compress_media_preference(self) -> CompressMediaPreference:
+		return resolve_compress_media_preference(
+			stored=self.user_preferences.get_compress_media(),
+			tools_available=self.compression_tools.available(),
+		)
+
+	def set_compress_media(self, enabled: bool) -> CompressMediaPreference:
+		"""Persist preference when tools allow; always return effective resolved state."""
+		if self.compression_tools.available():
+			self.user_preferences.set_compress_media(bool(enabled))
+		return self.compress_media_preference()
 
 	def _wifi_upload_snapshot(self) -> dict[str, object]:
 		from spacemaker.bootstrap.lan import lan_ip
@@ -904,10 +928,12 @@ class AppServices:
 		if not library_root:
 			return
 		originals = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
+		compress = self.compress_media_preference()
 		if not should_auto_drain_after_upload(
 			ui_mode=ui_mode,
 			convert_phase=convert_phase,
 			originals_count=originals,
+			compress_media=compress.enabled,
 		):
 			return
 		self.start_convert(policy=ConvertStartPolicy.CONCURRENT_WITH_EXTRACT)
@@ -977,6 +1003,7 @@ class AppServices:
 				# _convert_job_active() would block it from actually starting anything.
 				if not (
 					(control is None or not control.was_stopped())
+					and self.compress_media_preference().enabled
 					and should_requeue_convert_drain(
 						concurrent_with_extract=concurrent_with_extract,
 						remaining_originals=remaining,

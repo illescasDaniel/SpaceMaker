@@ -6,24 +6,17 @@ _Last updated: 2026-09-26_
 
 ## Current focus
 
-**Phase 2 (architecture)** — Photo backup **Compress media** preference.
+**Phases 3–4 complete** — Photo backup **Compress media** preference implemented end-to-end (domain → ports → adapters → settings API → Easy UI).
 
-Wireframe + spec approved 2026-09-26. Domain + ports added; no adapters/UI yet.
-
-## Blockers
-
-Waiting for **explicit architecture approval** in chat before Phase 3 (tests) / Phase 4 (adapters + UI).
+Wireframe, spec, and architecture approved 2026-09-26.
 
 ## Next steps
 
-1. User reviews architecture → reply **architecture approved** (or change requests).
-2. Phase 3: unit tests for `resolve_compress_media_preference`, tools gate, auto-drain when compress off.
-3. Phase 4: JSON/preferences adapter, CompressionTools adapter, settings API + Easy UI.
+- Manual browser check of Photo backup checkbox / info panel / tools-unavailable state (optional polish).
+- Mark ready for review / merge when user is satisfied.
 
 ## Just changed
 
-- `src/spacemaker/domain/compress_media.py` — preference resolution
-- `src/spacemaker/domain/convert_policy.py` — `compress_media` gate on auto-drain
-- `src/spacemaker/ports/outbound/user_preferences.py`
-- `src/spacemaker/ports/outbound/compression_tools.py`
-- `docs/ARCHITECTURE.md`, `memory/decisions.md`
+- Domain/ports (Phase 2) + tests + `JsonUserPreferences`, `ManagedCompressionTools`
+- Settings `compress_media` field; Easy auto-convert gated; production Easy UI
+- Specs/wireframe already on branch
