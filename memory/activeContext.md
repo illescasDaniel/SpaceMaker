@@ -12,9 +12,8 @@ Interpreted user “afp” as **AFC / iPhone USB** (same stack as USB photo back
 
 ## Just changed
 
-- `wireframes/app.html` — Home tile + `#view-usb-file-transfer` (MTP / ADB / iPhone USB; no convert; Documents destination)
-- `wireframes/README.md` — mention fifth module
-- `memory/activeContext.md`, `memory/progress.md`
+- `wireframes/app.html` — USB file transfer polish per design feedback: no step “1”; iPhone limit banner only on AFC; destination / mode / pause-stop copy behind ⓘ panels
+- Earlier: Home tile + `#view-usb-file-transfer`; `wireframes/README.md`; memory
 
 ## Next steps
 
