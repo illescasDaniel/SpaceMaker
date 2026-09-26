@@ -1116,6 +1116,94 @@
 			margin: 0.25rem 0 0.5rem;
 		}
 
+		/* Photo backup — convert preference */
+		.easy-convert-pref {
+			text-align: left;
+			margin: 0 0 1.25rem;
+			padding: 0.65rem 0.75rem;
+			background: var(--surface2);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+		}
+
+		.easy-convert-pref-row {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+		}
+
+		.easy-convert-pref-label {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			font-size: 0.92rem;
+			color: var(--text);
+			cursor: pointer;
+			margin: 0;
+			flex: 1 1 auto;
+			min-width: 0;
+		}
+
+		.easy-convert-pref-label input[type="checkbox"] {
+			width: 1.05rem;
+			height: 1.05rem;
+			accent-color: var(--accent);
+			flex-shrink: 0;
+		}
+
+		.easy-convert-pref-label.is-disabled {
+			color: var(--muted);
+			cursor: not-allowed;
+		}
+
+		.easy-convert-pref .info-btn {
+			flex-shrink: 0;
+		}
+
+		.easy-convert-pref-hint {
+			margin: 0.45rem 0 0;
+			font-size: 0.8rem;
+			color: var(--muted);
+			line-height: 1.4;
+		}
+
+		.easy-convert-pref-hint.panel-hidden {
+			display: none;
+		}
+
+		.easy-convert-info-panel {
+			margin-top: 0.55rem;
+			text-align: left;
+		}
+
+		.easy-convert-info-panel p {
+			margin: 0 0 0.45rem;
+			font-size: 0.82rem;
+			color: var(--muted);
+			line-height: 1.45;
+		}
+
+		.easy-convert-info-panel p:last-child {
+			margin-bottom: 0;
+		}
+
+		.easy-convert-info-panel strong {
+			color: var(--text);
+			font-weight: 600;
+		}
+
+		.easy-convert-off-status {
+			text-align: left;
+			margin-bottom: 1.25rem;
+		}
+
+		.easy-convert-off-status .status-line {
+			font-size: 0.85rem;
+			margin: 0;
+			color: var(--muted);
+		}
+
 		.easy-import-issues {
 			text-align: left;
 			margin: 1.25rem 0 0;
@@ -1523,6 +1611,23 @@
 			</div>
 			<p class="easy-lead">Scan this QR code with your phone camera. Stay on the same Wi‑Fi, then choose photos and videos to send.</p>
 			<p class="folder-hint">Photos and videos are saved under <code>~/Pictures/SpaceMakerLibrary/</code></p>
+			<div class="easy-convert-pref" id="easy-convert-pref">
+				<div class="easy-convert-pref-row">
+					<label class="easy-convert-pref-label" id="easy-convert-pref-label" for="easy-convert-checkbox">
+						<input type="checkbox" id="easy-convert-checkbox" checked />
+						<span>Convert media</span>
+					</label>
+					<button type="button" class="info-btn" id="btn-easy-convert-info" title="About media conversion" aria-expanded="false" aria-controls="easy-convert-info-panel">i</button>
+				</div>
+				<p class="easy-convert-pref-hint panel-hidden" id="easy-convert-tools-hint">
+					Conversion tools are not available on this computer, so convert stays off.
+				</p>
+				<div class="info-panel easy-convert-info-panel" id="easy-convert-info-panel" aria-hidden="true">
+					<p><strong>Photos</strong> are converted to <strong>AVIF</strong>.</p>
+					<p><strong>Videos</strong> are converted to <strong>AV1</strong> when this computer supports hardware encoding. Otherwise videos are kept as received (or use H.264 hardware when available).</p>
+					<p>Your choice is saved and reused the next time you open Photo backup.</p>
+				</div>
+			</div>
 			<div class="easy-progress-block">
 				<p class="label" style="margin: 0;">Transfer</p>
 				<p class="status-line" id="easy-transfer-status">1 file received</p>
@@ -1530,12 +1635,15 @@
 					<div class="progress-fill" id="easy-transfer-fill" style="width: 40%"></div>
 				</div>
 			</div>
-			<div class="easy-progress-block">
+			<div class="easy-progress-block" id="easy-convert-progress-block">
 				<p class="label" style="margin: 0;">Convert</p>
 				<p class="status-line" id="easy-convert-status">1 file converted, waiting for more</p>
 				<div class="progress" role="progressbar" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100">
 					<div class="progress-fill" id="easy-convert-fill" style="width: 65%"></div>
 				</div>
+			</div>
+			<div class="easy-convert-off-status panel-hidden" id="easy-convert-off-status">
+				<p class="status-line">Conversion off — new uploads stay as received (no re-encode).</p>
 			</div>
 			<div class="easy-import-issues" id="easy-import-issues-wrap" role="status" aria-live="polite">
 				<div class="alert alert-warn easy-import-alert" id="easy-import-invalid">
@@ -1570,6 +1678,7 @@
 				Wireframe demo:
 				<button type="button" id="btn-easy-toggle-gallery">Toggle View gallery</button>
 				<button type="button" id="btn-easy-cycle-import-issues">Cycle import issue banners</button>
+				<button type="button" id="btn-easy-cycle-convert-pref">Cycle convert preference</button>
 			</p>
 		</div>
 	</section>
@@ -2157,6 +2266,52 @@
 		document.getElementById('btn-easy-open-error').addEventListener('click', function () {
 			alert('Wireframe: reveal error/ in file manager');
 		});
+		(function () {
+			var checkbox = document.getElementById('easy-convert-checkbox');
+			var label = document.getElementById('easy-convert-pref-label');
+			var toolsHint = document.getElementById('easy-convert-tools-hint');
+			var progressBlock = document.getElementById('easy-convert-progress-block');
+			var offStatus = document.getElementById('easy-convert-off-status');
+			var infoBtn = document.getElementById('btn-easy-convert-info');
+			var infoPanel = document.getElementById('easy-convert-info-panel');
+			var importIssues = document.getElementById('easy-import-issues-wrap');
+			/* 0 = on (default), 1 = off (user choice), 2 = tools unavailable */
+			var convertPrefMode = 0;
+
+			function applyConvertPref() {
+				var toolsMissing = convertPrefMode === 2;
+				var convertOn = convertPrefMode === 0;
+				checkbox.disabled = toolsMissing;
+				checkbox.checked = convertOn;
+				label.classList.toggle('is-disabled', toolsMissing);
+				toolsHint.classList.toggle('panel-hidden', !toolsMissing);
+				progressBlock.classList.toggle('panel-hidden', !convertOn);
+				offStatus.classList.toggle('panel-hidden', convertOn);
+				/* Import issue banners only apply when convert runs */
+				if (!convertOn) {
+					importIssues.classList.add('panel-hidden');
+				}
+			}
+
+			checkbox.addEventListener('change', function () {
+				if (checkbox.disabled) return;
+				convertPrefMode = checkbox.checked ? 0 : 1;
+				applyConvertPref();
+			});
+
+			infoBtn.addEventListener('click', function () {
+				var open = infoPanel.classList.toggle('visible');
+				infoBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+				infoPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+			});
+
+			document.getElementById('btn-easy-cycle-convert-pref').addEventListener('click', function () {
+				convertPrefMode = (convertPrefMode + 1) % 3;
+				applyConvertPref();
+			});
+
+			applyConvertPref();
+		})();
 		(function () {
 			var cycle = 0;
 			var wrap = document.getElementById('easy-import-issues-wrap');
