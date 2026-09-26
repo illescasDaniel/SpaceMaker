@@ -1676,7 +1676,6 @@
 
 		<article class="step-card active-step" aria-labelledby="uft-title">
 			<div class="step-header">
-				<div class="step-num">1</div>
 				<h2 class="step-title" id="uft-title">Transfer</h2>
 			</div>
 			<div class="label-row">
@@ -1724,27 +1723,42 @@
 				<label><input type="checkbox" /> Movies</label>
 				<label><input type="checkbox" /> Music</label>
 			</fieldset>
-			<p class="folder-hint" id="uft-folder-hint">Any file types under the selected folders. Nested paths are preserved.</p>
-			<p class="label">Destination</p>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Destination</p>
+				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
+			</div>
 			<input class="field" type="text" value="/home/user/Documents/SpaceMaker" aria-label="Destination folder" readonly />
-			<p class="folder-hint">Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). No <code>originals/</code> or convert pipeline.</p>
-			<p class="label">Mode</p>
+			<div class="info-panel" id="uft-dest-info-panel" aria-hidden="true">
+				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Nested paths from the phone are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
+			</div>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Mode</p>
+				<button type="button" class="info-btn" id="btn-uft-mode-info" title="Copy vs Move" aria-expanded="false" aria-controls="uft-mode-info-panel">i</button>
+			</div>
 			<div class="row">
 				<button type="button" class="chip selected" id="uft-chip-copy">Copy</button>
 				<button type="button" class="chip" id="uft-chip-move">Move</button>
 			</div>
-			<p class="folder-hint" id="uft-move-hint">Move deletes from the phone after a successful copy when the connection supports it (ADB preferred; MTP/iPhone may fall back to copy-only per file).</p>
+			<div class="info-panel" id="uft-mode-info-panel" aria-hidden="true">
+				<p><strong>Copy</strong> leaves files on the phone. <strong>Move</strong> deletes from the phone after a successful copy when the connection supports it (ADB preferred; MTP/iPhone may fall back to copy-only per file).</p>
+			</div>
 			<p class="status-line" id="uft-status-line"><strong>Status:</strong> <span id="uft-status-text">Not started</span></p>
 			<div class="progress" id="uft-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" hidden>
 				<div class="progress-fill" id="uft-progress-fill" style="width: 0%"></div>
 			</div>
 			<p class="status-line" id="uft-count-line" hidden><span id="uft-count-text">0 files transferred</span></p>
+			<div class="label-row" style="margin-top: 0.75rem;">
+				<p class="label" style="margin: 0;">Actions</p>
+				<button type="button" class="info-btn" id="btn-uft-actions-info" title="Pause and Stop behavior" aria-expanded="false" aria-controls="uft-actions-info-panel">i</button>
+			</div>
 			<div class="extract-actions">
 				<button type="button" class="btn btn-primary" id="btn-uft-start">Start transfer</button>
 				<button type="button" class="btn btn-secondary" id="btn-uft-pause" disabled>Pause</button>
 				<button type="button" class="btn btn-ghost" id="btn-uft-stop" disabled>Stop</button>
 			</div>
-			<p class="folder-hint" style="margin-top: 0.5rem;">Pause finishes the current file; Stop ends the queue after the current file.</p>
+			<div class="info-panel" id="uft-actions-info-panel" aria-hidden="true">
+				<p>Pause finishes the current file, then waits. Stop ends the queue after the current file; completed files stay in the destination.</p>
+			</div>
 			<div class="easy-view-gallery-wrap" id="uft-open-folder-wrap" hidden>
 				<button type="button" class="btn btn-primary" id="btn-uft-open-folder">Open destination folder</button>
 			</div>
@@ -2492,8 +2506,6 @@
 
 		/* USB file transfer module (cable-only demo) */
 		(function () {
-			var btnInfo = document.getElementById('btn-uft-connection-info');
-			var infoPanel = document.getElementById('uft-connection-info-panel');
 			var btnMtp = document.getElementById('btn-uft-conn-mtp');
 			var btnAdb = document.getElementById('btn-uft-conn-adb');
 			var btnAfc = document.getElementById('btn-uft-conn-afc');
@@ -2524,16 +2536,25 @@
 				'<legend class="sr-only">Device folders</legend>' +
 				'<label><input type="checkbox" checked /> Camera (DCIM)</label>';
 
-			btnInfo.addEventListener('click', function () {
-				var open = infoPanel.classList.toggle('visible');
-				btnInfo.setAttribute('aria-expanded', open ? 'true' : 'false');
-				infoPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
-			});
+			function bindInfoToggle(btnId, panelId) {
+				var btn = document.getElementById(btnId);
+				var panel = document.getElementById(panelId);
+				btn.addEventListener('click', function () {
+					var open = panel.classList.toggle('visible');
+					btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+					panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+				});
+			}
+			bindInfoToggle('btn-uft-connection-info', 'uft-connection-info-panel');
+			bindInfoToggle('btn-uft-dest-info', 'uft-dest-info-panel');
+			bindInfoToggle('btn-uft-mode-info', 'uft-mode-info-panel');
+			bindInfoToggle('btn-uft-actions-info', 'uft-actions-info-panel');
 
 			function setMethod(method) {
 				btnMtp.classList.toggle('active', method === 'mtp');
 				btnAdb.classList.toggle('active', method === 'adb');
 				btnAfc.classList.toggle('active', method === 'afc');
+				/* Limit banner only when iPhone / AFC is the active connection */
 				iphoneBanner.hidden = method !== 'afc';
 				if (method === 'mtp') {
 					statusText.textContent = 'Samsung Galaxy S24 · Connected via MTP';
