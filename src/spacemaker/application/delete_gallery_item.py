@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
-
+from spacemaker.application.gallery_cache_cleanup import delete_gallery_derived_caches
 from spacemaker.domain.gallery_export import is_safe_gallery_relative_path
 from spacemaker.domain.library import LibraryFolder
 from spacemaker.ports.outbound.filesystem import FileSystemPort
@@ -18,7 +17,5 @@ class DeleteGalleryItem:
 		if not self._filesystem.exists(full):
 			return False
 		self._filesystem.delete_file(full)
-		thumb = Path(library_root) / ".thumbnails" / Path(relative_path).with_suffix(".jpg")
-		if thumb.is_file():
-			self._filesystem.delete_file(str(thumb))
+		delete_gallery_derived_caches(self._filesystem, library_root, relative_path)
 		return True

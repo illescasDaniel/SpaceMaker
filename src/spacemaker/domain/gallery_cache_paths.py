@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+from pathlib import Path
 
 from spacemaker.domain.gallery_export import ExportFormat
 from spacemaker.domain.library_paths import EXPORTS_DIR_NAME, THUMBNAILS_DIR_NAME
@@ -20,14 +20,14 @@ def _append_cache_extension(relative_path: str, extension: str) -> str:
 def thumbnail_path(library_root: str, relative_path: str) -> str:
 	"""Absolute path for a gallery thumbnail cache file (append .jpg to relative path)."""
 	rel = _append_cache_extension(relative_path, ".jpg")
-	return str(PurePosixPath(library_root) / THUMBNAILS_DIR_NAME / rel)
+	return str(Path(library_root) / THUMBNAILS_DIR_NAME / Path(rel))
 
 
 def export_cache_path(library_root: str, relative_path: str, export_format: ExportFormat) -> str:
 	"""Absolute path for a friendly-export cache file (append .jpg or .mp4 to relative path)."""
 	ext = ".jpg" if export_format is ExportFormat.JPEG else ".mp4"
 	rel = _append_cache_extension(relative_path, ext)
-	return str(PurePosixPath(library_root) / EXPORTS_DIR_NAME / rel)
+	return str(Path(library_root) / EXPORTS_DIR_NAME / Path(rel))
 
 
 def export_cache_paths_for_relative(library_root: str, relative_path: str) -> tuple[str, ...]:
