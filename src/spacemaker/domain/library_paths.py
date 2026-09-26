@@ -6,6 +6,9 @@ from pathlib import PurePosixPath
 # Directory names under library buckets that must not be converted or counted.
 SKIPPED_LIBRARY_DIR_NAMES: frozenset[str] = frozenset({".thumbnails", ".exports"})
 
+THUMBNAILS_DIR_NAME = ".thumbnails"
+EXPORTS_DIR_NAME = ".exports"
+
 
 def skip_library_relative_path(relative: str) -> bool:
 	normalized = relative.replace("\\", "/")

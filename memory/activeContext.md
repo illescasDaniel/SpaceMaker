@@ -6,23 +6,27 @@ _Last updated: 2026-09-26_
 
 ## Current focus
 
-Gallery orphan cache cleanup (thumbs + exports). Plan approved; **Phase 1 SPEC
-written — waiting on explicit spec approval in chat** before domain/ports or
-`src/spacemaker/` implementation (SDD gate).
+Gallery orphan cache cleanup. Spec approved. **Phase 2 domain helpers landed —
+waiting on explicit architecture approval** before tests / use-case / adapter
+wiring (SDD gate).
 
-## Just changed
+## Architecture (Phase 2)
 
-- `specs/gallery/SPEC.md` — in-app delete and external sync clean index +
-  `.thumbnails/` + `.exports/`; injective path-mirrored cache naming; no
-  cache paths in SQLite; fixed stale “delete: future spec” out-of-scope line.
-- `docs/playbooks/SpaceMaker-adaptations.md` — export cache naming note.
+No new ports — `FileSystemPort` already covers exists/delete. Domain:
+
+- [`gallery_cache_paths.py`](src/spacemaker/domain/gallery_cache_paths.py):
+  `thumbnail_path`, `export_cache_path`, `export_cache_paths_for_relative`,
+  `is_legacy_hash_export_filename`
+- [`library_paths.py`](src/spacemaker/domain/library_paths.py):
+  `THUMBNAILS_DIR_NAME` / `EXPORTS_DIR_NAME` constants
+- Legacy `export_cache_filename` kept until Phase 4 rewires
+  `ExportFriendlyMedia` / delete / sync
 
 ## Next steps
 
-1. User: reply **spec approved** (or requested changes) on
-   `specs/gallery/SPEC.md`.
-2. Then: domain helpers → ExportFriendlyMedia / thumb generator →
-   DeleteGalleryItem + SyncGalleryIndex → unit tests → memory wrap-up.
+1. User: reply **architecture approved** (or requested changes).
+2. Then: Phases 3–4 — unit tests + ExportFriendlyMedia / thumb generator /
+   DeleteGalleryItem / SyncGalleryIndex + remove legacy hash helper.
 
 ## Run
 

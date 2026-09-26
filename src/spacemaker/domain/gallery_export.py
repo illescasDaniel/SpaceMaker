@@ -50,6 +50,7 @@ def export_cache_filename(
 	source_size: int,
 	export_format: ExportFormat,
 ) -> str:
+	"""Legacy flat-hash export name. Prefer gallery_cache_paths.export_cache_path."""
 	ext = "jpg" if export_format is ExportFormat.JPEG else "mp4"
 	key = f"{relative_path}\0{source_mtime_ns}\0{source_size}\0{export_format.value}"
 	digest = hashlib.sha256(key.encode()).hexdigest()[:20]
