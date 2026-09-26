@@ -1229,6 +1229,89 @@
 			margin: 0.25rem 0 0.5rem;
 		}
 
+		.easy-compress-pref {
+			text-align: left;
+			margin: 0 0 1.25rem;
+			padding: 0.65rem 0.75rem;
+			background: var(--surface2);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+		}
+
+		.easy-compress-pref-row {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+		}
+
+		.easy-compress-pref-label {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			font-size: 0.92rem;
+			color: var(--text);
+			cursor: pointer;
+			margin: 0;
+			flex: 1 1 auto;
+			min-width: 0;
+		}
+
+		.easy-compress-pref-label input[type="checkbox"] {
+			width: 1.05rem;
+			height: 1.05rem;
+			accent-color: var(--accent);
+			flex-shrink: 0;
+		}
+
+		.easy-compress-pref-label.is-disabled {
+			color: var(--muted);
+			cursor: not-allowed;
+		}
+
+		.easy-compress-pref .info-btn {
+			flex-shrink: 0;
+		}
+
+		.easy-compress-pref-hint {
+			margin: 0.45rem 0 0;
+			font-size: 0.8rem;
+			color: var(--muted);
+			line-height: 1.4;
+		}
+
+		.easy-compress-info-panel {
+			margin-top: 0.55rem;
+			text-align: left;
+		}
+
+		.easy-compress-info-panel p {
+			margin: 0 0 0.45rem;
+			font-size: 0.82rem;
+			color: var(--muted);
+			line-height: 1.45;
+		}
+
+		.easy-compress-info-panel p:last-child {
+			margin-bottom: 0;
+		}
+
+		.easy-compress-info-panel strong {
+			color: var(--text);
+			font-weight: 600;
+		}
+
+		.easy-compress-off-status {
+			text-align: left;
+			margin-bottom: 1.25rem;
+		}
+
+		.easy-compress-off-status .status-line {
+			font-size: 0.85rem;
+			margin: 0;
+			color: var(--muted);
+		}
+
 		.easy-view-gallery-wrap {
 			margin-top: 2rem;
 			padding-top: 1.5rem;
@@ -1566,6 +1649,23 @@
 			</div>
 			<p class="easy-lead">Scan this QR code with your phone camera. Stay on the same Wi‑Fi, then choose photos and videos to send.</p>
 			<p class="folder-hint" id="photo-library-hint"></p>
+			<div class="easy-compress-pref" id="easy-compress-pref">
+				<div class="easy-compress-pref-row">
+					<label class="easy-compress-pref-label" id="easy-compress-pref-label" for="easy-compress-checkbox">
+						<input type="checkbox" id="easy-compress-checkbox" checked />
+						<span>Compress media</span>
+					</label>
+					<button type="button" class="info-btn" id="btn-easy-compress-info" title="About media compression" aria-expanded="false" aria-controls="easy-compress-info-panel">i</button>
+				</div>
+				<p class="easy-compress-pref-hint panel-hidden" id="easy-compress-tools-hint">
+					Compression tools are not available on this computer, so compress stays off.
+				</p>
+				<div class="info-panel easy-compress-info-panel" id="easy-compress-info-panel" aria-hidden="true">
+					<p>Compress media to <strong>save disk space</strong> and keep photos and videos <strong>web-compatible</strong> for browsing in the gallery.</p>
+					<p><strong>How:</strong> photos convert to <strong>AVIF</strong>. Videos convert to <strong>AV1</strong> when this computer supports hardware encoding; otherwise they stay as received (or use H.264 hardware when available).</p>
+					<p>Your choice is saved and reused the next time you open Photo backup.</p>
+				</div>
+			</div>
 			<div class="easy-progress-block">
 				<p class="label" style="margin: 0;">Transfer</p>
 				<p class="status-line" id="easy-transfer-status">0 files received</p>
@@ -1573,12 +1673,15 @@
 					<div class="progress-fill" id="easy-transfer-fill" style="width: 0%"></div>
 				</div>
 			</div>
-			<div class="easy-progress-block">
+			<div class="easy-progress-block" id="easy-convert-progress-block">
 				<p class="label" style="margin: 0;">Convert</p>
 				<p class="status-line" id="easy-convert-status">Waiting for files</p>
 				<div class="progress" id="easy-convert-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
 					<div class="progress-fill" id="easy-convert-fill" style="width: 0%"></div>
 				</div>
+			</div>
+			<div class="easy-compress-off-status panel-hidden" id="easy-compress-off-status">
+				<p class="status-line">Compression off — new uploads stay as received (no re-encode).</p>
 			</div>
 			<p class="status-line easy-import-issues panel-hidden" id="easy-import-issues" role="status"></p>
 			<div class="easy-view-gallery-wrap panel-hidden" id="easy-view-gallery-wrap">

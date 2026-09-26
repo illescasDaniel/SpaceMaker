@@ -137,6 +137,11 @@ def spacemaker_data_dir(*, tools_dir: Path | None = None) -> Path:
 	return (tools_dir or managed_tools_dir()).parent
 
 
+def user_preferences_path(*, tools_dir: Path | None = None) -> Path:
+	"""Disk-backed preferences (e.g. Compress media) next to managed tools data."""
+	return spacemaker_data_dir(tools_dir=tools_dir) / "preferences.json"
+
+
 def components_setup_complete_marker(*, tools_dir: Path | None = None) -> Path:
 	return spacemaker_data_dir(tools_dir=tools_dir) / "components_setup_complete"
 

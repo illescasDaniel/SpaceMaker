@@ -157,6 +157,7 @@ class SettingsBody(BaseModel):
 	device_id: str = ""
 	device_label: str = ""
 	source_folders: list[str] | None = None
+	compress_media: bool | None = None
 
 
 def _no_cache_file(path: Path) -> FileResponse:
@@ -286,42 +287,49 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.put("/api/settings")
 	def put_settings(request: Request, body: SettingsBody) -> dict[str, object]:
 		require_loopback(request)
+		# Compress media may change during an active receive session.
+		compress_turned_on = False
+		if body.compress_media is not None:
+			before = services.compress_media_preference().enabled
+			after = services.set_compress_media(body.compress_media)
+			compress_turned_on = after.enabled and not before
 		with services.session._lock:
 			if body.ui_mode is not None:
 				services.session.ui_mode = body.ui_mode
-			if services.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
-				services.push_state()
-				return services.enriched_snapshot()
-			library_root = normalize_library_root(body.library_root)
-			if library_root and not is_absolute_library_path(library_root):
-				raise HTTPException(status_code=400, detail="library_root must be an absolute path")
-			previous_method = services.session.connection_method
-			services.session.library_root = library_root
-			services.session.connection_method = body.connection_method
-			if body.connection_method is ConnectionMethod.WIFI:
-				services.session.transfer_mode = TransferMode.COPY
-			else:
-				services.session.transfer_mode = body.transfer_mode
-			if body.connection_method is not previous_method:
-				services.session.device_id = ""
-				services.session.device_label = ""
-			device_id = body.device_id.strip()
-			if body.connection_method is ConnectionMethod.WIFI:
-				services.session.device_id = ""
-				services.session.device_label = ""
-			else:
-				repo = services.devices_for(body.connection_method)
-				known = {d.device_id: d.label for d in repo.list_devices()}
-				if device_id and device_id in known:
-					services.session.device_id = device_id
-					services.session.device_label = known[device_id]
+			extract_busy = services.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+			if not extract_busy:
+				library_root = normalize_library_root(body.library_root)
+				if library_root and not is_absolute_library_path(library_root):
+					raise HTTPException(status_code=400, detail="library_root must be an absolute path")
+				previous_method = services.session.connection_method
+				services.session.library_root = library_root
+				services.session.connection_method = body.connection_method
+				if body.connection_method is ConnectionMethod.WIFI:
+					services.session.transfer_mode = TransferMode.COPY
 				else:
+					services.session.transfer_mode = body.transfer_mode
+				if body.connection_method is not previous_method:
 					services.session.device_id = ""
 					services.session.device_label = ""
-			if body.source_folders is not None:
-				services.session.source_folders = [f.lower() for f in body.source_folders]
-			if services.session.library_root:
-				services.filesystem.ensure_library_folders(services.session.library_root)
+				device_id = body.device_id.strip()
+				if body.connection_method is ConnectionMethod.WIFI:
+					services.session.device_id = ""
+					services.session.device_label = ""
+				else:
+					repo = services.devices_for(body.connection_method)
+					known = {d.device_id: d.label for d in repo.list_devices()}
+					if device_id and device_id in known:
+						services.session.device_id = device_id
+						services.session.device_label = known[device_id]
+					else:
+						services.session.device_id = ""
+						services.session.device_label = ""
+				if body.source_folders is not None:
+					services.session.source_folders = [f.lower() for f in body.source_folders]
+				if services.session.library_root:
+					services.filesystem.ensure_library_folders(services.session.library_root)
+		if compress_turned_on:
+			services.maybe_start_convert_drain()
 		services.push_state()
 		return services.enriched_snapshot()
 

@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-26 — Photo backup Compress media: disk preferences + Easy UI (full SDD)
+
+- **Context:** Approved wireframe + easy-mode spec + architecture for a **Compress media** checkbox on Photo backup (Easy): default on, forced off when compression CLIs missing, persisted across launches, gates Easy auto-convert.
+- **Decision:** (1) Domain `compress_media.py` + ports `UserPreferencesPort` / `CompressionToolsPort`. (2) Adapter `JsonUserPreferences` at `{spacemaker_data_dir}/preferences.json` (atomic write); `ManagedCompressionTools` over managed-tool snapshot (`magick` + `ffmpeg`). (3) `PUT /api/settings` accepts `compress_media` even during extract; turning on resumes Easy drain. Client omits the field when the checkbox is disabled so a stored “on” is not overwritten while tools are missing. (4) Easy UI matches wireframe (checkbox, ⓘ why/how, tools hint, hide Convert progress when off). Hardware encoders are **not** part of the tools gate.
+- **Rationale:** First disk-backed user preference separate from session-only `AppSession`; JSON next to managed-tools data reuses existing OS data-dir layout. Verified live: tools-unavailable forced-off + info panel; unit/integration tests green (unrelated pre-existing raw/magick unit failure when ImageMagick absent).
+
 ## 2026-09-25 — Gallery item detail: real-thumbnail-first progressive loading, photo-app open animation, slide transitions on prev/next; fixed a `.gallery-item-stage` centering regression
 
 - **Context:** User asked for the gallery photo-detail flow to feel like an app, not a website: opening a photo should animate like an entrance rather than a hard cut; prev/next navigation should slide; and while the full image/video is still loading, the preview area should show the item's real thumbnail plus a spinner instead of collapsing to near-zero height and jumping once the full media arrives. Confirmed with the user that every saved photo already gets a generated thumbnail in production (`SubprocessThumbnailGenerator`, served at `GET /thumbs/{relative_path}`), so the placeholder is the real thumbnail, not a synthetic blur. Full SDD cycle run: Phase 0 wireframe (`wireframes/app.html`) approved ("i like this, that's the idea... design is fine, let's advance"), Phase 1 spec (`specs/ui-motion/SPEC.md`, `specs/gallery/SPEC.md`) approved ("proceed"), Phase 2 architecture approved ("okay") before Phase 4 touched production code.
