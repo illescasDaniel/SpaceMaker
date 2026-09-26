@@ -2,11 +2,11 @@
 
 Append-only log (newest first). Never rewrite history.
 
-## 2026-09-26 — Photo backup Compress media: domain preference + outbound ports (disk-backed; tools gate)
+## 2026-09-26 — Photo backup Compress media: disk preferences + Easy UI (full SDD)
 
-- **Context:** Approved wireframe + easy-mode spec for a **Compress media** checkbox on Photo backup (Easy): default on, forced off when compression CLIs missing, persisted across launches, gates Easy auto-convert. Settings today are mostly in-memory `AppSession`; there was no preference store or domain type for this flag.
-- **Decision (Phase 2 architecture):** (1) `domain/compress_media.py` — `CompressMediaPreference`, `compression_tools_available` (requires `magick` + `ffmpeg` not `MISSING`), `resolve_compress_media_preference(stored, tools_available)` (tools missing → off + disabled; unset stored → default on). (2) Outbound ports `UserPreferencesPort` (`get`/`set_compress_media`, `None` = never set) and `CompressionToolsPort` (`available()`). (3) `should_auto_drain_after_upload(..., compress_media=True)` gates Easy auto-convert. Adapters (JSON/config file, managed-tools wrap) and UI deferred to Phase 3–4 after architecture approval. Hardware encoders are **not** part of the tools gate (convert-media already move-as-is / H.264 HW without AV1).
-- **Rationale:** Keeps encode policy in convert-media; Easy only owns on/off + persistence. Separate ports avoid coupling preferences to `ManagedToolsService` internals. Default-true kwarg on auto-drain keeps existing callers green until wiring lands.
+- **Context:** Approved wireframe + easy-mode spec + architecture for a **Compress media** checkbox on Photo backup (Easy): default on, forced off when compression CLIs missing, persisted across launches, gates Easy auto-convert.
+- **Decision:** (1) Domain `compress_media.py` + ports `UserPreferencesPort` / `CompressionToolsPort`. (2) Adapter `JsonUserPreferences` at `{spacemaker_data_dir}/preferences.json` (atomic write); `ManagedCompressionTools` over managed-tool snapshot (`magick` + `ffmpeg`). (3) `PUT /api/settings` accepts `compress_media` even during extract; turning on resumes Easy drain. Client omits the field when the checkbox is disabled so a stored “on” is not overwritten while tools are missing. (4) Easy UI matches wireframe (checkbox, ⓘ why/how, tools hint, hide Convert progress when off). Hardware encoders are **not** part of the tools gate.
+- **Rationale:** First disk-backed user preference separate from session-only `AppSession`; JSON next to managed-tools data reuses existing OS data-dir layout. Verified live: tools-unavailable forced-off + info panel; unit/integration tests green (unrelated pre-existing raw/magick unit failure when ImageMagick absent).
 
 ## 2026-09-25 — Gallery item detail: real-thumbnail-first progressive loading, photo-app open animation, slide transitions on prev/next; fixed a `.gallery-item-stage` centering regression
 
