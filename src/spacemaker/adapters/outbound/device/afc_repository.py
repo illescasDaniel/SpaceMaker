@@ -80,8 +80,8 @@ class AfcDeviceRepository:
 		return self._walk_media(mount)
 
 	def list_file_paths(self, device_id: str) -> list[str]:
-		_ = device_id
-		raise NotImplementedError("USB file transfer listing — implement in Phase 4")
+		mount = self._mount_path(device_id)
+		return self._walk_all_files(mount)
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		mount = self._mount_path(device_id)
@@ -145,7 +145,12 @@ class AfcDeviceRepository:
 		return mount_dir
 
 	def _walk_media(self, root: Path) -> list[str]:
-		allowed = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+		return self._walk_under_tops(root, allowed=IMAGE_EXTENSIONS | VIDEO_EXTENSIONS)
+
+	def _walk_all_files(self, root: Path) -> list[str]:
+		return self._walk_under_tops(root, allowed=None)
+
+	def _walk_under_tops(self, root: Path, *, allowed: frozenset[str] | None) -> list[str]:
 		paths: list[str] = []
 		scanned_top = False
 		for top_name in _AFC_TOP_DIRS:
@@ -159,13 +164,18 @@ class AfcDeviceRepository:
 			paths = [self._ensure_dcim_prefix(rel) for rel in paths]
 		return sorted(set(paths))
 
-	def _walk_subtree(self, tree_root: Path, path_base: Path, allowed: frozenset[str]) -> list[str]:
+	def _walk_subtree(
+		self,
+		tree_root: Path,
+		path_base: Path,
+		allowed: frozenset[str] | None,
+	) -> list[str]:
 		paths: list[str] = []
 		for dirpath, dirnames, filenames in os.walk(tree_root, followlinks=False):
 			dirnames[:] = [name for name in dirnames if name not in SKIPPED_LIBRARY_DIR_NAMES]
 			for name in filenames:
 				ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-				if ext not in allowed:
+				if allowed is not None and ext not in allowed:
 					continue
 				full = Path(dirpath) / name
 				rel = full.relative_to(path_base).as_posix()
