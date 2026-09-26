@@ -5,7 +5,7 @@ Source of truth for behavior. Wireframes: [wireframes/app.html](../wireframes/ap
 | Spec | Scope |
 |------|--------|
 | [home-modules/SPEC.md](home-modules/SPEC.md) | Home hub tiles, module routing, Photo/USB/receive/send entry |
-| [easy-mode/SPEC.md](easy-mode/SPEC.md) | Photo backup UI, auto Wi‑Fi receive, convert-as-received, gallery QR |
+| [easy-mode/SPEC.md](easy-mode/SPEC.md) | Photo backup UI, Compress media preference, auto Wi‑Fi receive, convert-as-received, gallery QR |
 | [receive-files/SPEC.md](receive-files/SPEC.md) | Phone → PC uploads to Documents/SpaceMaker |
 | [send-files/SPEC.md](send-files/SPEC.md) | PC → phone share via QR `/share` |
 | [main-wizard/SPEC.md](main-wizard/SPEC.md) | USB three-step wizard, progress, error/invalid warnings |

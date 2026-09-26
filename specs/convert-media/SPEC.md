@@ -12,7 +12,7 @@
 ## Triggers & routing
 
 - **Start (Advanced):** User clicks **Start convert** when enabled (see [main-wizard](../main-wizard/SPEC.md): enabled when `originals/` non-empty, including during extract; click **stops extract first** then converts).
-- **Start (Easy):** [easy-mode](../easy-mode/SPEC.md) — after each Wi‑Fi upload into `originals/`, convert drains automatically **without** stopping extract; re-queues while files remain.
+- **Start (Easy):** [easy-mode](../easy-mode/SPEC.md) — after each Wi‑Fi upload into `originals/`, when **Compress media** is on and tools are available, convert drains automatically **without** stopping extract; re-queues while files remain. When Compress media is off, Easy does not start convert (uploads stay in `originals/`).
 - **Input:** All files under `originals/` (recursive), processed in deterministic order (e.g. sorted relative path).
 - **Output:** Each source file ends with no copy left in `originals/` except transient in-flight (success, move-as-is, `error/`, or `invalid/`).
 
