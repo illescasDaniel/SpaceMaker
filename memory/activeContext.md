@@ -6,22 +6,24 @@ _Last updated: 2026-09-26_
 
 ## Current focus
 
-**Phase 1 (spec)** — Photo backup **Compress media** preference. Wireframe approved 2026-09-26.
+**Phase 2 (architecture)** — Photo backup **Compress media** preference.
 
-Updated `specs/easy-mode/SPEC.md` (+ cross-ref in `specs/convert-media/SPEC.md`, `specs/README.md`).
+Wireframe + spec approved 2026-09-26. Domain + ports added; no adapters/UI yet.
 
 ## Blockers
 
-Waiting for **explicit spec approval** in chat before Phase 2 (ports/domain).
+Waiting for **explicit architecture approval** in chat before Phase 3 (tests) / Phase 4 (adapters + UI).
 
 ## Next steps
 
-1. User reviews `specs/easy-mode/SPEC.md` → reply **spec approved** (or change requests).
-2. Phase 2: domain preference + ports (disk-backed preference, tools-available signal, Easy convert gate).
+1. User reviews architecture → reply **architecture approved** (or change requests).
+2. Phase 3: unit tests for `resolve_compress_media_preference`, tools gate, auto-drain when compress off.
+3. Phase 4: JSON/preferences adapter, CompressionTools adapter, settings API + Easy UI.
 
 ## Just changed
 
-- `specs/easy-mode/SPEC.md` — Compress media preference BDD + UI rules
-- `specs/convert-media/SPEC.md` — Easy start gated on Compress media
-- `specs/README.md` — easy-mode row wording
-- `wireframes/app.html` — approved wireframe (Phase 0)
+- `src/spacemaker/domain/compress_media.py` — preference resolution
+- `src/spacemaker/domain/convert_policy.py` — `compress_media` gate on auto-drain
+- `src/spacemaker/ports/outbound/user_preferences.py`
+- `src/spacemaker/ports/outbound/compression_tools.py`
+- `docs/ARCHITECTURE.md`, `memory/decisions.md`

@@ -77,6 +77,11 @@ State is:
   next gallery load.
 - **In-process/in-memory** for session/runtime state (`AppSession`, held on
   `AppServices.session`).
+- **Disk-backed user preferences** via `UserPreferencesPort` (e.g. Photo backup
+  **Compress media** on/off) — survive app relaunch; distinct from session-only
+  fields like `ui_mode`. Compression tool readiness is exposed through
+  `CompressionToolsPort` (magick + ffmpeg resolvable), with effective checkbox
+  state resolved in `domain/compress_media.py`.
 - Long-running work (extract/convert) runs on a `ThreadPoolExecutor` owned by
   `AppServices`, tracked via `Future` handles rather than a job table.
 
