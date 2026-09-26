@@ -6,18 +6,18 @@ _Last updated: 2026-09-26_
 
 ## Current focus
 
-**USB file transfer** — SDD Phase 2 architecture done; awaiting **architecture approval**.
-
-Wireframe + spec approved 2026-09-26.
+**USB file transfer** — Phases 0–4 complete on this branch (wireframe → spec →
+architecture → tests → adapters + production UI). Ready for user verification
+on a machine with a phone.
 
 ## Just changed
 
-- Domain: `transfer_folders.py`, `usb_file_transfer.py`, `AppModule.USB_FILE_TRANSFER`
-- Port: `DeviceRepositoryPort.list_file_paths` (+ adapter stubs / fake)
-- Use case: `application/transfer_usb_files.py`
-- Docs: ARCHITECTURE, decisions, SPEC metadata
+- Domain/ports/use case + `list_file_paths` on MTP/ADB/AFC
+- Session/services/API: `/api/usb-transfer/*`, `transfer_folders`, module enter
+- Production `index.html` + `app.js` Home tile and Transfer screen
+- Unit tests for folders, domain helpers, use case, AFC listing
 
 ## Next steps
 
-1. User replies **architecture approved** (or changes).
-2. Then Phases 3–4: unit tests from BDD, then adapter `list_file_paths` + web UI/wiring.
+- Manual check: Home → USB file transfer → MTP/ADB device → Start transfer
+- Optional: mark draft PR ready when happy
