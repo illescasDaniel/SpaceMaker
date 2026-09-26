@@ -25,10 +25,11 @@ Composition root: `bootstrap.services.create_app()` wires outbound adapters into
 
 ## Runtime flow
 
-1. **Home hub** — four modules: Photo backup (Wi‑Fi library receive), USB photo backup (wizard), Receive files (Documents), Send files (PC → phone). See [specs/home-modules/SPEC.md](../specs/home-modules/SPEC.md).
+1. **Home hub** — five modules: Photo backup (Wi‑Fi library receive), USB photo backup (wizard), **USB file transfer** (cable → Documents, no convert), Receive files (Documents), Send files (PC → phone). See [specs/home-modules/SPEC.md](../specs/home-modules/SPEC.md), [specs/usb-file-transfer/SPEC.md](../specs/usb-file-transfer/SPEC.md).
 2. **Extract** — Wi‑Fi QR upload and/or `DeviceRepository` (MTP via **libmtp**, ADB via **adbutils** + `adb`) into `originals/`. Managed tool dir → download → `PATH` after setup. See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md).
-3. **Convert** — reads `originals/`, writes `converted/`, or routes failures to `error/` / `invalid/`.
-4. **Gallery** — indexes `converted/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, and share sessions.
+3. **USB file transfer** — `TransferUsbFiles` + `DeviceRepository.list_file_paths` (MTP/ADB/AFC) into `documents_directory()/SpaceMaker/`; reuses pause/stop control; no convert/gallery.
+4. **Convert** — reads `originals/`, writes `converted/`, or routes failures to `error/` / `invalid/`.
+5. **Gallery** — indexes `converted/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, and share sessions.
 
 Progress for extract and convert streams over WebSockets to the desktop web UI (loopback only). Phone clients use HTTP APIs and tokenized upload/share/receive endpoints.
 

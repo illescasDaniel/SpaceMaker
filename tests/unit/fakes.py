@@ -93,6 +93,7 @@ class FakeFileSystem:
 class FakeDeviceRepository:
 	devices: list[DeviceInfo] = field(default_factory=list)
 	media_paths: list[str] = field(default_factory=list)
+	file_paths: list[str] | None = None
 	sizes: dict[str, int] = field(default_factory=dict)
 	pulled: list[tuple[str, str, str]] = field(default_factory=list)
 	deleted: list[tuple[str, str]] = field(default_factory=list)
@@ -102,6 +103,12 @@ class FakeDeviceRepository:
 
 	def list_media_paths(self, device_id: str) -> list[str]:
 		_ = device_id
+		return list(self.media_paths)
+
+	def list_file_paths(self, device_id: str) -> list[str]:
+		_ = device_id
+		if self.file_paths is not None:
+			return list(self.file_paths)
 		return list(self.media_paths)
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:

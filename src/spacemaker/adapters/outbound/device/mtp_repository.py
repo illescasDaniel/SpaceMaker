@@ -27,6 +27,10 @@ class MtpDeviceRepository:
 			return self._walk_media(mount)
 		return []
 
+	def list_file_paths(self, device_id: str) -> list[str]:
+		_ = device_id
+		raise NotImplementedError("USB file transfer listing — implement in Phase 4")
+
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		mount = Path(device_id)
 		if mount.is_dir() and self._is_gvfs_mount(mount):

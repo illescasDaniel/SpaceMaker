@@ -49,6 +49,10 @@ class AdbDeviceRepository:
 					found.add(path)
 		return sorted(found)
 
+	def list_file_paths(self, device_id: str) -> list[str]:
+		_ = device_id
+		raise NotImplementedError("USB file transfer listing — implement in Phase 4")
+
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		device = self._client.device(device_id)
 		output = self._shell_text(device, f"stat -c %s {device_path} 2>/dev/null || wc -c < {device_path}")

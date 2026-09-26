@@ -79,6 +79,10 @@ class AfcDeviceRepository:
 		mount = self._mount_path(device_id)
 		return self._walk_media(mount)
 
+	def list_file_paths(self, device_id: str) -> list[str]:
+		_ = device_id
+		raise NotImplementedError("USB file transfer listing — implement in Phase 4")
+
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		mount = self._mount_path(device_id)
 		full = mount / device_path.lstrip("/")

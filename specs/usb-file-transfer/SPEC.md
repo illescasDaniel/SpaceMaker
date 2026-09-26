@@ -4,9 +4,12 @@
 
 - **Feature:** Copy or move arbitrary files from a phone over USB into Documents — no conversion
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-usb-file-transfer` + Home tile `usb_file_transfer`. **Wireframe approved** 2026-09-26
+- **Spec approved:** 2026-09-26
+- **Architecture:** pending approval — `TransferUsbFiles`, `TransferFolder`, `DeviceRepositoryPort.list_file_paths`
 - **Related:** [home-modules](../home-modules/SPEC.md), [receive-files](../receive-files/SPEC.md) (same Documents root), [extract-media](../extract-media/SPEC.md) (shared MTP / ADB / AFC device backends; different destination and file scope)
-- **Use case (planned):** `TransferUsbFiles` (name may refine in Phase 2)
-- **Ports (planned):** reuse outbound `DeviceRepository` adapters; destination via Documents path (not photo library `originals/`)
+- **Use case:** `TransferUsbFiles` (`application/transfer_usb_files.py`)
+- **Ports:** outbound `DeviceRepositoryPort` (+ `list_file_paths`); `FileSystemPort`; destination `documents_directory()/SpaceMaker/` (not photo library `originals/`)
+- **Domain:** `TransferFolder`, `usb_file_transfer` helpers; `AppModule.USB_FILE_TRANSFER`
 
 ## Triggers & routing
 
