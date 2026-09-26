@@ -28,8 +28,10 @@ class MtpDeviceRepository:
 		return []
 
 	def list_file_paths(self, device_id: str) -> list[str]:
-		_ = device_id
-		raise NotImplementedError("USB file transfer listing — implement in Phase 4")
+		mount = Path(device_id)
+		if mount.is_dir() and self._is_gvfs_mount(mount):
+			return self._walk_files(mount)
+		return []
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		mount = Path(device_id)
@@ -116,12 +118,18 @@ class MtpDeviceRepository:
 
 	def _walk_media(self, root: Path) -> list[str]:
 		allowed = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+		return self._walk_paths(root, allowed=allowed)
+
+	def _walk_files(self, root: Path) -> list[str]:
+		return self._walk_paths(root, allowed=None)
+
+	def _walk_paths(self, root: Path, *, allowed: frozenset[str] | None) -> list[str]:
 		paths: list[str] = []
 		for dirpath, dirnames, filenames in os.walk(root):
 			dirnames[:] = [name for name in dirnames if name not in SKIPPED_LIBRARY_DIR_NAMES]
 			for name in filenames:
 				ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-				if ext not in allowed:
+				if allowed is not None and ext not in allowed:
 					continue
 				full = Path(dirpath) / name
 				rel = full.relative_to(root).as_posix()
