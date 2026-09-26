@@ -6,13 +6,13 @@ _Last updated: 2026-09-26_
 
 ## Current focus
 
-**Phase 0 (wireframe)** — Photo backup “Convert media” preference checkbox + info button.
+**Phase 0 (wireframe)** — Photo backup “Compress media” preference checkbox + info button.
 
 Wireframe updated in `wireframes/app.html` (`#view-easy`):
-- Checkbox **Convert media** (default on)
-- ⓘ info panel: photos → AVIF; videos → AV1 when HW encoding available
+- Checkbox **Compress media** (default on)
+- ⓘ info panel: why (save space + web-compatible) + how (AVIF / AV1 when HW available)
 - Tools-unavailable: forced off + disabled + hint
-- Convert progress hidden when off; short “Conversion off” status
+- Convert progress hidden when off; short “Compression off” status
 - Demo: **Cycle convert preference** (on → off → tools missing)
 
 ## Blockers
