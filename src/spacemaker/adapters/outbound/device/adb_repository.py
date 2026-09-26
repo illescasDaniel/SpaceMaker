@@ -18,6 +18,21 @@ _MEDIA_ROOTS = (
 	"/storage/emulated/0/Pictures",
 )
 
+_FILE_ROOTS = (
+	"/sdcard/Download",
+	"/sdcard/Documents",
+	"/sdcard/DCIM",
+	"/sdcard/Pictures",
+	"/sdcard/Movies",
+	"/sdcard/Music",
+	"/storage/emulated/0/Download",
+	"/storage/emulated/0/Documents",
+	"/storage/emulated/0/DCIM",
+	"/storage/emulated/0/Pictures",
+	"/storage/emulated/0/Movies",
+	"/storage/emulated/0/Music",
+)
+
 
 class AdbDeviceRepository:
 	def __init__(self, adb_path: Path) -> None:
@@ -47,6 +62,18 @@ class AdbDeviceRepository:
 				ext = path.rsplit(".", 1)[-1].lower()
 				if ext in allowed:
 					found.add(path)
+		return sorted(found)
+
+	def list_file_paths(self, device_id: str) -> list[str]:
+		device = self._client.device(device_id)
+		found: set[str] = set()
+		for root in _FILE_ROOTS:
+			output = self._shell_text(device, f"find {root} -type f 2>/dev/null || true")
+			for line in output.splitlines():
+				path = line.strip()
+				if not path or skip_media_path(path):
+					continue
+				found.add(path)
 		return sorted(found)
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:

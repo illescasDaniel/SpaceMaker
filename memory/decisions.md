@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-26 — USB file transfer: separate `TransferFolder` + `list_file_paths`; reuse Documents root and extract job control
+
+- **Context:** New Home module for cable-only arbitrary-file transfer (MTP/ADB/AFC) into Documents, no convert. Spec approved 2026-09-26. Needed domain/ports without conflating photo-library extract.
+- **Decision:** (1) `TransferFolder` enum (Download/Documents/DCIM/Pictures/Movies/Music) separate from media-only `SourceFolder`, so extract defaults stay DCIM/Pictures/Movies. (2) Extend `DeviceRepositoryPort` with `list_file_paths` (any file type); keep `list_media_paths` for extract. Adapter bodies stubbed `NotImplementedError` until Phase 4. (3) Use case `TransferUsbFiles` writes under `documents_directory()/SpaceMaker/` via `documents_transfer_destination` (same root as Receive files), reuses `ExtractJobControl` + `extract_control_flags` for pause/stop. (4) `AppModule.USB_FILE_TRANSFER`; iPhone limit banner gated by `shows_iphone_limit_banner` (AFC only).
+- **Rationale:** Extending `SourceFolder` would change extract’s `ALL_SOURCE_FOLDERS` defaults. A second list API avoids teaching media extractors to return PDFs. Shared Documents root matches Receive files UX; shared job control avoids a parallel pause/stop implementation.
+
 ## 2026-09-25 — Gallery item detail: real-thumbnail-first progressive loading, photo-app open animation, slide transitions on prev/next; fixed a `.gallery-item-stage` centering regression
 
 - **Context:** User asked for the gallery photo-detail flow to feel like an app, not a website: opening a photo should animate like an entrance rather than a hard cut; prev/next navigation should slide; and while the full image/video is still loading, the preview area should show the item's real thumbnail plus a spinner instead of collapsing to near-zero height and jumping once the full media arrives. Confirmed with the user that every saved photo already gets a generated thumbnail in production (`SubprocessThumbnailGenerator`, served at `GET /thumbs/{relative_path}`), so the placeholder is the real thumbnail, not a synthetic blur. Full SDD cycle run: Phase 0 wireframe (`wireframes/app.html`) approved ("i like this, that's the idea... design is fine, let's advance"), Phase 1 spec (`specs/ui-motion/SPEC.md`, `specs/gallery/SPEC.md`) approved ("proceed"), Phase 2 architecture approved ("okay") before Phase 4 touched production code.

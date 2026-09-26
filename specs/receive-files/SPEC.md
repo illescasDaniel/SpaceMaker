@@ -38,4 +38,4 @@
 ## Out of scope
 
 - Gallery indexing or convert pipeline
-- USB/MTP receive
+- USB/MTP/ADB/AFC receive (see [usb-file-transfer](../usb-file-transfer/SPEC.md))

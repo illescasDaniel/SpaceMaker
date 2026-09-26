@@ -1226,6 +1226,15 @@
 			padding: 1.5rem 1.25rem 2.5rem;
 		}
 
+		#view-usb-file-transfer.screen {
+			max-width: 40rem;
+			width: 100%;
+		}
+
+		#view-usb-file-transfer .wizard-intro {
+			max-width: none;
+		}
+
 		.home-hub-lead {
 			text-align: center;
 			color: var(--muted);
@@ -1474,6 +1483,17 @@
 					</svg>
 					<span class="module-tile-title">USB photo backup</span>
 				</button>
+				<button type="button" class="module-tile" data-module="usb_file_transfer">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="16" y="6" width="16" height="28" rx="3"/>
+						<path d="M22 38h4"/>
+						<path d="M12 20h8"/>
+						<path d="M16 16v8"/>
+						<path d="M28 24h8"/>
+						<path d="M32 20v8"/>
+					</svg>
+					<span class="module-tile-title">USB file transfer</span>
+				</button>
 				<button type="button" class="module-tile" data-module="receive_files">
 					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
 						<rect x="14" y="8" width="12" height="20" rx="2"/>
@@ -1641,6 +1661,113 @@
 			</div>
 			<p class="easy-lead">Choose files or folders on this PC. Your phone opens the QR page to download files or zipped folders.</p>
 		</div>
+	</section>
+
+	<!-- USB FILE TRANSFER (cable only — any files, no convert) -->
+	<section id="view-usb-file-transfer" class="screen" aria-label="USB file transfer">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current">USB file transfer</span>
+		</nav>
+		<p class="wizard-intro">
+			Copy or move any files from a phone over USB. No conversion — files land as-is under Documents.
+		</p>
+
+		<article class="step-card active-step" aria-labelledby="uft-title">
+			<div class="step-header">
+				<h2 class="step-title" id="uft-title">Transfer</h2>
+			</div>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Connection</p>
+				<button type="button" class="info-btn" id="btn-uft-connection-info" title="How to connect via MTP, ADB, or iPhone USB" aria-expanded="false" aria-controls="uft-connection-info-panel">i</button>
+			</div>
+			<fieldset class="connection-toggle">
+				<legend class="sr-only">Device connection method</legend>
+				<button type="button" class="active" id="btn-uft-conn-mtp">MTP</button>
+				<button type="button" id="btn-uft-conn-adb">ADB<span class="rec">cable</span></button>
+				<button type="button" id="btn-uft-conn-afc">iPhone<span class="rec">USB</span></button>
+			</fieldset>
+			<div class="info-panel" id="uft-connection-info-panel" aria-hidden="true">
+				<h4>MTP</h4>
+				<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Android works well for any folder. Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
+				<h4>ADB (cable)</h4>
+				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move.</p>
+				<h4>iPhone (USB)</h4>
+				<p><strong>Linux only</strong> in this release (Apple File Conduit / AFC via <code>usbmuxd</code>, <code>libimobiledevice</code>, <code>ifuse</code>). Unlock, tap <strong>Trust</strong>, keep unlocked. Access is limited — mostly <strong>Camera (DCIM)</strong>; other app sandboxes are not exposed. Files copy as-is (no HEIC→JPEG convert here).</p>
+			</div>
+			<div class="alert alert-warn" id="uft-iphone-limit-banner" hidden>
+				<span class="alert-icon" aria-hidden="true">⚠</span>
+				<div>
+					<strong>iPhone access is limited</strong>
+					<p class="easy-import-hint" style="margin: 0.35rem 0 0;">
+						Only folders the device exposes over USB are listed (typically Camera). Full document pickers need Wi‑Fi <strong>Receive files</strong> instead.
+					</p>
+				</div>
+			</div>
+			<p class="label">Device</p>
+			<select class="field" id="uft-select-device" aria-label="Connected device">
+				<option>Samsung Galaxy S24</option>
+			</select>
+			<div class="field device-status connected" id="uft-device-status">
+				<span class="status-dot" aria-hidden="true"></span>
+				<span id="uft-device-status-text">Samsung Galaxy S24 · Connected via MTP</span>
+			</div>
+			<p class="label">Folders to transfer</p>
+			<fieldset class="folder-picker" id="uft-folder-picker">
+				<legend class="sr-only">Device folders</legend>
+				<label><input type="checkbox" checked /> Download</label>
+				<label><input type="checkbox" checked /> Documents</label>
+				<label><input type="checkbox" /> Camera (DCIM)</label>
+				<label><input type="checkbox" /> Pictures</label>
+				<label><input type="checkbox" /> Movies</label>
+				<label><input type="checkbox" /> Music</label>
+			</fieldset>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Destination</p>
+				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
+			</div>
+			<input class="field" type="text" value="/home/user/Documents/SpaceMaker" aria-label="Destination folder" readonly />
+			<div class="info-panel" id="uft-dest-info-panel" aria-hidden="true">
+				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Nested paths from the phone are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
+			</div>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Mode</p>
+				<button type="button" class="info-btn" id="btn-uft-mode-info" title="Copy vs Move" aria-expanded="false" aria-controls="uft-mode-info-panel">i</button>
+			</div>
+			<div class="row">
+				<button type="button" class="chip selected" id="uft-chip-copy">Copy</button>
+				<button type="button" class="chip" id="uft-chip-move">Move</button>
+			</div>
+			<div class="info-panel" id="uft-mode-info-panel" aria-hidden="true">
+				<p><strong>Copy</strong> leaves files on the phone. <strong>Move</strong> deletes from the phone after a successful copy when the connection supports it (ADB preferred; MTP/iPhone may fall back to copy-only per file).</p>
+			</div>
+			<p class="status-line" id="uft-status-line"><strong>Status:</strong> <span id="uft-status-text">Not started</span></p>
+			<div class="progress" id="uft-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" hidden>
+				<div class="progress-fill" id="uft-progress-fill" style="width: 0%"></div>
+			</div>
+			<p class="status-line" id="uft-count-line" hidden><span id="uft-count-text">0 files transferred</span></p>
+			<div class="label-row" style="margin-top: 0.75rem;">
+				<p class="label" style="margin: 0;">Actions</p>
+				<button type="button" class="info-btn" id="btn-uft-actions-info" title="Pause and Stop behavior" aria-expanded="false" aria-controls="uft-actions-info-panel">i</button>
+			</div>
+			<div class="extract-actions">
+				<button type="button" class="btn btn-primary" id="btn-uft-start">Start transfer</button>
+				<button type="button" class="btn btn-secondary" id="btn-uft-pause" disabled>Pause</button>
+				<button type="button" class="btn btn-ghost" id="btn-uft-stop" disabled>Stop</button>
+			</div>
+			<div class="info-panel" id="uft-actions-info-panel" aria-hidden="true">
+				<p>Pause finishes the current file, then waits. Stop ends the queue after the current file; completed files stay in the destination.</p>
+			</div>
+			<div class="easy-view-gallery-wrap" id="uft-open-folder-wrap" hidden>
+				<button type="button" class="btn btn-primary" id="btn-uft-open-folder">Open destination folder</button>
+			</div>
+			<p class="wireframe-demo-row">
+				Wireframe demo:
+				<button type="button" id="btn-uft-demo-progress">Simulate transfer progress</button>
+				<button type="button" id="btn-uft-demo-done">Mark transfer done</button>
+			</p>
+		</article>
 	</section>
 
 	<!-- MAIN WIZARD (Advanced) -->
@@ -1980,6 +2107,7 @@
 		function moduleToViewId(module) {
 			if (module === 'photo_backup') return 'easy';
 			if (module === 'usb_photo_backup') return 'wizard';
+			if (module === 'usb_file_transfer') return 'usb-file-transfer';
 			if (module === 'receive_files') return 'receive-files';
 			if (module === 'send_files') return 'send-files';
 			return 'home';
@@ -1995,7 +2123,7 @@
 				});
 				return;
 			}
-			var mainViews = ['home', 'easy', 'wizard', 'receive-files', 'send-files', 'gallery', 'gallery-item'];
+			var mainViews = ['home', 'easy', 'wizard', 'usb-file-transfer', 'receive-files', 'send-files', 'gallery', 'gallery-item'];
 			if (mainViews.indexOf(resolved) >= 0) {
 				document.querySelectorAll('.view-tabs button').forEach(function (b) {
 					var tab = b.getAttribute('data-view');
@@ -2004,7 +2132,7 @@
 						tab === 'gallery' && resolved.indexOf('gallery') === 0 || tab === 'home' && resolved !== 'gallery' && resolved !== 'gallery-item',
 					);
 				});
-				if (resolved === 'easy' || resolved === 'wizard' || resolved === 'gallery') {
+				if (resolved === 'easy' || resolved === 'wizard' || resolved === 'usb-file-transfer' || resolved === 'gallery') {
 					lastMainView = resolved === 'gallery' ? 'gallery' : 'home';
 				}
 			}
@@ -2375,6 +2503,145 @@
 				setExtractUi('stopped');
 			}
 		});
+
+		/* USB file transfer module (cable-only demo) */
+		(function () {
+			var btnMtp = document.getElementById('btn-uft-conn-mtp');
+			var btnAdb = document.getElementById('btn-uft-conn-adb');
+			var btnAfc = document.getElementById('btn-uft-conn-afc');
+			var statusText = document.getElementById('uft-device-status-text');
+			var iphoneBanner = document.getElementById('uft-iphone-limit-banner');
+			var folderPicker = document.getElementById('uft-folder-picker');
+			var chipCopy = document.getElementById('uft-chip-copy');
+			var chipMove = document.getElementById('uft-chip-move');
+			var btnStart = document.getElementById('btn-uft-start');
+			var btnPause = document.getElementById('btn-uft-pause');
+			var btnStop = document.getElementById('btn-uft-stop');
+			var phaseText = document.getElementById('uft-status-text');
+			var progressBar = document.getElementById('uft-progress');
+			var progressFill = document.getElementById('uft-progress-fill');
+			var countLine = document.getElementById('uft-count-line');
+			var countText = document.getElementById('uft-count-text');
+			var openWrap = document.getElementById('uft-open-folder-wrap');
+			var phase = 'idle';
+			var androidFolders =
+				'<legend class="sr-only">Device folders</legend>' +
+				'<label><input type="checkbox" checked /> Download</label>' +
+				'<label><input type="checkbox" checked /> Documents</label>' +
+				'<label><input type="checkbox" /> Camera (DCIM)</label>' +
+				'<label><input type="checkbox" /> Pictures</label>' +
+				'<label><input type="checkbox" /> Movies</label>' +
+				'<label><input type="checkbox" /> Music</label>';
+			var iphoneFolders =
+				'<legend class="sr-only">Device folders</legend>' +
+				'<label><input type="checkbox" checked /> Camera (DCIM)</label>';
+
+			function bindInfoToggle(btnId, panelId) {
+				var btn = document.getElementById(btnId);
+				var panel = document.getElementById(panelId);
+				btn.addEventListener('click', function () {
+					var open = panel.classList.toggle('visible');
+					btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+					panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+				});
+			}
+			bindInfoToggle('btn-uft-connection-info', 'uft-connection-info-panel');
+			bindInfoToggle('btn-uft-dest-info', 'uft-dest-info-panel');
+			bindInfoToggle('btn-uft-mode-info', 'uft-mode-info-panel');
+			bindInfoToggle('btn-uft-actions-info', 'uft-actions-info-panel');
+
+			function setMethod(method) {
+				btnMtp.classList.toggle('active', method === 'mtp');
+				btnAdb.classList.toggle('active', method === 'adb');
+				btnAfc.classList.toggle('active', method === 'afc');
+				/* Limit banner only when iPhone / AFC is the active connection */
+				iphoneBanner.hidden = method !== 'afc';
+				if (method === 'mtp') {
+					statusText.textContent = 'Samsung Galaxy S24 · Connected via MTP';
+					folderPicker.innerHTML = androidFolders;
+				} else if (method === 'adb') {
+					statusText.textContent = 'Pixel 8 · Connected via ADB';
+					folderPicker.innerHTML = androidFolders;
+				} else {
+					statusText.textContent = 'Daniel’s iPhone · Connected via iPhone USB';
+					folderPicker.innerHTML = iphoneFolders;
+				}
+			}
+
+			btnMtp.addEventListener('click', function () { setMethod('mtp'); });
+			btnAdb.addEventListener('click', function () { setMethod('adb'); });
+			btnAfc.addEventListener('click', function () { setMethod('afc'); });
+
+			chipCopy.addEventListener('click', function () {
+				chipCopy.classList.add('selected');
+				chipMove.classList.remove('selected');
+			});
+			chipMove.addEventListener('click', function () {
+				chipMove.classList.add('selected');
+				chipCopy.classList.remove('selected');
+			});
+
+			function setPhase(next) {
+				phase = next;
+				btnStart.disabled = next === 'running' || next === 'paused';
+				btnPause.disabled = next !== 'running';
+				btnStop.disabled = next !== 'running' && next !== 'paused';
+				if (next === 'idle') {
+					phaseText.textContent = 'Not started';
+					progressBar.hidden = true;
+					countLine.hidden = true;
+					openWrap.hidden = true;
+				} else if (next === 'running') {
+					phaseText.textContent = 'Transferring…';
+					progressBar.hidden = false;
+					countLine.hidden = false;
+					countText.textContent = '7 files transferred';
+					progressFill.style.width = '45%';
+					progressBar.setAttribute('aria-valuenow', '45');
+				} else if (next === 'paused') {
+					phaseText.textContent = 'Paused — current file finished';
+				} else if (next === 'done') {
+					phaseText.textContent = 'Done: 24 files';
+					progressBar.hidden = false;
+					countLine.hidden = false;
+					countText.textContent = '24 files transferred';
+					progressFill.style.width = '100%';
+					progressBar.setAttribute('aria-valuenow', '100');
+					btnStart.disabled = false;
+					openWrap.hidden = false;
+				} else if (next === 'stopped') {
+					phaseText.textContent = 'Stopped: 7 files';
+					btnStart.disabled = false;
+					openWrap.hidden = false;
+				}
+			}
+
+			btnStart.addEventListener('click', function () {
+				if (phase === 'idle' || phase === 'stopped' || phase === 'done') {
+					setPhase('running');
+				}
+			});
+			btnPause.addEventListener('click', function () {
+				if (phase === 'running') {
+					setPhase('paused');
+				}
+			});
+			btnStop.addEventListener('click', function () {
+				if (phase === 'running' || phase === 'paused') {
+					setPhase('stopped');
+				}
+			});
+			document.getElementById('btn-uft-demo-progress').addEventListener('click', function () {
+				setPhase('running');
+			});
+			document.getElementById('btn-uft-demo-done').addEventListener('click', function () {
+				setPhase('done');
+			});
+			document.getElementById('btn-uft-open-folder').addEventListener('click', function () {
+				alert('Wireframe: open ~/Documents/SpaceMaker/ in file manager');
+			});
+			setMethod('mtp');
+		})();
 	</script>
 </body>
 </html>

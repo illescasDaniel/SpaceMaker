@@ -7,6 +7,7 @@ class AppModule(StrEnum):
 	HOME = "home"
 	PHOTO_BACKUP = "photo_backup"
 	USB_PHOTO_BACKUP = "usb_photo_backup"
+	USB_FILE_TRANSFER = "usb_file_transfer"
 	RECEIVE_FILES = "receive_files"
 	SEND_FILES = "send_files"
 

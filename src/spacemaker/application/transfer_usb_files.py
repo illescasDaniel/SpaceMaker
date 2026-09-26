@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+
+from spacemaker.domain.extract_control import ExtractJobControl
+from spacemaker.domain.library import JobProgress, TransferMode
+from spacemaker.domain.library_paths import skip_media_path
+from spacemaker.domain.transfer_folders import TransferFolder, path_matches_transfer_folders
+from spacemaker.domain.usb_file_transfer import documents_transfer_destination
+from spacemaker.ports.outbound.device_repository import DeviceRepositoryPort
+from spacemaker.ports.outbound.filesystem import FileSystemPort
+
+
+class TransferUsbFiles:
+	"""Copy or move arbitrary device files into Documents/SpaceMaker (no convert)."""
+
+	def __init__(
+		self,
+		devices: DeviceRepositoryPort,
+		filesystem: FileSystemPort,
+	) -> None:
+		self._devices = devices
+		self._filesystem = filesystem
+
+	def run(
+		self,
+		dest_root: str,
+		device_id: str,
+		mode: TransferMode,
+		*,
+		folders: frozenset[TransferFolder],
+		control: ExtractJobControl | None = None,
+		on_progress: Callable[[JobProgress], None] | None = None,
+	) -> JobProgress:
+		if not folders:
+			return JobProgress(completed=0, total=0)
+		Path(dest_root).mkdir(parents=True, exist_ok=True)
+		paths = sorted(
+			p
+			for p in self._devices.list_file_paths(device_id)
+			if path_matches_transfer_folders(p, folders) and not skip_media_path(p)
+		)
+		if control is not None and control.was_stopped():
+			return JobProgress(completed=0, total=len(paths))
+		total = len(paths)
+		completed = 0
+		self._emit(on_progress, completed, total)
+		for device_path in paths:
+			if control is not None and not control.before_next_file():
+				break
+			dest = documents_transfer_destination(dest_root, device_path)
+			if dest is None:
+				if control is not None:
+					control.after_file()
+				continue
+			if self._should_skip(device_path, device_id, dest):
+				completed += 1
+				self._emit(on_progress, completed, total)
+				if control is not None:
+					control.after_file()
+				continue
+			self._filesystem.ensure_parent_directory(dest)
+			self._devices.pull_file(device_id, device_path, dest)
+			if mode is TransferMode.MOVE:
+				self._devices.delete_device_file(device_id, device_path)
+			completed += 1
+			self._emit(on_progress, completed, total)
+			if control is not None:
+				control.after_file()
+		return JobProgress(completed=completed, total=total)
+
+	def _should_skip(self, device_path: str, device_id: str, dest: str) -> bool:
+		if not self._filesystem.exists(dest):
+			return False
+		remote = self._devices.remote_file_size(device_id, device_path)
+		local = self._filesystem.file_size(dest)
+		return remote > 0 and remote == local
+
+	def _emit(
+		self,
+		on_progress: Callable[[JobProgress], None] | None,
+		completed: int,
+		total: int,
+	) -> None:
+		if on_progress is not None:
+			on_progress(JobProgress(completed=completed, total=total))
