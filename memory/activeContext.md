@@ -7,7 +7,8 @@ _Last updated: 2026-09-26_
 ## Current focus
 
 Gallery orphan cache cleanup — **implemented** (spec + architecture approved;
-Phases 3–4 done). Ready for review / merge.
+Phases 3–4 done). Ready for review / merge. Branch updated with `main`
+(includes merged DNG convert unit-test stub fix, PR #5).
 
 ## Just changed
 
@@ -28,5 +29,5 @@ Phases 3–4 done). Ready for review / merge.
 
 ```bash
 uv run task checks
-uv run pytest tests/unit/test_gallery_cache_paths.py tests/unit/test_delete_gallery_item.py tests/unit/test_sync_gallery_index.py tests/unit/test_gallery_export.py
+uv run pytest tests/unit/test_gallery_cache_paths.py tests/unit/test_delete_gallery_item.py tests/unit/test_sync_gallery_index.py tests/unit/test_gallery_export.py tests/unit/test_raw_image_convert.py
 ```
