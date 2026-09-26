@@ -43,6 +43,7 @@ from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.sync_gallery_index import SyncGalleryIndex
+from spacemaker.application.transfer_usb_files import TransferUsbFiles
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.app_meta import app_release_info
 from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path, tools_install_root
@@ -67,7 +68,14 @@ from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode
 from spacemaker.domain.source_folders import SourceFolder, parse_source_folders
+from spacemaker.domain.transfer_folders import TransferFolder, parse_transfer_folders
 from spacemaker.domain.ui_mode import UiMode
+from spacemaker.domain.usb_file_transfer import (
+	can_start_usb_file_transfer,
+	default_transfer_folders,
+	shows_iphone_limit_banner,
+	transfer_control_flags,
+)
 from spacemaker.domain.video_encode import HardwareVideoEncoder
 
 
@@ -129,6 +137,8 @@ class AppServices:
 		self._share_entries: list[SharedManifestEntry] = []
 		self._share_selection: list[str] = []
 		self._extract_future: Future[None] | None = None
+		self._usb_transfer_control: ExtractJobControl | None = None
+		self._usb_transfer_future: Future[None] | None = None
 		self._convert_control: ExtractJobControl | None = None
 		self._convert_future: Future[None] | None = None
 		self.receive_uploaded = ReceiveUploadedMedia(self.filesystem)
@@ -142,6 +152,9 @@ class AppServices:
 
 	def extract_use_case(self, method: ConnectionMethod) -> ExtractMedia:
 		return ExtractMedia(self.devices_for(method), self.filesystem)
+
+	def usb_transfer_use_case(self, method: ConnectionMethod) -> TransferUsbFiles:
+		return TransferUsbFiles(self.devices_for(method), self.filesystem)
 
 	def convert_use_case(self) -> ConvertMedia:
 		return ConvertMedia(self.filesystem, self.converter, self.probe)
@@ -246,6 +259,7 @@ class AppServices:
 
 	def shutdown(self, *, timeout_seconds: float = 10.0) -> None:
 		self.stop_extract_and_wait(timeout_seconds=timeout_seconds)
+		self.stop_usb_transfer_and_wait(timeout_seconds=timeout_seconds)
 		self.stop_convert_and_wait(timeout_seconds=timeout_seconds)
 		self._executor.shutdown(wait=False, cancel_futures=True)
 
@@ -310,6 +324,23 @@ class AppServices:
 			trailing_slash=True,
 		)
 		base["documents_receive_file_count"] = self._documents_receive_file_count()
+		with self.session._lock:
+			usb_phase = self.session.usb_transfer_phase
+			usb_folders = list(self.session.transfer_folders)
+			usb_has_device = bool(self.session.device_id)
+			usb_method = self.session.connection_method
+			usb_completed = self.session.usb_transfer_progress.completed
+		usb_flags = transfer_control_flags(usb_phase)
+		usb_flags["start"] = can_start_usb_file_transfer(
+			has_device=usb_has_device,
+			folders_selected=len(usb_folders) > 0,
+			phase=usb_phase,
+		)
+		base["usb_transfer_actions"] = usb_flags
+		base["usb_transfer_iphone_limit"] = shows_iphone_limit_banner(usb_method)
+		base["usb_transfer_show_open_folder"] = (
+			usb_phase in {JobPhase.DONE, JobPhase.STOPPED} and usb_completed > 0
+		) or self._documents_receive_file_count() > 0
 		if library_root:
 			base["library_root_display"] = display_user_path(library_root, trailing_slash=True)
 		else:
@@ -440,6 +471,8 @@ class AppServices:
 
 	def enter_module(self, module: AppModule) -> None:
 		self.stop_active_lan_session()
+		if module is not AppModule.USB_FILE_TRANSFER:
+			self.stop_usb_transfer_and_wait(timeout_seconds=30.0)
 		with self.session._lock:
 			self.session.active_module = module
 			if module is AppModule.PHOTO_BACKUP:
@@ -448,6 +481,17 @@ class AppServices:
 				self.session.transfer_mode = TransferMode.COPY
 			elif module is AppModule.USB_PHOTO_BACKUP:
 				self.session.ui_mode = UiMode.ADVANCED
+			elif module is AppModule.USB_FILE_TRANSFER:
+				self.session.connection_method = ConnectionMethod.MTP
+				self.session.transfer_mode = TransferMode.COPY
+				self.session.transfer_folders = sorted(
+					f.value for f in default_transfer_folders(ConnectionMethod.MTP)
+				)
+				self.session.device_id = ""
+				self.session.device_label = ""
+				self.session.usb_transfer_phase = JobPhase.IDLE
+				self.session.usb_transfer_progress = JobProgress(0, 0)
+				self.session.last_error = ""
 		if module is AppModule.PHOTO_BACKUP:
 			self.bootstrap_photo_backup()
 		elif module is AppModule.RECEIVE_FILES:
@@ -456,9 +500,12 @@ class AppServices:
 			self._share_selection = []
 			self._share_entries = []
 			self._clear_share_session()
+		elif module is AppModule.USB_FILE_TRANSFER:
+			self.reconcile_device_selection(ConnectionMethod.MTP)
 
 	def leave_module_for_home(self) -> None:
 		self.stop_active_lan_session()
+		self.stop_usb_transfer_and_wait(timeout_seconds=30.0)
 		self._share_selection = []
 		with self.session._lock:
 			self.session.active_module = AppModule.HOME
@@ -831,6 +878,117 @@ class AppServices:
 			if remaining > 0:
 				with contextlib.suppress(Exception):
 					future.result(timeout=remaining)
+
+	def _usb_transfer_job_active(self) -> bool:
+		future = self._usb_transfer_future
+		return future is not None and not future.done()
+
+	def start_usb_transfer(self) -> None:
+		if self._usb_transfer_job_active():
+			return
+		with self.session._lock:
+			if self.session.usb_transfer_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
+				return
+			if not self.session.transfer_folders or not self.session.device_id:
+				return
+			method = self.session.connection_method
+			if method is ConnectionMethod.WIFI:
+				return
+			device_id = self.session.device_id
+			mode = self.session.transfer_mode
+			folders = parse_transfer_folders(self.session.transfer_folders)
+			if not folders:
+				return
+			self.session.usb_transfer_phase = JobPhase.RUNNING
+			self.session.usb_transfer_progress = JobProgress(0, 0)
+			self.session.last_error = ""
+		dest_root = self._documents_receive_root
+		Path(dest_root).mkdir(parents=True, exist_ok=True)
+		self._usb_transfer_control = ExtractJobControl(on_paused=self._on_usb_transfer_paused)
+		self.push_state()
+		self._usb_transfer_future = self._executor.submit(
+			self._run_usb_transfer,
+			dest_root,
+			device_id,
+			method,
+			mode,
+			folders,
+		)
+
+	def _on_usb_transfer_paused(self) -> None:
+		with self.session._lock:
+			self.session.usb_transfer_phase = JobPhase.PAUSED
+		self.push_state()
+
+	def pause_usb_transfer(self) -> None:
+		if self._usb_transfer_control is not None:
+			self._usb_transfer_control.request_pause()
+
+	def resume_usb_transfer(self) -> None:
+		with self.session._lock:
+			if self.session.usb_transfer_phase is not JobPhase.PAUSED:
+				return
+			self.session.usb_transfer_phase = JobPhase.RUNNING
+		if self._usb_transfer_control is not None:
+			self._usb_transfer_control.resume()
+		self.push_state()
+
+	def stop_usb_transfer(self) -> None:
+		if self._usb_transfer_control is not None:
+			self._usb_transfer_control.request_stop()
+		self.push_state()
+
+	def stop_usb_transfer_and_wait(self, *, timeout_seconds: float = 300.0) -> None:
+		future = self._usb_transfer_future
+		with self.session._lock:
+			phase_active = self.session.usb_transfer_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+		if not phase_active and (future is None or future.done()):
+			return
+		self.stop_usb_transfer()
+		future = self._usb_transfer_future
+		if future is not None:
+			with contextlib.suppress(Exception):
+				future.result(timeout=timeout_seconds)
+
+	def _run_usb_transfer(
+		self,
+		dest_root: str,
+		device_id: str,
+		method: ConnectionMethod,
+		mode: TransferMode,
+		folders: frozenset[TransferFolder],
+	) -> None:
+		control = self._usb_transfer_control
+		try:
+			use_case = self.usb_transfer_use_case(method)
+
+			def on_progress(progress: JobProgress) -> None:
+				with self.session._lock:
+					self.session.usb_transfer_progress = progress
+				self.push_state()
+
+			use_case.run(
+				dest_root,
+				device_id,
+				mode,
+				folders=folders,
+				control=control,
+				on_progress=on_progress,
+			)
+			with self.session._lock:
+				if control is not None and control.was_stopped():
+					self.session.usb_transfer_phase = JobPhase.STOPPED
+				elif control is not None and control.is_paused():
+					self.session.usb_transfer_phase = JobPhase.PAUSED
+				else:
+					self.session.usb_transfer_phase = JobPhase.DONE
+		except Exception as exc:
+			with self.session._lock:
+				self.session.usb_transfer_phase = JobPhase.ERROR
+				self.session.last_error = str(exc)
+		finally:
+			self._usb_transfer_future = None
+		self.push_state()
 
 	def stop_convert(self) -> None:
 		if self._convert_control is not None:

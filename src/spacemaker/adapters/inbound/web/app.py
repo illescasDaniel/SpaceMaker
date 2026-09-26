@@ -58,6 +58,7 @@ from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import LibraryFolder, TransferMode
 from spacemaker.domain.ui_mode import UiMode
+from spacemaker.domain.usb_file_transfer import default_transfer_folders
 
 
 def _gallery_item_dict(item: GalleryItem) -> dict[str, str]:
@@ -157,6 +158,7 @@ class SettingsBody(BaseModel):
 	device_id: str = ""
 	device_label: str = ""
 	source_folders: list[str] | None = None
+	transfer_folders: list[str] | None = None
 
 
 def _no_cache_file(path: Path) -> FileResponse:
@@ -292,6 +294,9 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			if services.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
 				services.push_state()
 				return services.enriched_snapshot()
+			if services.session.usb_transfer_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
+				services.push_state()
+				return services.enriched_snapshot()
 			library_root = normalize_library_root(body.library_root)
 			if library_root and not is_absolute_library_path(library_root):
 				raise HTTPException(status_code=400, detail="library_root must be an absolute path")
@@ -305,6 +310,13 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			if body.connection_method is not previous_method:
 				services.session.device_id = ""
 				services.session.device_label = ""
+				if (
+					services.session.active_module is AppModule.USB_FILE_TRANSFER
+					and body.transfer_folders is None
+				):
+					services.session.transfer_folders = sorted(
+						f.value for f in default_transfer_folders(body.connection_method)
+					)
 			device_id = body.device_id.strip()
 			if body.connection_method is ConnectionMethod.WIFI:
 				services.session.device_id = ""
@@ -320,6 +332,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 					services.session.device_label = ""
 			if body.source_folders is not None:
 				services.session.source_folders = [f.lower() for f in body.source_folders]
+			if body.transfer_folders is not None:
+				services.session.transfer_folders = [f.lower() for f in body.transfer_folders]
 			if services.session.library_root:
 				services.filesystem.ensure_library_folders(services.session.library_root)
 		services.push_state()
@@ -621,6 +635,39 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	def extract_stop(request: Request) -> dict[str, object]:
 		require_loopback(request)
 		services.stop_extract_and_wait(timeout_seconds=300.0)
+		return services.enriched_snapshot()
+
+	@app.post("/api/usb-transfer/start")
+	def usb_transfer_start(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		method = services.session.connection_method
+		if method is ConnectionMethod.WIFI:
+			raise HTTPException(status_code=400, detail="USB file transfer requires MTP, ADB, or iPhone USB")
+		if method is ConnectionMethod.AFC and sys.platform != "linux":
+			raise HTTPException(status_code=501, detail="iPhone USB is Linux only in this release")
+		if not services.session.device_id:
+			raise HTTPException(status_code=400, detail="select a device")
+		if not services.session.transfer_folders:
+			raise HTTPException(status_code=400, detail="select at least one folder")
+		services.start_usb_transfer()
+		return services.enriched_snapshot()
+
+	@app.post("/api/usb-transfer/pause")
+	def usb_transfer_pause(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		services.pause_usb_transfer()
+		return services.enriched_snapshot()
+
+	@app.post("/api/usb-transfer/resume")
+	def usb_transfer_resume(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		services.resume_usb_transfer()
+		return services.enriched_snapshot()
+
+	@app.post("/api/usb-transfer/stop")
+	def usb_transfer_stop(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		services.stop_usb_transfer_and_wait(timeout_seconds=300.0)
 		return services.enriched_snapshot()
 
 	@app.post("/api/convert/start")

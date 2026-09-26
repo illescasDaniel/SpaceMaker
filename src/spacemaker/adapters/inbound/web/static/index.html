@@ -114,6 +114,15 @@
 			box-sizing: border-box;
 		}
 
+		#view-usb-file-transfer.screen {
+			max-width: 40rem;
+			width: 100%;
+		}
+
+		#view-usb-file-transfer .wizard-intro {
+			max-width: none;
+		}
+
 		#view-wizard .steps {
 			max-width: min(1400px, 100%);
 			margin-left: auto;
@@ -130,6 +139,10 @@
 			gap: 0.75rem;
 			min-height: 280px;
 			transition: opacity var(--dur-base) var(--ease-standard);
+		}
+
+		#view-usb-file-transfer .step-card {
+			min-height: 0;
 		}
 
 		.step-card.disabled {
@@ -1523,6 +1536,17 @@
 					</svg>
 					<span class="module-tile-title">USB photo backup</span>
 				</button>
+				<button type="button" class="module-tile" data-module="usb_file_transfer">
+					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+						<rect x="16" y="6" width="16" height="28" rx="3"/>
+						<path d="M22 38h4"/>
+						<path d="M12 20h8"/>
+						<path d="M16 16v8"/>
+						<path d="M28 24h8"/>
+						<path d="M32 20v8"/>
+					</svg>
+					<span class="module-tile-title">USB file transfer</span>
+				</button>
 				<button type="button" class="module-tile" data-module="receive_files">
 					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
 						<rect x="14" y="8" width="12" height="20" rx="2"/>
@@ -1624,6 +1648,102 @@
 				</button>
 			</div>
 		</div>
+	</section>
+
+	<section id="view-usb-file-transfer" class="screen" aria-label="USB file transfer">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current" aria-current="page">USB file transfer</span>
+		</nav>
+		<p class="wizard-intro">
+			Copy or move any files from a phone over USB. No conversion — files land as-is under Documents.
+		</p>
+		<div class="form-banner" id="uft-form-banner" role="alert" hidden></div>
+		<article class="step-card active-step" aria-labelledby="uft-title">
+			<div class="step-header">
+				<h2 class="step-title" id="uft-title">Transfer</h2>
+			</div>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Connection</p>
+				<button type="button" class="info-btn" id="btn-uft-connection-info" title="How to connect via MTP, ADB, or iPhone USB" aria-expanded="false" aria-controls="uft-connection-info-panel">i</button>
+			</div>
+			<fieldset class="connection-toggle">
+				<legend class="sr-only">Device connection method</legend>
+				<button type="button" class="active" id="btn-uft-conn-mtp" data-uft-method="mtp">MTP</button>
+				<button type="button" id="btn-uft-conn-adb" data-uft-method="adb">ADB<span class="rec">cable</span></button>
+				<button type="button" id="btn-uft-conn-afc" data-uft-method="afc">iPhone<span class="rec">USB</span></button>
+			</fieldset>
+			<div class="info-panel" id="uft-connection-info-panel" aria-hidden="true">
+				<h4>MTP</h4>
+				<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Android works well for any folder. Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
+				<h4>ADB (cable)</h4>
+				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move.</p>
+				<h4>iPhone (USB)</h4>
+				<p><strong>Linux only</strong> in this release (Apple File Conduit / AFC via <code>usbmuxd</code>, <code>libimobiledevice</code>, <code>ifuse</code>). Unlock, tap <strong>Trust</strong>, keep unlocked. Access is limited — mostly <strong>Camera (DCIM)</strong>; other app sandboxes are not exposed. Files copy as-is (no HEIC→JPEG convert here).</p>
+			</div>
+			<div class="alert alert-warn" id="uft-iphone-limit-banner" hidden>
+				<span class="alert-icon" aria-hidden="true">⚠</span>
+				<div>
+					<strong>iPhone access is limited</strong>
+					<p class="easy-import-hint" style="margin: 0.35rem 0 0;">
+						Only folders the device exposes over USB are listed (typically Camera). Full document pickers need Wi‑Fi <strong>Receive files</strong> instead.
+					</p>
+				</div>
+			</div>
+			<p class="label">Device</p>
+			<select class="field" id="uft-select-device" aria-label="Connected device">
+				<option value="">No device</option>
+			</select>
+			<div class="field device-status" id="uft-device-status">
+				<span class="status-dot" aria-hidden="true"></span>
+				<span id="uft-device-status-text">Scanning for device…</span>
+			</div>
+			<p class="label">Folders to transfer</p>
+			<fieldset class="folder-picker" id="uft-folder-picker">
+				<legend class="sr-only">Device folders</legend>
+			</fieldset>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Destination</p>
+				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
+			</div>
+			<input class="field" type="text" id="uft-dest-path" value="" aria-label="Destination folder" readonly />
+			<div class="info-panel" id="uft-dest-info-panel" aria-hidden="true">
+				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Nested paths from the phone are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
+			</div>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Mode</p>
+				<button type="button" class="info-btn" id="btn-uft-mode-info" title="Copy vs Move" aria-expanded="false" aria-controls="uft-mode-info-panel">i</button>
+			</div>
+			<div class="row">
+				<button type="button" class="chip selected" id="uft-chip-copy">Copy</button>
+				<button type="button" class="chip" id="uft-chip-move">Move</button>
+			</div>
+			<div class="info-panel" id="uft-mode-info-panel" aria-hidden="true">
+				<p><strong>Copy</strong> leaves files on the phone. <strong>Move</strong> deletes from the phone after a successful copy when the connection supports it (ADB preferred; MTP/iPhone may fall back to copy-only per file).</p>
+			</div>
+			<p class="status-line" id="uft-status-line"><strong>Status:</strong> <span id="uft-status-text">Not started</span></p>
+			<div class="progress" id="uft-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" hidden>
+				<div class="progress-fill" id="uft-progress-fill" style="width: 0%"></div>
+			</div>
+			<p class="status-line" id="uft-count-line" hidden><span id="uft-count-text">0 files transferred</span></p>
+			<div class="label-row" style="margin-top: 0.75rem;">
+				<p class="label" style="margin: 0;">Actions</p>
+				<button type="button" class="info-btn" id="btn-uft-actions-info" title="Pause and Stop behavior" aria-expanded="false" aria-controls="uft-actions-info-panel">i</button>
+			</div>
+			<div class="extract-actions">
+				<button type="button" class="btn btn-primary" id="btn-uft-start" disabled>Start transfer</button>
+				<button type="button" class="btn btn-secondary" id="btn-uft-pause" hidden disabled>Pause</button>
+				<button type="button" class="btn btn-secondary" id="btn-uft-resume" hidden disabled>Resume</button>
+				<button type="button" class="btn btn-ghost" id="btn-uft-stop" hidden disabled>Stop</button>
+			</div>
+			<div class="info-panel" id="uft-actions-info-panel" aria-hidden="true">
+				<p>Pause finishes the current file, then waits. Stop ends the queue after the current file; completed files stay in the destination.</p>
+			</div>
+			<div class="easy-view-gallery-wrap panel-hidden" id="uft-open-folder-wrap">
+				<button type="button" class="btn btn-primary" id="btn-uft-open-folder">Open destination folder</button>
+			</div>
+		</article>
 	</section>
 
 	<section id="view-send-files" class="screen" aria-label="Send files">
