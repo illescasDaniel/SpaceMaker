@@ -5,6 +5,16 @@ at session start — see `.cursor/skills/agent-memory/SKILL.md`. Kept for
 reference; entries are grouped by the area they came from, newest additions
 at the top of each section.
 
+## USB file transfer (2026-09-27) — branch `cursor/usb-file-transfer-c861`
+
+### Done
+
+- [x] USB file transfer Home module — full SDD (wireframe/spec/architecture/tests/impl); cable-only arbitrary files into Documents
+- [x] Strip MTP app-wide; ADB (adbfs Browse) + AFC (ifuse) only for cable
+- [x] Lazy adbfs mount; Add files… / Add folder…; flatten Android storage prefixes on destination
+- [x] Real-device verification: ADB + iPhone USB transfer working (2026-09-27)
+- Open follow-up (kept in `progress.md`): ADB Browse / listing very slow — review before production
+
 ## Transfer files + Home polish (2026-09-27) — branch `cursor/transfer-files-5ada`
 
 ### Done

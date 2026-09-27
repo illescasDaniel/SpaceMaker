@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -79,6 +80,41 @@ class AfcDeviceRepository:
 		mount = self._mount_path(device_id)
 		return self._walk_media(mount)
 
+	def list_file_paths(self, device_id: str) -> list[str]:
+		mount = self._mount_path(device_id)
+		return self._walk_all_files(mount)
+
+	def list_extra_file_paths(self, device_id: str, extras: frozenset[str]) -> list[str]:
+		from spacemaker.domain.transfer_folders import normalize_device_relative_path
+
+		mount = self._mount_path(device_id)
+		found: set[str] = set()
+		for raw in extras:
+			relative = normalize_device_relative_path(raw.lstrip("/"))
+			if relative is None:
+				continue
+			full = mount / relative
+			try:
+				if full.is_file():
+					rel = full.relative_to(mount).as_posix()
+					if not skip_media_path(rel):
+						found.add(rel)
+					continue
+				if full.is_dir():
+					found.update(self._walk_subtree(full, mount, allowed=None))
+			except OSError:
+				continue
+		return sorted(found)
+
+	def browse_root(self, device_id: str) -> str | None:
+		try:
+			mount = self._mount_path(device_id)
+		except RuntimeError:
+			return None
+		if mount.is_dir():
+			return str(mount.resolve())
+		return None
+
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		mount = self._mount_path(device_id)
 		full = mount / device_path.lstrip("/")
@@ -127,12 +163,17 @@ class AfcDeviceRepository:
 		mount_dir = Path(tempfile.mkdtemp(prefix="spacemaker-afc-"))
 		self._require_tool(BundledTool.IFUSE)
 		ifuse = self._runner.path(BundledTool.IFUSE)
-		result = subprocess.run(  # noqa: S603
-			[str(ifuse), str(mount_dir), "-u", device_id],
-			capture_output=True,
-			text=True,
-			check=False,
-		)
+		try:
+			result = subprocess.run(  # noqa: S603
+				[str(ifuse), str(mount_dir), "-u", device_id],
+				capture_output=True,
+				text=True,
+				check=False,
+				timeout=15.0,
+			)
+		except subprocess.TimeoutExpired as exc:
+			self._unmount_path(mount_dir)
+			raise RuntimeError("ifuse timed out — unlock iPhone and tap Trust") from exc
 		if result.returncode != 0:
 			shutil.rmtree(mount_dir, ignore_errors=True)
 			detail = (result.stderr or result.stdout or "").strip()
@@ -141,7 +182,12 @@ class AfcDeviceRepository:
 		return mount_dir
 
 	def _walk_media(self, root: Path) -> list[str]:
-		allowed = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+		return self._walk_under_tops(root, allowed=IMAGE_EXTENSIONS | VIDEO_EXTENSIONS)
+
+	def _walk_all_files(self, root: Path) -> list[str]:
+		return self._walk_under_tops(root, allowed=None)
+
+	def _walk_under_tops(self, root: Path, *, allowed: frozenset[str] | None) -> list[str]:
 		paths: list[str] = []
 		scanned_top = False
 		for top_name in _AFC_TOP_DIRS:
@@ -155,13 +201,18 @@ class AfcDeviceRepository:
 			paths = [self._ensure_dcim_prefix(rel) for rel in paths]
 		return sorted(set(paths))
 
-	def _walk_subtree(self, tree_root: Path, path_base: Path, allowed: frozenset[str]) -> list[str]:
+	def _walk_subtree(
+		self,
+		tree_root: Path,
+		path_base: Path,
+		allowed: frozenset[str] | None,
+	) -> list[str]:
 		paths: list[str] = []
 		for dirpath, dirnames, filenames in os.walk(tree_root, followlinks=False):
 			dirnames[:] = [name for name in dirnames if name not in SKIPPED_LIBRARY_DIR_NAMES]
 			for name in filenames:
 				ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-				if ext not in allowed:
+				if allowed is not None and ext not in allowed:
 					continue
 				full = Path(dirpath) / name
 				rel = full.relative_to(path_base).as_posix()
@@ -190,6 +241,14 @@ class AfcDeviceRepository:
 	def _require_tool(self, tool: BundledTool) -> None:
 		self._runner.path(tool)
 
+	def release_mounts(self) -> None:
+		if self._test_mounts is not None:
+			self._live_mounts.clear()
+			return
+		for mount in list(self._live_mounts.values()):
+			self._unmount_path(mount)
+		self._live_mounts.clear()
+
 	def _unmount_path(self, mount: Path) -> None:
 		for name in ("fusermount3", "fusermount", "umount"):
 			binary = shutil.which(name)
@@ -207,6 +266,5 @@ class AfcDeviceRepository:
 	def __del__(self) -> None:
 		if self._test_mounts is not None:
 			return
-		for mount in list(self._live_mounts.values()):
-			self._unmount_path(mount)
-		self._live_mounts.clear()
+		with contextlib.suppress(Exception):
+			self.release_mounts()

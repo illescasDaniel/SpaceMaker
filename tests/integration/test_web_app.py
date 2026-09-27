@@ -62,7 +62,7 @@ def test_given_fresh_app_when_get_index_then_home_layout_matches_spec() -> None:
 	assert 'class="app-footer"' in html
 	assert 'id="transfer-save-tip"' in html
 	assert 'id="btn-transfer-open-documents"' in html
-	assert html.count('class="module-tile"') == 5
+	assert html.count('class="module-tile"') == 6
 
 
 def test_given_default_window_geometry_when_inspect_then_960x720() -> None:
@@ -141,7 +141,7 @@ def test_given_originals_on_disk_when_convert_start_then_running(tmp_path) -> No
 		"/api/settings",
 		json={
 			"library_root": str(originals),
-			"connection_method": "mtp",
+			"connection_method": "adb",
 			"transfer_mode": "copy",
 			"device_id": "",
 			"source_folders": ["dcim"],
@@ -164,7 +164,7 @@ def test_given_converted_files_when_get_settings_then_visualize_ready(tmp_path) 
 		"/api/settings",
 		json={
 			"library_root": str(library),
-			"connection_method": "mtp",
+			"connection_method": "adb",
 			"transfer_mode": "copy",
 			"device_id": "",
 			"source_folders": ["dcim"],
@@ -209,7 +209,7 @@ def test_given_converted_file_when_gallery_item_api_then_metadata(tmp_path) -> N
 		"/api/settings",
 		json={
 			"library_root": str(library),
-			"connection_method": "mtp",
+			"connection_method": "adb",
 			"transfer_mode": "copy",
 			"device_id": "",
 			"source_folders": ["dcim"],
@@ -239,7 +239,7 @@ def test_given_converted_file_when_open_on_host_then_ok(tmp_path, monkeypatch) -
 		"/api/settings",
 		json={
 			"library_root": str(library),
-			"connection_method": "mtp",
+			"connection_method": "adb",
 			"transfer_mode": "copy",
 			"device_id": "",
 			"source_folders": ["dcim"],
@@ -264,7 +264,7 @@ def test_given_converted_file_when_delete_item_then_removed(tmp_path) -> None:
 		"/api/settings",
 		json={
 			"library_root": str(library),
-			"connection_method": "mtp",
+			"connection_method": "adb",
 			"transfer_mode": "copy",
 			"device_id": "",
 			"source_folders": ["dcim"],
@@ -287,7 +287,7 @@ def test_given_media_download_flag_when_get_then_attachment(tmp_path) -> None:
 		"/api/settings",
 		json={
 			"library_root": str(library),
-			"connection_method": "mtp",
+			"connection_method": "adb",
 			"transfer_mode": "copy",
 			"device_id": "",
 			"source_folders": ["dcim"],
@@ -309,7 +309,7 @@ def test_given_converted_fixture_when_calendar_then_days(tmp_path) -> None:
 		"/api/settings",
 		json={
 			"library_root": str(library),
-			"connection_method": "mtp",
+			"connection_method": "adb",
 			"transfer_mode": "copy",
 			"device_id": "",
 			"source_folders": ["dcim"],

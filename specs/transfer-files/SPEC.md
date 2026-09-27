@@ -168,4 +168,4 @@
 - Auto-opening the saved file after desktop Download
 - Paired-device history, accounts, or cloud relay
 - Unique custom device nicknames beyond simple origin labels (PC vs remote)
-- USB/MTP/ADB transfer in this module
+- USB/ADB transfer in this module

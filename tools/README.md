@@ -6,7 +6,7 @@ SpaceMaker resolves third-party binaries in this order:
 2. **Download** — pinned builds from the app catalog on first launch
 3. **System `PATH`** — only after you choose **Continue** on the components setup screen (or when `SPACEMAKER_DEV=1` for contributors)
 
-Required tool names: `adb`, `ffmpeg`, `ffprobe`, `magick`, `exiftool`, `mtp-detect`, `mtp-getfile`.
+Required tool names: `adb`, `ffmpeg`, `ffprobe`, `magick`, `exiftool`. Optional for USB Browse: `adbfs` (PATH). Optional for iPhone USB: `idevice_id`, `idevicepair`, `ideviceinfo`, `ifuse`.
 
 Optional override for tests or custom layouts: `SPACEMAKER_TOOLS_DIR=/path/to/tools`.
 

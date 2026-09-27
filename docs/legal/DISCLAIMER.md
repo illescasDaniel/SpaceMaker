@@ -18,7 +18,7 @@ To the maximum extent permitted by law, the authors and contributors **are not l
 
 ## Third-party tools
 
-Managed or system utilities (FFmpeg, ImageMagick, ExifTool, libmtp, adb, etc.) are independent projects. Release builds **download** pinned tools when possible; SpaceMaker invokes them locally. Their behavior and licenses are described in [THIRD_PARTY_TOOLS.md](THIRD_PARTY_TOOLS.md).
+Managed or system utilities (FFmpeg, ImageMagick, ExifTool, adb, etc.) are independent projects. Release builds **download** pinned tools when possible; SpaceMaker invokes them locally. Their behavior and licenses are described in [THIRD_PARTY_TOOLS.md](THIRD_PARTY_TOOLS.md).
 
 ## Your acceptance
 

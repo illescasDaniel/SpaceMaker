@@ -1,13 +1,14 @@
+import pytest
+
 from spacemaker.adapters.outbound.device.adb_repository import AdbDeviceRepository
 from spacemaker.adapters.outbound.device.afc_repository import AfcDeviceRepository
 from spacemaker.adapters.outbound.device.factory import device_repository_for
-from spacemaker.adapters.outbound.device.mtp_repository import MtpDeviceRepository
 from spacemaker.domain.connection import ConnectionMethod
 
 
-def test_given_mtp_when_device_repository_for_then_mtp_repo():
-	repo = device_repository_for(ConnectionMethod.MTP)
-	assert isinstance(repo, MtpDeviceRepository)
+def test_given_wifi_when_device_repository_for_then_error():
+	with pytest.raises(ValueError, match="no device repository"):
+		device_repository_for(ConnectionMethod.WIFI)
 
 
 def test_given_afc_when_device_repository_for_then_afc_repo():
