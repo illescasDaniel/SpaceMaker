@@ -4,13 +4,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from spacemaker.domain.gallery_cache_paths import export_cache_path
 from spacemaker.domain.gallery_export import (
 	ExportFormat,
-	export_cache_filename,
 	is_friendly_h264_aac_mp4,
 	is_friendly_jpeg_filename,
 )
 from spacemaker.domain.library import LibraryFolder
+from spacemaker.domain.library_paths import EXPORTS_DIR_NAME
 from spacemaker.domain.media import media_kind_for_filename
 from spacemaker.ports.outbound.filesystem import FileSystemPort
 from spacemaker.ports.outbound.media_converter import MediaConverterPort
@@ -35,7 +36,7 @@ class ExportFriendlyMedia:
 		self._probe = probe
 
 	def exports_dir(self, library_root: str) -> str:
-		return str(Path(library_root) / ".exports")
+		return str(Path(library_root) / EXPORTS_DIR_NAME)
 
 	def run(
 		self,
@@ -49,7 +50,6 @@ class ExportFriendlyMedia:
 		if not self._filesystem.exists(source):
 			raise FileNotFoundError(relative_path)
 		source_path = Path(source)
-		stat = source_path.stat()
 		kind = media_kind_for_filename(relative_path)
 		if export_format is ExportFormat.JPEG and kind.value != "image":
 			raise ValueError("JPEG export requires an image")
@@ -68,14 +68,8 @@ class ExportFriendlyMedia:
 					on_progress(100)
 				return ExportResult(download_path=str(source_path.resolve()), skipped_encode=True)
 
-		cache_name = export_cache_filename(
-			relative_path,
-			stat.st_mtime_ns,
-			stat.st_size,
-			export_format,
-		)
-		dest = Path(self.exports_dir(library_root)) / cache_name
-		if dest.is_file() and dest.stat().st_size > 0:
+		dest = Path(export_cache_path(library_root, relative_path, export_format))
+		if dest.is_file() and dest.stat().st_size > 0 and dest.stat().st_mtime >= source_path.stat().st_mtime:
 			if on_progress:
 				on_progress(100)
 			return ExportResult(download_path=str(dest.resolve()), skipped_encode=False)

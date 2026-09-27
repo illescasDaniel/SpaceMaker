@@ -10,13 +10,66 @@ pytestmark = pytest.mark.integration
 
 
 def test_given_fresh_app_when_get_index_then_returns_html() -> None:
+	from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
+
 	client = TestClient(create_app())
 	response = client.get("/")
 	assert response.status_code == 200
 	assert "text/html" in response.headers.get("content-type", "")
 	assert "SpaceMaker" in response.text
+	assert response.headers.get("cache-control") == "no-store, must-revalidate"
+	assert f'window.SPACEMAKER_UI_SHELL_VERSION = "{UI_SHELL_VERSION}"' in response.text
+	assert f"/static/app.js?v={UI_SHELL_VERSION}" in response.text
 	csp = response.headers.get("content-security-policy", "")
 	assert "unsafe-eval" in csp
+
+
+def test_given_fresh_app_when_get_index_and_settings_then_shell_versions_match() -> None:
+	client = TestClient(create_app())
+	index = client.get("/")
+	settings = client.get("/api/settings")
+	assert index.status_code == 200
+	assert settings.status_code == 200
+	version = settings.json()["ui_shell_version"]
+	assert version
+	assert f'window.SPACEMAKER_UI_SHELL_VERSION = "{version}"' in index.text
+
+
+def test_given_static_app_js_when_get_then_no_store_cache() -> None:
+	client = TestClient(create_app())
+	response = client.get("/static/app.js")
+	assert response.status_code == 200
+	assert response.headers.get("cache-control") == "no-store, must-revalidate"
+
+
+def test_given_fresh_app_when_get_index_then_home_layout_matches_spec() -> None:
+	# given
+	client = TestClient(create_app())
+
+	# when
+	response = client.get("/")
+
+	# then
+	assert response.status_code == 200
+	html = response.text
+	assert "Choose what you want to do on this PC and your phone." not in html
+	assert "home-hub-lead" not in html
+	assert "grid-template-columns: repeat(3, minmax(0, 8.75rem))" in html
+	assert "aspect-ratio: 4 / 3" in html
+	assert "#view-home.screen.active" in html
+	assert "justify-content: center" in html
+	assert "position: fixed" in html
+	assert 'class="app-footer"' in html
+	assert 'id="transfer-save-tip"' in html
+	assert 'id="btn-transfer-open-documents"' in html
+	assert html.count('class="module-tile"') == 5
+
+
+def test_given_default_window_geometry_when_inspect_then_960x720() -> None:
+	from spacemaker.bootstrap.window_geometry import DESKTOP_WINDOW_HEIGHT, DESKTOP_WINDOW_WIDTH
+
+	assert DESKTOP_WINDOW_WIDTH == 960
+	assert DESKTOP_WINDOW_HEIGHT == 720
 
 
 def test_given_devtools_probe_when_get_json_version_then_200() -> None:

@@ -1,4 +1,4 @@
-_Last updated: 2026-09-26_
+_Last updated: 2026-09-27_
 
 ## Branch
 
@@ -10,6 +10,8 @@ _Last updated: 2026-09-26_
 
 Wireframe, spec, and architecture approved 2026-09-26.
 
+Synced with `origin/main` (`55939b2`) — Transfer files + gallery orphan cache cleanup now on this branch.
+
 ## Next steps
 
 - Manual browser check of Photo backup checkbox / info panel / tools-unavailable state (optional polish).
@@ -17,6 +19,7 @@ Wireframe, spec, and architecture approved 2026-09-26.
 
 ## Just changed
 
+- Merged `origin/main` into this branch (resolved memory/specs/wireframe conflicts)
 - Domain/ports (Phase 2) + tests + `JsonUserPreferences`, `ManagedCompressionTools`
 - Settings `compress_media` field; Easy auto-convert gated; production Easy UI
 - Specs/wireframe already on branch

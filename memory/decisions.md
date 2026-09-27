@@ -2,11 +2,41 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-27 — Transfer desktop Download saves to Documents/SpaceMaker; Home centered + 960×720
+
+- **Context:** Desktop Transfer **Download** used `<a download>` which pywebview ignores. User wanted copies in `Documents/SpaceMaker` with visible feedback. Also asked for a smaller default window and a centered Home grid.
+- **Decision:** `SaveTransferItemToDocuments` use case + loopback `POST /api/transfer/save`; phone keeps streaming `GET /api/transfer/download`. UI Tip + Open documents folder. Default window `960×720`; `#view-home` flex-centered. Spec/wireframe updated under SDD (redundant session/Documents lead line removed).
+- **Rationale:** Documents root already used by Receive; collision suffix matches transfer naming; ephemeral staging unchanged.
+
+## 2026-09-27 — Home hub: 3-column 4:3 tiles + floating footer (UI-only)
+
+- **Context:** User wanted a denser Home with three columns, smaller tiles that stay 4:3 (not square), unchanged icon/title size, and a floating Settings/About footer instead of a full-width strip. Also asked to drop hub lead copy and to separate wireframe Tip vs agent/reviewer notes so production never inherits programmer chrome.
+- **Decision:** Spec/wireframe updated under SDD gates; architecture is inbound-static-only (no domain/ports). Production `index.html` matches: `repeat(3, …8.75rem)`, `aspect-ratio: 4 / 3`, fixed floating `.app-footer`, no `.home-hub-lead`. Wireframe annotation vocabulary (`.tip` / `.wf-note` / `.wf-demo`) documented in `wireframes/README.md` and never copied to `static/`. Bumped `UI_SHELL_VERSION` to `2026.09.home-layout`.
+- **Rationale:** Layout chrome doesn’t need hexagonal surface area; stamping + shell version bump keeps desktop WebEngine on the new CSS.
+
+## 2026-09-27 — UI shell version: single source of truth + silent auto-reload (no mismatch banner)
+
+- **Context:** Desktop showed "UI and server do not match" because `UI_SHELL_VERSION` in Python (`2026.09.transfer-files`) had drifted from a hardcoded `EXPECTED_UI_SHELL_VERSION` in `app.js` (`2026.09.gallery-nav`). The dual constant was easy for agents to forget when bumping the shell; the banner was a false positive even with a fresh, correct UI. User asked that opening SpaceMaker always get the latest UI and never surface that error.
+- **Decision:** Keep one constant (`UI_SHELL_VERSION` in `ui_shell.py`). Serve desktop/mobile-gallery HTML through `stamp_shell_html()` so the page embeds `window.SPACEMAKER_UI_SHELL_VERSION` and `app.js?v=…` from that same value. Remove the JS expected-version constant. On a true stale WebEngine document, `healIfStaleShell` does a one-shot `location.replace` with a cache-bust query instead of showing a banner. Expand `Cache-Control: no-store` to all `/static/` paths (not only `app.js`).
+- **Rationale:** Serve-time stamping makes page and `/api/settings` unable to disagree when both are live; auto-reload heals the only remaining case (cached HTML). Bumping shell assets is again one edit in one file.
+
 ## 2026-09-26 — Photo backup Compress media: disk preferences + Easy UI (full SDD)
 
 - **Context:** Approved wireframe + easy-mode spec + architecture for a **Compress media** checkbox on Photo backup (Easy): default on, forced off when compression CLIs missing, persisted across launches, gates Easy auto-convert.
 - **Decision:** (1) Domain `compress_media.py` + ports `UserPreferencesPort` / `CompressionToolsPort`. (2) Adapter `JsonUserPreferences` at `{spacemaker_data_dir}/preferences.json` (atomic write); `ManagedCompressionTools` over managed-tool snapshot (`magick` + `ffmpeg`). (3) `PUT /api/settings` accepts `compress_media` even during extract; turning on resumes Easy drain. Client omits the field when the checkbox is disabled so a stored “on” is not overwritten while tools are missing. (4) Easy UI matches wireframe (checkbox, ⓘ why/how, tools hint, hide Convert progress when off). Hardware encoders are **not** part of the tools gate.
 - **Rationale:** First disk-backed user preference separate from session-only `AppSession`; JSON next to managed-tools data reuses existing OS data-dir layout. Verified live: tools-unavailable forced-off + info panel; unit/integration tests green (unrelated pre-existing raw/magick unit failure when ImageMagick absent).
+
+## 2026-09-25 — Transfer files: ephemeral staging + SHA-256 name collision; fifth Home module
+
+- **Context:** New bidirectional LAN session (PC + phones upload/download). User chose keep Receive/Send and add a fifth Home tile; same display name with different content gets auto-suffix (`report (2).pdf`). Spec approved 2026-09-25.
+- **Decision:** Session bytes live only under an ephemeral staging root (not Documents, not library). `ContentHasher` outbound port (`sha256_file`) feeds `StageTransferItem`; domain `allocate_transfer_display_name` skips when name+hash match and otherwise suffixes before the final extension. Folders become one `FOLDER_ZIP` row via existing `write_folder_zip`. `AppModule.TRANSFER_FILES` / `LanSessionKind.TRANSFER_FILES` added. HTTP/UI wiring deferred to Phase 4 after architecture approval.
+- **Rationale:** Hash-on-collision matches the approved spec without path-only skip (receive/send). A dedicated hasher port keeps hashing out of domain and out of FastAPI handlers. Reusing share’s zip helper avoids a second zip implementation.
+
+## 2026-09-26 — Gallery derived caches: injective path-mirrored thumbs/exports; no cache paths in SQLite
+
+- **Context:** In-app delete already cleared `converted/` + `.thumbnails/` + the index row, but not `.exports/`. External deletes dropped index rows on sync but left both `.thumbnails/` and `.exports/` orphans. Friendly exports used opaque `sha256(path+mtime_ns+size+format)` names, which cannot be reconstructed after an external delete because the index only stores float `mtime` + size. User also asked whether thumb/export paths should be stored in `.index.sqlite` for conflict resolution.
+- **Decision:** (1) Do **not** store thumbnail or export paths in the gallery index — it remains derived metadata only; filesystem is source of truth. (2) Switch both caches to **injective path-mirrored** names by appending the cache extension to the full relative path (keep original suffix): e.g. `2025/vacation.avif` → `.thumbnails/2025/vacation.avif.jpg` and `.exports/2025/vacation.avif.jpg`. (3) Reuse caches when `cache.mtime >= source.mtime`. (4) GC on in-app delete and on sync for `removed` (thumb + exports) and `changed` (exports); sweep legacy hash-named `.exports/` files on sync.
+- **Rationale:** Hash names blocked reliable GC after external delete. Stem-replaced thumbs (`with_suffix(".jpg")`) already collide for `vacation.avif` vs `vacation.mp4`. Storing paths in SQLite would duplicate a pure function, go stale on naming changes, vanish on index rebuild, and not prevent on-disk collisions. Appended-suffix mirroring makes `relative_path` → cache path injective and deletable without DB state. SPEC updated first (`specs/gallery/SPEC.md`); implementation gated on explicit spec approval.
 
 ## 2026-09-25 — Gallery item detail: real-thumbnail-first progressive loading, photo-app open animation, slide transitions on prev/next; fixed a `.gallery-item-stage` centering regression
 

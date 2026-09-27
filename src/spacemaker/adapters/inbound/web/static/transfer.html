@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="icon" href="/favicon.ico" sizes="32x32">
+	<title>SpaceMaker — Transfer files</title>
+	<link rel="stylesheet" href="/static/theme.css">
+	<style>
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: var(--font);
+			background: var(--bg);
+			color: var(--text);
+			line-height: 1.5;
+		}
+		.page { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+		.logo { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.35rem; }
+		.logo span { color: var(--accent); }
+		.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.5rem; }
+		.ephemeral { font-size: 0.8rem; color: var(--muted); margin: 0 0 1rem; }
+		.card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 1rem;
+			margin-bottom: 0.75rem;
+			animation: panel-fade-in var(--dur-base) var(--ease-standard);
+		}
+		.card-list { padding: 0.25rem 0; }
+		@keyframes panel-fade-in {
+			from { opacity: 0; }
+			to { opacity: 1; }
+		}
+		.section-label {
+			font-size: 0.75rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--muted);
+			margin: 0 0 0.5rem;
+		}
+		.btn {
+			font: inherit;
+			display: block;
+			width: 100%;
+			border: none;
+			border-radius: 8px;
+			padding: 0.7rem 1rem;
+			cursor: pointer;
+			font-weight: 600;
+			margin-top: 0.45rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+		}
+		.btn:active { transform: scale(0.97); }
+		.btn-primary { background: var(--accent-dim); color: #fff; }
+		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+		.hint { font-size: 0.8rem; color: var(--muted); margin: 0.85rem 0 0; }
+		.sent-count { font-size: 0.9rem; font-weight: 600; margin: 0 0 0.75rem; }
+		.file-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.75rem;
+			padding: 0.65rem 1rem;
+			border-bottom: 1px solid var(--border);
+			font-size: 0.9rem;
+		}
+		.file-row:last-child { border-bottom: none; }
+		.name-block { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
+		.file-name {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			font-weight: 600;
+		}
+		.file-from { font-size: 0.75rem; color: var(--muted); }
+		.btn-dl {
+			font: inherit;
+			border: none;
+			border-radius: 6px;
+			padding: 0.35rem 0.65rem;
+			cursor: pointer;
+			font-weight: 600;
+			background: var(--accent-dim);
+			color: #fff;
+			flex-shrink: 0;
+			text-decoration: none;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+		}
+		.btn-dl:active { transform: scale(0.95); }
+		.empty { color: var(--muted); font-size: 0.9rem; padding: 1rem; text-align: center; }
+		.hidden { display: none; }
+		#file-input, #folder-input { display: none; }
+	</style>
+</head>
+<body>
+	<div class="page">
+		<p class="logo">Space<span>Maker</span></p>
+		<p class="sub">Upload and download in this shared session.</p>
+		<p class="ephemeral">Everything here is temporary — when the PC closes Transfer files, these files are deleted.</p>
+		<p class="sent-count" id="item-count" hidden></p>
+		<div id="panel-ended" class="card hidden">
+			<p class="empty">This transfer session has ended. Scan the QR code again on your PC.</p>
+		</div>
+		<div id="panel-main">
+			<div class="card" id="upload-card">
+				<p class="section-label">Upload</p>
+				<button type="button" class="btn btn-primary" id="btn-pick-files">Choose files</button>
+				<button type="button" class="btn btn-secondary" id="btn-pick-folder">Choose folder</button>
+				<input type="file" id="file-input" multiple />
+				<input type="file" id="folder-input" webkitdirectory directory multiple />
+				<p class="hint" id="device-hint"></p>
+			</div>
+			<div class="card hidden" id="panel-uploading">
+				<p id="upload-status"><strong>Uploading…</strong></p>
+			</div>
+			<div class="card card-list" id="list-card">
+				<p class="section-label" style="padding: 0.75rem 1rem 0;">Session files</p>
+				<div id="panel-list"></div>
+			</div>
+		</div>
+	</div>
+	<script>
+	(function () {
+		var params = new URLSearchParams(window.location.search);
+		var token = params.get("t") || "";
+
+		function uploadDeviceKind() {
+			var ua = navigator.userAgent || "";
+			if (/iPhone|iPad|iPod/i.test(ua)) {
+				return "ios";
+			}
+			if (/Android/i.test(ua)) {
+				return "android";
+			}
+			return "other";
+		}
+
+		function applyUploadUiForDevice() {
+			var kind = uploadDeviceKind();
+			var pickFiles = document.getElementById("btn-pick-files");
+			var pickFolder = document.getElementById("btn-pick-folder");
+			var hint = document.getElementById("device-hint");
+			if (kind === "ios") {
+				if (pickFiles) {
+					pickFiles.textContent = "Choose";
+				}
+				if (pickFolder) {
+					pickFolder.classList.add("hidden");
+				}
+				if (hint) {
+					hint.textContent = "Tap Choose, then pick from Photos or Files. Folders upload as a zip when supported.";
+				}
+			} else {
+				if (pickFiles) {
+					pickFiles.textContent = "Choose files";
+				}
+				if (pickFolder) {
+					pickFolder.classList.remove("hidden");
+				}
+				if (hint) {
+					hint.textContent =
+						kind === "android"
+							? "On Android: folders upload as a zip. Or choose files one batch at a time."
+							: "Pick files or a folder from this device. Folders upload as a zip.";
+				}
+			}
+		}
+
+		function sessionUrl() {
+			return "/api/transfer/session?t=" + encodeURIComponent(token);
+		}
+
+		function downloadUrl(fileId) {
+			return "/api/transfer/download?t=" + encodeURIComponent(token) + "&file_id=" + encodeURIComponent(fileId);
+		}
+
+		function originLabel(file) {
+			if (file.origin === "pc") {
+				return "from PC";
+			}
+			return "from Phone";
+		}
+
+		function renderFiles(files) {
+			var list = document.getElementById("panel-list");
+			var countEl = document.getElementById("item-count");
+			if (!list) {
+				return;
+			}
+			list.innerHTML = "";
+			if (countEl) {
+				countEl.hidden = false;
+				countEl.textContent =
+					files.length === 1 ? "1 item in session" : files.length + " items in session";
+			}
+			if (!files.length) {
+				list.innerHTML = '<p class="empty">No files in this session yet.</p>';
+				return;
+			}
+			files.forEach(function (file) {
+				var row = document.createElement("div");
+				row.className = "file-row";
+				var block = document.createElement("span");
+				block.className = "name-block";
+				var name = document.createElement("span");
+				name.className = "file-name";
+				name.textContent = file.name;
+				var from = document.createElement("span");
+				from.className = "file-from";
+				from.textContent =
+					file.kind === "folder_zip" ? "folder · " + originLabel(file) : originLabel(file);
+				block.appendChild(name);
+				block.appendChild(from);
+				var btn = document.createElement("a");
+				btn.className = "btn-dl";
+				btn.href = downloadUrl(file.id);
+				btn.textContent = "Download";
+				btn.setAttribute("download", file.download_name || file.name || "");
+				row.appendChild(block);
+				row.appendChild(btn);
+				list.appendChild(row);
+			});
+		}
+
+		function showEnded() {
+			document.getElementById("panel-ended").classList.remove("hidden");
+			document.getElementById("panel-main").classList.add("hidden");
+		}
+
+		function refreshSession() {
+			if (!token) {
+				showEnded();
+				return Promise.resolve(null);
+			}
+			return fetch(sessionUrl(), { headers: { Accept: "application/json" } })
+				.then(function (r) { return r.json(); })
+				.then(function (body) {
+					if (!body.active) {
+						showEnded();
+						return body;
+					}
+					document.getElementById("panel-ended").classList.add("hidden");
+					document.getElementById("panel-main").classList.remove("hidden");
+					renderFiles(body.files || []);
+					return body;
+				});
+		}
+
+		function uploadLooseFiles(fileList) {
+			if (!fileList?.length) {
+				return;
+			}
+			var form = new FormData();
+			var i;
+			for (i = 0; i < fileList.length; i++) {
+				form.append("files", fileList[i], fileList[i].name);
+			}
+			return postUpload(form, fileList.length);
+		}
+
+		function uploadFolder(fileList) {
+			if (!fileList?.length) {
+				return;
+			}
+			var first = fileList[0];
+			var rel = (first.webkitRelativePath || first.name).replace(/\\/g, "/");
+			var folderName = rel.split("/")[0] || "folder";
+			var form = new FormData();
+			form.append("as_folder", "1");
+			form.append("folder_name", folderName);
+			var i;
+			var file;
+			var name;
+			for (i = 0; i < fileList.length; i++) {
+				file = fileList[i];
+				name = file.webkitRelativePath || file.name;
+				form.append("files", file, name);
+			}
+			return postUpload(form, fileList.length);
+		}
+
+		function postUpload(form, count) {
+			document.getElementById("upload-card").classList.add("hidden");
+			document.getElementById("panel-uploading").classList.remove("hidden");
+			document.getElementById("upload-status").textContent = "Uploading " + count + " file(s)…";
+			return fetch("/api/transfer?t=" + encodeURIComponent(token), {
+				method: "POST",
+				body: form,
+			})
+				.then(function (r) {
+					if (!r.ok) {
+						return r.text().then(function (t) {
+							throw new Error(t || "Upload failed");
+						});
+					}
+					return r.json();
+				})
+				.then(function () {
+					document.getElementById("panel-uploading").classList.add("hidden");
+					document.getElementById("upload-card").classList.remove("hidden");
+					return refreshSession();
+				})
+				.catch(function (err) {
+					document.getElementById("upload-status").textContent = err.message || "Upload failed";
+					document.getElementById("upload-card").classList.remove("hidden");
+					return refreshSession();
+				});
+		}
+
+		document.getElementById("btn-pick-files").addEventListener("click", function () {
+			document.getElementById("file-input").click();
+		});
+		document.getElementById("btn-pick-folder").addEventListener("click", function () {
+			document.getElementById("folder-input").click();
+		});
+		document.getElementById("file-input").addEventListener("change", function (ev) {
+			uploadLooseFiles(ev.target.files);
+			ev.target.value = "";
+		});
+		document.getElementById("folder-input").addEventListener("change", function (ev) {
+			uploadFolder(ev.target.files);
+			ev.target.value = "";
+		});
+
+		applyUploadUiForDevice();
+		refreshSession();
+		setInterval(refreshSession, 5000);
+	})();
+	</script>
+</body>
+</html>

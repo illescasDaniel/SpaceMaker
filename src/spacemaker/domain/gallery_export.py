@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from enum import StrEnum
 from pathlib import PurePosixPath
 
@@ -42,15 +41,3 @@ def is_friendly_h264_aac_mp4(probe: VideoProbe | None) -> bool:
 	if probe.audio_codec is not None and probe.audio_codec.lower() != "aac":
 		return False
 	return is_web_compatible_video(probe)
-
-
-def export_cache_filename(
-	relative_path: str,
-	source_mtime_ns: int,
-	source_size: int,
-	export_format: ExportFormat,
-) -> str:
-	ext = "jpg" if export_format is ExportFormat.JPEG else "mp4"
-	key = f"{relative_path}\0{source_mtime_ns}\0{source_size}\0{export_format.value}"
-	digest = hashlib.sha256(key.encode()).hexdigest()[:20]
-	return f"{digest}.{ext}"

@@ -25,10 +25,10 @@ Composition root: `bootstrap.services.create_app()` wires outbound adapters into
 
 ## Runtime flow
 
-1. **Home hub** — four modules: Photo backup (Wi‑Fi library receive), USB photo backup (wizard), Receive files (Documents), Send files (PC → phone). See [specs/home-modules/SPEC.md](../specs/home-modules/SPEC.md).
+1. **Home hub** — five modules: Photo backup (Wi‑Fi library receive), USB photo backup (wizard), Receive files (Documents), Send files (PC → phone), Transfer files (temporary multi-device upload+download). See [specs/home-modules/SPEC.md](../specs/home-modules/SPEC.md).
 2. **Extract** — Wi‑Fi QR upload and/or `DeviceRepository` (MTP via **libmtp**, ADB via **adbutils** + `adb`) into `originals/`. Managed tool dir → download → `PATH` after setup. See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md).
 3. **Convert** — reads `originals/`, writes `converted/`, or routes failures to `error/` / `invalid/`.
-4. **Gallery** — indexes `converted/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, and share sessions.
+4. **Gallery** — indexes `converted/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, share, and transfer sessions.
 
 Progress for extract and convert streams over WebSockets to the desktop web UI (loopback only). Phone clients use HTTP APIs and tokenized upload/share/receive endpoints.
 
@@ -50,12 +50,12 @@ registers every route as an inline closure via
 `@app.get/post/put/delete/websocket(...)` inside that one function — there is
 no separate `APIRouter`/controller-class layer. Routes are grouped by prefix
 convention (`/api/gallery/...`, `/api/extract/...`, `/api/convert/...`,
-`/api/tools/...`, `/api/receive/...`, `/api/share/...`) rather than by file.
+`/api/tools/...`, `/api/receive/...`, `/api/share/...`, `/api/transfer/...`) rather than by file.
 Each handler is a thin adapter that calls into `AppServices` /
 application-layer use cases and serializes domain objects to dicts — a
 closure-based composition style, not classic MVC. Static SPA shells are
 served from `adapters/inbound/web/static/` via a `StaticFiles` mount plus
-explicit HTML entry routes (`/`, `/gallery`, `/upload`, `/receive`, `/share`).
+explicit HTML entry routes (`/`, `/gallery`, `/upload`, `/receive`, `/share`, `/transfer`).
 A single `/ws` WebSocket endpoint pushes state updates to connected clients.
 Request bodies are typed with Pydantic `BaseModel`s.
 

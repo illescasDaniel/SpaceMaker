@@ -1,12 +1,13 @@
+import os
 from pathlib import Path
 
 from tests.unit.fakes import FakeMediaConverter, FakeMediaProbe
 
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
+from spacemaker.domain.gallery_cache_paths import export_cache_path
 from spacemaker.domain.gallery_export import (
 	ExportFormat,
-	export_cache_filename,
 	is_friendly_h264_aac_mp4,
 	is_friendly_jpeg_filename,
 	is_safe_gallery_relative_path,
@@ -40,7 +41,7 @@ def test_given_h264_aac_probe_when_friendly_mp4_then_true() -> None:
 	assert is_friendly_h264_aac_mp4(probe) is True
 
 
-def test_given_avif_in_converted_when_export_jpeg_then_writes_cache(tmp_path) -> None:
+def test_given_avif_in_converted_when_export_jpeg_then_writes_path_mirrored_cache(tmp_path) -> None:
 	# given
 	library = str(tmp_path / "lib")
 	fs = LocalFileSystem()
@@ -49,12 +50,14 @@ def test_given_avif_in_converted_when_export_jpeg_then_writes_cache(tmp_path) ->
 	Path(source).write_bytes(b"x" * 100)
 	converter = FakeMediaConverter()
 	use_case = ExportFriendlyMedia(fs, converter, FakeMediaProbe())
+	expected = export_cache_path(library, "a.avif", ExportFormat.JPEG)
 	# when
 	result = use_case.run(library, "a.avif", ExportFormat.JPEG)
 	# then
 	assert len(converter.encoded_jpegs) == 1
 	assert result.skipped_encode is False
-	assert result.download_path.endswith(".jpg")
+	assert result.download_path == str(Path(expected).resolve())
+	assert Path(expected).is_file()
 
 
 def test_given_jpeg_in_converted_when_export_jpeg_then_skips_encode(tmp_path) -> None:
@@ -74,11 +77,23 @@ def test_given_jpeg_in_converted_when_export_jpeg_then_skips_encode(tmp_path) ->
 	assert result.download_path == source
 
 
-def test_given_stable_inputs_when_cache_filename_then_deterministic() -> None:
+def test_given_fresh_cache_when_export_jpeg_then_reuses_without_reencode(tmp_path) -> None:
 	# given
+	library = str(tmp_path / "lib")
+	fs = LocalFileSystem()
+	fs.ensure_library_folders(library)
+	source = fs.library_path(library, LibraryFolder.CONVERTED, "a.avif")
+	Path(source).write_bytes(b"x" * 100)
+	cache = Path(export_cache_path(library, "a.avif", ExportFormat.JPEG))
+	cache.parent.mkdir(parents=True, exist_ok=True)
+	cache.write_bytes(b"cached")
+	# Ensure cache is not older than source.
+	os.utime(cache, (Path(source).stat().st_mtime + 1, Path(source).stat().st_mtime + 1))
+	converter = FakeMediaConverter()
+	use_case = ExportFriendlyMedia(fs, converter, FakeMediaProbe())
 	# when
-	a = export_cache_filename("x/y.avif", 1, 2, ExportFormat.JPEG)
-	b = export_cache_filename("x/y.avif", 1, 2, ExportFormat.JPEG)
+	result = use_case.run(library, "a.avif", ExportFormat.JPEG)
 	# then
-	assert a == b
-	assert a.endswith(".jpg")
+	assert converter.encoded_jpegs == []
+	assert result.skipped_encode is False
+	assert result.download_path == str(cache.resolve())

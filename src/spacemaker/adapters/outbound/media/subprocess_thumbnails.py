@@ -4,6 +4,7 @@ from pathlib import Path
 
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
+from spacemaker.domain.gallery_cache_paths import thumbnail_path
 from spacemaker.domain.library import LibraryFolder
 from spacemaker.domain.media import MediaKind, media_kind_for_filename
 
@@ -19,7 +20,7 @@ class SubprocessThumbnailGenerator:
 		source = Path(self._library_converted_path(library_root, relative_path))
 		if not source.is_file():
 			raise FileNotFoundError(relative_path)
-		dest = self._thumb_path(library_root, relative_path)
+		dest = Path(thumbnail_path(library_root, relative_path))
 		dest.parent.mkdir(parents=True, exist_ok=True)
 		if dest.is_file() and dest.stat().st_mtime >= source.stat().st_mtime:
 			return str(dest)
@@ -33,11 +34,6 @@ class SubprocessThumbnailGenerator:
 	def _library_converted_path(self, library_root: str, relative: str) -> str:
 		base = Path(library_root) / LibraryFolder.CONVERTED.value
 		return str((base / relative).resolve())
-
-	def _thumb_path(self, library_root: str, relative: str) -> Path:
-		rel = Path(relative)
-		stem = rel.with_suffix(".jpg")
-		return Path(library_root) / ".thumbnails" / stem
 
 	def _thumb_image(self, source: Path, dest: Path) -> None:
 		size = str(THUMB_SIZE)
