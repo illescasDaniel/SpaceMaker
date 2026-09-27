@@ -1532,10 +1532,10 @@
 		var openWrap = document.getElementById("uft-open-folder-wrap");
 		var showProgress = phase === "running" || phase === "paused" || phase === "done" || phase === "stopped";
 		var transferActive = phase === "running" || phase === "paused";
+		var available = next.usb_transfer_available_folders;
+		var availableKey = Array.isArray(available) ? available.slice().sort().join(",") : "all";
 		if (next.active_module === "usb_file_transfer") {
 			syncUsbTransferConnectionButtons(method);
-			var available = next.usb_transfer_available_folders;
-			var availableKey = Array.isArray(available) ? available.slice().sort().join(",") : "all";
 			if (uftFoldersMethod !== method || uftAvailableFoldersKey !== availableKey) {
 				rebuildUsbTransferFolders(method, next.transfer_folders || [], available);
 				uftFoldersMethod = method;
@@ -2809,8 +2809,7 @@
 			var browse = state?.usb_transfer_browse || {};
 			if (!browse.mount_available && !browse.mount_root) {
 				showFormBanner(
-					browse.hint ||
-						"Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.",
+					browse.hint || "Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.",
 					"uft-form-banner",
 				);
 				return Promise.reject(new Error("mount unavailable"));

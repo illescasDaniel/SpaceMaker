@@ -1274,11 +1274,9 @@ class AppServices:
 		mount = peek(device_id) if callable(peek) else None
 		if mount:
 			# Prefer shallow mount names when a live mount already exists.
-			try:
+			with contextlib.suppress(Exception):
 				from_mount = probe_existing_transfer_folders(mount)
 				available = sorted(f.value for f in from_mount)
-			except Exception:
-				pass
 			return {
 				"mount_available": True,
 				"mount_root": mount,
@@ -1321,9 +1319,7 @@ class AppServices:
 		mount = repo.browse_root(device_id)
 		if not mount:
 			if method is ConnectionMethod.ADB:
-				raise ValueError(
-					"Could not mount with adbfs. Install adbfs-rootless-git (or similar) and retry."
-				)
+				raise ValueError("Could not mount with adbfs. Install adbfs-rootless-git (or similar) and retry.")
 			raise ValueError("phone mount not available for Add files/folder")
 		return mount
 
