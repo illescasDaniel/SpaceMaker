@@ -1,30 +1,20 @@
-_Last updated: 2026-09-25_
+_Last updated: 2026-09-27_
 
 ## Branch
 
-`cursor/transfer-files-5ada`
+`cursor/transfer-files-5ada` (merging to main)
 
 ## Current focus
 
-**Transfer files** — Phases 0–4 complete (wireframe/spec/architecture approved; tests + impl landed). Ready for user verification.
+Hand-off after Transfer files + Home polish: commit pushed, PR ready → CI → merge → delete remote branch.
 
-## Just changed
+## Just changed (this commit)
 
-- Domain/ports/use case (Phase 2)
-- Unit tests (`test_transfer_session.py`, `test_transfer_files_session.py`)
-- `AppServices` transfer session + wipe on Home/shutdown
-- Routes `/transfer`, `/api/transfer/*`
-- Static: `transfer.html`, Home tile + `#view-transfer-files`, `app.js`
-- `Sha256ContentHasher` adapter
+- UI shell stamp / no mismatch banner; Home 3-col 4:3 + floating footer + centered hub; window 960×720
+- Transfer PC Download → Documents/SpaceMaker + Tip / Open documents folder
+- Wireframe annotation vocabulary (Tip / Review / Agent)
 
-## Next steps
+## Next steps (after merge)
 
-- Manual smoke: enter Transfer files, scan QR, upload from phone, add from PC, download both ways, Home deletes staging
-- Optionally mark draft PR ready when verified
-
-## Run
-
-```bash
-uv run task spacemaker-server
-# open Home → Transfer files
-```
+- Continue on `main` (or new feature branch)
+- Open items still in `progress.md`: Easy mode import issues; Windows/macOS native webview confirm

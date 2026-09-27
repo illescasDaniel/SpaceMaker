@@ -75,6 +75,9 @@
 			flex: 1;
 			display: flex;
 			flex-direction: column;
+			min-height: 0;
+			/* Clearance for the floating footer so last content isn’t covered. */
+			padding-bottom: 4.5rem;
 		}
 
 		.wireframe-banner {
@@ -133,6 +136,19 @@
 		.screen.active {
 			display: block;
 			animation: screen-fade-in var(--dur-base) var(--ease-standard);
+		}
+
+		/* Home hub: center the module grid in the window. */
+		#view-home.screen.active {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			flex: 1;
+			width: 100%;
+			max-width: none;
+			min-height: 0;
+			box-sizing: border-box;
 		}
 
 		@keyframes screen-fade-in {
@@ -924,12 +940,23 @@
 		}
 
 		.app-footer {
-			border-top: 1px solid var(--border);
-			padding: 0.75rem 1.5rem;
+			position: fixed;
+			left: 50%;
+			bottom: 1rem;
+			transform: translateX(-50%);
+			z-index: 40;
+			width: max-content;
+			max-width: calc(100% - 2rem);
+			margin: 0;
+			padding: 0.55rem 1.35rem;
 			text-align: center;
 			font-size: 0.85rem;
 			color: var(--muted);
-			background: var(--surface);
+			background: color-mix(in srgb, var(--surface) 94%, transparent);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+			backdrop-filter: blur(10px);
 		}
 
 		.app-footer button {
@@ -1221,32 +1248,28 @@
 
 
 		.home-hub {
-			max-width: 36rem;
+			max-width: 30rem;
+			width: 100%;
 			margin: 0 auto;
-			padding: 1.5rem 1.25rem 2.5rem;
-		}
-
-		.home-hub-lead {
-			text-align: center;
-			color: var(--muted);
-			margin: 0 0 1.5rem;
-			font-size: 1.05rem;
+			padding: 1rem 1.25rem;
 		}
 
 		.module-grid {
 			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 1rem;
+			grid-template-columns: repeat(3, minmax(0, 8.75rem));
+			gap: 0.75rem;
+			justify-content: center;
 		}
 
 		.module-tile {
-			aspect-ratio: 1;
+			aspect-ratio: 4 / 3;
+			width: 100%;
 			display: flex;
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			gap: 0.65rem;
-			padding: 1rem;
+			gap: 0.5rem;
+			padding: 0.55rem 0.45rem;
 			border-radius: var(--radius);
 			border: 1px solid var(--border);
 			background: var(--surface);
@@ -1271,13 +1294,14 @@
 		.module-tile-icon {
 			width: 3rem;
 			height: 3rem;
+			flex-shrink: 0;
 			color: var(--accent-dim);
 		}
 
 		.module-tile-title {
 			font-weight: 700;
 			font-size: 0.92rem;
-			line-height: 1.25;
+			line-height: 1.2;
 		}
 
 		.share-picker {
@@ -1367,20 +1391,102 @@
 			font-size: 0.82rem;
 		}
 
-		.wireframe-review-hint {
-			text-align: center;
+		/* ── Annotation vocabulary (who is this text for?) ─────────────────
+		   .tip              → ships to product (end-user copy)
+		   .wf-note          → NEVER ships; wireframe-only. Required badge says
+		                       who it is for: data-for="reviewer" | "agent"
+		   .wireframe-banner → file-level chrome; NEVER ships
+		   .wf-demo          → interactive wireframe controls; NEVER ships
+		   Plain UI copy with no badge is product UI.
+		*/
+		.tip {
+			margin: 0.85rem 0 0;
+			padding: 0.65rem 0.85rem;
 			font-size: 0.85rem;
-			color: var(--muted);
-			margin: 1.25rem 0 0;
+			color: var(--text);
+			background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+			border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+			border-radius: 8px;
 		}
 
-		.wireframe-demo-row {
-			margin-top: 2rem;
+		.tip-badge {
+			display: inline-block;
+			margin-right: 0.35rem;
+			padding: 0.05rem 0.4rem;
+			border-radius: 4px;
+			font-size: 0.7rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+			color: #fff;
+			background: var(--accent-dim);
+			vertical-align: 0.05em;
+		}
+
+		.wf-note {
+			margin: 1rem 0 0;
+			padding: 0.65rem 0.85rem;
+			font-size: 0.8rem;
+			color: var(--muted);
+			background: repeating-linear-gradient(
+				-45deg,
+				var(--surface2),
+				var(--surface2) 8px,
+				color-mix(in srgb, var(--warn) 10%, var(--surface2)) 8px,
+				color-mix(in srgb, var(--warn) 10%, var(--surface2)) 16px
+			);
+			border: 1px dashed var(--warn);
+			border-radius: 8px;
+		}
+
+		.wf-note-badge {
+			display: inline-block;
+			margin: 0 0.4rem 0.35rem 0;
+			padding: 0.05rem 0.45rem;
+			border-radius: 4px;
+			font-size: 0.68rem;
+			font-weight: 700;
+			letter-spacing: 0.05em;
+			text-transform: uppercase;
+			color: #1a1400;
+			background: var(--warn);
+			vertical-align: 0.05em;
+		}
+
+		.wf-note[data-for="agent"] {
+			border-color: var(--disabled);
+			background: repeating-linear-gradient(
+				-45deg,
+				var(--surface2),
+				var(--surface2) 8px,
+				color-mix(in srgb, var(--disabled) 18%, var(--surface2)) 8px,
+				color-mix(in srgb, var(--disabled) 18%, var(--surface2)) 16px
+			);
+		}
+
+		.wf-note[data-for="agent"] .wf-note-badge {
+			color: #fff;
+			background: var(--disabled);
+		}
+
+		.wf-demo {
+			margin-top: 1.25rem;
 			font-size: 0.75rem;
 			color: var(--muted);
 		}
 
-		.wireframe-demo-row button {
+		.wf-demo::before {
+			content: "Wireframe demo — not in product";
+			display: block;
+			margin-bottom: 0.35rem;
+			font-size: 0.68rem;
+			font-weight: 700;
+			letter-spacing: 0.05em;
+			text-transform: uppercase;
+			color: var(--warn);
+		}
+
+		.wf-demo button {
 			font: inherit;
 			border: 1px dashed var(--border);
 			background: var(--surface2);
@@ -1388,6 +1494,18 @@
 			padding: 0.35rem 0.65rem;
 			border-radius: 6px;
 			cursor: pointer;
+		}
+
+		.transfer-save-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+			align-items: center;
+			margin-top: 0.75rem;
+		}
+
+		.transfer-save-actions .btn {
+			margin-top: 0;
 		}
 
 		.components-screen {
@@ -1451,13 +1569,12 @@
 </head>
 <body>
 	<div class="wireframe-banner">
-		<strong>Design preview (static HTML)</strong> — open this file in your browser (File → Open, or drag onto a browser window).
-		Click each Home tile to review layout. Phone pages: <code>wireframes/phone-receive.html</code>, <code>wireframes/phone-share.html</code>.
-		Not the live app (<code>uv run task spacemaker</code>).
-		<br>
-		<strong>Motion notes:</strong> shared vocabulary is <code>--ease-standard</code> / <code>--dur-fast</code> (120ms) / <code>--dur-base</code> (200ms), defined once in <code>:root</code>.
-		Motion only on user-caused state changes: navigation cross-fade, hover/press feedback, list add/remove, async state swaps (progress fill, panel show/hide).
-		No page-load intros, no decorative/looping animation. A <code>prefers-reduced-motion: reduce</code> block collapses everything to near-instant.
+		<strong>Design preview (static HTML)</strong> — not the live app.
+		Annotations:
+		<strong class="tip-badge" style="margin-left:0.25rem">Tip</strong> = end-user copy (ships);
+		<span class="wf-note-badge" style="margin-left:0.35rem">Review only</span> = for you reviewing;
+		<span class="wf-note-badge" style="margin-left:0.35rem;background:var(--disabled);color:#fff">Agent note</span> = for the coding agent — never ship striped notes or this banner.
+		Open <strong>Home</strong> (centered grid) and <strong>Transfer files</strong> (PC Download → Documents).
 	</div>
 
 	<div class="app-shell">
@@ -1502,13 +1619,14 @@
 				<button type="button" class="btn btn-primary" id="btn-components-continue">Continue</button>
 				<button type="button" class="btn btn-secondary" id="btn-components-retry">Retry downloads</button>
 			</div>
-			<p class="wireframe-demo-row" style="margin-top: 1.25rem;">Wireframe demo: <button type="button" id="btn-wireframe-show-components">Show components screen</button></p>
+			<div class="wf-demo">
+				<button type="button" id="btn-wireframe-show-components">Show components screen</button>
+			</div>
 		</div>
 	</section>
 
 	<section id="view-home" class="screen active" aria-label="Home hub">
 		<div class="home-hub">
-			<p class="home-hub-lead">Choose what you want to do on this PC and your phone.</p>
 			<div class="module-grid">
 				<button type="button" class="module-tile" data-module="photo_backup">
 					<svg class="module-tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
@@ -1556,7 +1674,14 @@
 					<span class="module-tile-title">Transfer files</span>
 				</button>
 			</div>
-			<p class="wireframe-review-hint">Tap a tile to preview that screen. Use <strong>Home</strong> in the breadcrumb to return.</p>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Home: 3-column grid, tiles <code>aspect-ratio: 4 / 3</code> at ~8.75rem wide (icon 3rem / title 0.92rem unchanged). Vertically+horizontally center <code>#view-home</code>. Default desktop window <code>960×720</code> (4:3) in <code>window_geometry.py</code>. Floating footer is fixed chrome — do not copy <code>.wf-note</code>, <code>.wf-demo</code>, or the top banner into production <code>static/</code>.
+			</aside>
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				Confirm the module grid sits in the middle of the window. Tap a tile to preview that module. Use <strong>Home</strong> in the breadcrumb to return.
+			</aside>
 		</div>
 	</section>
 
@@ -1631,11 +1756,10 @@
 			<div class="easy-view-gallery-wrap panel-hidden" id="easy-view-gallery-wrap">
 				<button type="button" class="btn btn-primary btn-easy-view-gallery" id="btn-easy-view-gallery">View gallery</button>
 			</div>
-			<p class="wireframe-demo-row">
-				Wireframe demo:
+			<div class="wf-demo">
 				<button type="button" id="btn-easy-toggle-gallery">Toggle View gallery</button>
 				<button type="button" id="btn-easy-cycle-import-issues">Cycle import issue banners</button>
-			</p>
+			</div>
 		</div>
 	</section>
 
@@ -1734,7 +1858,6 @@
 				<button type="button" class="info-btn" title="Show transfer URL">i</button>
 			</div>
 			<p class="easy-lead">Scan this QR with any phone on the same Wi‑Fi. Everyone in the session can upload and download until you return to Home.</p>
-			<p class="folder-hint">Files stay in a temporary session only. Closing this module deletes everything that was uploaded.</p>
 		</div>
 		<div class="share-picker transfer-session">
 			<div class="share-picker-actions">
@@ -1773,6 +1896,21 @@
 				</li>
 			</ul>
 			<p class="status-line" style="margin-top: 0.75rem;">4 items in session</p>
+			<p class="tip" id="transfer-save-tip" role="status">
+				<span class="tip-badge">Tip</span>
+				Saved to <code>~/Documents/SpaceMaker/notes.txt</code>
+			</p>
+			<div class="transfer-save-actions">
+				<button type="button" class="btn btn-primary">Open documents folder</button>
+			</div>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Desktop <strong>Download</strong> = <code>POST /api/transfer/save</code> copy into Documents/SpaceMaker (collision suffix); show tip with display path + Open documents folder. Keep <code>GET /api/transfer/download</code> for phone streaming only. Do not ship this striped note.
+			</aside>
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				Imagine you just hit <strong>Download</strong> on <code>notes.txt</code> — the Tip and Open documents folder appear. Phone download UX is unchanged (browser save).
+			</aside>
 		</div>
 	</section>
 
@@ -1959,7 +2097,9 @@
 				<button type="button" id="btn-calendar">Calendar</button>
 			</fieldset>
 		</div>
-		<p class="wireframe-demo-row">Wireframe demo: <button type="button" id="btn-demo-remove-thumb">Remove a thumbnail (delete animation)</button></p>
+		<div class="wf-demo">
+			<button type="button" id="btn-demo-remove-thumb">Remove a thumbnail (delete animation)</button>
+		</div>
 
 		<div class="gallery-layout">
 			<div class="gallery-main">

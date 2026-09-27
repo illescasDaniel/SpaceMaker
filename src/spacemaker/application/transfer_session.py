@@ -11,6 +11,7 @@ from spacemaker.domain.transfer_session import (
 	TransferSessionItem,
 	allocate_transfer_display_name,
 	folder_zip_display_name,
+	next_suffixed_display_name,
 )
 from spacemaker.ports.outbound.content_hasher import ContentHasher
 from spacemaker.ports.outbound.filesystem import FileSystemPort
@@ -29,6 +30,45 @@ EMPTY_TRANSFER_FOLDER_MESSAGE = (
 class TransferStageOutcome:
 	disposition: TransferIngestDisposition
 	item: TransferSessionItem | None
+
+
+@dataclass(frozen=True, slots=True)
+class SavedTransferDocument:
+	"""Result of copying a staged transfer item into Documents/SpaceMaker."""
+
+	saved_path: str
+	saved_name: str
+
+
+class SaveTransferItemToDocuments:
+	"""Copy a staged transfer file into the Documents receive root (collision-safe)."""
+
+	def __init__(self, filesystem: FileSystemPort) -> None:
+		self._filesystem = filesystem
+
+	def save(
+		self,
+		*,
+		staged_path: str,
+		display_name: str,
+		documents_root: str,
+	) -> SavedTransferDocument:
+		if not self._filesystem.exists(staged_path):
+			raise FileNotFoundError("transfer item is no longer available")
+		clean = display_name.strip()
+		if not clean or "/" in clean.replace("\\", "/") or clean in {".", ".."}:
+			raise ValueError("invalid display name")
+		placeholder = str(Path(documents_root) / ".spacemaker-keep")
+		self._filesystem.ensure_parent_directory(placeholder)
+		Path(documents_root).mkdir(parents=True, exist_ok=True)
+		taken: set[str] = set()
+		while True:
+			candidate = next_suffixed_display_name(clean, taken)
+			dest = str(Path(documents_root) / candidate)
+			if not self._filesystem.exists(dest):
+				self._filesystem.copy_file(staged_path, dest)
+				return SavedTransferDocument(saved_path=dest, saved_name=candidate)
+			taken.add(candidate)
 
 
 class StageTransferItem:

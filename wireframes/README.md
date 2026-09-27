@@ -2,6 +2,21 @@
 
 Self-contained HTML mocks for UX review **before** writing `specs/` or application code.
 
+## Who is this text for?
+
+Wireframes mix product UI with notes that must never ship. Use the right block:
+
+| Block | Audience | Ships to production? |
+|-------|----------|----------------------|
+| Plain UI (buttons, titles, `.folder-hint`, etc.) | End user | **Yes** — implement in `static/` |
+| `<p class="tip"><span class="tip-badge">Tip</span> …</p>` | End user (callout) | **Yes** — keep the Tip styling |
+| `<aside class="wf-note" data-for="reviewer">` + **Review only** badge | You (design review) | **No** |
+| `<aside class="wf-note" data-for="agent">` + **Agent note** badge | Coding agent | **No** |
+| `<div class="wf-demo">` | Interactive wireframe controls | **No** |
+| `.wireframe-banner` (top strip) | File chrome | **No** |
+
+Striped dashed boxes = wireframe-only. If it isn’t labeled Tip / Review only / Agent note / Wireframe demo, treat it as product UI.
+
 | File | Purpose |
 |------|---------|
 | [app.html](app.html) | Desktop app: Home hub, Photo/USB/Receive/Send/Transfer modules, Advanced wizard, Gallery |

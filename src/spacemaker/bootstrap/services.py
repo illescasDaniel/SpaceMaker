@@ -47,6 +47,7 @@ from spacemaker.application.sync_gallery_index import SyncGalleryIndex
 from spacemaker.application.transfer_session import (
 	EMPTY_TRANSFER_FOLDER_MESSAGE,
 	EmptyTransferFolderError,
+	SaveTransferItemToDocuments,
 	StageTransferItem,
 )
 from spacemaker.application.wizard_state import wizard_actions
@@ -146,6 +147,7 @@ class AppServices:
 		self.receive_documents = ReceiveUploadedDocuments(self.filesystem)
 		self.content_hasher = Sha256ContentHasher()
 		self.stage_transfer = StageTransferItem(self.filesystem, self.content_hasher)
+		self.save_transfer_to_documents = SaveTransferItemToDocuments(self.filesystem)
 		self._documents_receive_root = default_documents_receive_root()
 
 	def devices_for(self, method: ConnectionMethod):
@@ -566,6 +568,32 @@ class AppServices:
 				if item.file_id == file_id and Path(item.staged_path).is_file():
 					return item
 		return None
+
+	def save_transfer_item_to_documents(self, file_id: str) -> dict[str, str]:
+		"""Desktop Download: copy staged item into Documents/SpaceMaker (loopback)."""
+		fid = (file_id or "").strip()
+		if not fid:
+			raise ValueError("file_id required")
+		with self._wifi_token_lock:
+			token = self._transfer_session_token
+			active = self._lan_session_kind is LanSessionKind.TRANSFER_FILES and bool(token)
+		if not active:
+			raise PermissionError("transfer session ended")
+		with self._transfer_lock:
+			item = next((row for row in self._transfer_items if row.file_id == fid), None)
+		if item is None or not Path(item.staged_path).is_file():
+			raise FileNotFoundError("transfer item not found")
+		Path(self._documents_receive_root).mkdir(parents=True, exist_ok=True)
+		saved = self.save_transfer_to_documents.save(
+			staged_path=item.staged_path,
+			display_name=item.display_name,
+			documents_root=self._documents_receive_root,
+		)
+		return {
+			"saved_path": saved.saved_path,
+			"saved_name": saved.saved_name,
+			"saved_path_display": display_user_path(saved.saved_path),
+		}
 
 	def _next_transfer_file_id(self) -> str:
 		return f"t{uuid.uuid4().hex[:12]}"

@@ -1,6 +1,5 @@
 (function () {
 	var clientShell = window.SPACEMAKER_SHELL || "desktop";
-	var EXPECTED_UI_SHELL_VERSION = "2026.09.gallery-nav";
 	var lastMainView = "home";
 	var uiMode = "easy";
 	var state = null;
@@ -172,31 +171,44 @@
 		media.appendChild(full);
 	}
 
-	function warnIfStaleShell(settings) {
-		var homeBanner;
+	function clearHomeFormBanner() {
+		var homeBanner = document.getElementById("home-form-banner");
+		if (homeBanner) {
+			homeBanner.hidden = true;
+			homeBanner.textContent = "";
+		}
+	}
+
+	function reloadStaleShell(serverVersion) {
+		var slug = String(serverVersion || "").replace(/\./g, "-");
+		var next =
+			"/?_shell=" + encodeURIComponent(slug || "latest") + "&_=" + String(Date.now());
+		location.replace(next);
+	}
+
+	function healIfStaleShell(settings) {
 		if (!isDesktopShell() || !settings) {
 			return;
 		}
-		if (settings.ui_shell_version === EXPECTED_UI_SHELL_VERSION) {
-			homeBanner = document.getElementById("home-form-banner");
-			if (homeBanner) {
-				homeBanner.hidden = true;
-				homeBanner.textContent = "";
-			}
+		var pageVersion = window.SPACEMAKER_UI_SHELL_VERSION || "";
+		var serverVersion = settings.ui_shell_version || "";
+		if (pageVersion && serverVersion && pageVersion === serverVersion) {
+			clearHomeFormBanner();
 			return;
 		}
-		var port = location.port || "8765";
-		var message =
-			"UI and server do not match. Quit every SpaceMaker window, stop any process on port " +
-			port +
-			", then run: uv run task spacemaker";
-		homeBanner = document.getElementById("home-form-banner");
-		if (homeBanner) {
-			homeBanner.textContent = message;
-			homeBanner.hidden = false;
-		} else {
-			showFormBanner(message);
+		// Stale WebEngine document vs live server — pull latest once, no user-facing panic.
+		var reloadKey = "spacemaker-shell-reload:" + serverVersion;
+		try {
+			if (!sessionStorage.getItem(reloadKey)) {
+				sessionStorage.setItem(reloadKey, "1");
+				reloadStaleShell(serverVersion);
+				return;
+			}
+		} catch (_err) {
+			reloadStaleShell(serverVersion);
+			return;
 		}
+		clearHomeFormBanner();
 	}
 
 	function syncActiveModuleView(next) {
@@ -987,10 +999,44 @@
 		}
 	}
 
-	function transferDownloadUrl(token, fileId) {
-		return (
-			"/api/transfer/download?t=" + encodeURIComponent(token || "") + "&file_id=" + encodeURIComponent(fileId || "")
-		);
+	function showTransferSaveTip(displayPath) {
+		var tip = document.getElementById("transfer-save-tip");
+		var tipText = document.getElementById("transfer-save-tip-text");
+		var actions = document.getElementById("transfer-save-actions");
+		if (tipText) {
+			tipText.textContent = "Saved to " + (displayPath || "Documents/SpaceMaker");
+		}
+		if (tip) {
+			tip.hidden = false;
+		}
+		if (actions) {
+			actions.hidden = false;
+		}
+	}
+
+	function hideTransferSaveTip() {
+		var tip = document.getElementById("transfer-save-tip");
+		var tipText = document.getElementById("transfer-save-tip-text");
+		var actions = document.getElementById("transfer-save-actions");
+		if (tip) {
+			tip.hidden = true;
+		}
+		if (tipText) {
+			tipText.textContent = "";
+		}
+		if (actions) {
+			actions.hidden = true;
+		}
+	}
+
+	function saveTransferItemToDocuments(fileId) {
+		return api("POST", "/api/transfer/save", { file_id: fileId })
+			.then(function (result) {
+				showTransferSaveTip(result.saved_path_display || result.saved_path || "");
+			})
+			.catch(function (err) {
+				window.alert(err.message || "Could not save to Documents/SpaceMaker.");
+			});
 	}
 
 	function updateTransferUi(next) {
@@ -1002,15 +1048,7 @@
 		var serverHint = document.getElementById("transfer-server-only-hint");
 		var hasDesktop = !!window.pywebview?.api;
 		var items = session.items || [];
-		var token = "";
 		var pageUrl = session.page_url || "";
-		if (pageUrl) {
-			try {
-				token = new URL(pageUrl).searchParams.get("t") || "";
-			} catch (_err) {
-				token = "";
-			}
-		}
 		if (serverHint) {
 			serverHint.classList.toggle("panel-hidden", hasDesktop);
 		}
@@ -1028,6 +1066,7 @@
 				uploadWait.hidden = false;
 				uploadWait.textContent = "Waiting to start transfer session…";
 			}
+			hideTransferSaveTip();
 		}
 		setQrUrlField("transfer-qr-url", pageUrl);
 		if (list) {
@@ -1048,13 +1087,15 @@
 					(item.origin_label || (item.origin === "pc" ? "PC" : "Phone"));
 				meta.appendChild(name);
 				meta.appendChild(from);
-				var link = document.createElement("a");
-				link.className = "btn btn-secondary transfer-dl";
-				link.textContent = "Download";
-				link.href = transferDownloadUrl(token, item.id);
-				link.setAttribute("download", item.download_name || item.name || "");
+				var btn = document.createElement("button");
+				btn.type = "button";
+				btn.className = "btn btn-secondary transfer-dl";
+				btn.textContent = "Download";
+				btn.addEventListener("click", function () {
+					saveTransferItemToDocuments(item.id);
+				});
 				li.appendChild(meta);
-				li.appendChild(link);
+				li.appendChild(btn);
 				list.appendChild(li);
 			});
 		}
@@ -2355,6 +2396,11 @@
 				showFormBanner(err.message || "Could not open documents folder.");
 			});
 		});
+		onClick("btn-transfer-open-documents", function () {
+			api("POST", "/api/documents/open-folder").catch(function (err) {
+				window.alert(err.message || "Could not open documents folder.");
+			});
+		});
 
 		function mergeShareSelection(extra) {
 			var base = state?.share_selection ? state.share_selection.slice() : [];
@@ -2839,7 +2885,7 @@
 			})
 			.then(applyState)
 			.then(function () {
-				warnIfStaleShell(state);
+				healIfStaleShell(state);
 				if (state && toolsBlockMainApp(state)) {
 					maybeShowComponentsScreen(state);
 					return runComponentsEnsure()

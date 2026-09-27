@@ -7,6 +7,7 @@ from pathlib import Path
 from spacemaker.application.transfer_session import (
 	EMPTY_TRANSFER_FOLDER_MESSAGE,
 	EmptyTransferFolderError,
+	SaveTransferItemToDocuments,
 	StageTransferItem,
 )
 from spacemaker.domain.transfer_session import (
@@ -53,7 +54,7 @@ def _item(
 	return TransferSessionItem(
 		file_id=file_id,
 		display_name=display_name,
-		staged_path=f"/tmp/{file_id}",
+		staged_path=f"staged/{file_id}",
 		content_hash=content_hash,
 		kind=TransferItemKind.FILE,
 		origin=origin,
@@ -279,4 +280,66 @@ def test_given_empty_folder_when_stage_folder_as_zip_then_raises(tmp_path):
 	except EmptyTransferFolderError as exc:
 		raised = True
 		assert str(exc) == EMPTY_TRANSFER_FOLDER_MESSAGE
+	assert raised
+
+
+def test_given_staged_file_when_save_to_documents_then_copies_with_display_name(tmp_path):
+	# given
+	fs = FakeFs()
+	staged = tmp_path / "staged.bin"
+	staged.write_bytes(b"hello-transfer")
+	docs = tmp_path / "Documents" / "SpaceMaker"
+	use_case = SaveTransferItemToDocuments(fs)
+
+	# when
+	saved = use_case.save(
+		staged_path=str(staged),
+		display_name="notes.txt",
+		documents_root=str(docs),
+	)
+
+	# then
+	assert saved.saved_name == "notes.txt"
+	assert Path(saved.saved_path).read_bytes() == b"hello-transfer"
+	assert staged.is_file()
+
+
+def test_given_name_collision_when_save_to_documents_then_suffixes(tmp_path):
+	# given
+	fs = FakeFs()
+	staged = tmp_path / "staged.bin"
+	staged.write_bytes(b"new-bytes")
+	docs = tmp_path / "Documents" / "SpaceMaker"
+	docs.mkdir(parents=True)
+	(docs / "report.pdf").write_bytes(b"old")
+	use_case = SaveTransferItemToDocuments(fs)
+
+	# when
+	saved = use_case.save(
+		staged_path=str(staged),
+		display_name="report.pdf",
+		documents_root=str(docs),
+	)
+
+	# then
+	assert saved.saved_name == "report (2).pdf"
+	assert (docs / "report.pdf").read_bytes() == b"old"
+	assert Path(saved.saved_path).read_bytes() == b"new-bytes"
+
+
+def test_given_missing_staged_file_when_save_to_documents_then_raises(tmp_path):
+	# given
+	fs = FakeFs()
+	use_case = SaveTransferItemToDocuments(fs)
+
+	# when / then
+	try:
+		use_case.save(
+			staged_path=str(tmp_path / "missing.bin"),
+			display_name="notes.txt",
+			documents_root=str(tmp_path / "docs"),
+		)
+		raised = False
+	except FileNotFoundError:
+		raised = True
 	assert raised

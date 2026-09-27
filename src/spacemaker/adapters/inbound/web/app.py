@@ -19,7 +19,7 @@ from fastapi import (
 	WebSocket,
 	WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -50,6 +50,7 @@ from spacemaker.bootstrap.ui_shell import (
 	CONTENT_SECURITY_POLICY,
 	CONTENT_SECURITY_POLICY_DESKTOP,
 	NO_CACHE_HEADERS,
+	stamp_shell_html,
 )
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
@@ -152,6 +153,10 @@ class TransferAddBody(BaseModel):
 	paths: list[str]
 
 
+class TransferSaveBody(BaseModel):
+	file_id: str
+
+
 class LibraryOpenFolderBody(BaseModel):
 	bucket: str
 
@@ -170,6 +175,11 @@ def _no_cache_file(path: Path) -> FileResponse:
 	return FileResponse(path, headers=dict(NO_CACHE_HEADERS))
 
 
+def _stamped_shell_page(path: Path) -> HTMLResponse:
+	html = stamp_shell_html(path.read_text(encoding="utf-8"))
+	return HTMLResponse(html, headers=dict(NO_CACHE_HEADERS))
+
+
 def create_fastapi_app(services: AppServices) -> FastAPI:
 	@asynccontextmanager
 	async def lifespan(app: FastAPI):
@@ -185,7 +195,8 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	async def no_cache_shell_assets(request: Request, call_next):
 		response = await call_next(request)
 		path = request.url.path
-		if path == "/" or path.startswith("/gallery") or path == "/static/app.js":
+		# Local desktop shell must always see current CSS/JS — never a stale WebEngine cache.
+		if path == "/" or path.startswith("/gallery") or path.startswith("/static/"):
 			for key, value in NO_CACHE_HEADERS.items():
 				response.headers[key] = value
 		if path == "/" or path.startswith("/gallery") or path in {"/upload", "/receive", "/share", "/transfer"}:
@@ -203,6 +214,12 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			return _STATIC / "gallery_mobile.html"
 		return _STATIC / "mobile_remote.html"
 
+	def _spa_response(entry: SpaEntry) -> Response:
+		path = _spa_file(entry)
+		if entry is SpaEntry.DESKTOP or entry is SpaEntry.MOBILE_GALLERY:
+			return _stamped_shell_page(path)
+		return _no_cache_file(path)
+
 	@app.get("/json/version")
 	def devtools_version_probe() -> dict[str, str]:
 		# Qt WebEngine / Chromium poll this for remote debugging; stub avoids 404 log noise.
@@ -213,18 +230,18 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return []
 
 	@app.get("/")
-	def root_page(request: Request) -> FileResponse:
+	def root_page(request: Request) -> Response:
 		host = normalize_host(request.headers.get("host", ""))
 		entry = spa_entry_for(host=host, path="/")
-		return _no_cache_file(_spa_file(entry))
+		return _spa_response(entry)
 
 	@app.get("/gallery")
 	@app.get("/gallery/item/{relative_path:path}")
-	def gallery_page(request: Request, relative_path: str = "") -> FileResponse:
+	def gallery_page(request: Request, relative_path: str = "") -> Response:
 		_ = relative_path
 		host = normalize_host(request.headers.get("host", ""))
 		entry = spa_entry_for(host=host, path=request.url.path)
-		return _no_cache_file(_spa_file(entry))
+		return _spa_response(entry)
 
 	@app.get("/upload")
 	def upload_page(t: str = "") -> FileResponse:
@@ -380,6 +397,18 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		except PermissionError as exc:
 			raise HTTPException(status_code=403, detail=str(exc)) from exc
 		return services.enriched_snapshot()
+
+	@app.post("/api/transfer/save")
+	def transfer_save(request: Request, body: TransferSaveBody) -> dict[str, str]:
+		require_loopback(request)
+		try:
+			return services.save_transfer_item_to_documents(body.file_id)
+		except ValueError as exc:
+			raise HTTPException(status_code=400, detail=str(exc)) from exc
+		except PermissionError as exc:
+			raise HTTPException(status_code=403, detail=str(exc)) from exc
+		except FileNotFoundError as exc:
+			raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 	@app.get("/api/receive/qr.svg")
 	def receive_qr(request: Request, t: str = "") -> Response:

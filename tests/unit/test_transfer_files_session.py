@@ -52,6 +52,66 @@ def test_given_transfer_upload_when_home_then_staged_files_deleted(tmp_path):
 	services.shutdown()
 
 
+def test_given_transfer_item_when_save_to_documents_then_copy_persists_after_home(tmp_path):
+	# given
+	services = AppServices(port=8765, bind_host="127.0.0.1")
+	docs = tmp_path / "Documents" / "SpaceMaker"
+	services._documents_receive_root = str(docs)
+	services.enter_module(AppModule.TRANSFER_FILES)
+	token = services._transfer_session_token
+	temp = tmp_path / "notes.txt"
+	temp.write_text("keep-me", encoding="utf-8")
+	item = services.handle_transfer_upload_file(
+		token,
+		requested_name="notes.txt",
+		temp_path=str(temp),
+		origin=TransferOrigin.PHONE,
+	)
+	assert item is not None
+
+	# when
+	saved = services.save_transfer_item_to_documents(item.file_id)
+	services.leave_module_for_home()
+
+	# then
+	assert saved["saved_name"] == "notes.txt"
+	assert Path(saved["saved_path"]).read_text(encoding="utf-8") == "keep-me"
+	assert (docs / "notes.txt").is_file()
+	assert not Path(item.staged_path).exists()
+
+	services.shutdown()
+
+
+def test_given_documents_collision_when_save_transfer_then_suffix(tmp_path):
+	# given
+	services = AppServices(port=8765, bind_host="127.0.0.1")
+	docs = tmp_path / "Documents" / "SpaceMaker"
+	docs.mkdir(parents=True)
+	(docs / "report.pdf").write_bytes(b"existing")
+	services._documents_receive_root = str(docs)
+	services.enter_module(AppModule.TRANSFER_FILES)
+	token = services._transfer_session_token
+	temp = tmp_path / "new.pdf"
+	temp.write_bytes(b"fresh")
+	item = services.handle_transfer_upload_file(
+		token,
+		requested_name="report.pdf",
+		temp_path=str(temp),
+		origin=TransferOrigin.PHONE,
+	)
+	assert item is not None
+
+	# when
+	saved = services.save_transfer_item_to_documents(item.file_id)
+
+	# then
+	assert saved["saved_name"] == "report (2).pdf"
+	assert (docs / "report.pdf").read_bytes() == b"existing"
+	assert Path(saved["saved_path"]).read_bytes() == b"fresh"
+
+	services.shutdown()
+
+
 def test_given_same_name_different_hash_when_two_uploads_then_suffix(tmp_path):
 	# given
 	services = AppServices(port=8765, bind_host="127.0.0.1")
