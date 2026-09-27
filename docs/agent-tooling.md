@@ -50,7 +50,24 @@ The generic JSON-RPC/LSP wire protocol (subprocess framing, request/
 response dispatch, document sync) lives in `mcp-servers/_shared/lsp_client.py`
 as `LspClient`, shared with `webnav` below. Only the `ty`-specific launch
 command (`mcp-servers/codenav_mcp/ty_command.py`) and languageId are
-codenav's own.
+codenav's own. Location formatting (`path:line:col` headers + snippets)
+lives in `mcp-servers/_shared/format.py`.
+
+### Positioning (codenav and webnav)
+
+`line` and `column` are **1-indexed**. `column` is a UTF-16 **character
+offset** on the line — not a visual/display column. A leading `\t` counts
+as **one** character, so after a single tab the next character starts at
+column 2. Prefer `search_symbol` (returns `path:line:col`) and pass those
+numbers through unchanged; guessing display width from a tab-expanded
+editor view will miss the symbol. `definition` / `references` headers use
+the same `path:line:col` form so agents can copy positions into follow-up
+calls.
+
+JSON-RPC errors from the language server are surfaced as tool text
+(`LSP error on …`) rather than looking like empty “not found” results.
+`diagnostics` falls back to the push `publishDiagnostics` cache when pull
+diagnostics are unsupported or empty (common for HTML/CSS servers).
 
 ## `webnav` MCP server
 
@@ -71,12 +88,15 @@ falling back to `PATH` and then `npx` — same fallback chain as codenav's ty
 resolver.
 
 `search_symbol` only covers JS: the HTML/CSS language servers don't
-implement a useful `workspace/symbol`. `jsconfig.json` has `checkJs: false`
+implement a useful `workspace/symbol`. CSS custom-property hover and
+`var(--name)` usage lookup are also limited by the CSS language server —
+not something webnav reimplements. `jsconfig.json` has `checkJs: false`
 by default (the existing `app.js` is large and untyped; flip it per-file
 with a `// @ts-check` comment to opt a file into stricter `diagnostics`).
 Run it standalone for manual testing with `uv run python
 mcp-servers/webnav_mcp/server.py`; point it at a different workspace via
-the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above).
+the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above). See
+**Positioning** under codenav above — the same column rules apply.
 
 ## Rules — Cursor vs Claude Code
 

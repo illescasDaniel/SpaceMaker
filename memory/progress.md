@@ -9,6 +9,6 @@ Open items only. Finished work: `memory/archive.md`.
 - [x] **Gallery orphan cache cleanup** — injective path-mirrored thumbs/exports;
   in-app delete + sync GC for index/thumbs/exports; SPEC + arch approved;
   merged via PR #4 (`1e516d0` on `main`)
-- [ ] **codenav/webnav MCP harden** — character-offset docs, `path:line:col` headers, LSP error surfacing, diagnostics push fallback, shared formatters, unit tests (plan approved 2026-09-27)
+- [x] **codenav/webnav MCP harden** — character-offset docs, `path:line:col` headers, LSP error surfacing, diagnostics push fallback, shared formatters, unit tests (plan approved 2026-09-27)
 - [ ] **Easy mode import issues — where to review** — wireframe approved 2026-09-23; spec draft (open-folder API partially via `/api/library/open-folder`)
 - [ ] Confirm on real Windows/macOS hardware that the native pywebview backends (`edgechromium`/`cocoa`, see `decisions.md` 2026-09-24) actually open a working window — only smoke-tested via `--server-only` in this sandbox (no GUI available here)

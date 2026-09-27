@@ -16,22 +16,27 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from _shared.lsp_client import LspClient  # noqa: E402
+from _shared.format import format_location, uri_to_relative  # noqa: E402
+from _shared.lsp_client import LspClient, LspRequestError  # noqa: E402
 from _shared.workspace import resolve_workspace_root  # noqa: E402
 from lang_command import resolve_css_command, resolve_html_command, resolve_ts_command  # noqa: E402
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 
 
 WORKSPACE_ROOT = resolve_workspace_root("WEBNAV_MCP_WORKSPACE")
+
+_POSITION_NOTE = (
+	"Positions are 1-indexed. `column` is a UTF-16 character offset on the "
+	"line (not a visual/display column): a leading tab counts as one "
+	"character, so after a single tab the next character starts at column 2."
+)
 
 mcp = MCPServer(
 	name="webnav",
@@ -40,7 +45,7 @@ mcp = MCPServer(
 		"typescript-language-server (JS) and vscode-langservers-extracted "
 		"(HTML/CSS). Prefer this over grepping for symbol definitions/usages. "
 		"search_symbol only covers JS (the HTML/CSS servers don't implement "
-		"useful workspace-wide symbol search)."
+		"useful workspace-wide symbol search). " + _POSITION_NOTE
 	),
 )
 
@@ -119,46 +124,23 @@ async def _client_for(file_path: str) -> LspClient:
 	raise ValueError(f"webnav has no language server for {file_path!r} (supported: .js/.mjs/.cjs/.html/.css)")
 
 
-def _uri_to_relative(uri: str) -> str:
-	parsed = urlparse(uri)
-	path = Path(unquote(parsed.path.lstrip("/") if os.name == "nt" else parsed.path))
-	try:
-		return str(path.relative_to(WORKSPACE_ROOT)).replace("\\", "/")
-	except ValueError:
-		return str(path)
-
-
-def _snippet(uri: str, start_line: int, end_line: int, *, context: int = 0) -> str:
-	parsed = urlparse(uri)
-	path = Path(unquote(parsed.path.lstrip("/") if os.name == "nt" else parsed.path))
-	try:
-		lines = path.read_text(encoding="utf-8").splitlines()
-	except OSError:
-		return ""
-	lo = max(0, start_line - context)
-	hi = min(len(lines), end_line + 1 + context)
-	numbered = [f"{i + 1:>5} | {lines[i]}" for i in range(lo, hi)]
-	return "\n".join(numbered)
-
-
-def _format_location(loc: dict) -> str:
-	uri = loc.get("uri") or loc.get("targetUri", "")
-	rng = loc.get("range") or loc.get("targetRange", {})
-	start = rng.get("start", {})
-	end = rng.get("end", {})
-	start_line = start.get("line", 0)
-	end_line = end.get("line", start_line)
-	rel = _uri_to_relative(uri)
-	header = f"{rel}:{start_line + 1}"
-	snippet = _snippet(uri, start_line, end_line, context=2)
-	return f"{header}\n{snippet}" if snippet else header
+def _format_lsp_error(exc: LspRequestError) -> str:
+	return f"LSP error on {exc.method}: {exc}"
 
 
 @mcp.tool()
 async def hover(file_path: str, line: int, column: int) -> str:
-	"""Get type/documentation info for the symbol at a position (1-indexed line/column)."""
-	client = await _client_for(file_path)
-	result = await client.hover(file_path, line, column)
+	"""Get type/documentation info for the symbol at a position.
+
+	`line` and `column` are 1-indexed. `column` is a UTF-16 character offset
+	on the line (not a visual/display column): a leading tab counts as one
+	character.
+	"""
+	try:
+		client = await _client_for(file_path)
+		result = await client.hover(file_path, line, column)
+	except LspRequestError as exc:
+		return _format_lsp_error(exc)
 	contents = result.get("contents")
 	if not contents:
 		return "No hover information at that position."
@@ -171,22 +153,38 @@ async def hover(file_path: str, line: int, column: int) -> str:
 
 @mcp.tool()
 async def definition(file_path: str, line: int, column: int) -> str:
-	"""Go to the definition of the symbol at a position (1-indexed line/column)."""
-	client = await _client_for(file_path)
-	locations = await client.definition(file_path, line, column)
+	"""Go to the definition of the symbol at a position.
+
+	`line` and `column` are 1-indexed. `column` is a UTF-16 character offset
+	on the line (not a visual/display column): a leading tab counts as one
+	character.
+	"""
+	try:
+		client = await _client_for(file_path)
+		locations = await client.definition(file_path, line, column)
+	except LspRequestError as exc:
+		return _format_lsp_error(exc)
 	if not locations:
 		return "No definition found at that position."
-	return "\n\n".join(_format_location(loc) for loc in locations)
+	return "\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in locations)
 
 
 @mcp.tool()
 async def references(file_path: str, line: int, column: int, include_declaration: bool = True) -> str:
-	"""Find all usages of the symbol at a position (1-indexed line/column) across the workspace."""
-	client = await _client_for(file_path)
-	locations = await client.references(file_path, line, column, include_declaration=include_declaration)
+	"""Find all usages of the symbol at a position across the workspace.
+
+	`line` and `column` are 1-indexed. `column` is a UTF-16 character offset
+	on the line (not a visual/display column): a leading tab counts as one
+	character.
+	"""
+	try:
+		client = await _client_for(file_path)
+		locations = await client.references(file_path, line, column, include_declaration=include_declaration)
+	except LspRequestError as exc:
+		return _format_lsp_error(exc)
 	if not locations:
 		return "No references found at that position."
-	return "\n\n".join(_format_location(loc) for loc in locations)
+	return "\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in locations)
 
 
 @mcp.tool()
@@ -196,9 +194,14 @@ async def search_symbol(query: str) -> str:
 	JS-only: the HTML/CSS language servers don't implement useful
 	workspace-wide symbol search. Use this to find a symbol's file/position
 	first, then pass that position to definition/references/hover.
+	Returned positions use the same character-offset column convention as the
+	other tools.
 	"""
-	client = await _get_ts_client()
-	symbols = await client.workspace_symbol(query)
+	try:
+		client = await _get_ts_client()
+		symbols = await client.workspace_symbol(query)
+	except LspRequestError as exc:
+		return _format_lsp_error(exc)
 	if not symbols:
 		return f"No symbols matching {query!r}."
 	lines = []
@@ -206,7 +209,7 @@ async def search_symbol(query: str) -> str:
 		loc = sym.get("location", {})
 		rng = loc.get("range", {})
 		start = rng.get("start", {})
-		rel = _uri_to_relative(loc.get("uri", ""))
+		rel = uri_to_relative(loc.get("uri", ""), WORKSPACE_ROOT)
 		lines.append(f"{sym.get('name', '?')}  ({rel}:{start.get('line', 0) + 1}:{start.get('character', 0) + 1})")
 	return "\n".join(lines)
 
@@ -214,8 +217,11 @@ async def search_symbol(query: str) -> str:
 @mcp.tool()
 async def diagnostics(file_path: str) -> str:
 	"""Get the relevant language server's diagnostics (errors/warnings) for a single file."""
-	client = await _client_for(file_path)
-	items = await client.diagnostics(file_path)
+	try:
+		client = await _client_for(file_path)
+		items = await client.diagnostics(file_path)
+	except LspRequestError as exc:
+		return _format_lsp_error(exc)
 	if not items:
 		return "No diagnostics."
 	lines = []

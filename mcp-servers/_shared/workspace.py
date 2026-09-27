@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+
 # mcp-servers/_shared/workspace.py → repo root is three parents up.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 

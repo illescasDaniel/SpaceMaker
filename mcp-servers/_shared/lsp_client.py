@@ -25,6 +25,15 @@ class NotStartedError(RuntimeError):
 	pass
 
 
+class LspRequestError(RuntimeError):
+	"""JSON-RPC error response from the language server."""
+
+	def __init__(self, method: str, code: Any, message: str) -> None:
+		self.method = method
+		self.code = code
+		super().__init__(message)
+
+
 @dataclass
 class OpenFile:
 	uri: str
@@ -77,9 +86,7 @@ class LspClient:
 					},
 					"workspace": {"workspaceFolders": True},
 				},
-				"workspaceFolders": [
-					{"uri": self.workspace_root.as_uri(), "name": self.workspace_root.name}
-				],
+				"workspaceFolders": [{"uri": self.workspace_root.as_uri(), "name": self.workspace_root.name}],
 			},
 		)
 		self._notify("initialized", {})
@@ -156,16 +163,20 @@ class LspClient:
 	async def _request(self, method: str, params: dict[str, Any], timeout: float = 20) -> dict[str, Any]:
 		self._next_id += 1
 		msg_id = self._next_id
-		fut: asyncio.Future = asyncio.get_event_loop().create_future()
+		fut: asyncio.Future = asyncio.get_running_loop().create_future()
 		self._pending[msg_id] = fut
 		self._send({"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params})
 		stdin = self._running_proc.stdin
 		if stdin is not None:
 			await stdin.drain()
 		try:
-			return await asyncio.wait_for(fut, timeout=timeout)
+			resp = await asyncio.wait_for(fut, timeout=timeout)
 		finally:
 			self._pending.pop(msg_id, None)
+		if "error" in resp:
+			err = resp["error"] or {}
+			raise LspRequestError(method, err.get("code"), str(err.get("message", err)))
+		return resp
 
 	def _notify(self, method: str, params: dict[str, Any]) -> None:
 		self._send({"jsonrpc": "2.0", "method": method, "params": params})
@@ -208,9 +219,7 @@ class LspClient:
 					"contentChanges": [{"text": text}],
 				},
 			)
-			self._open_files[uri] = OpenFile(
-				uri=uri, version=new_version, mtime_ns=stat.st_mtime_ns, size=stat.st_size
-			)
+			self._open_files[uri] = OpenFile(uri=uri, version=new_version, mtime_ns=stat.st_mtime_ns, size=stat.st_size)
 		return uri
 
 	# -- LSP calls used by the MCP tools --------------------------------------
@@ -254,8 +263,18 @@ class LspClient:
 
 	async def diagnostics(self, file_path: str) -> list[dict[str, Any]]:
 		uri = await self.ensure_open(file_path)
-		resp = await self._request("textDocument/diagnostic", {"textDocument": {"uri": uri}})
+		cached = self._diagnostics.get(uri, [])
+		try:
+			resp = await self._request("textDocument/diagnostic", {"textDocument": {"uri": uri}})
+		except LspRequestError:
+			# HTML/CSS servers often only push publishDiagnostics and reject pull.
+			return cached
 		result = resp.get("result") or {}
 		if result.get("kind") == "unchanged":
-			return self._diagnostics.get(uri, [])
-		return result.get("items", [])
+			return cached
+		items = result.get("items")
+		if items is None:
+			return cached
+		if not items and cached:
+			return cached
+		return items
