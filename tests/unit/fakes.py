@@ -97,6 +97,7 @@ class FakeDeviceRepository:
 	sizes: dict[str, int] = field(default_factory=dict)
 	pulled: list[tuple[str, str, str]] = field(default_factory=list)
 	deleted: list[tuple[str, str]] = field(default_factory=list)
+	mount_root: str | None = None
 
 	def list_devices(self) -> list[DeviceInfo]:
 		return list(self.devices)
@@ -110,6 +111,15 @@ class FakeDeviceRepository:
 		if self.file_paths is not None:
 			return list(self.file_paths)
 		return list(self.media_paths)
+
+	def list_extra_file_paths(self, device_id: str, extras: frozenset[str]) -> list[str]:
+		from spacemaker.domain.transfer_folders import path_matches_extra_sources
+
+		return [p for p in self.list_file_paths(device_id) if path_matches_extra_sources(p, extras)]
+
+	def browse_root(self, device_id: str) -> str | None:
+		_ = device_id
+		return self.mount_root
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		_ = device_id

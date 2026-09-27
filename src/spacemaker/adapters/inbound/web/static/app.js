@@ -245,7 +245,7 @@
 		if (document.getElementById("btn-conn-afc").classList.contains("active")) {
 			return "afc";
 		}
-		return "mtp";
+		return "wifi";
 	}
 
 	function validateStep1Form(showFieldErrors) {
@@ -621,7 +621,7 @@
 		if (method === "afc") {
 			return "iPhone USB";
 		}
-		return "MTP";
+		return "ADB";
 	}
 
 	function applyConnectionPanels(method) {
@@ -650,7 +650,6 @@
 
 	function syncConnectionButtons(method) {
 		document.getElementById("btn-conn-wifi").classList.toggle("active", method === "wifi");
-		document.getElementById("btn-conn-mtp").classList.toggle("active", method === "mtp");
 		document.getElementById("btn-conn-adb").classList.toggle("active", method === "adb");
 		document.getElementById("btn-conn-afc").classList.toggle("active", method === "afc");
 		applyConnectionPanels(method);
@@ -758,8 +757,6 @@
 			ffprobe: "ffprobe",
 			magick: "magick (ImageMagick)",
 			exiftool: "exiftool",
-			"mtp-detect": "mtp-detect (libmtp)",
-			"mtp-getfile": "mtp-getfile (libmtp)",
 			idevice_id: "idevice_id (libimobiledevice)",
 			idevicepair: "idevicepair (libimobiledevice)",
 			ideviceinfo: "ideviceinfo (libimobiledevice)",
@@ -1274,10 +1271,11 @@
 	var UFT_IPHONE_FOLDERS = [{ id: "dcim", label: "Camera (DCIM)" }];
 	var uftDeviceLabels = {};
 	var uftFoldersMethod = "";
+	var uftAvailableFoldersKey = "";
 
 	function selectedUsbTransferMethod() {
 		var active = document.querySelector("#view-usb-file-transfer .connection-toggle button.active");
-		return active?.getAttribute("data-uft-method") || "mtp";
+		return active?.getAttribute("data-uft-method") || "adb";
 	}
 
 	function selectedUsbTransferFolders() {
@@ -1289,35 +1287,119 @@
 		return out;
 	}
 
-	function rebuildUsbTransferFolders(method, selected) {
+	function currentUsbExtraPaths() {
+		var list = document.getElementById("uft-extra-sources");
+		if (!list) {
+			return [];
+		}
+		var out = [];
+		list.querySelectorAll("li[data-extra-path]").forEach(function (li) {
+			out.push(li.getAttribute("data-extra-path"));
+		});
+		return out;
+	}
+
+	function extraPathKind(path) {
+		var name = (path || "").split("/").pop() || path;
+		return name.indexOf(".") > 0 ? "file" : "folder";
+	}
+
+	function renderUsbTransferExtras(paths) {
+		var list = document.getElementById("uft-extra-sources");
+		if (!list) {
+			return;
+		}
+		list.innerHTML = "";
+		var items = paths || [];
+		if (!items.length) {
+			list.hidden = true;
+			return;
+		}
+		list.hidden = false;
+		items.forEach(function (path) {
+			var li = document.createElement("li");
+			li.setAttribute("data-extra-path", path);
+			var name = document.createElement("span");
+			name.className = "uft-extra-name";
+			name.textContent = path;
+			var kind = document.createElement("span");
+			kind.className = "uft-extra-kind";
+			kind.textContent = extraPathKind(path);
+			var remove = document.createElement("button");
+			remove.type = "button";
+			remove.className = "btn-uft-extra-remove";
+			remove.textContent = "Remove";
+			remove.setAttribute("aria-label", "Remove " + path);
+			remove.addEventListener("click", function () {
+				var next = currentUsbExtraPaths().filter(function (p) {
+					return p !== path;
+				});
+				pushUsbTransferSettingsWithExtras(next);
+			});
+			li.appendChild(name);
+			li.appendChild(kind);
+			li.appendChild(remove);
+			list.appendChild(li);
+		});
+	}
+
+	function rebuildUsbTransferFolders(method, selected, available) {
 		var picker = document.getElementById("uft-folder-picker");
+		var emptyHint = document.getElementById("uft-presets-empty");
 		if (!picker) {
 			return;
 		}
-		var catalog = method === "afc" ? UFT_IPHONE_FOLDERS : UFT_ANDROID_FOLDERS;
+		var catalog = method === "afc" ? UFT_IPHONE_FOLDERS.slice() : UFT_ANDROID_FOLDERS.slice();
+		var filtered = false;
+		if (Array.isArray(available)) {
+			filtered = true;
+			catalog = catalog.filter(function (item) {
+				return available.indexOf(item.id) >= 0;
+			});
+		}
 		var selectedSet = {};
 		(selected || []).forEach(function (id) {
 			selectedSet[id] = true;
 		});
-		if (!selected?.length) {
-			catalog.forEach(function (item, index) {
-				if (method === "afc" || index < 2) {
-					selectedSet[item.id] = true;
-				}
-			});
-		}
-		picker.innerHTML = '<legend class="sr-only">Device folders</legend>';
+		picker.innerHTML = '<legend class="sr-only">Device folders that exist on this phone</legend>';
 		catalog.forEach(function (item) {
 			var label = document.createElement("label");
 			var input = document.createElement("input");
 			input.type = "checkbox";
 			input.setAttribute("data-folder", item.id);
 			input.checked = !!selectedSet[item.id];
-			input.addEventListener("change", pushUsbTransferSettings);
+			input.addEventListener("change", function () {
+				pushUsbTransferSettings();
+			});
 			label.appendChild(input);
 			label.appendChild(document.createTextNode(" " + item.label));
 			picker.appendChild(label);
 		});
+		var showEmpty = filtered && catalog.length === 0;
+		picker.hidden = showEmpty;
+		if (emptyHint) {
+			emptyHint.classList.toggle("panel-hidden", !showEmpty);
+		}
+	}
+
+	function syncUsbTransferBrowseUi(next) {
+		var browse = next.usb_transfer_browse || {};
+		var btnFiles = document.getElementById("btn-uft-add-files");
+		var btnFolder = document.getElementById("btn-uft-add-folder");
+		var hint = document.getElementById("uft-browse-unavailable");
+		var mountOk = !!browse.mount_available;
+		if (btnFiles) {
+			btnFiles.disabled = !mountOk;
+		}
+		if (btnFolder) {
+			btnFolder.disabled = !mountOk;
+		}
+		if (hint) {
+			hint.classList.toggle("panel-hidden", mountOk);
+			if (browse.hint) {
+				hint.textContent = browse.hint;
+			}
+		}
 	}
 
 	function syncUsbTransferConnectionButtons(method) {
@@ -1332,8 +1414,8 @@
 		if (!root || !textEl) {
 			return;
 		}
-		var method = next.connection_method || "mtp";
-		var methodLabel = method === "afc" ? "iPhone USB" : method.toUpperCase();
+		var method = next.connection_method || "adb";
+		var methodLabel = method === "afc" ? "iPhone USB" : method === "adb" ? "ADB" : method.toUpperCase();
 		if (next.device_id && (uftDeviceLabels[next.device_id] || next.device_label)) {
 			root.classList.add("connected");
 			root.classList.remove("disconnected");
@@ -1346,7 +1428,7 @@
 	}
 
 	function refreshUsbTransferDevices(method) {
-		return api("GET", "/api/devices?connection_method=" + encodeURIComponent(method || "mtp"))
+		return api("GET", "/api/devices?connection_method=" + encodeURIComponent(method || "adb"))
 			.then(function (devices) {
 				uftDeviceLabels = {};
 				var sel = document.getElementById("uft-select-device");
@@ -1370,9 +1452,19 @@
 					sel.value = previous;
 				} else if (state?.device_id && uftDeviceLabels[state.device_id]) {
 					sel.value = state.device_id;
+				} else if (devices.length) {
+					sel.value = devices[0].device_id;
 				}
 				if (state) {
-					updateUsbTransferDeviceStatus(state);
+					updateUsbTransferDeviceStatus(
+						Object.assign({}, state, {
+							device_id: sel.value || state.device_id,
+							device_label: uftDeviceLabels[sel.value] || state.device_label,
+						}),
+					);
+				}
+				if (sel.value && sel.value !== (state?.device_id || "")) {
+					return pushUsbTransferSettings();
 				}
 			})
 			.catch(function (err) {
@@ -1386,6 +1478,10 @@
 	}
 
 	function pushUsbTransferSettings() {
+		return pushUsbTransferSettingsWithExtras(currentUsbExtraPaths());
+	}
+
+	function pushUsbTransferSettingsWithExtras(extras) {
 		var sel = document.getElementById("uft-select-device");
 		var deviceId = sel ? sel.value : "";
 		var method = selectedUsbTransferMethod();
@@ -1397,6 +1493,7 @@
 			device_id: deviceId,
 			device_label: uftDeviceLabels[deviceId] || "",
 			transfer_folders: selectedUsbTransferFolders(),
+			transfer_extra_paths: extras || [],
 		};
 		return api("PUT", "/api/settings", body)
 			.then(function (data) {
@@ -1414,7 +1511,7 @@
 		if (!document.getElementById("view-usb-file-transfer") || !next.usb_transfer) {
 			return;
 		}
-		var method = next.connection_method || "mtp";
+		var method = next.connection_method || "adb";
 		var dest = document.getElementById("uft-dest-path");
 		var banner = document.getElementById("uft-iphone-limit-banner");
 		var chipCopy = document.getElementById("uft-chip-copy");
@@ -1437,9 +1534,12 @@
 		var transferActive = phase === "running" || phase === "paused";
 		if (next.active_module === "usb_file_transfer") {
 			syncUsbTransferConnectionButtons(method);
-			if (uftFoldersMethod !== method) {
-				rebuildUsbTransferFolders(method, next.transfer_folders || []);
+			var available = next.usb_transfer_available_folders;
+			var availableKey = Array.isArray(available) ? available.slice().sort().join(",") : "all";
+			if (uftFoldersMethod !== method || uftAvailableFoldersKey !== availableKey) {
+				rebuildUsbTransferFolders(method, next.transfer_folders || [], available);
 				uftFoldersMethod = method;
+				uftAvailableFoldersKey = availableKey;
 				refreshUsbTransferDevices(method);
 			} else {
 				document.querySelectorAll("#uft-folder-picker input[data-folder]").forEach(function (box) {
@@ -1447,6 +1547,8 @@
 					box.checked = (next.transfer_folders || []).indexOf(id) >= 0;
 				});
 			}
+			renderUsbTransferExtras(next.transfer_extra_paths || []);
+			syncUsbTransferBrowseUi(next);
 			if (dest) {
 				dest.value = next.documents_receive_root_display || next.documents_receive_root || "";
 			}
@@ -1553,7 +1655,6 @@
 				el.disabled = extractActive;
 			});
 		document.getElementById("btn-conn-wifi").disabled = extractActive;
-		document.getElementById("btn-conn-mtp").disabled = extractActive;
 		document.getElementById("btn-conn-adb").disabled = extractActive;
 		document.getElementById("btn-conn-afc").disabled = extractActive;
 		updateWifiUploadPanel(next);
@@ -2674,6 +2775,7 @@
 			});
 		}
 		bindInfoToggle("btn-uft-connection-info", "uft-connection-info-panel");
+		bindInfoToggle("btn-uft-folders-info", "uft-folders-info-panel");
 		bindInfoToggle("btn-uft-dest-info", "uft-dest-info-panel");
 		bindInfoToggle("btn-uft-mode-info", "uft-mode-info-panel");
 		bindInfoToggle("btn-uft-actions-info", "uft-actions-info-panel");
@@ -2682,10 +2784,10 @@
 			btn.addEventListener("click", function () {
 				var method = btn.getAttribute("data-uft-method");
 				syncUsbTransferConnectionButtons(method);
-				rebuildUsbTransferFolders(method, []);
-				uftFoldersMethod = method;
+				uftFoldersMethod = "";
+				uftAvailableFoldersKey = "";
 				refreshUsbTransferDevices(method).then(function () {
-					return pushUsbTransferSettings();
+					return pushUsbTransferSettingsWithExtras([]);
 				});
 			});
 		});
@@ -2703,6 +2805,77 @@
 		if (uftSelect) {
 			uftSelect.addEventListener("change", pushUsbTransferSettings);
 		}
+		function ensureUsbMountForPicks() {
+			var browse = state?.usb_transfer_browse || {};
+			if (!browse.mount_available && !browse.mount_root) {
+				showFormBanner(
+					browse.hint ||
+						"Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.",
+					"uft-form-banner",
+				);
+				return Promise.reject(new Error("mount unavailable"));
+			}
+			if (browse.mount_root) {
+				return Promise.resolve(browse.mount_root);
+			}
+			return api("POST", "/api/usb-transfer/mount").then(function (data) {
+				applyState(data);
+				var next = data.usb_transfer_browse || {};
+				if (!next.mount_root) {
+					throw new Error(next.hint || "Could not mount phone for Add files/folder.");
+				}
+				return next.mount_root;
+			});
+		}
+
+		function postUsbHostPicks(paths) {
+			var filtered = Array.isArray(paths) ? paths.filter(Boolean) : [];
+			if (!filtered.length) {
+				return Promise.resolve(null);
+			}
+			return api("POST", "/api/usb-transfer/extras", { host_paths: filtered }).then(function (data) {
+				clearFormBanner("uft-form-banner");
+				applyState(data);
+				return data;
+			});
+		}
+
+		onClick("btn-uft-add-files", function () {
+			if (!window.pywebview?.api?.choose_device_files) {
+				showFormBanner("Add files works in the desktop app.", "uft-form-banner");
+				return;
+			}
+			ensureUsbMountForPicks()
+				.then(function (mount) {
+					return Promise.resolve(window.pywebview.api.choose_device_files(mount));
+				})
+				.then(postUsbHostPicks)
+				.catch(function (err) {
+					if (err && err.message === "mount unavailable") {
+						return;
+					}
+					showFormBanner(err.message || "Could not add files.", "uft-form-banner");
+				});
+		});
+		onClick("btn-uft-add-folder", function () {
+			if (!window.pywebview?.api?.choose_device_folder) {
+				showFormBanner("Add folder works in the desktop app.", "uft-form-banner");
+				return;
+			}
+			ensureUsbMountForPicks()
+				.then(function (mount) {
+					return Promise.resolve(window.pywebview.api.choose_device_folder(mount));
+				})
+				.then(function (folder) {
+					return postUsbHostPicks(folder ? [folder] : []);
+				})
+				.catch(function (err) {
+					if (err && err.message === "mount unavailable") {
+						return;
+					}
+					showFormBanner(err.message || "Could not add folder.", "uft-form-banner");
+				});
+		});
 		onClick("btn-uft-start", function () {
 			pushUsbTransferSettings()
 				.then(function () {
@@ -3019,9 +3192,6 @@
 
 		document.getElementById("btn-conn-wifi").addEventListener("click", function () {
 			switchConnectionMethod("wifi");
-		});
-		document.getElementById("btn-conn-mtp").addEventListener("click", function () {
-			switchConnectionMethod("mtp");
 		});
 		document.getElementById("btn-conn-adb").addEventListener("click", function () {
 			switchConnectionMethod("adb");

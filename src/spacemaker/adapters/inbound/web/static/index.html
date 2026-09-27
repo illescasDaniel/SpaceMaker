@@ -299,6 +299,70 @@
 			cursor: pointer;
 		}
 
+		.uft-folder-actions {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 0.5rem;
+			margin-top: 0.5rem;
+		}
+
+		.uft-folder-actions .btn {
+			margin-top: 0;
+		}
+
+		.uft-extra-sources {
+			list-style: none;
+			margin: 0.5rem 0 0;
+			padding: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 0.35rem;
+		}
+
+		.uft-extra-sources li {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+			padding: 0.4rem 0.55rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--surface2);
+			font-size: 0.88rem;
+		}
+
+		.uft-extra-sources .uft-extra-name {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			color: var(--text);
+		}
+
+		.uft-extra-sources .uft-extra-kind {
+			color: var(--muted);
+			font-size: 0.8rem;
+			flex-shrink: 0;
+		}
+
+		.uft-extra-sources .btn-uft-extra-remove {
+			flex-shrink: 0;
+			font: inherit;
+			font-size: 0.8rem;
+			font-weight: 600;
+			padding: 0.25rem 0.5rem;
+			border-radius: 6px;
+			border: 1px solid var(--border);
+			background: transparent;
+			color: var(--accent);
+			cursor: pointer;
+		}
+
+		.uft-browse-hint {
+			margin: 0.4rem 0 0;
+		}
+
 		.extract-actions {
 			display: flex;
 			flex-wrap: wrap;
@@ -1797,19 +1861,16 @@
 			</div>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Connection</p>
-				<button type="button" class="info-btn" id="btn-uft-connection-info" title="How to connect via MTP, ADB, or iPhone USB" aria-expanded="false" aria-controls="uft-connection-info-panel">i</button>
+				<button type="button" class="info-btn" id="btn-uft-connection-info" title="How to connect via ADB or iPhone USB" aria-expanded="false" aria-controls="uft-connection-info-panel">i</button>
 			</div>
 			<fieldset class="connection-toggle">
 				<legend class="sr-only">Device connection method</legend>
-				<button type="button" class="active" id="btn-uft-conn-mtp" data-uft-method="mtp">MTP</button>
-				<button type="button" id="btn-uft-conn-adb" data-uft-method="adb">ADB<span class="rec">cable</span></button>
+				<button type="button" class="active" id="btn-uft-conn-adb" data-uft-method="adb">ADB<span class="rec">cable</span></button>
 				<button type="button" id="btn-uft-conn-afc" data-uft-method="afc">iPhone<span class="rec">USB</span></button>
 			</fieldset>
 			<div class="info-panel" id="uft-connection-info-panel" aria-hidden="true">
-				<h4>MTP</h4>
-				<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Android works well for any folder. Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
-				<h4>ADB (cable)</h4>
-				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move.</p>
+				<h4>ADB (cable) — Android default</h4>
+				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move. <strong>Add files…</strong> / <strong>Add folder…</strong> need <code>adbfs</code> on PATH (e.g. AUR <code>adbfs-rootless-git</code>).</p>
 				<h4>iPhone (USB)</h4>
 				<p><strong>Linux only</strong> in this release (Apple File Conduit / AFC via <code>usbmuxd</code>, <code>libimobiledevice</code>, <code>ifuse</code>). Unlock, tap <strong>Trust</strong>, keep unlocked. Access is limited — mostly <strong>Camera (DCIM)</strong>; other app sandboxes are not exposed. Files copy as-is (no HEIC→JPEG convert here).</p>
 			</div>
@@ -1830,17 +1891,30 @@
 				<span class="status-dot" aria-hidden="true"></span>
 				<span id="uft-device-status-text">Scanning for device…</span>
 			</div>
-			<p class="label">Folders to transfer</p>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Sources to transfer</p>
+				<button type="button" class="info-btn" id="btn-uft-folders-info" title="Preset folders and Add files/folder" aria-expanded="false" aria-controls="uft-folders-info-panel">i</button>
+			</div>
+			<div class="info-panel" id="uft-folders-info-panel" aria-hidden="true">
+				<p>Common folders appear only when they exist on the phone. <strong>Add files…</strong> and <strong>Add folder…</strong> open the system file dialog at the phone mount (flattened to user storage — you see <code>Download</code>, <code>DCIM</code>, etc., not <code>storage/self/primary</code>). Each pick is added below as a removable extra. Needs a mount: ADB with <code>adbfs</code>, or iPhone <code>ifuse</code>.</p>
+			</div>
 			<fieldset class="folder-picker" id="uft-folder-picker">
-				<legend class="sr-only">Device folders</legend>
+				<legend class="sr-only">Device folders that exist on this phone</legend>
 			</fieldset>
+			<p class="folder-hint panel-hidden" id="uft-presets-empty">No common folders found on this device. Use Add files… or Add folder… to pick sources.</p>
+			<ul class="uft-extra-sources" id="uft-extra-sources" aria-label="Additional sources from Add files or Add folder" hidden></ul>
+			<div class="uft-folder-actions">
+				<button type="button" class="btn btn-secondary" id="btn-uft-add-files" disabled>Add files…</button>
+				<button type="button" class="btn btn-secondary" id="btn-uft-add-folder" disabled>Add folder…</button>
+			</div>
+			<p class="folder-hint uft-browse-hint panel-hidden" id="uft-browse-unavailable">Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.</p>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Destination</p>
 				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
 			</div>
 			<input class="field" type="text" id="uft-dest-path" value="" aria-label="Destination folder" readonly />
 			<div class="info-panel" id="uft-dest-info-panel" aria-hidden="true">
-				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Nested paths from the phone are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
+				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Android user-storage prefixes (<code>storage/self/primary</code>, <code>storage/emulated/0</code>, <code>sdcard</code>) are stripped so a phone path like <code>…/Download/report.pdf</code> lands as <code>Download/report.pdf</code> — not nested under those mount aliases. Remaining nested folders are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
 			</div>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Mode</p>
@@ -1851,7 +1925,7 @@
 				<button type="button" class="chip" id="uft-chip-move">Move</button>
 			</div>
 			<div class="info-panel" id="uft-mode-info-panel" aria-hidden="true">
-				<p><strong>Copy</strong> leaves files on the phone. <strong>Move</strong> deletes from the phone after a successful copy when the connection supports it (ADB preferred; MTP/iPhone may fall back to copy-only per file).</p>
+				<p><strong>Copy</strong> leaves files on the phone. <strong>Move</strong> deletes from the phone after a successful copy when the connection supports it (ADB preferred; iPhone may fall back to copy-only per file).</p>
 			</div>
 			<p class="status-line" id="uft-status-line"><strong>Status:</strong> <span id="uft-status-text">Not started</span></p>
 			<div class="progress" id="uft-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" hidden>
@@ -1974,24 +2048,21 @@
 				</div>
 				<div class="label-row">
 					<p class="label" style="margin: 0;">Connection</p>
-					<button type="button" class="info-btn" id="btn-connection-info" title="How to transfer via Wi‑Fi, MTP, ADB, or iPhone USB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
+					<button type="button" class="info-btn" id="btn-connection-info" title="How to transfer via Wi‑Fi, ADB, or iPhone USB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
 				</div>
 				<fieldset class="connection-toggle">
 					<legend class="sr-only">Device connection method</legend>
 					<button type="button" class="active" id="btn-conn-wifi">Wi‑Fi</button>
-					<button type="button" id="btn-conn-mtp">MTP</button>
 					<button type="button" id="btn-conn-adb">ADB<span class="rec">cable</span></button>
 					<button type="button" id="btn-conn-afc">iPhone<span class="rec">USB</span></button>
 				</fieldset>
 				<div class="info-panel" id="connection-info-panel" aria-hidden="true">
 					<h4>Wi‑Fi (default)</h4>
 					<p>Phone and PC on the <strong>same Wi‑Fi</strong>. Click <strong>Start extract</strong>, scan the QR (or open the URL), then pick files or folders on the phone. No USB cable. <strong>Move</strong> is not available.</p>
-					<h4>MTP</h4>
-					<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
-					<h4>ADB (cable)</h4>
+					<h4>ADB (cable) — Android USB</h4>
 					<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install.</p>
 					<h4>iPhone (USB)</h4>
-					<p><strong>Linux only.</strong> Install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro (SpaceMaker uses your <code>PATH</code>, like libmtp). On Arch/CachyOS, plug in the iPhone to start <code>usbmuxd</code> (udev) — <code>systemctl enable usbmuxd</code> is not supported. Unlock, tap <strong>Trust</strong>, stay unlocked during extract. <strong>Camera (DCIM)</strong> is the useful folder; iCloud-optimized photos may be missing on the device.</p>
+					<p><strong>Linux only.</strong> Install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro (SpaceMaker uses your <code>PATH</code>). On Arch/CachyOS, plug in the iPhone to start <code>usbmuxd</code> (udev) — <code>systemctl enable usbmuxd</code> is not supported. Unlock, tap <strong>Trust</strong>, stay unlocked during extract. <strong>Camera (DCIM)</strong> is the useful folder; iCloud-optimized photos may be missing on the device.</p>
 				</div>
 				<div id="panel-usb" class="panel-hidden">
 					<p class="label">Device</p>
@@ -2261,7 +2332,6 @@
 				<li><a href="https://ffmpeg.org/" target="_blank" rel="noopener">FFmpeg</a> / ffprobe — video</li>
 				<li><a href="https://imagemagick.org/" target="_blank" rel="noopener">ImageMagick</a> — AVIF</li>
 				<li><a href="https://exiftool.org/" target="_blank" rel="noopener">ExifTool</a> — metadata</li>
-				<li><a href="https://libmtp.sourceforge.net/" target="_blank" rel="noopener">libmtp</a> — MTP</li>
 				<li><a href="https://developer.android.com/tools/releases/platform-tools" target="_blank" rel="noopener">Android platform-tools (adb)</a></li>
 			</ul>
 

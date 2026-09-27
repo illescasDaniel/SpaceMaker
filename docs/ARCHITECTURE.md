@@ -9,7 +9,7 @@ src/spacemaker/
 ├── application/         # Use case orchestration (ExtractMedia, ConvertMedia, …)
 ├── adapters/
 │   ├── inbound/web/     # FastAPI routes, WebSockets, static UI
-│   └── outbound/        # FFmpeg, adb/MTP, filesystem
+│   └── outbound/        # FFmpeg, adb/AFC, filesystem
 ├── bootstrap/           # Composition root (services, paths, managed tools)
 └── desktop.py           # pywebview entry (starts local server, opens window)
 ```
@@ -26,8 +26,8 @@ Composition root: `bootstrap.services.create_app()` wires outbound adapters into
 ## Runtime flow
 
 1. **Home hub** — six modules: Photo backup (Wi‑Fi library receive), USB photo backup (wizard), **USB file transfer** (cable → Documents, no convert), Receive files (Documents), Send files (PC → phone), Transfer files (temporary multi-device upload+download). See [specs/home-modules/SPEC.md](../specs/home-modules/SPEC.md), [specs/usb-file-transfer/SPEC.md](../specs/usb-file-transfer/SPEC.md), [specs/transfer-files/SPEC.md](../specs/transfer-files/SPEC.md).
-2. **Extract** — Wi‑Fi QR upload and/or `DeviceRepository` (MTP via **libmtp**, ADB via **adbutils** + `adb`) into `originals/`. Managed tool dir → download → `PATH` after setup. See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md).
-3. **USB file transfer** — `TransferUsbFiles` + `DeviceRepository.list_file_paths` (MTP/ADB/AFC) into `documents_directory()/SpaceMaker/`; reuses pause/stop control; no convert/gallery.
+2. **Extract** — Wi‑Fi QR upload and/or `DeviceRepository` (ADB via **adbutils** + `adb`, iPhone AFC via **ifuse**) into `originals/`. Managed tool dir → download → `PATH` after setup. See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md).
+3. **USB file transfer** — `TransferUsbFiles` + `DeviceRepository.list_file_paths` / `list_extra_file_paths` (ADB/AFC); Add files/folder via **adbfs** / **ifuse** mounts into `documents_directory()/SpaceMaker/` with Android storage prefixes stripped; reuses pause/stop control; no convert/gallery.
 4. **Convert** — reads `originals/`, writes `converted/`, or routes failures to `error/` / `invalid/`.
 5. **Gallery** — indexes `converted/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, share, and transfer sessions.
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 
-UI_SHELL_VERSION = "2026.09.usb-file-transfer"
+UI_SHELL_VERSION = "2026.09.uft-add-files-flatten"
 
 _CSP_COMMON = (
 	"default-src 'self'; "

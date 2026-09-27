@@ -7,16 +7,6 @@ tools:
     homepage: https://developer.android.com/tools/releases/platform-tools
     license_note: Android Software Development Kit License Agreement
 
-  - id: mtp-detect
-    purpose: Detect MTP devices
-    homepage: https://libmtp.sourceforge.net/
-    license_note: LGPL-2.1+
-
-  - id: mtp-getfile
-    purpose: Read files from MTP devices
-    homepage: https://libmtp.sourceforge.net/
-    license_note: LGPL-2.1+
-
   - id: idevice_id
     purpose: List connected iPhones (AFC / usbmux)
     homepage: https://libimobiledevice.org/

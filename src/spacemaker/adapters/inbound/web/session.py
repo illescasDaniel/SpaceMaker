@@ -7,7 +7,6 @@ from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import JobProgress, TransferMode
-from spacemaker.domain.transfer_folders import DEFAULT_ANDROID_TRANSFER_FOLDERS
 from spacemaker.domain.ui_mode import UiMode
 
 
@@ -23,9 +22,8 @@ class AppSession:
 	device_id: str = ""
 	device_label: str = ""
 	source_folders: list[str] = field(default_factory=lambda: ["dcim", "pictures", "movies"])
-	transfer_folders: list[str] = field(
-		default_factory=lambda: sorted(f.value for f in DEFAULT_ANDROID_TRANSFER_FOLDERS),
-	)
+	transfer_folders: list[str] = field(default_factory=list)
+	transfer_extra_paths: list[str] = field(default_factory=list)
 	extract_phase: JobPhase = JobPhase.IDLE
 	convert_phase: JobPhase = JobPhase.IDLE
 	usb_transfer_phase: JobPhase = JobPhase.IDLE
@@ -55,6 +53,7 @@ class AppSession:
 				"device_label": self.device_label,
 				"source_folders": list(self.source_folders),
 				"transfer_folders": list(self.transfer_folders),
+				"transfer_extra_paths": list(self.transfer_extra_paths),
 				"extract": {
 					"phase": self.extract_phase.value,
 					"progress": {

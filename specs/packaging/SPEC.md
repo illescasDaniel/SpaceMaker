@@ -11,7 +11,7 @@
 
 ## Goals
 
-End users receive a **portable desktop build** per OS. It contains the Python runtime, web UI, legal markdown, and app icon. It does **not** contain adb, libmtp, ffmpeg, ffprobe, magick, or exiftool.
+End users receive a **portable desktop build** per OS. It contains the Python runtime, web UI, legal markdown, and app icon. It does **not** contain adb, ffmpeg, ffprobe, magick, or exiftool.
 
 The desktop shell's pywebview backend is native per OS: **WebView2** (`edgechromium`) on Windows, **WKWebView** (`cocoa`) on macOS — no Qt on either. **Qt WebEngine** (`qt`) is Linux-only, kept there so the app pins a known Chromium version instead of depending on the host distro's `webkit2gtk`. `pyqt6`/`pyqt6-webengine`/`qtpy` are Linux-only dependencies.
 
@@ -38,14 +38,14 @@ A failed download for one tool must **not** block setup for other tools.
 
 | Tool | Role |
 |------|------|
-| `adb` | ADB extract |
-| `mtp-detect`, `mtp-getfile` | MTP extract (libmtp) |
-| `idevice_id`, `idevicepair`, `ideviceinfo`, `ifuse` | iPhone USB extract (AFC; Linux, `PATH` only — install packages **usbmuxd**, **libimobiledevice**, **ifuse**) |
+| `adb` | ADB extract / USB file transfer |
+| `adbfs` | USB file transfer Browse / exist-probe mount (PATH only — e.g. `adbfs-rootless-git`; not catalog-downloaded) |
+| `idevice_id`, `idevicepair`, `ideviceinfo`, `ifuse` | iPhone USB extract + USB file transfer Browse (AFC; Linux, `PATH` only — install packages **usbmuxd**, **libimobiledevice**, **ifuse**) |
 | `ffmpeg`, `ffprobe` | Video encode + validation |
 | `magick` | AVIF encode |
 | `exiftool` | Metadata copy |
 
-When no portable catalog entry exists for a platform (common for libmtp), skip download and rely on PATH + manual-install copy.
+When no portable catalog entry exists for a platform, skip download and rely on PATH + manual-install copy. **MTP / libmtp tools are not part of SpaceMaker** (removed 2026-09-27).
 
 ## Target matrix (v1)
 

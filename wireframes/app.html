@@ -351,6 +351,70 @@
 			cursor: pointer;
 		}
 
+		.uft-folder-actions {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 0.5rem;
+			margin-top: 0.5rem;
+		}
+
+		.uft-folder-actions .btn {
+			margin-top: 0;
+		}
+
+		.uft-extra-sources {
+			list-style: none;
+			margin: 0.5rem 0 0;
+			padding: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 0.35rem;
+		}
+
+		.uft-extra-sources li {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+			padding: 0.4rem 0.55rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--surface2);
+			font-size: 0.88rem;
+		}
+
+		.uft-extra-sources .uft-extra-name {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			color: var(--text);
+		}
+
+		.uft-extra-sources .uft-extra-kind {
+			color: var(--muted);
+			font-size: 0.8rem;
+			flex-shrink: 0;
+		}
+
+		.uft-extra-sources .btn-uft-extra-remove {
+			flex-shrink: 0;
+			font: inherit;
+			font-size: 0.8rem;
+			font-weight: 600;
+			padding: 0.25rem 0.5rem;
+			border-radius: 6px;
+			border: 1px solid var(--border);
+			background: transparent;
+			color: var(--accent);
+			cursor: pointer;
+		}
+
+		.uft-browse-hint {
+			margin: 0.4rem 0 0;
+		}
+
 		.extract-actions {
 			display: flex;
 			flex-wrap: wrap;
@@ -1620,10 +1684,6 @@
 				<span class="tool-name">adb</span>
 				<span class="tool-status ready">Ready (downloaded)</span>
 			</div>
-			<div class="tool-row">
-				<span class="tool-name">mtp-detect / mtp-getfile</span>
-				<span class="tool-status fail">Install libmtp — not on PATH</span>
-			</div>
 			<div class="components-actions">
 				<button type="button" class="btn btn-primary" id="btn-components-continue">Continue</button>
 				<button type="button" class="btn btn-secondary" id="btn-components-retry">Retry downloads</button>
@@ -1869,19 +1929,16 @@
 			</div>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Connection</p>
-				<button type="button" class="info-btn" id="btn-uft-connection-info" title="How to connect via MTP, ADB, or iPhone USB" aria-expanded="false" aria-controls="uft-connection-info-panel">i</button>
+				<button type="button" class="info-btn" id="btn-uft-connection-info" title="How to connect via ADB or iPhone USB" aria-expanded="false" aria-controls="uft-connection-info-panel">i</button>
 			</div>
 			<fieldset class="connection-toggle">
 				<legend class="sr-only">Device connection method</legend>
-				<button type="button" class="active" id="btn-uft-conn-mtp">MTP</button>
-				<button type="button" id="btn-uft-conn-adb">ADB<span class="rec">cable</span></button>
+				<button type="button" class="active" id="btn-uft-conn-adb">ADB<span class="rec">cable</span></button>
 				<button type="button" id="btn-uft-conn-afc">iPhone<span class="rec">USB</span></button>
 			</fieldset>
 			<div class="info-panel" id="uft-connection-info-panel" aria-hidden="true">
-				<h4>MTP</h4>
-				<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Android works well for any folder. Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
-				<h4>ADB (cable)</h4>
-				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move.</p>
+				<h4>ADB (cable) — Android default</h4>
+				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move. <strong>Add files…</strong> / <strong>Add folder…</strong> need <code>adbfs</code> on PATH (e.g. AUR <code>adbfs-rootless-git</code>).</p>
 				<h4>iPhone (USB)</h4>
 				<p><strong>Linux only</strong> in this release (Apple File Conduit / AFC via <code>usbmuxd</code>, <code>libimobiledevice</code>, <code>ifuse</code>). Unlock, tap <strong>Trust</strong>, keep unlocked. Access is limited — mostly <strong>Camera (DCIM)</strong>; other app sandboxes are not exposed. Files copy as-is (no HEIC→JPEG convert here).</p>
 			</div>
@@ -1896,29 +1953,42 @@
 			</div>
 			<p class="label">Device</p>
 			<select class="field" id="uft-select-device" aria-label="Connected device">
-				<option>Samsung Galaxy S24</option>
+				<option>Pixel 8</option>
 			</select>
 			<div class="field device-status connected" id="uft-device-status">
 				<span class="status-dot" aria-hidden="true"></span>
-				<span id="uft-device-status-text">Samsung Galaxy S24 · Connected via MTP</span>
+				<span id="uft-device-status-text">Pixel 8 · Connected via ADB</span>
 			</div>
-			<p class="label">Folders to transfer</p>
+			<div class="label-row">
+				<p class="label" style="margin: 0;">Sources to transfer</p>
+				<button type="button" class="info-btn" id="btn-uft-folders-info" title="Preset folders and Add files/folder" aria-expanded="false" aria-controls="uft-folders-info-panel">i</button>
+			</div>
+			<div class="info-panel" id="uft-folders-info-panel" aria-hidden="true">
+				<p>Common folders appear only when they exist on the phone. <strong>Add files…</strong> and <strong>Add folder…</strong> open the system file dialog at the phone mount (flattened to user storage — you see <code>Download</code>, <code>DCIM</code>, etc., not <code>storage/self/primary</code>). Each pick is added below as a removable extra. Needs a mount: ADB with <code>adbfs</code>, or iPhone <code>ifuse</code>.</p>
+			</div>
 			<fieldset class="folder-picker" id="uft-folder-picker">
-				<legend class="sr-only">Device folders</legend>
-				<label><input type="checkbox" checked /> Download</label>
-				<label><input type="checkbox" checked /> Documents</label>
-				<label><input type="checkbox" /> Camera (DCIM)</label>
-				<label><input type="checkbox" /> Pictures</label>
-				<label><input type="checkbox" /> Movies</label>
-				<label><input type="checkbox" /> Music</label>
+				<legend class="sr-only">Device folders that exist on this phone</legend>
+				<!-- Demo: Music hidden — does not exist on this device -->
+				<label data-uft-preset="download"><input type="checkbox" /> Download</label>
+				<label data-uft-preset="documents"><input type="checkbox" /> Documents</label>
+				<label data-uft-preset="dcim"><input type="checkbox" /> Camera (DCIM)</label>
+				<label data-uft-preset="pictures"><input type="checkbox" /> Pictures</label>
+				<label data-uft-preset="movies"><input type="checkbox" /> Movies</label>
 			</fieldset>
+			<p class="folder-hint panel-hidden" id="uft-presets-empty">No common folders found on this device. Use Add files… or Add folder… to pick sources.</p>
+			<ul class="uft-extra-sources" id="uft-extra-sources" aria-label="Additional sources from Browse" hidden></ul>
+			<div class="uft-folder-actions">
+				<button type="button" class="btn btn-secondary" id="btn-uft-add-files">Add files…</button>
+				<button type="button" class="btn btn-secondary" id="btn-uft-add-folder">Add folder…</button>
+			</div>
+			<p class="folder-hint uft-browse-hint panel-hidden" id="uft-browse-unavailable">Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.</p>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Destination</p>
 				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
 			</div>
 			<input class="field" type="text" value="/home/user/Documents/SpaceMaker" aria-label="Destination folder" readonly />
 			<div class="info-panel" id="uft-dest-info-panel" aria-hidden="true">
-				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Nested paths from the phone are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
+				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Android user-storage prefixes (<code>storage/self/primary</code>, <code>storage/emulated/0</code>, <code>sdcard</code>) are stripped so a phone path like <code>…/Download/report.pdf</code> lands as <code>Download/report.pdf</code> — not nested under those mount aliases. Remaining nested folders are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
 			</div>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Mode</p>
@@ -1929,7 +1999,7 @@
 				<button type="button" class="chip" id="uft-chip-move">Move</button>
 			</div>
 			<div class="info-panel" id="uft-mode-info-panel" aria-hidden="true">
-				<p><strong>Copy</strong> leaves files on the phone. <strong>Move</strong> deletes from the phone after a successful copy when the connection supports it (ADB preferred; MTP/iPhone may fall back to copy-only per file).</p>
+				<p><strong>Copy</strong> leaves files on the phone. <strong>Move</strong> deletes from the phone after a successful copy when the connection supports it (ADB preferred; iPhone may fall back to copy-only per file).</p>
 			</div>
 			<p class="status-line" id="uft-status-line"><strong>Status:</strong> <span id="uft-status-text">Not started</span></p>
 			<div class="progress" id="uft-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" hidden>
@@ -1955,6 +2025,11 @@
 				Wireframe demo:
 				<button type="button" id="btn-uft-demo-progress">Simulate transfer progress</button>
 				<button type="button" id="btn-uft-demo-done">Mark transfer done</button>
+				<button type="button" id="btn-uft-demo-no-mount">Simulate no mount (Add off)</button>
+				<button type="button" id="btn-uft-demo-mount-ok">Simulate mount OK</button>
+				<button type="button" id="btn-uft-demo-add-extra">Add sample file pick</button>
+				<button type="button" id="btn-uft-demo-add-folder-extra">Add sample folder pick</button>
+				<button type="button" id="btn-uft-demo-no-presets">Simulate no preset folders</button>
 			</p>
 		</article>
 	</section>
@@ -2061,33 +2136,30 @@
 				</div>
 				<div class="label-row">
 					<p class="label" style="margin: 0;">Connection</p>
-					<button type="button" class="info-btn" id="btn-connection-info" title="How to connect via Wi‑Fi, MTP, ADB, or iPhone USB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
+					<button type="button" class="info-btn" id="btn-connection-info" title="How to connect via Wi‑Fi, ADB, or iPhone USB" aria-expanded="false" aria-controls="connection-info-panel">i</button>
 				</div>
 				<fieldset class="connection-toggle">
 					<legend class="sr-only">Device connection method</legend>
 					<button type="button" class="active" id="btn-conn-wifi">Wi‑Fi</button>
-					<button type="button" id="btn-conn-mtp">MTP</button>
 					<button type="button" id="btn-conn-adb">ADB<span class="rec">cable</span></button>
 					<button type="button" id="btn-conn-afc">iPhone<span class="rec">USB</span></button>
 				</fieldset>
 				<div class="info-panel" id="connection-info-panel" aria-hidden="true">
 					<h4>Wi‑Fi (default)</h4>
 					<p>Phone and PC on the <strong>same Wi‑Fi</strong>. Click <strong>Start extract</strong>, scan the QR (or open the URL), then pick files or folders on the phone. No USB cable. <strong>Move</strong> is not available — uploads are always copy into <code>originals/</code>. Allow inbound TCP on the PC firewall if prompted.</p>
-					<h4>MTP</h4>
-					<p>On the phone, choose <strong>File transfer / MTP</strong> (not charge-only). Windows and Linux usually need nothing else on the PC. macOS may need extra setup — follow any in-app hint if the device is not found.</p>
-					<h4>ADB (cable)</h4>
+					<h4>ADB (cable) — Android USB</h4>
 					<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install.</p>
 					<h4>iPhone (USB)</h4>
-					<p><strong>Linux only</strong> in this release. Install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro (SpaceMaker uses your <code>PATH</code>, like libmtp). On Arch/CachyOS, <code>usbmuxd</code> is started when you <strong>plug in</strong> the iPhone (udev) — do not use <code>systemctl enable usbmuxd</code>. Unlock the phone, tap <strong>Trust</strong>, and keep it unlocked during extract. Only <strong>Camera (DCIM)</strong> is useful on iPhone — HEIC/MOV copy into <code>originals/</code>. Photos stored only in iCloud may be missing locally.</p>
+					<p><strong>Linux only</strong> in this release. Install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro (SpaceMaker uses your <code>PATH</code>). On Arch/CachyOS, <code>usbmuxd</code> is started when you <strong>plug in</strong> the iPhone (udev) — do not use <code>systemctl enable usbmuxd</code>. Unlock the phone, tap <strong>Trust</strong>, and keep it unlocked during extract. Only <strong>Camera (DCIM)</strong> is useful on iPhone — HEIC/MOV copy into <code>originals/</code>. Photos stored only in iCloud may be missing locally.</p>
 				</div>
 				<div id="panel-usb">
 					<p class="label">Device</p>
 					<select class="field" id="select-device" aria-label="Connected device">
-						<option>Samsung Galaxy S24</option>
+						<option>Pixel 8</option>
 					</select>
 					<div class="field device-status connected" id="device-status">
 						<span class="status-dot" aria-hidden="true"></span>
-						<span id="device-status-text">Samsung Galaxy S24 · Connected via MTP</span>
+						<span id="device-status-text">Pixel 8 · Connected via ADB</span>
 					</div>
 					<p class="label">Folders to back up</p>
 					<fieldset class="folder-picker">
@@ -2337,7 +2409,6 @@
 				<li><a href="https://ffmpeg.org/" target="_blank" rel="noopener">FFmpeg</a> / ffprobe — video</li>
 				<li><a href="https://imagemagick.org/" target="_blank" rel="noopener">ImageMagick</a> — AVIF</li>
 				<li><a href="https://exiftool.org/" target="_blank" rel="noopener">ExifTool</a> — metadata</li>
-				<li><a href="https://libmtp.sourceforge.net/" target="_blank" rel="noopener">libmtp</a> — MTP</li>
 				<li><a href="https://developer.android.com/tools/releases/platform-tools" target="_blank" rel="noopener">Android platform-tools (adb)</a></li>
 			</ul>
 			<p>Production app loads full text from bundled <code>docs/legal/</code> files.</p>
@@ -2650,7 +2721,6 @@
 		var btnConnInfo = document.getElementById('btn-connection-info');
 		var connInfoPanel = document.getElementById('connection-info-panel');
 		var btnWifi = document.getElementById('btn-conn-wifi');
-		var btnMtp = document.getElementById('btn-conn-mtp');
 		var btnAdb = document.getElementById('btn-conn-adb');
 		var btnAfc = document.getElementById('btn-conn-afc');
 		var panelUsb = document.getElementById('panel-usb');
@@ -2673,7 +2743,6 @@
 
 		function setConnectionMethod(method) {
 			btnWifi.classList.toggle('active', method === 'wifi');
-			btnMtp.classList.toggle('active', method === 'mtp');
 			btnAdb.classList.toggle('active', method === 'adb');
 			btnAfc.classList.toggle('active', method === 'afc');
 			panelUsb.classList.toggle('panel-hidden', method === 'wifi');
@@ -2690,9 +2759,7 @@
 				chipMove.classList.remove('disabled');
 				chipMove.disabled = false;
 				moveWifiHint.hidden = true;
-				if (method === 'mtp') {
-					deviceStatusText.textContent = 'Samsung Galaxy S24 · Connected via MTP';
-				} else if (method === 'afc') {
+				if (method === 'afc') {
 					deviceStatusText.textContent = 'Daniel’s iPhone · Connected via iPhone USB';
 				} else {
 					deviceStatusText.textContent = 'Pixel 8 · Connected via ADB';
@@ -2701,7 +2768,6 @@
 		}
 
 		btnWifi.addEventListener('click', function () { setConnectionMethod('wifi'); });
-		btnMtp.addEventListener('click', function () { setConnectionMethod('mtp'); });
 		btnAdb.addEventListener('click', function () { setConnectionMethod('adb'); });
 		btnAfc.addEventListener('click', function () { setConnectionMethod('afc'); });
 		setConnectionMethod('wifi');
@@ -2780,12 +2846,16 @@
 
 		/* USB file transfer module (cable-only demo) */
 		(function () {
-			var btnMtp = document.getElementById('btn-uft-conn-mtp');
 			var btnAdb = document.getElementById('btn-uft-conn-adb');
 			var btnAfc = document.getElementById('btn-uft-conn-afc');
 			var statusText = document.getElementById('uft-device-status-text');
 			var iphoneBanner = document.getElementById('uft-iphone-limit-banner');
 			var folderPicker = document.getElementById('uft-folder-picker');
+			var presetsEmpty = document.getElementById('uft-presets-empty');
+			var extraList = document.getElementById('uft-extra-sources');
+			var btnAddFiles = document.getElementById('btn-uft-add-files');
+			var btnAddFolder = document.getElementById('btn-uft-add-folder');
+			var browseHint = document.getElementById('uft-browse-unavailable');
 			var chipCopy = document.getElementById('uft-chip-copy');
 			var chipMove = document.getElementById('uft-chip-move');
 			var btnStart = document.getElementById('btn-uft-start');
@@ -2798,17 +2868,20 @@
 			var countText = document.getElementById('uft-count-text');
 			var openWrap = document.getElementById('uft-open-folder-wrap');
 			var phase = 'idle';
+			var mountOk = true;
+			var extras = [];
+			var extraSeq = 0;
+			/* Music omitted: does not exist on demo device */
 			var androidFolders =
-				'<legend class="sr-only">Device folders</legend>' +
-				'<label><input type="checkbox" checked /> Download</label>' +
-				'<label><input type="checkbox" checked /> Documents</label>' +
-				'<label><input type="checkbox" /> Camera (DCIM)</label>' +
-				'<label><input type="checkbox" /> Pictures</label>' +
-				'<label><input type="checkbox" /> Movies</label>' +
-				'<label><input type="checkbox" /> Music</label>';
+				'<legend class="sr-only">Device folders that exist on this phone</legend>' +
+				'<label data-uft-preset="download"><input type="checkbox" /> Download</label>' +
+				'<label data-uft-preset="documents"><input type="checkbox" /> Documents</label>' +
+				'<label data-uft-preset="dcim"><input type="checkbox" /> Camera (DCIM)</label>' +
+				'<label data-uft-preset="pictures"><input type="checkbox" /> Pictures</label>' +
+				'<label data-uft-preset="movies"><input type="checkbox" /> Movies</label>';
 			var iphoneFolders =
-				'<legend class="sr-only">Device folders</legend>' +
-				'<label><input type="checkbox" checked /> Camera (DCIM)</label>';
+				'<legend class="sr-only">Device folders that exist on this phone</legend>' +
+				'<label data-uft-preset="dcim"><input type="checkbox" /> Camera (DCIM)</label>';
 
 			function bindInfoToggle(btnId, panelId) {
 				var btn = document.getElementById(btnId);
@@ -2820,31 +2893,116 @@
 				});
 			}
 			bindInfoToggle('btn-uft-connection-info', 'uft-connection-info-panel');
+			bindInfoToggle('btn-uft-folders-info', 'uft-folders-info-panel');
 			bindInfoToggle('btn-uft-dest-info', 'uft-dest-info-panel');
 			bindInfoToggle('btn-uft-mode-info', 'uft-mode-info-panel');
 			bindInfoToggle('btn-uft-actions-info', 'uft-actions-info-panel');
 
+			function renderExtras() {
+				extraList.innerHTML = '';
+				if (!extras.length) {
+					extraList.hidden = true;
+					return;
+				}
+				extraList.hidden = false;
+				extras.forEach(function (item) {
+					var li = document.createElement('li');
+					li.dataset.extraId = String(item.id);
+					var name = document.createElement('span');
+					name.className = 'uft-extra-name';
+					name.textContent = item.name;
+					var kind = document.createElement('span');
+					kind.className = 'uft-extra-kind';
+					kind.textContent = item.kind;
+					var remove = document.createElement('button');
+					remove.type = 'button';
+					remove.className = 'btn-uft-extra-remove';
+					remove.textContent = 'Remove';
+					remove.setAttribute('aria-label', 'Remove ' + item.name);
+					remove.addEventListener('click', function () {
+						extras = extras.filter(function (e) { return e.id !== item.id; });
+						renderExtras();
+						updateStartEnabled();
+					});
+					li.appendChild(name);
+					li.appendChild(kind);
+					li.appendChild(remove);
+					extraList.appendChild(li);
+				});
+			}
+
+			function setMountAvailable(ok) {
+				mountOk = ok;
+				btnAddFiles.disabled = !ok;
+				btnAddFolder.disabled = !ok;
+				browseHint.classList.toggle('panel-hidden', ok);
+			}
+
+			function setPresetsHtml(html, empty) {
+				folderPicker.innerHTML = html;
+				folderPicker.hidden = !!empty;
+				presetsEmpty.classList.toggle('panel-hidden', !empty);
+				updateStartEnabled();
+			}
+
+			function hasCheckedPreset() {
+				return !!folderPicker.querySelector('input[type="checkbox"]:checked');
+			}
+
+			function updateStartEnabled() {
+				if (phase === 'running' || phase === 'paused') {
+					btnStart.disabled = true;
+					return;
+				}
+				btnStart.disabled = !(hasCheckedPreset() || extras.length > 0);
+			}
+
 			function setMethod(method) {
-				btnMtp.classList.toggle('active', method === 'mtp');
 				btnAdb.classList.toggle('active', method === 'adb');
 				btnAfc.classList.toggle('active', method === 'afc');
-				/* Limit banner only when iPhone / AFC is the active connection */
 				iphoneBanner.hidden = method !== 'afc';
-				if (method === 'mtp') {
-					statusText.textContent = 'Samsung Galaxy S24 · Connected via MTP';
-					folderPicker.innerHTML = androidFolders;
-				} else if (method === 'adb') {
+				if (method === 'adb') {
 					statusText.textContent = 'Pixel 8 · Connected via ADB';
-					folderPicker.innerHTML = androidFolders;
+					setPresetsHtml(androidFolders, false);
+					/* Demo default: ADB without adbfs — Add off until demo mount OK */
+					setMountAvailable(false);
+					browseHint.textContent = 'Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.';
 				} else {
 					statusText.textContent = 'Daniel’s iPhone · Connected via iPhone USB';
-					folderPicker.innerHTML = iphoneFolders;
+					setPresetsHtml(iphoneFolders, false);
+					setMountAvailable(true);
+					browseHint.textContent = 'Add files/folder needs a mounted phone (iPhone ifuse, or ADB with adbfs). Desktop app only.';
 				}
 			}
 
-			btnMtp.addEventListener('click', function () { setMethod('mtp'); });
 			btnAdb.addEventListener('click', function () { setMethod('adb'); });
 			btnAfc.addEventListener('click', function () { setMethod('afc'); });
+
+			folderPicker.addEventListener('change', function () {
+				updateStartEnabled();
+			});
+
+			function addExtra(name, kind) {
+				extraSeq += 1;
+				extras.push({ id: extraSeq, name: name, kind: kind });
+				renderExtras();
+				updateStartEnabled();
+			}
+
+			btnAddFiles.addEventListener('click', function () {
+				if (!mountOk) {
+					return;
+				}
+				alert('Wireframe: native multi-file dialog opens at the flattened phone mount (Download, DCIM, …).');
+				addExtra('Download/notes.txt', 'file');
+			});
+			btnAddFolder.addEventListener('click', function () {
+				if (!mountOk) {
+					return;
+				}
+				alert('Wireframe: native folder dialog opens at the flattened phone mount (not storage/self/primary).');
+				addExtra('WhatsApp/Media', 'folder');
+			});
 
 			chipCopy.addEventListener('click', function () {
 				chipCopy.classList.add('selected');
@@ -2857,7 +3015,6 @@
 
 			function setPhase(next) {
 				phase = next;
-				btnStart.disabled = next === 'running' || next === 'paused';
 				btnPause.disabled = next !== 'running';
 				btnStop.disabled = next !== 'running' && next !== 'paused';
 				if (next === 'idle') {
@@ -2881,16 +3038,18 @@
 					countText.textContent = '24 files transferred';
 					progressFill.style.width = '100%';
 					progressBar.setAttribute('aria-valuenow', '100');
-					btnStart.disabled = false;
 					openWrap.hidden = false;
 				} else if (next === 'stopped') {
 					phaseText.textContent = 'Stopped: 7 files';
-					btnStart.disabled = false;
 					openWrap.hidden = false;
 				}
+				updateStartEnabled();
 			}
 
 			btnStart.addEventListener('click', function () {
+				if (btnStart.disabled) {
+					return;
+				}
 				if (phase === 'idle' || phase === 'stopped' || phase === 'done') {
 					setPhase('running');
 				}
@@ -2911,10 +3070,27 @@
 			document.getElementById('btn-uft-demo-done').addEventListener('click', function () {
 				setPhase('done');
 			});
+			document.getElementById('btn-uft-demo-no-mount').addEventListener('click', function () {
+				setMountAvailable(false);
+				browseHint.textContent = 'Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.';
+			});
+			document.getElementById('btn-uft-demo-mount-ok').addEventListener('click', function () {
+				setMountAvailable(true);
+			});
+			document.getElementById('btn-uft-demo-add-extra').addEventListener('click', function () {
+				addExtra('Download/notes.txt', 'file');
+			});
+			document.getElementById('btn-uft-demo-add-folder-extra').addEventListener('click', function () {
+				addExtra('WhatsApp/Media', 'folder');
+			});
+			document.getElementById('btn-uft-demo-no-presets').addEventListener('click', function () {
+				setPresetsHtml('<legend class="sr-only">Device folders that exist on this phone</legend>', true);
+			});
 			document.getElementById('btn-uft-open-folder').addEventListener('click', function () {
 				alert('Wireframe: open ~/Documents/SpaceMaker/ in file manager');
 			});
-			setMethod('mtp');
+			setMethod('adb');
+			renderExtras();
 		})();
 	</script>
 </body>

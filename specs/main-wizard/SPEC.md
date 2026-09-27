@@ -25,9 +25,9 @@
 
 - Match wireframe structure: header **SpaceMaker**, three cards on wide viewports, stacked on narrow.
 - Each card shows: step number, title, **status line** (`Not started` | `In progress: N%` | `Completed: N files` | `Waiting for …` | `Failed`), progress bar when applicable.
-- **Step 1 — Extract:** **connection method** segmented control (**Wi‑Fi** default, **MTP**, **ADB (cable)**, **iPhone (USB)**) with a **visible container border** (see wireframe), **info (ⓘ)** button, library root picker, Copy/Move mode chips (**label text uses `--text`** on theme surfaces), **Start extract**, **Pause extract**, **Resume extract** (while paused), **Stop extract**, file counts.
+- **Step 1 — Extract:** **connection method** segmented control (**Wi‑Fi** default, **ADB (cable)**, **iPhone (USB)**) with a **visible container border** (see wireframe), **info (ⓘ)** button, library root picker, Copy/Move mode chips (**label text uses `--text`** on theme surfaces), **Start extract**, **Pause extract**, **Resume extract** (while paused), **Stop extract**, file counts.
 - **Step 1 — Wi‑Fi:** hide USB **device picker**, **device status**, and **source folder** checklist. Show **phone upload** block: idle hint until extract starts; while **running** or **paused**, show LAN **URL + QR** for the **upload page** (not the gallery URL). **Move** chip is **disabled**; only **Copy** applies (uploads always copy into `originals/`).
-- **Step 1 — USB (MTP/ADB):** **device picker** + **status line** (friendly copy + connection indicator — never raw `libmtp:0`-style ids as the main message), **source folder** checklist, Copy/Move chips (Move enabled when cable method selected).
+- **Step 1 — USB (ADB / iPhone):** **device picker** + **status line** (friendly copy + connection indicator — never raw serials as the main message), **source folder** checklist, Copy/Move chips (Move enabled when cable method selected).
 - **Step 1 — Extract controls (enabled/disabled):**
   | Extract phase | Start | Pause | Resume | Stop |
   |---------------|-------|-------|--------|------|
@@ -82,9 +82,9 @@
 
 - **Given** the user is on Step 1
 - **When** the user opens the connection method info control
-- **Then** instructions for Wi‑Fi, MTP, ADB (cable), and iPhone (USB) are visible
+- **Then** instructions for Wi‑Fi, ADB (cable), and iPhone (USB) are visible
 - **And** Wi‑Fi help covers same network, Start extract, QR scan, and that Move is unavailable
-- **And** MTP help focuses on phone USB mode, not installing libmtp on Windows/Linux
+- **And** no MTP / libmtp help is shown
 
 ### Scenario: Extract progress updates over WebSocket
 
@@ -119,7 +119,7 @@
 
 - **Given** a device is connected for the selected method
 - **When** Step 1 is shown
-- **Then** status shows a readable name and **Connected via MTP** or **Connected via ADB**
+- **Then** status shows a readable name and **Connected via ADB** or **Connected via iPhone USB**
 - **And** device status is hidden when **Wi‑Fi** is selected
 - **And** a green (or success) indicator is shown
 - **And** internal backend identifiers are not used as the primary status string
@@ -216,7 +216,7 @@
 |-----------|-------------|
 | No device for selected USB method | Step 1 shows not connected (muted indicator + setup hint); Start disabled or clear error on attempt |
 | Wi‑Fi session ended or invalid token on phone | Upload page shows session ended; user must Start extract again on PC |
-| Missing host dependency (adb, libmtp) | Step 1 banner with install hint from info panel |
+| Missing host dependency (adb, ifuse) | Step 1 banner with install hint from info panel |
 | Library root not writable | Error message on Step 1; no silent failure |
 | WebSocket disconnect during job | Status shows reconnecting or last known progress; job continues server-side |
 | Review clicked | OS file manager or in-app list opens `error/` or `invalid/` path (implementation choice; must be spec’d in adapter — default: reveal folder in OS file manager) |

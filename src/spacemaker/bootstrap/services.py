@@ -44,12 +44,16 @@ from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.sync_gallery_index import SyncGalleryIndex
-from spacemaker.application.transfer_usb_files import TransferUsbFiles
 from spacemaker.application.transfer_session import (
 	EMPTY_TRANSFER_FOLDER_MESSAGE,
 	EmptyTransferFolderError,
 	SaveTransferItemToDocuments,
 	StageTransferItem,
+)
+from spacemaker.application.transfer_usb_files import TransferUsbFiles
+from spacemaker.application.usb_transfer_browse import (
+	device_relative_paths_from_host_picks,
+	probe_existing_transfer_folders,
 )
 from spacemaker.application.wizard_state import wizard_actions
 from spacemaker.bootstrap.app_meta import app_release_info
@@ -75,7 +79,7 @@ from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode
 from spacemaker.domain.source_folders import SourceFolder, parse_source_folders
-from spacemaker.domain.transfer_folders import TransferFolder, parse_transfer_folders
+from spacemaker.domain.transfer_folders import TransferFolder, merge_extra_paths, parse_transfer_folders
 from spacemaker.domain.transfer_session import TransferOrigin, TransferSessionItem
 from spacemaker.domain.ui_mode import UiMode
 from spacemaker.domain.usb_file_transfer import (
@@ -128,6 +132,7 @@ class AppServices:
 		self.export_friendly = ExportFriendlyMedia(self.filesystem, self.converter, self.probe)
 		self.thumbnails = SubprocessThumbnailGenerator(self.runner)
 		self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spacemaker-job")
+		self._device_repos: dict[ConnectionMethod, object] = {}
 		self._export_jobs: dict[str, GalleryExportJob] = {}
 		self._export_lock = threading.Lock()
 		self._ws_clients: set[WebSocketLike] = set()
@@ -163,7 +168,20 @@ class AppServices:
 	def devices_for(self, method: ConnectionMethod):
 		if method is ConnectionMethod.WIFI:
 			raise ValueError("Wi-Fi extract does not use DeviceRepository")
-		return device_repository_for(method, runner=self.runner)
+		cached = self._device_repos.get(method)
+		if cached is not None:
+			return cached
+		repo = device_repository_for(method, runner=self.runner)
+		self._device_repos[method] = repo
+		return repo
+
+	def release_device_mounts(self) -> None:
+		for repo in list(self._device_repos.values()):
+			release = getattr(repo, "release_mounts", None)
+			if callable(release):
+				with contextlib.suppress(Exception):
+					release()
+		self._device_repos.clear()
 
 	def extract_use_case(self, method: ConnectionMethod) -> ExtractMedia:
 		return ExtractMedia(self.devices_for(method), self.filesystem)
@@ -276,6 +294,7 @@ class AppServices:
 		self.stop_extract_and_wait(timeout_seconds=timeout_seconds)
 		self.stop_usb_transfer_and_wait(timeout_seconds=timeout_seconds)
 		self.stop_convert_and_wait(timeout_seconds=timeout_seconds)
+		self.release_device_mounts()
 		self._clear_transfer_session()
 		self._executor.shutdown(wait=False, cancel_futures=True)
 
@@ -344,13 +363,16 @@ class AppServices:
 		with self.session._lock:
 			usb_phase = self.session.usb_transfer_phase
 			usb_folders = list(self.session.transfer_folders)
+			usb_extras = list(self.session.transfer_extra_paths)
 			usb_has_device = bool(self.session.device_id)
 			usb_method = self.session.connection_method
+			usb_device_id = self.session.device_id
 			usb_completed = self.session.usb_transfer_progress.completed
 		usb_flags = transfer_control_flags(usb_phase)
 		usb_flags["start"] = can_start_usb_file_transfer(
 			has_device=usb_has_device,
 			folders_selected=len(usb_folders) > 0,
+			extras_selected=len(usb_extras) > 0,
 			phase=usb_phase,
 		)
 		base["usb_transfer_actions"] = usb_flags
@@ -358,6 +380,10 @@ class AppServices:
 		base["usb_transfer_show_open_folder"] = (
 			usb_phase in {JobPhase.DONE, JobPhase.STOPPED} and usb_completed > 0
 		) or self._documents_receive_file_count() > 0
+		browse = self._usb_browse_snapshot(usb_method, usb_device_id)
+		base["usb_transfer_browse"] = browse
+		base["usb_transfer_available_folders"] = browse["available_folders"]
+		base["transfer_extra_paths"] = usb_extras
 		if library_root:
 			base["library_root_display"] = display_user_path(library_root, trailing_slash=True)
 		else:
@@ -550,6 +576,7 @@ class AppServices:
 		self.stop_active_lan_session()
 		if module is not AppModule.USB_FILE_TRANSFER:
 			self.stop_usb_transfer_and_wait(timeout_seconds=30.0)
+		self.release_device_mounts()
 		with self.session._lock:
 			self.session.active_module = module
 			if module is AppModule.PHOTO_BACKUP:
@@ -559,11 +586,10 @@ class AppServices:
 			elif module is AppModule.USB_PHOTO_BACKUP:
 				self.session.ui_mode = UiMode.ADVANCED
 			elif module is AppModule.USB_FILE_TRANSFER:
-				self.session.connection_method = ConnectionMethod.MTP
+				self.session.connection_method = ConnectionMethod.ADB
 				self.session.transfer_mode = TransferMode.COPY
-				self.session.transfer_folders = sorted(
-					f.value for f in default_transfer_folders(ConnectionMethod.MTP)
-				)
+				self.session.transfer_folders = sorted(f.value for f in default_transfer_folders(ConnectionMethod.ADB))
+				self.session.transfer_extra_paths = []
 				self.session.device_id = ""
 				self.session.device_label = ""
 				self.session.usb_transfer_phase = JobPhase.IDLE
@@ -578,16 +604,22 @@ class AppServices:
 			self._share_entries = []
 			self._clear_share_session()
 		elif module is AppModule.USB_FILE_TRANSFER:
-			self.reconcile_device_selection(ConnectionMethod.MTP)
+			self.reconcile_device_selection(ConnectionMethod.ADB)
+			with contextlib.suppress(Exception):
+				cleanup = getattr(self.devices_for(ConnectionMethod.ADB), "cleanup_orphan_mounts", None)
+				if callable(cleanup):
+					cleanup()
 		elif module is AppModule.TRANSFER_FILES:
 			self.start_transfer_files_session()
 
 	def leave_module_for_home(self) -> None:
 		self.stop_active_lan_session()
 		self.stop_usb_transfer_and_wait(timeout_seconds=30.0)
+		self.release_device_mounts()
 		self._share_selection = []
 		with self.session._lock:
 			self.session.active_module = AppModule.HOME
+			self.session.transfer_extra_paths = []
 
 	def start_transfer_files_session(self) -> None:
 		import tempfile
@@ -1176,22 +1208,168 @@ class AppServices:
 		future = self._usb_transfer_future
 		return future is not None and not future.done()
 
+	def _usb_browse_snapshot(self, method: ConnectionMethod, device_id: str) -> dict[str, object]:
+		with self.session._lock:
+			active = self.session.active_module
+		# Never mount FUSE from photo-backup / other modules — that froze ADB device
+		# selection on the wizard when enriched_snapshot ran after auto-select.
+		if active is not AppModule.USB_FILE_TRANSFER:
+			return {
+				"mount_available": False,
+				"mount_root": "",
+				"available_folders": None,
+				"hint": "",
+			}
+		if method is ConnectionMethod.WIFI or not device_id:
+			return {
+				"mount_available": False,
+				"mount_root": "",
+				"available_folders": None,
+				"hint": "Connect a device to browse phone folders.",
+			}
+		try:
+			repo = self.devices_for(method)
+		except Exception:
+			repo = None
+		if method is ConnectionMethod.ADB and repo is not None:
+			return self._adb_browse_snapshot(repo, device_id)
+		# AFC (and any other mount-backed method): mount when needed for exist-probe.
+		try:
+			mount = repo.browse_root(device_id) if repo is not None else None
+		except Exception:
+			mount = None
+			repo = None
+		if mount:
+			existing = probe_existing_transfer_folders(mount)
+			return {
+				"mount_available": True,
+				"mount_root": mount,
+				"available_folders": sorted(f.value for f in existing),
+				"hint": "",
+			}
+		if method is ConnectionMethod.AFC:
+			hint = "Add files/folder needs an ifuse mount for iPhone USB. Desktop app only."
+		else:
+			hint = "Add files/folder needs a mounted phone. Desktop app only."
+		return {
+			"mount_available": False,
+			"mount_root": "",
+			"available_folders": None,
+			"hint": hint,
+		}
+
+	def _adb_browse_snapshot(self, repo: object, device_id: str) -> dict[str, object]:
+		"""ADB presets via shell; FUSE only if already mounted (Add mounts lazily)."""
+		available: list[str] | None = None
+		probe = getattr(repo, "probe_existing_transfer_folders", None)
+		if callable(probe):
+			try:
+				existing = probe(device_id)
+				available = sorted(f.value for f in existing)
+			except Exception:
+				available = None
+		backend = getattr(repo, "browse_backend_available", None)
+		backend_ok = bool(backend()) if callable(backend) else False
+		peek = getattr(repo, "peek_browse_root", None)
+		mount = peek(device_id) if callable(peek) else None
+		if mount:
+			# Prefer shallow mount names when a live mount already exists.
+			try:
+				from_mount = probe_existing_transfer_folders(mount)
+				available = sorted(f.value for f in from_mount)
+			except Exception:
+				pass
+			return {
+				"mount_available": True,
+				"mount_root": mount,
+				"available_folders": available,
+				"hint": "",
+			}
+		if backend_ok:
+			return {
+				"mount_available": True,
+				"mount_root": "",
+				"available_folders": available,
+				"hint": "",
+			}
+		hint = (
+			"Add files/folder needs adbfs on PATH (e.g. AUR adbfs-rootless-git). "
+			"Preset folders can still appear via ADB. Desktop app only."
+		)
+		return {
+			"mount_available": False,
+			"mount_root": "",
+			"available_folders": available,
+			"hint": hint,
+		}
+
+	def ensure_usb_browse_mount(self) -> str:
+		"""Mount the phone for Add files/folder (lazy). Raises ValueError on failure."""
+		with self.session._lock:
+			method = self.session.connection_method
+			device_id = self.session.device_id
+			active = self.session.active_module
+		if active is not AppModule.USB_FILE_TRANSFER:
+			raise ValueError("Add files/folder is only available in USB file transfer")
+		if method is ConnectionMethod.WIFI or not device_id:
+			raise ValueError("select a USB device first")
+		repo = self.devices_for(method)
+		cleanup = getattr(repo, "cleanup_orphan_mounts", None)
+		if callable(cleanup):
+			with contextlib.suppress(Exception):
+				cleanup()
+		mount = repo.browse_root(device_id)
+		if not mount:
+			if method is ConnectionMethod.ADB:
+				raise ValueError(
+					"Could not mount with adbfs. Install adbfs-rootless-git (or similar) and retry."
+				)
+			raise ValueError("phone mount not available for Add files/folder")
+		return mount
+
+	def add_usb_transfer_extras_from_host(self, host_paths: list[str]) -> list[str]:
+		with self.session._lock:
+			method = self.session.connection_method
+			device_id = self.session.device_id
+			existing = list(self.session.transfer_extra_paths)
+		if method is ConnectionMethod.WIFI or not device_id:
+			raise ValueError("select a USB device first")
+		mount = self.ensure_usb_browse_mount()
+		accepted = device_relative_paths_from_host_picks(mount, host_paths)
+		if not accepted:
+			raise ValueError("selected paths must be under the phone mount")
+		merged = merge_extra_paths(existing, accepted)
+		with self.session._lock:
+			self.session.transfer_extra_paths = merged
+		return merged
+
+	def set_usb_transfer_extra_paths(self, paths: list[str]) -> list[str]:
+		merged = merge_extra_paths([], paths)
+		with self.session._lock:
+			self.session.transfer_extra_paths = merged
+		return merged
+
+	def clear_usb_transfer_extras(self) -> None:
+		with self.session._lock:
+			self.session.transfer_extra_paths = []
+
 	def start_usb_transfer(self) -> None:
 		if self._usb_transfer_job_active():
 			return
 		with self.session._lock:
 			if self.session.usb_transfer_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
 				return
-			if not self.session.transfer_folders or not self.session.device_id:
+			if not self.session.device_id:
+				return
+			folders = parse_transfer_folders(self.session.transfer_folders)
+			extras = frozenset(self.session.transfer_extra_paths)
+			if not folders and not extras:
 				return
 			method = self.session.connection_method
 			if method is ConnectionMethod.WIFI:
 				return
 			device_id = self.session.device_id
 			mode = self.session.transfer_mode
-			folders = parse_transfer_folders(self.session.transfer_folders)
-			if not folders:
-				return
 			self.session.usb_transfer_phase = JobPhase.RUNNING
 			self.session.usb_transfer_progress = JobProgress(0, 0)
 			self.session.last_error = ""
@@ -1206,6 +1384,7 @@ class AppServices:
 			method,
 			mode,
 			folders,
+			extras,
 		)
 
 	def _on_usb_transfer_paused(self) -> None:
@@ -1250,6 +1429,7 @@ class AppServices:
 		method: ConnectionMethod,
 		mode: TransferMode,
 		folders: frozenset[TransferFolder],
+		extra_paths: frozenset[str],
 	) -> None:
 		control = self._usb_transfer_control
 		try:
@@ -1265,6 +1445,7 @@ class AppServices:
 				device_id,
 				mode,
 				folders=folders,
+				extra_paths=extra_paths,
 				control=control,
 				on_progress=on_progress,
 			)

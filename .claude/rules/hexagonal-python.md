@@ -35,7 +35,7 @@ Verify with ripgrep when unsure.
 ## Adapters (`src/spacemaker/adapters/`)
 
 - **Inbound:** FastAPI routes, WebSocket handlers, static web assets
-- **Outbound:** FFmpeg/ImageMagick/exiftool executors, adb/MTP, filesystem moves
+- **Outbound:** FFmpeg/ImageMagick/exiftool executors, adb/AFC, filesystem moves
 
 ## Rules
 

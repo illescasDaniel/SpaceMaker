@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from spacemaker.adapters.outbound.device.adb_repository import AdbDeviceRepository
 from spacemaker.adapters.outbound.device.afc_repository import AfcDeviceRepository
-from spacemaker.adapters.outbound.device.mtp_repository import MtpDeviceRepository
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
 from spacemaker.domain.connection import ConnectionMethod
@@ -20,4 +19,4 @@ def device_repository_for(
 		return AdbDeviceRepository(adb_path)
 	if method is ConnectionMethod.AFC:
 		return AfcDeviceRepository(run)
-	return MtpDeviceRepository(run)
+	raise ValueError(f"no device repository for connection method {method.value}")

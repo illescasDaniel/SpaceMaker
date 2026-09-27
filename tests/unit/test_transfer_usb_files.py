@@ -62,7 +62,7 @@ def test_given_existing_same_size_when_transfer_then_skips_pull(tmp_path: Path) 
 	devices.file_paths = ["/sdcard/Download/a.pdf"]
 	devices.sizes["/sdcard/Download/a.pdf"] = 500
 	dest_root = str(tmp_path / "SpaceMaker")
-	dest = str(Path(dest_root) / "sdcard" / "Download" / "a.pdf")
+	dest = str(Path(dest_root) / "Download" / "a.pdf")
 	fs.files[dest] = 500
 	use_case = TransferUsbFiles(devices, fs)
 	# when
@@ -91,6 +91,92 @@ def test_given_empty_folders_when_transfer_then_noop(tmp_path: Path) -> None:
 	)
 	assert result.total == 0
 	assert devices.pulled == []
+
+
+def test_given_extra_folder_when_transfer_then_includes_nested(tmp_path: Path) -> None:
+	# given
+	fs = FakeFileSystem()
+	devices = FakeDeviceRepository()
+	devices.bind_filesystem(fs)
+	devices.file_paths = [
+		"WhatsApp/Media/a.jpg",
+		"Download/b.pdf",
+		"other/c.txt",
+	]
+	devices.sizes["WhatsApp/Media/a.jpg"] = 10
+	devices.sizes["Download/b.pdf"] = 20
+	devices.sizes["other/c.txt"] = 30
+	use_case = TransferUsbFiles(devices, fs)
+	# when
+	result = use_case.run(
+		str(tmp_path / "SpaceMaker"),
+		"dev1",
+		TransferMode.COPY,
+		folders=frozenset(),
+		extra_paths=frozenset({"WhatsApp/Media"}),
+	)
+	# then
+	assert result.completed == 1
+	assert devices.pulled[0][1] == "WhatsApp/Media/a.jpg"
+
+
+def test_given_mount_relative_extra_when_absolute_adb_paths_then_includes(tmp_path: Path) -> None:
+	# given — Browse stores mount-relative extras; ADB lists absolute paths
+	fs = FakeFileSystem()
+	devices = FakeDeviceRepository()
+	devices.bind_filesystem(fs)
+	devices.file_paths = [
+		"/sdcard/WhatsApp/Media/voice/a.opus",
+		"/storage/emulated/0/WhatsApp/Media/b.jpg",
+		"/sdcard/Download/c.pdf",
+	]
+	devices.sizes["/sdcard/WhatsApp/Media/voice/a.opus"] = 10
+	devices.sizes["/storage/emulated/0/WhatsApp/Media/b.jpg"] = 20
+	devices.sizes["/sdcard/Download/c.pdf"] = 30
+	use_case = TransferUsbFiles(devices, fs)
+	# when
+	result = use_case.run(
+		str(tmp_path / "SpaceMaker"),
+		"dev1",
+		TransferMode.COPY,
+		folders=frozenset(),
+		extra_paths=frozenset({"WhatsApp/Media"}),
+	)
+	# then
+	assert result.completed == 2
+	pulled = {item[1] for item in devices.pulled}
+	assert pulled == {
+		"/sdcard/WhatsApp/Media/voice/a.opus",
+		"/storage/emulated/0/WhatsApp/Media/b.jpg",
+	}
+
+
+def test_given_presets_and_extra_file_when_transfer_then_union(tmp_path: Path) -> None:
+	# given
+	fs = FakeFileSystem()
+	devices = FakeDeviceRepository()
+	devices.bind_filesystem(fs)
+	devices.file_paths = [
+		"/sdcard/Download/a.pdf",
+		"/sdcard/notes.txt",
+	]
+	devices.sizes["/sdcard/Download/a.pdf"] = 10
+	devices.sizes["/sdcard/notes.txt"] = 5
+	use_case = TransferUsbFiles(devices, fs)
+	# when
+	result = use_case.run(
+		str(tmp_path / "SpaceMaker"),
+		"dev1",
+		TransferMode.COPY,
+		folders=frozenset({TransferFolder.DOWNLOAD}),
+		extra_paths=frozenset({"notes.txt"}),
+	)
+	# then
+	assert result.completed == 2
+	pulled = {item[1] for item in devices.pulled}
+	assert pulled == {"/sdcard/Download/a.pdf", "/sdcard/notes.txt"}
+	assert any(path.endswith("Download/a.pdf") for path in fs.files)
+	assert any(path.endswith("notes.txt") and "sdcard" not in path for path in fs.files)
 
 
 def test_given_stop_when_after_file_then_ends_queue(tmp_path: Path) -> None:

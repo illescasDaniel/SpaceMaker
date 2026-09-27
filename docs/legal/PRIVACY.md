@@ -11,7 +11,7 @@ SpaceMaker runs on your computer. It is designed to **backup, convert, and brows
 | Data | Where it stays | Sent to us? |
 |------|----------------|-------------|
 | Photos and videos from your phone | Your chosen library folder on disk (or Documents for Receive files) | **No** |
-| Device identifiers (USB/MTP/ADB) | Local app memory only | **No** |
+| Device identifiers (USB/ADB) | Local app memory only | **No** |
 | Conversion logs | Local machine (optional log files) | **No** |
 
 ## Network use
@@ -26,7 +26,7 @@ SpaceMaker runs on your computer. It is designed to **backup, convert, and brows
 
 ## Third-party programs
 
-SpaceMaker uses command-line tools (FFmpeg, ImageMagick, ExifTool, libmtp, Android platform-tools `adb`, etc.). Release builds **download** pinned versions when possible; otherwise they may use tools you installed on your system. See [THIRD_PARTY_TOOLS.md](THIRD_PARTY_TOOLS.md) for names, purposes, project home pages, and license notes.
+SpaceMaker uses command-line tools (FFmpeg, ImageMagick, ExifTool, Android platform-tools `adb`, etc.). Release builds **download** pinned versions when possible; otherwise they may use tools you installed on your system. See [THIRD_PARTY_TOOLS.md](THIRD_PARTY_TOOLS.md) for names, purposes, project home pages, and license notes.
 
 Those tools run **only on your machine** as part of SpaceMaker. We do not receive their output.
 

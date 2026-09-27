@@ -6,7 +6,10 @@ from pathlib import Path
 from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.library import JobProgress, TransferMode
 from spacemaker.domain.library_paths import skip_media_path
-from spacemaker.domain.transfer_folders import TransferFolder, path_matches_transfer_folders
+from spacemaker.domain.transfer_folders import (
+	TransferFolder,
+	path_matches_transfer_folders,
+)
 from spacemaker.domain.usb_file_transfer import documents_transfer_destination
 from spacemaker.ports.outbound.device_repository import DeviceRepositoryPort
 from spacemaker.ports.outbound.filesystem import FileSystemPort
@@ -30,17 +33,23 @@ class TransferUsbFiles:
 		mode: TransferMode,
 		*,
 		folders: frozenset[TransferFolder],
+		extra_paths: frozenset[str] = frozenset(),
 		control: ExtractJobControl | None = None,
 		on_progress: Callable[[JobProgress], None] | None = None,
 	) -> JobProgress:
-		if not folders:
+		if not folders and not extra_paths:
 			return JobProgress(completed=0, total=0)
 		Path(dest_root).mkdir(parents=True, exist_ok=True)
-		paths = sorted(
-			p
-			for p in self._devices.list_file_paths(device_id)
-			if path_matches_transfer_folders(p, folders) and not skip_media_path(p)
-		)
+		paths_set: set[str] = set()
+		if folders:
+			for path in self._devices.list_file_paths(device_id):
+				if path_matches_transfer_folders(path, folders) and not skip_media_path(path):
+					paths_set.add(path)
+		if extra_paths:
+			for path in self._devices.list_extra_file_paths(device_id, extra_paths):
+				if not skip_media_path(path):
+					paths_set.add(path)
+		paths = sorted(paths_set)
 		if control is not None and control.was_stopped():
 			return JobProgress(completed=0, total=len(paths))
 		total = len(paths)
