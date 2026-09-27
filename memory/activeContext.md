@@ -1,4 +1,4 @@
-_Last updated: 2026-09-26_
+_Last updated: 2026-09-27_
 
 ## Branch
 
@@ -7,27 +7,14 @@ _Last updated: 2026-09-26_
 ## Current focus
 
 Gallery orphan cache cleanup — **implemented** (spec + architecture approved;
-Phases 3–4 done). Ready for review / merge. Branch updated with `main`
-(includes merged DNG convert unit-test stub fix, PR #5).
+Phases 3–4 done). Synced with `origin/main` (Transfer files + Home polish).
+Landing via `/save-pr-changes` (PR #4).
 
 ## Just changed
 
-- Domain: `gallery_cache_paths.py` (injective thumb/export paths); removed
-  legacy `export_cache_filename`
-- Application: `gallery_cache_cleanup.py`; `DeleteGalleryItem`,
-  `SyncGalleryIndex`, `ExportFriendlyMedia` wired for GC + path-mirrored
-  exports
-- Adapter: `SubprocessThumbnailGenerator` uses `thumbnail_path`
-- Tests: cache paths, delete, sync orphan/changed/legacy sweep, export reuse
+- Merged `origin/main` into this branch (resolved `memory/` conflicts)
+- Added `.cursor/skills/save-pr-changes/` + AGENTS.md user-invoked list entry
 
 ## Next steps
 
-- PR review / merge of #4
-- No further code planned on this thread unless review feedback
-
-## Run
-
-```bash
-uv run task checks
-uv run pytest tests/unit/test_gallery_cache_paths.py tests/unit/test_delete_gallery_item.py tests/unit/test_sync_gallery_index.py tests/unit/test_gallery_export.py tests/unit/test_raw_image_convert.py
-```
+- Checks → save-changes → mark PR #4 ready → CI green → merge → delete remote branch

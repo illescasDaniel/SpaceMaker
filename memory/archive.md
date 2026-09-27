@@ -5,6 +5,16 @@ at session start — see `.cursor/skills/agent-memory/SKILL.md`. Kept for
 reference; entries are grouped by the area they came from, newest additions
 at the top of each section.
 
+## Transfer files + Home polish (2026-09-27) — branch `cursor/transfer-files-5ada`
+
+### Done
+
+- [x] Transfer files Phases 0–4 (wireframe/spec/architecture/tests/impl) — fifth Home tile, ephemeral LAN session, phone `/transfer`, desktop Add files/folder
+- [x] Desktop Transfer **Download** copies into `Documents/SpaceMaker` with Tip + Open documents folder (`SaveTransferItemToDocuments`, `POST /api/transfer/save`); phone stream unchanged
+- [x] Home hub: 3-column 4:3 tiles, floating footer, centered grid, default window 960×720
+- [x] UI shell version single source of truth (`stamp_shell_html`) — no false “UI and server do not match” banner
+- [x] Wireframe Tip / Review only / Agent note vocabulary (`wireframes/README.md`)
+
 ## GraphRAG agent tooling — `webnav` MCP server for JS/HTML/CSS (2026-09-25)
 
 ### Done
