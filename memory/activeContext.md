@@ -10,8 +10,7 @@ _Last updated: 2026-09-27_
 
 ## Next steps
 
-- Commit + push MCP harden (after checks).
-- Manual re-smoke MCP tools if Cursor reloads servers (optional).
+- Reload Cursor MCP servers (or restart) so live tools pick up the harden.
 - Manual app checks still open: Clear prefs list width; Compress-off upload → Gallery; sticky header.
 - Mark photo-backup branch ready for review / merge when satisfied.
 
