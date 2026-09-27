@@ -181,8 +181,7 @@
 
 	function reloadStaleShell(serverVersion) {
 		var slug = String(serverVersion || "").replace(/\./g, "-");
-		var next =
-			"/?_shell=" + encodeURIComponent(slug || "latest") + "&_=" + String(Date.now());
+		var next = "/?_shell=" + encodeURIComponent(slug || "latest") + "&_=" + String(Date.now());
 		location.replace(next);
 	}
 
