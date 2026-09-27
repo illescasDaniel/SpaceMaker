@@ -47,7 +47,7 @@ Authoritative compression flags (historical shell reference): [convert_all_1_1.s
 
 ## Gallery export (download-friendly formats)
 
-Separate from library convert. On-demand when the user chooses **Download as JPEG** or **Download as MP4** on a gallery item page. Outputs are cached under `{library_root}/.exports/` (skipped by extract/convert scans, like `.thumbnails/`).
+Separate from library convert. On-demand when the user chooses **Download as JPEG** or **Download as MP4** on a gallery item page. Outputs are cached under `{library_root}/.exports/` (skipped by extract/convert scans, like `.thumbnails/`), using an injective path-mirror of the source relative path (append `.jpg` / `.mp4` to the full relative path so distinct sources never share a cache file).
 
 **Image → JPEG:** ImageMagick `-quality 95`; ExifTool copy all tags from source. No size rollback — quality first.
 

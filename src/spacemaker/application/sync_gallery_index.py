@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from spacemaker.application.gallery_cache_cleanup import (
+	delete_gallery_derived_caches,
+	delete_gallery_export_caches,
+	sweep_legacy_hash_export_caches,
+)
 from spacemaker.domain.gallery_index import GalleryIndexRow, IndexSyncPlan, plan_index_sync
 from spacemaker.domain.library import LibraryFolder
 from spacemaker.domain.media import media_kind_for_filename
@@ -43,5 +48,11 @@ class SyncGalleryIndex:
 					size=stat.size,
 				)
 			)
+		for relative_path in plan.removed:
+			delete_gallery_derived_caches(self._filesystem, library_root, relative_path)
+		for relative_path in plan.changed:
+			delete_gallery_export_caches(self._filesystem, library_root, relative_path)
+		if plan.removed or plan.changed:
+			sweep_legacy_hash_export_caches(self._filesystem, library_root)
 		self._index.apply_sync(library_root, upserts=upserts, removed=list(plan.removed))
 		return plan

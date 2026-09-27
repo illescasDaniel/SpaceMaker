@@ -21,7 +21,8 @@
 - **Timeline view:** group by **Year**, then **Month**; responsive thumbnail grid with **`object-fit: cover`** on thumb images.
 - **Calendar view:** month navigation (prev/next); weekday header row; days with media highlighted; selecting a day shows that day’s thumbnails below the grid.
 - **Mobile:** layout must remain usable at ~320px width.
-- **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`.
+- **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`. Cache paths are a pure function of the source relative path: append `.jpg` to the full relative path (keep the original suffix), e.g. `2025/vacation.avif` → `.thumbnails/2025/vacation.avif.jpg`. This keeps distinct sources from colliding when they share a stem (`vacation.avif` vs `vacation.mp4`). Thumbnail and export cache paths are **not** stored in the gallery index.
+- **Friendly export cache:** on-demand **Download as JPEG** / **Download as MP4** outputs (when a re-encode is needed) live under `{library_root}/.exports/` with the same injective path-mirror rule — append `.jpg` or `.mp4` to the full relative path (e.g. `2025/vacation.avif` → `.exports/2025/vacation.avif.jpg`). Reuse when the cache file exists and is at least as new as the source. Safe to delete anytime; regenerates on the next friendly download. Already-friendly sources (JPEG / H.264+AAC MP4) are served from `converted/` and write nothing under `.exports/`.
 - **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
 - **Performance:** cached thumbs; a persisted, incrementally-synced index (derived from `converted/` + EXIF/probe metadata, never a source of truth by itself) backs timeline/calendar/day queries so response time does not scale with total library size. Timeline loads via cursor-paginated pages with infinite scroll. Smooth, responsive scrolling at **50,000+ items**, with a bounded mounted-tile working set (not the full library) regardless of scroll distance.
 - **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, `max-height: 55vh` on desktop; phone shell ~50vh). **Previous** / **Next** overlay buttons on the preview move to the adjacent item in **timeline order** (newest-first, same as the grid); disabled at the first/last item. Metadata block under preview includes **On disk** (absolute path, full-width wrap). Actions depend on shell:
@@ -80,6 +81,25 @@
 - **When** one file is deleted or added in `converted/`
 - **Then** only that file's index entry is updated or removed
 - **And** the rest of the library's metadata is not re-probed
+
+### Scenario: External delete drops index and derived caches on next sync
+
+- **Given** a file listed in the gallery index with a thumbnail under `.thumbnails/` and (optionally) a friendly-export cache under `.exports/`
+- **And** that file has been removed from `converted/` outside the app (e.g. file browser)
+- **When** the gallery next runs its incremental index sync (timeline first page or calendar)
+- **Then** that file's index entry is removed
+- **And** its `.thumbnails/` cache file is deleted if present
+- **And** its `.exports/` cache file(s) for that relative path are deleted if present
+- **And** no error is shown to the user
+
+### Scenario: External replace drops stale friendly-export caches on next sync
+
+- **Given** a file in `converted/` with a friendly-export cache under `.exports/`
+- **And** that file's mtime or size has changed on disk (replaced outside the app)
+- **When** the gallery next runs its incremental index sync
+- **Then** that file's index entry is updated
+- **And** its `.exports/` cache file(s) for that relative path are deleted if present
+- **And** the thumbnail is refreshed on the next thumb request when the source is newer than the cache
 
 ### Scenario: Gallery index rebuilds after being missing or corrupt
 
@@ -150,6 +170,9 @@
 - **Given** the gallery item page for a file in `converted/`
 - **When** user confirms **Delete**
 - **Then** the file is removed from `converted/` on the host
+- **And** its gallery index entry is removed
+- **And** its `.thumbnails/` cache file is deleted if present
+- **And** its `.exports/` cache file(s) for that relative path are deleted if present
 - **And** the user returns to the gallery grid without that item
 
 ### Scenario: Download stored file
@@ -163,6 +186,7 @@
 - **Given** an AVIF image in `converted/`
 - **When** user chooses **Download as JPEG**
 - **Then** the server encodes to high-quality JPEG (unless already JPEG)
+- **And** the result is cached under `.exports/` at the path-mirrored location for that relative path
 - **And** the UI shows export progress in an alert
 - **And** the browser downloads the JPEG when encoding completes
 
@@ -171,6 +195,7 @@
 - **Given** an AV1 `.av1.mp4` in `converted/` and a **hardware** H.264 encoder available on the host
 - **When** user chooses **Download as MP4**
 - **Then** the server encodes H.264 + AAC MP4 with hardware only (unless already H.264+AAC MP4)
+- **And** the result is cached under `.exports/` at the path-mirrored location for that relative path
 - **And** the UI shows export progress in an alert
 - **And** the browser downloads the MP4 when encoding completes
 
@@ -197,7 +222,7 @@
 
 | Case | Behavior |
 |------|----------|
-| Missing file on disk after index | Remove from index on next refresh; no 500 page |
+| Missing file on disk after index | Remove from index on next refresh; delete matching `.thumbnails/` and `.exports/` caches if present; no 500 page |
 | Corrupt media | Show broken placeholder; optional move to invalid via separate admin action (out of scope v1) |
 | LAN blocked by firewall | Show note in Step 3; gallery still works locally in pywebview |
 | Gallery index file missing or corrupt | Rebuilt automatically from `converted/` + EXIF/probe metadata on next load; no user-facing error |
@@ -207,6 +232,7 @@
 - Index only readable files (optional probe; skip unreadable with log).
 - URLs for media must be path-safe (no directory traversal).
 - Gallery index (`.index.sqlite`) is a derived cache only; deleting it never loses media, it triggers a full rebuild from `converted/` on next load.
+- Thumbnail and friendly-export paths are derived from the source relative path (not stored in the index); `.thumbnails/` and `.exports/` are safe to delete anytime.
 
 ## Testing strategy
 
@@ -218,9 +244,11 @@
 | Integration | HTTP GET `/gallery` returns 200 with fixture tree in `tmp_path` |
 | Integration | GET `/api/gallery/calendar` returns month + days-with-media; GET `/thumbs/…` returns JPEG after first request |
 | Integration | GET `/gallery/item/…` SPA 200; GET `/api/gallery/item`; export POST + download |
-| Unit | Path safety; friendly-format skip; export cache naming |
+| Unit | Path safety; friendly-format skip; injective export/thumbnail cache naming |
 | Unit | SPA path helper / snapshot includes `visualize` step state (see main-wizard spec) |
 | Unit | Index sync diff: added/changed/removed files computed from mtime/size comparison against the index |
+| Unit | Sync removes orphan `.thumbnails/` and `.exports/` for removed paths; drops stale exports for changed paths |
+| Unit | In-app delete removes converted file, index row, thumbnail, and export caches |
 | Unit | Keyset pagination cursor stability, including ties on identical `captured_at` |
 | Unit | Calendar/day queries return correct results directly from the index at month/day boundaries |
 | Unit | Neighbor (prev/next) lookup at both boundaries returns no wrap |
@@ -232,5 +260,6 @@
 
 - Full-screen swipe viewer with pinch-zoom (follow-up feature; item page is not a pinch lightbox)
 - Sharing albums publicly outside LAN
-- Editing/deleting media from gallery (delete: future spec)
+- Storing thumbnail or export cache paths (or existence flags) in `.index.sqlite`
 - Face recognition or search
+- Editing media from gallery (crop/rotate/etc.)

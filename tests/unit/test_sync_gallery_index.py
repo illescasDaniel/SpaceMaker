@@ -1,8 +1,11 @@
 from datetime import datetime
+from pathlib import Path
 
 from tests.unit.fakes import FakeFileSystem, FakeGalleryIndex, FakeMediaProbe
 
 from spacemaker.application.sync_gallery_index import SyncGalleryIndex
+from spacemaker.domain.gallery_cache_paths import export_cache_path, thumbnail_path
+from spacemaker.domain.gallery_export import ExportFormat
 from spacemaker.domain.library import LibraryFolder
 
 
@@ -116,3 +119,94 @@ def test_given_removed_file_when_run_then_dropped_from_index():
 	# then
 	assert plan.removed == ("a.avif",)
 	assert index.get(library, "a.avif") is None
+
+
+def test_given_removed_file_with_caches_when_run_then_caches_deleted():
+	# given
+	library = "/lib"
+	rel = "2025/a.avif"
+	full = _converted_path(library, rel)
+	fs = FakeFileSystem()
+	fs.files[full] = 10
+	fs.mtimes[full] = 100.0
+	thumb = thumbnail_path(library, rel)
+	export_jpeg = export_cache_path(library, rel, ExportFormat.JPEG)
+	fs.files[thumb] = 5
+	fs.files[export_jpeg] = 20
+	probe = FakeMediaProbe(captured_at_map={full: datetime(2025, 9, 4)})
+	index = FakeGalleryIndex()
+	sync = SyncGalleryIndex(fs, probe, index)
+	sync.run(library)
+	del fs.files[full]
+	del fs.mtimes[full]
+	# when
+	plan = sync.run(library)
+	# then
+	assert plan.removed == (rel,)
+	assert index.get(library, rel) is None
+	assert thumb not in fs.files
+	assert export_jpeg not in fs.files
+
+
+def test_given_removed_file_without_caches_when_run_then_succeeds():
+	# given
+	library = "/lib"
+	full = _converted_path(library, "a.avif")
+	fs = FakeFileSystem()
+	fs.files[full] = 10
+	fs.mtimes[full] = 100.0
+	probe = FakeMediaProbe(captured_at_map={full: datetime(2025, 9, 4)})
+	index = FakeGalleryIndex()
+	sync = SyncGalleryIndex(fs, probe, index)
+	sync.run(library)
+	del fs.files[full]
+	del fs.mtimes[full]
+	# when
+	plan = sync.run(library)
+	# then
+	assert plan.removed == ("a.avif",)
+	assert index.get(library, "a.avif") is None
+
+
+def test_given_changed_file_when_run_then_export_caches_deleted():
+	# given
+	library = "/lib"
+	rel = "a.avif"
+	full = _converted_path(library, rel)
+	fs = FakeFileSystem()
+	fs.files[full] = 10
+	fs.mtimes[full] = 100.0
+	export_jpeg = export_cache_path(library, rel, ExportFormat.JPEG)
+	fs.files[export_jpeg] = 20
+	probe = FakeMediaProbe(captured_at_map={full: datetime(2025, 9, 4)})
+	index = FakeGalleryIndex()
+	sync = SyncGalleryIndex(fs, probe, index)
+	sync.run(library)
+	fs.mtimes[full] = 101.0
+	probe.captured_at_map[full] = datetime(2025, 9, 5)
+	# when
+	plan = sync.run(library)
+	# then
+	assert plan.changed == (rel,)
+	assert export_jpeg not in fs.files
+
+
+def test_given_legacy_hash_export_when_removed_sync_then_legacy_swept():
+	# given
+	library = "/lib"
+	full = _converted_path(library, "a.avif")
+	fs = FakeFileSystem()
+	fs.files[full] = 10
+	fs.mtimes[full] = 100.0
+	legacy = str(Path(library) / ".exports" / "abcdef0123456789abcd.jpg")
+	fs.files[legacy] = 30
+	probe = FakeMediaProbe(captured_at_map={full: datetime(2025, 9, 4)})
+	index = FakeGalleryIndex()
+	sync = SyncGalleryIndex(fs, probe, index)
+	sync.run(library)
+	del fs.files[full]
+	del fs.mtimes[full]
+	# when
+	sync.run(library)
+	# then
+	assert legacy not in fs.files
