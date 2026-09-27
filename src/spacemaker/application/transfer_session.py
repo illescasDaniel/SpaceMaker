@@ -21,9 +21,7 @@ class EmptyTransferFolderError(ValueError):
 	"""User selected a folder with zero files."""
 
 
-EMPTY_TRANSFER_FOLDER_MESSAGE = (
-	"This folder has no files. Choose a folder that contains at least one file."
-)
+EMPTY_TRANSFER_FOLDER_MESSAGE = "This folder has no files. Choose a folder that contains at least one file."
 
 
 @dataclass(frozen=True, slots=True)

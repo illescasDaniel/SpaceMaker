@@ -17,7 +17,7 @@ def test_given_desktop_shell_html_when_stamp_then_embeds_ui_shell_version() -> N
 	stamped = stamp_shell_html(raw)
 	assert f'content="{UI_SHELL_VERSION}"' in stamped
 	assert f'window.SPACEMAKER_UI_SHELL_VERSION = "{UI_SHELL_VERSION}"' in stamped
-	assert f'/static/app.js?v={UI_SHELL_VERSION}' in stamped
+	assert f"/static/app.js?v={UI_SHELL_VERSION}" in stamped
 	assert "EXPECTED_UI_SHELL_VERSION" not in stamped
 
 
