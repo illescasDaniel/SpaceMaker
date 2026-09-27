@@ -11,6 +11,7 @@ from fastapi import (
 	BackgroundTasks,
 	FastAPI,
 	File,
+	Form,
 	HTTPException,
 	Query,
 	Request,
@@ -18,7 +19,7 @@ from fastapi import (
 	WebSocket,
 	WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -32,6 +33,7 @@ from spacemaker.adapters.inbound.web.qr_svg import encode_qr_svg
 from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
 from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_app, reveal_in_file_manager
 from spacemaker.application.file_share_manifest import EmptyShareSelectionError
+from spacemaker.application.transfer_session import EmptyTransferFolderError
 from spacemaker.bootstrap.firewall import probe_gallery_port
 from spacemaker.bootstrap.lan import lan_ip
 from spacemaker.bootstrap.paths import (
@@ -48,6 +50,7 @@ from spacemaker.bootstrap.ui_shell import (
 	CONTENT_SECURITY_POLICY,
 	CONTENT_SECURITY_POLICY_DESKTOP,
 	NO_CACHE_HEADERS,
+	stamp_shell_html,
 )
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
@@ -57,6 +60,7 @@ from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase, is_sa
 from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import LibraryFolder, TransferMode
+from spacemaker.domain.transfer_session import TransferOrigin
 from spacemaker.domain.ui_mode import UiMode
 from spacemaker.domain.usb_file_transfer import default_transfer_folders
 
@@ -146,6 +150,14 @@ class ShareSelectionBody(BaseModel):
 	paths: list[str]
 
 
+class TransferAddBody(BaseModel):
+	paths: list[str]
+
+
+class TransferSaveBody(BaseModel):
+	file_id: str
+
+
 class LibraryOpenFolderBody(BaseModel):
 	bucket: str
 
@@ -165,6 +177,11 @@ def _no_cache_file(path: Path) -> FileResponse:
 	return FileResponse(path, headers=dict(NO_CACHE_HEADERS))
 
 
+def _stamped_shell_page(path: Path) -> HTMLResponse:
+	html = stamp_shell_html(path.read_text(encoding="utf-8"))
+	return HTMLResponse(html, headers=dict(NO_CACHE_HEADERS))
+
+
 def create_fastapi_app(services: AppServices) -> FastAPI:
 	@asynccontextmanager
 	async def lifespan(app: FastAPI):
@@ -180,10 +197,11 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	async def no_cache_shell_assets(request: Request, call_next):
 		response = await call_next(request)
 		path = request.url.path
-		if path == "/" or path.startswith("/gallery") or path == "/static/app.js":
+		# Local desktop shell must always see current CSS/JS — never a stale WebEngine cache.
+		if path == "/" or path.startswith("/gallery") or path.startswith("/static/"):
 			for key, value in NO_CACHE_HEADERS.items():
 				response.headers[key] = value
-		if path == "/" or path.startswith("/gallery") or path in {"/upload", "/receive", "/share"}:
+		if path == "/" or path.startswith("/gallery") or path in {"/upload", "/receive", "/share", "/transfer"}:
 			client_host = request.client.host if request.client else None
 			if is_loopback_client_host(client_host):
 				response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY_DESKTOP
@@ -198,6 +216,12 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			return _STATIC / "gallery_mobile.html"
 		return _STATIC / "mobile_remote.html"
 
+	def _spa_response(entry: SpaEntry) -> Response:
+		path = _spa_file(entry)
+		if entry is SpaEntry.DESKTOP or entry is SpaEntry.MOBILE_GALLERY:
+			return _stamped_shell_page(path)
+		return _no_cache_file(path)
+
 	@app.get("/json/version")
 	def devtools_version_probe() -> dict[str, str]:
 		# Qt WebEngine / Chromium poll this for remote debugging; stub avoids 404 log noise.
@@ -208,18 +232,18 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return []
 
 	@app.get("/")
-	def root_page(request: Request) -> FileResponse:
+	def root_page(request: Request) -> Response:
 		host = normalize_host(request.headers.get("host", ""))
 		entry = spa_entry_for(host=host, path="/")
-		return _no_cache_file(_spa_file(entry))
+		return _spa_response(entry)
 
 	@app.get("/gallery")
 	@app.get("/gallery/item/{relative_path:path}")
-	def gallery_page(request: Request, relative_path: str = "") -> FileResponse:
+	def gallery_page(request: Request, relative_path: str = "") -> Response:
 		_ = relative_path
 		host = normalize_host(request.headers.get("host", ""))
 		entry = spa_entry_for(host=host, path=request.url.path)
-		return _no_cache_file(_spa_file(entry))
+		return _spa_response(entry)
 
 	@app.get("/upload")
 	def upload_page(t: str = "") -> FileResponse:
@@ -242,6 +266,12 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if not services.share_token_valid(t):
 			return FileResponse(_STATIC / "upload-ended.html")
 		return FileResponse(_STATIC / "share.html")
+
+	@app.get("/transfer")
+	def transfer_page(t: str = "") -> FileResponse:
+		if not services.transfer_token_valid(t):
+			return FileResponse(_STATIC / "upload-ended.html")
+		return FileResponse(_STATIC / "transfer.html")
 
 	@app.get("/api/server-info")
 	def server_info() -> dict[str, object]:
@@ -371,6 +401,29 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			raise HTTPException(status_code=400, detail=str(exc)) from exc
 		return services.enriched_snapshot()
 
+	@app.post("/api/transfer/add")
+	def transfer_add(request: Request, body: TransferAddBody) -> dict[str, object]:
+		require_loopback(request)
+		try:
+			services.add_transfer_paths_from_desktop(body.paths)
+		except EmptyTransferFolderError as exc:
+			raise HTTPException(status_code=400, detail=str(exc)) from exc
+		except PermissionError as exc:
+			raise HTTPException(status_code=403, detail=str(exc)) from exc
+		return services.enriched_snapshot()
+
+	@app.post("/api/transfer/save")
+	def transfer_save(request: Request, body: TransferSaveBody) -> dict[str, str]:
+		require_loopback(request)
+		try:
+			return services.save_transfer_item_to_documents(body.file_id)
+		except ValueError as exc:
+			raise HTTPException(status_code=400, detail=str(exc)) from exc
+		except PermissionError as exc:
+			raise HTTPException(status_code=403, detail=str(exc)) from exc
+		except FileNotFoundError as exc:
+			raise HTTPException(status_code=404, detail=str(exc)) from exc
+
 	@app.get("/api/receive/qr.svg")
 	def receive_qr(request: Request, t: str = "") -> Response:
 		require_loopback(request)
@@ -389,6 +442,16 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		page_url = services._file_share_snapshot()["page_url"]
 		if not page_url:
 			raise HTTPException(status_code=404, detail="share session not active")
+		return Response(content=encode_qr_svg(str(page_url)), media_type="image/svg+xml")
+
+	@app.get("/api/transfer/qr.svg")
+	def transfer_qr(request: Request, t: str = "") -> Response:
+		require_loopback(request)
+		if not services.transfer_token_valid(t):
+			raise HTTPException(status_code=404, detail="transfer session not active")
+		page_url = services._transfer_files_snapshot()["page_url"]
+		if not page_url:
+			raise HTTPException(status_code=404, detail="transfer session not active")
 		return Response(content=encode_qr_svg(str(page_url)), media_type="image/svg+xml")
 
 	@app.get("/api/receive/session")
@@ -472,6 +535,112 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			media_type="application/zip",
 			headers={"Content-Disposition": _attachment_named(target.download_filename)},
 		)
+
+	@app.get("/api/transfer/session")
+	def transfer_session_status(t: str = "") -> dict[str, object]:
+		if not services.transfer_token_valid(t):
+			return {"active": False, "files": []}
+		return {"active": True, "files": services.transfer_manifest(t)}
+
+	@app.get("/api/transfer/download")
+	def transfer_download(t: str = "", file_id: str = "") -> FileResponse:
+		if not file_id:
+			raise HTTPException(status_code=400, detail="file_id required")
+		item = services.resolve_transfer_download(t, file_id)
+		if item is None:
+			raise HTTPException(status_code=404, detail="file not found")
+		if item.kind.value == "folder_zip":
+			return FileResponse(
+				item.staged_path,
+				media_type="application/zip",
+				headers={"Content-Disposition": _attachment_named(item.display_name)},
+			)
+		return FileResponse(
+			item.staged_path,
+			headers={"Content-Disposition": _attachment_named(item.display_name)},
+		)
+
+	@app.post("/api/transfer")
+	async def transfer_upload(
+		files: Annotated[list[UploadFile], File()],
+		t: Annotated[str, Query()] = "",
+		as_folder: Annotated[str, Form()] = "",
+		folder_name: Annotated[str, Form()] = "",
+	) -> dict[str, object]:
+		if not services.transfer_token_valid(t):
+			raise HTTPException(status_code=403, detail="transfer session ended")
+		if not files:
+			raise HTTPException(status_code=400, detail="no files")
+		folder_mode = as_folder.strip() in {"1", "true", "yes"} and bool(folder_name.strip())
+		results: list[dict[str, str]] = []
+		if folder_mode:
+			relative_files: list[tuple[str, str]] = []
+			temps: list[str] = []
+			try:
+				for upload in files:
+					raw_name = upload.filename or "upload.bin"
+					suffix = Path(raw_name).suffix
+					with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+						temp_path = tmp.name
+						temps.append(temp_path)
+						while True:
+							chunk = await upload.read(1024 * 1024)
+							if not chunk:
+								break
+							tmp.write(chunk)
+					rel = raw_name.replace("\\", "/")
+					parts = Path(rel).parts
+					if len(parts) > 1 and parts[0] == folder_name.strip():
+						rel = "/".join(parts[1:])
+					if not rel or rel in {".", ".."} or ".." in Path(rel).parts:
+						raise HTTPException(status_code=400, detail="invalid folder path")
+					relative_files.append((rel, temp_path))
+				item = services.handle_transfer_upload_folder_files(
+					t,
+					folder_name=folder_name.strip(),
+					relative_files=relative_files,
+					origin=TransferOrigin.PHONE,
+				)
+				temps = []
+				if item is not None:
+					results.append({"id": item.file_id, "name": item.display_name})
+			except EmptyTransferFolderError as exc:
+				raise HTTPException(status_code=400, detail=str(exc)) from exc
+			except PermissionError as exc:
+				raise HTTPException(status_code=403, detail=str(exc)) from exc
+			finally:
+				for path in temps:
+					Path(path).unlink(missing_ok=True)
+			return {"uploaded": len(results), "files": results}
+
+		for upload in files:
+			raw_name = upload.filename or "upload.bin"
+			display = Path(raw_name.replace("\\", "/")).name or "upload.bin"
+			suffix = Path(display).suffix
+			temp_path: str | None = None
+			try:
+				with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+					temp_path = tmp.name
+					while True:
+						chunk = await upload.read(1024 * 1024)
+						if not chunk:
+							break
+						tmp.write(chunk)
+				item = services.handle_transfer_upload_file(
+					t,
+					requested_name=display,
+					temp_path=temp_path,
+					origin=TransferOrigin.PHONE,
+				)
+				temp_path = None
+				if item is not None:
+					results.append({"id": item.file_id, "name": item.display_name})
+			except PermissionError as exc:
+				raise HTTPException(status_code=403, detail=str(exc)) from exc
+			finally:
+				if temp_path is not None:
+					Path(temp_path).unlink(missing_ok=True)
+		return {"uploaded": len(results), "files": results}
 
 	@app.post("/api/documents/open-folder")
 	def open_documents_folder(request: Request) -> dict[str, bool]:

@@ -10,6 +10,7 @@ class AppModule(StrEnum):
 	USB_FILE_TRANSFER = "usb_file_transfer"
 	RECEIVE_FILES = "receive_files"
 	SEND_FILES = "send_files"
+	TRANSFER_FILES = "transfer_files"
 
 
 class LanSessionKind(StrEnum):
@@ -17,3 +18,4 @@ class LanSessionKind(StrEnum):
 	PHOTO_UPLOAD = "photo_upload"
 	RECEIVE_FILES = "receive_files"
 	SEND_FILES = "send_files"
+	TRANSFER_FILES = "transfer_files"

@@ -4,11 +4,12 @@ Source of truth for behavior. Wireframes: [wireframes/app.html](../wireframes/ap
 
 | Spec | Scope |
 |------|--------|
-| [home-modules/SPEC.md](home-modules/SPEC.md) | Home hub tiles, module routing, Photo/USB photo/USB file/receive/send entry |
+| [home-modules/SPEC.md](home-modules/SPEC.md) | Home hub tiles, module routing, Photo/USB photo/USB file/receive/send/transfer entry |
 | [easy-mode/SPEC.md](easy-mode/SPEC.md) | Photo backup UI, auto Wi‑Fi receive, convert-as-received, gallery QR |
 | [usb-file-transfer/SPEC.md](usb-file-transfer/SPEC.md) | USB MTP/ADB/AFC → Documents/SpaceMaker; any files; no convert |
 | [receive-files/SPEC.md](receive-files/SPEC.md) | Phone → PC uploads to Documents/SpaceMaker |
 | [send-files/SPEC.md](send-files/SPEC.md) | PC → phone share via QR `/share` |
+| [transfer-files/SPEC.md](transfer-files/SPEC.md) | Multi-device temporary upload+download session via QR `/transfer` |
 | [main-wizard/SPEC.md](main-wizard/SPEC.md) | USB photo backup three-step wizard, progress, error/invalid warnings |
 | [extract-media/SPEC.md](extract-media/SPEC.md) | Device detection, source folders, pause/stop, copy/move, idempotent transfer |
 | [convert-media/SPEC.md](convert-media/SPEC.md) | Folder routing, encode policy, retries, user recovery actions |

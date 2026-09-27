@@ -1,6 +1,5 @@
 (function () {
 	var clientShell = window.SPACEMAKER_SHELL || "desktop";
-	var EXPECTED_UI_SHELL_VERSION = "2026.09.gallery-nav";
 	var lastMainView = "home";
 	var uiMode = "easy";
 	var state = null;
@@ -172,31 +171,43 @@
 		media.appendChild(full);
 	}
 
-	function warnIfStaleShell(settings) {
-		var homeBanner;
+	function clearHomeFormBanner() {
+		var homeBanner = document.getElementById("home-form-banner");
+		if (homeBanner) {
+			homeBanner.hidden = true;
+			homeBanner.textContent = "";
+		}
+	}
+
+	function reloadStaleShell(serverVersion) {
+		var slug = String(serverVersion || "").replace(/\./g, "-");
+		var next = "/?_shell=" + encodeURIComponent(slug || "latest") + "&_=" + String(Date.now());
+		location.replace(next);
+	}
+
+	function healIfStaleShell(settings) {
 		if (!isDesktopShell() || !settings) {
 			return;
 		}
-		if (settings.ui_shell_version === EXPECTED_UI_SHELL_VERSION) {
-			homeBanner = document.getElementById("home-form-banner");
-			if (homeBanner) {
-				homeBanner.hidden = true;
-				homeBanner.textContent = "";
-			}
+		var pageVersion = window.SPACEMAKER_UI_SHELL_VERSION || "";
+		var serverVersion = settings.ui_shell_version || "";
+		if (pageVersion && serverVersion && pageVersion === serverVersion) {
+			clearHomeFormBanner();
 			return;
 		}
-		var port = location.port || "8765";
-		var message =
-			"UI and server do not match. Quit every SpaceMaker window, stop any process on port " +
-			port +
-			", then run: uv run task spacemaker";
-		homeBanner = document.getElementById("home-form-banner");
-		if (homeBanner) {
-			homeBanner.textContent = message;
-			homeBanner.hidden = false;
-		} else {
-			showFormBanner(message);
+		// Stale WebEngine document vs live server — pull latest once, no user-facing panic.
+		var reloadKey = "spacemaker-shell-reload:" + serverVersion;
+		try {
+			if (!sessionStorage.getItem(reloadKey)) {
+				sessionStorage.setItem(reloadKey, "1");
+				reloadStaleShell(serverVersion);
+				return;
+			}
+		} catch (_err) {
+			reloadStaleShell(serverVersion);
+			return;
 		}
+		clearHomeFormBanner();
 	}
 
 	function syncActiveModuleView(next) {
@@ -321,6 +332,8 @@
 				return "receive-files";
 			case "send_files":
 				return "send-files";
+			case "transfer_files":
+				return "transfer-files";
 			default:
 				return "home";
 		}
@@ -340,7 +353,8 @@
 			resolved === "wizard" ||
 			resolved === "usb-file-transfer" ||
 			resolved === "receive-files" ||
-			resolved === "send-files"
+			resolved === "send-files" ||
+			resolved === "transfer-files"
 		);
 	}
 
@@ -987,6 +1001,111 @@
 		}
 	}
 
+	function showTransferSaveTip(displayPath) {
+		var tip = document.getElementById("transfer-save-tip");
+		var tipText = document.getElementById("transfer-save-tip-text");
+		var actions = document.getElementById("transfer-save-actions");
+		if (tipText) {
+			tipText.textContent = "Saved to " + (displayPath || "Documents/SpaceMaker");
+		}
+		if (tip) {
+			tip.hidden = false;
+		}
+		if (actions) {
+			actions.hidden = false;
+		}
+	}
+
+	function hideTransferSaveTip() {
+		var tip = document.getElementById("transfer-save-tip");
+		var tipText = document.getElementById("transfer-save-tip-text");
+		var actions = document.getElementById("transfer-save-actions");
+		if (tip) {
+			tip.hidden = true;
+		}
+		if (tipText) {
+			tipText.textContent = "";
+		}
+		if (actions) {
+			actions.hidden = true;
+		}
+	}
+
+	function saveTransferItemToDocuments(fileId) {
+		return api("POST", "/api/transfer/save", { file_id: fileId })
+			.then(function (result) {
+				showTransferSaveTip(result.saved_path_display || result.saved_path || "");
+			})
+			.catch(function (err) {
+				window.alert(err.message || "Could not save to Documents/SpaceMaker.");
+			});
+	}
+
+	function updateTransferUi(next) {
+		var session = next.transfer_files_session || {};
+		var uploadQr = document.getElementById("transfer-qr");
+		var uploadWait = document.getElementById("transfer-qr-wait");
+		var list = document.getElementById("transfer-item-list");
+		var status = document.getElementById("transfer-item-status");
+		var serverHint = document.getElementById("transfer-server-only-hint");
+		var hasDesktop = !!window.pywebview?.api;
+		var items = session.items || [];
+		var pageUrl = session.page_url || "";
+		if (serverHint) {
+			serverHint.classList.toggle("panel-hidden", hasDesktop);
+		}
+		if (session.active && uploadQr) {
+			uploadQr.hidden = false;
+			if (session.qr_url) {
+				uploadQr.src = session.qr_url + "&_=" + Date.now();
+			}
+			if (uploadWait) {
+				uploadWait.hidden = true;
+			}
+		} else if (uploadQr) {
+			uploadQr.hidden = true;
+			if (uploadWait) {
+				uploadWait.hidden = false;
+				uploadWait.textContent = "Waiting to start transfer session…";
+			}
+			hideTransferSaveTip();
+		}
+		setQrUrlField("transfer-qr-url", pageUrl);
+		if (list) {
+			list.innerHTML = "";
+			items.forEach(function (item) {
+				var li = document.createElement("li");
+				li.className = "transfer-item";
+				var meta = document.createElement("span");
+				meta.className = "transfer-item-meta";
+				var name = document.createElement("span");
+				name.className = "transfer-item-name";
+				name.textContent = item.name || "";
+				var from = document.createElement("span");
+				from.className = "transfer-item-from";
+				from.textContent =
+					(item.kind === "folder_zip" ? "folder · " : "") +
+					"from " +
+					(item.origin_label || (item.origin === "pc" ? "PC" : "Phone"));
+				meta.appendChild(name);
+				meta.appendChild(from);
+				var btn = document.createElement("button");
+				btn.type = "button";
+				btn.className = "btn btn-secondary transfer-dl";
+				btn.textContent = "Download";
+				btn.addEventListener("click", function () {
+					saveTransferItemToDocuments(item.id);
+				});
+				li.appendChild(meta);
+				li.appendChild(btn);
+				list.appendChild(li);
+			});
+		}
+		if (status) {
+			status.textContent = items.length === 1 ? "1 item in session" : items.length + " items in session";
+		}
+	}
+
 	function updateEasyUi(next) {
 		var wifi = next.wifi_upload || {};
 		var uploadQr = document.getElementById("easy-upload-qr");
@@ -1131,6 +1250,7 @@
 		updateReceiveUi(next);
 		updateSendUi(next);
 		updateUsbTransferUi(next);
+		updateTransferUi(next);
 		if (next.managed_tools) {
 			renderComponentsList(next.managed_tools);
 		}
@@ -2535,6 +2655,11 @@
 				showFormBanner(err.message || "Could not open documents folder.");
 			});
 		});
+		onClick("btn-transfer-open-documents", function () {
+			api("POST", "/api/documents/open-folder").catch(function (err) {
+				window.alert(err.message || "Could not open documents folder.");
+			});
+		});
 
 		function bindInfoToggle(btnId, panelId) {
 			var btn = document.getElementById(btnId);
@@ -2715,6 +2840,60 @@
 				});
 		});
 
+		function addTransferPaths(paths) {
+			if (!paths?.length) {
+				return Promise.resolve(null);
+			}
+			return api("POST", "/api/transfer/add", { paths: paths })
+				.then(applyState)
+				.catch(function (err) {
+					window.alert(err.message || "Could not add to the transfer session.");
+					throw err;
+				});
+		}
+
+		onClick("btn-transfer-add-files", function () {
+			if (!window.pywebview?.api?.choose_files) {
+				showFormBanner("Use the desktop app to pick files.");
+				return;
+			}
+			Promise.resolve(window.pywebview.api.choose_files(""))
+				.then(function (picked) {
+					if (!picked?.length) {
+						return null;
+					}
+					return addTransferPaths(picked);
+				})
+				.catch(function () {
+					showFormBanner("Could not open the file picker.");
+				});
+		});
+		onClick("btn-transfer-add-folder", function () {
+			if (!window.pywebview?.api?.choose_share_folder) {
+				showFormBanner("Use the desktop app to pick a folder.");
+				return;
+			}
+			Promise.resolve(window.pywebview.api.choose_share_folder(""))
+				.then(function (folder) {
+					if (!folder || !String(folder).trim()) {
+						return null;
+					}
+					var countPromise = window.pywebview.api.share_folder_file_count
+						? Promise.resolve(window.pywebview.api.share_folder_file_count(folder))
+						: Promise.resolve(1);
+					return countPromise.then(function (count) {
+						if (count < 1) {
+							window.alert("This folder has no files. Choose a folder that contains at least one file.");
+							return null;
+						}
+						return addTransferPaths([folder]);
+					});
+				})
+				.catch(function () {
+					showFormBanner("Could not open the folder picker.");
+				});
+		});
+
 		function rememberMainViewBeforeFooterPage() {
 			var active = document.querySelector(".screen.active");
 			if (
@@ -2724,6 +2903,7 @@
 					active.id === "view-wizard" ||
 					active.id === "view-receive-files" ||
 					active.id === "view-send-files" ||
+					active.id === "view-transfer-files" ||
 					active.id === "view-gallery" ||
 					active.id === "view-gallery-item")
 			) {
@@ -2818,6 +2998,7 @@
 		bindInfoPanelToggle("btn-easy-qr-info", "easy-qr-info-panel");
 		bindInfoPanelToggle("btn-receive-qr-info", "receive-qr-info-panel");
 		bindInfoPanelToggle("btn-send-qr-info", "send-qr-info-panel");
+		bindInfoPanelToggle("btn-transfer-qr-info", "transfer-qr-info-panel");
 		bindInfoPanelToggle("btn-wifi-qr-info", "wifi-qr-info-panel");
 
 		function switchConnectionMethod(method) {
@@ -3045,7 +3226,7 @@
 			})
 			.then(applyState)
 			.then(function () {
-				warnIfStaleShell(state);
+				healIfStaleShell(state);
 				if (state && toolsBlockMainApp(state)) {
 					maybeShowComponentsScreen(state);
 					return runComponentsEnsure()

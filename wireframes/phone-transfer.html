@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpaceMaker — Transfer files (wireframe)</title>
+	<style>
+		:root {
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--warn: #e67700;
+			--warn-bg: #fff9db;
+			--radius: 12px;
+			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #0f1419;
+				--surface: #1a2332;
+				--surface2: #243044;
+				--border: #3d4f6f;
+				--text: #e8eef7;
+				--muted: #8b9cb3;
+				--accent: #4dabf7;
+				--accent-dim: #228be6;
+				--warn: #fcc419;
+				--warn-bg: #3d3200;
+			}
+		}
+		:root {
+			/* Motion vocabulary — shared with wireframes/app.html. */
+			--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+			--dur-fast: 120ms;
+			--dur-base: 200ms;
+		}
+		@media (prefers-reduced-motion: reduce) {
+			:root {
+				--dur-fast: 0.001ms;
+				--dur-base: 0.001ms;
+			}
+		}
+		* { box-sizing: border-box; }
+		body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+		.wireframe-banner {
+			background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+			color: var(--accent-dim);
+			text-align: center;
+			padding: 0.5rem 1rem;
+			font-size: 0.8rem;
+			border-bottom: 1px solid var(--border);
+		}
+		.page { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+		.logo { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.35rem; }
+		.logo span { color: var(--accent); }
+		.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.5rem; }
+		.ephemeral {
+			font-size: 0.8rem;
+			color: var(--muted);
+			margin: 0 0 1rem;
+		}
+		.card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 1rem;
+			margin-bottom: 0.75rem;
+			animation: panel-fade-in var(--dur-base) var(--ease-standard);
+		}
+		.card-list { padding: 0 1rem; }
+		.section-label {
+			font-size: 0.75rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--muted);
+			margin: 0 0 0.5rem;
+		}
+		.btn {
+			font: inherit; display: block; width: 100%; border: none; border-radius: 8px;
+			padding: 0.7rem 1rem; cursor: pointer; font-weight: 600; margin-top: 0.45rem;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+		}
+		.btn:active { transform: scale(0.97); }
+		.btn-primary { background: var(--accent-dim); color: #fff; }
+		.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+		.hint { font-size: 0.8rem; color: var(--muted); margin: 0.85rem 0 0; }
+		.alert { background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; margin-bottom: 1rem; }
+		.row {
+			display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+			padding: 0.65rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem;
+		}
+		.row:last-child { border-bottom: none; }
+		.name-block { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
+		.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+		.from { font-size: 0.75rem; color: var(--muted); }
+		.dl {
+			font: inherit; border: none; border-radius: 6px; padding: 0.35rem 0.65rem; cursor: pointer;
+			font-weight: 600; background: var(--accent-dim); color: #fff; flex-shrink: 0;
+			transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+		}
+		.dl:active { transform: scale(0.95); }
+		.state-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin: 0 0 1rem; padding: 0; border: 0; }
+		.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+		.state-tabs button {
+			font: inherit; font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px;
+			border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer;
+			transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+		}
+		.state-tabs button.active { background: var(--accent-dim); color: #fff; border-color: transparent; }
+		.panel-hidden { display: none; }
+		@keyframes panel-fade-in { from { opacity: 0; } to { opacity: 1; } }
+		.empty { color: var(--muted); font-size: 0.9rem; padding: 1rem 0; text-align: center; }
+		.sent-count { font-size: 0.9rem; font-weight: 600; margin: 0 0 0.75rem; }
+	</style>
+</head>
+<body>
+	<div class="wireframe-banner">Design preview — phone page for <strong>Transfer files</strong> (shared temporary session: upload + download). Motion: state-tab swaps fade in, buttons ease on press (120–200ms, reduced-motion aware).</div>
+	<div class="page">
+		<fieldset class="state-tabs">
+			<legend class="sr-only">Wireframe state mock</legend>
+			<button type="button" class="active" data-state="session">In session</button>
+			<button type="button" data-state="uploading">Uploading</button>
+			<button type="button" data-state="ended">Session ended</button>
+		</fieldset>
+		<fieldset class="state-tabs">
+			<legend class="sr-only">Device hint mock</legend>
+			<button type="button" class="active" data-device="android">Android hint</button>
+			<button type="button" data-device="ios">iPhone hint</button>
+		</fieldset>
+
+		<div id="panel-session">
+			<p class="logo">Space<span>Maker</span></p>
+			<p class="sub">Upload and download in this shared session.</p>
+			<p class="ephemeral">Everything here is temporary — when the PC closes Transfer files, these files are deleted.</p>
+			<p class="sent-count">4 items in session</p>
+
+			<div class="card" id="upload-card">
+				<p class="section-label">Upload</p>
+				<button type="button" class="btn btn-primary" id="btn-pick-files">Choose files</button>
+				<button type="button" class="btn btn-secondary" id="btn-pick-folder">Choose folder</button>
+				<p class="hint" id="device-hint">On Android: folders upload as a zip. Or choose files one batch at a time.</p>
+			</div>
+
+			<div class="card card-list" id="list-card">
+				<p class="section-label" style="padding-top: 1rem;">Session files</p>
+				<div class="row">
+					<span class="name-block">
+						<span class="name">notes.txt</span>
+						<span class="from">from PC</span>
+					</span>
+					<button type="button" class="dl">Download</button>
+				</div>
+				<div class="row">
+					<span class="name-block">
+						<span class="name">vacation.zip</span>
+						<span class="from">folder · from you</span>
+					</span>
+					<button type="button" class="dl">Download</button>
+				</div>
+				<div class="row">
+					<span class="name-block">
+						<span class="name">report.pdf</span>
+						<span class="from">from you</span>
+					</span>
+					<button type="button" class="dl">Download</button>
+				</div>
+				<div class="row">
+					<span class="name-block">
+						<span class="name">report (2).pdf</span>
+						<span class="from">from Tablet · same name, different file</span>
+					</span>
+					<button type="button" class="dl">Download</button>
+				</div>
+			</div>
+		</div>
+
+		<div id="panel-uploading" class="panel-hidden">
+			<p class="logo">Space<span>Maker</span></p>
+			<p class="sub">Upload and download in this shared session.</p>
+			<div class="card"><p><strong>Uploading</strong> — 2 file(s)…</p></div>
+		</div>
+
+		<div id="panel-ended" class="panel-hidden">
+			<p class="logo">Space<span>Maker</span></p>
+			<div class="card">
+				<p class="empty">This transfer session has ended. Scan the QR code again on your PC.</p>
+			</div>
+		</div>
+	</div>
+	<script>
+		var panels = {
+			session: document.getElementById('panel-session'),
+			uploading: document.getElementById('panel-uploading'),
+			ended: document.getElementById('panel-ended')
+		};
+		var hints = {
+			android: 'On Android: folders upload as a zip. Or choose files one batch at a time.',
+			ios: 'Tap Choose, then pick from Photos or Files. Folders upload as a zip when supported.'
+		};
+		function applyDeviceMock(device) {
+			var pickFiles = document.getElementById('btn-pick-files');
+			var pickFolder = document.getElementById('btn-pick-folder');
+			document.getElementById('device-hint').textContent = hints[device];
+			if (device === 'ios') {
+				pickFiles.textContent = 'Choose';
+				pickFolder.classList.add('panel-hidden');
+			} else {
+				pickFiles.textContent = 'Choose files';
+				pickFolder.classList.remove('panel-hidden');
+			}
+		}
+		document.querySelectorAll('.state-tabs button[data-state]').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				document.querySelectorAll('.state-tabs button[data-state]').forEach(function (b) { b.classList.remove('active'); });
+				btn.classList.add('active');
+				var state = btn.getAttribute('data-state');
+				Object.keys(panels).forEach(function (key) {
+					panels[key].classList.toggle('panel-hidden', key !== state);
+				});
+			});
+		});
+		document.querySelectorAll('.state-tabs button[data-device]').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				document.querySelectorAll('.state-tabs button[data-device]').forEach(function (b) { b.classList.remove('active'); });
+				btn.classList.add('active');
+				applyDeviceMock(btn.getAttribute('data-device'));
+			});
+		});
+	</script>
+</body>
+</html>

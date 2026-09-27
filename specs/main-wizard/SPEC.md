@@ -47,7 +47,7 @@
   - `In progress: N%` — convert job is running (same percent as Step 2).
   - `Ready: N files` — `converted/` count **> 0** (N = recursive file count).
 - Real-time progress: WebSocket messages update percent and counts without full page reload.
-- **Global footer:** on every main view, a persistent footer with **Settings** (downloaded components folder, delete/retry) and **About & Legal** (privacy, third-party, disclaimer). Wireframe: [wireframes/app.html](../../wireframes/app.html) footer + `#view-settings` / `#view-legal`. **UX approved** (2026-09-22).
+- **Global footer:** on every main view, a **floating** footer (fixed near the bottom edge, centered, elevated — not a full-width strip) with **Settings** (downloaded components folder, delete/retry) and **About & Legal** (privacy, third-party, disclaimer). Wireframe: [wireframes/app.html](../../wireframes/app.html) footer + `#view-settings` / `#view-legal`. Layout chrome aligned with [home-modules](../home-modules/SPEC.md) (2026-09-27). **UX approved** (2026-09-22); floating chrome **re-approved** with home-modules 2026-09-27.
 - **About & Legal page content:** Privacy summary + contact email, third-party tool names with **external home page links**, disclaimer summary (backups, no liability). Production loads full markdown from bundled `docs/legal/` (same sections).
 
 ## Acceptance criteria (BDD)
