@@ -1,25 +1,19 @@
-_Last updated: 2026-09-26_
+_Last updated: 2026-09-27_
 
 ## Branch
 
-`cursor/fix-raw-dng-convert-test-2e72`
+`cursor/transfer-files-5ada` (merging to main)
 
 ## Current focus
 
-Fixed failing DNG embedded-preview convert unit test. Root cause was the
-fake `magick` stub in `tests/unit/test_raw_image_convert.py`: bash
-`${@: -1}` under `#!/bin/sh` (dash) → exit 2 "Bad substitution", so both
-the DNG encode and the post-preview encode failed and the file landed in
-`error/`. Stub now uses POSIX last-arg (`for dest; do :; done`) and exits
-1 when the encode source is `*.dng` so the real preview fallback path runs.
+Hand-off after Transfer files + Home polish: conflicts with main resolved; PR ready → CI → merge → delete remote branch.
 
-## Next steps
+## Just changed
 
-- None for this thread; PR/merge of the test stub fix when ready.
+- Merged `origin/main` (DNG convert test stub fix)
+- UI shell stamp; Home polish; Transfer PC save-to-Documents
 
-## Run
+## Next steps (after merge)
 
-```bash
-uv run pytest tests/unit/test_raw_image_convert.py -vv
-uv run task checks
-```
+- Continue on `main` (or new feature branch)
+- Open items in `progress.md`: Easy mode import issues; Windows/macOS native webview confirm
