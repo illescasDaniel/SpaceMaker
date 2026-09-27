@@ -6,15 +6,15 @@ _Last updated: 2026-09-27_
 
 ## Current focus
 
-Gallery orphan cache cleanup — **implemented** (spec + architecture approved;
-Phases 3–4 done). Synced with `origin/main` (Transfer files + Home polish).
-Landing via `/save-pr-changes` (PR #4).
+Gallery orphan cache cleanup — **implemented** and synced with `main`.
+Local `uv run task checks` green (252 passed). Landing PR #4.
 
 ## Just changed
 
-- Merged `origin/main` into this branch (resolved `memory/` conflicts)
-- Added `.cursor/skills/save-pr-changes/` + AGENTS.md user-invoked list entry
+- Merged `origin/main` (Transfer files + Home polish); resolved `memory/` conflicts
+- Added `/save-pr-changes` skill + AGENTS.md mention
+- Checks clean after merge
 
 ## Next steps
 
-- Checks → save-changes → mark PR #4 ready → CI green → merge → delete remote branch
+- Mark PR #4 ready → watch CI → merge → delete remote branch only
