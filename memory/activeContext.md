@@ -2,19 +2,18 @@ _Last updated: 2026-09-27_
 
 ## Branch
 
-`cursor/gallery-orphan-cache-cleanup-2e72`
+`main` (up to date with `origin/main` at `1e516d0`)
 
 ## Current focus
 
-Gallery orphan cache cleanup — **implemented** and synced with `main`.
-Local `uv run task checks` green (252 passed). Landing PR #4.
+PR #4 gallery orphan cache cleanup is merged. Local `main` synced.
+Ready for next work from open items in `progress.md`.
 
 ## Just changed
 
-- Merged `origin/main` (Transfer files + Home polish); resolved `memory/` conflicts
-- Added `/save-pr-changes` skill + AGENTS.md mention
-- Checks clean after merge
+- Applied post-merge memory updates onto `main` (PR #4 marked merged)
+- Fast-forwarded local `main` to `origin/main`
 
 ## Next steps
 
-- Mark PR #4 ready → watch CI → merge → delete remote branch only
+- Open items in `progress.md`: Easy mode import issues; Windows/macOS native webview confirm
