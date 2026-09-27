@@ -33,7 +33,7 @@ def test_given_nested_original_when_convert_then_creates_converted_parent(tmp_pa
 
 	fs = LocalFileSystem()
 	src = fs.library_path(str(library), LibraryFolder.ORIGINALS, rel)
-	dest = fs.library_path(str(library), LibraryFolder.CONVERTED, "sdcard/Pictures/photo.avif")
+	dest = fs.library_path(str(library), LibraryFolder.PROCESSED, "sdcard/Pictures/photo.avif")
 	converter = RecordingConverter()
 	probe = FakeMediaProbe()
 	probe.readable_images.add(src)

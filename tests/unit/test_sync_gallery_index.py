@@ -10,7 +10,7 @@ from spacemaker.domain.library import LibraryFolder
 
 
 def _converted_path(library: str, relative: str) -> str:
-	return f"{library}/{LibraryFolder.CONVERTED.value}/{relative}"
+	return f"{library}/{LibraryFolder.PROCESSED.value}/{relative}"
 
 
 def test_given_new_file_on_disk_when_run_then_probed_and_added_to_index():

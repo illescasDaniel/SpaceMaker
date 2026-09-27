@@ -2,6 +2,7 @@ from spacemaker.domain.convert_policy import (
 	ConvertStartPolicy,
 	convert_start_policy,
 	should_auto_drain_after_upload,
+	should_promote_after_upload,
 	should_requeue_convert_drain,
 )
 from spacemaker.domain.jobs import JobPhase
@@ -39,6 +40,25 @@ def test_given_compress_media_off_when_should_auto_drain_then_false():
 		convert_phase=JobPhase.IDLE,
 		originals_count=2,
 		compress_media=False,
+	)
+
+
+def test_given_compress_media_off_when_should_promote_then_true():
+	# given / when / then
+	assert should_promote_after_upload(
+		ui_mode=UiMode.EASY,
+		convert_phase=JobPhase.IDLE,
+		originals_count=2,
+		compress_media=False,
+	)
+
+
+def test_given_compress_media_on_when_should_promote_then_false():
+	assert not should_promote_after_upload(
+		ui_mode=UiMode.EASY,
+		convert_phase=JobPhase.IDLE,
+		originals_count=2,
+		compress_media=True,
 	)
 
 

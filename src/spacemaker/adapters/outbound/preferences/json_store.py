@@ -26,6 +26,15 @@ class JsonUserPreferences:
 			data["compress_media"] = bool(enabled)
 			self._write_unlocked(data)
 
+	def clear(self) -> None:
+		with self._lock:
+			self._path.parent.mkdir(parents=True, exist_ok=True)
+			if self._path.is_file():
+				self._path.unlink()
+			# Remove any leftover temp from a crashed write.
+			tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+			tmp.unlink(missing_ok=True)
+
 	def _read(self) -> dict[str, Any]:
 		with self._lock:
 			return self._read_unlocked()

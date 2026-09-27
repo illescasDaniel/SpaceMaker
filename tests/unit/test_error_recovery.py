@@ -10,7 +10,7 @@ def test_given_error_files_when_move_all_to_converted_then_empties_error():
 	library = "/lib"
 	fs.files[f"{library}/{LibraryFolder.ERROR.value}/a.jpg"] = 10
 	# when
-	moved = ErrorRecovery(fs).move_all_errors_to_converted(library)
+	moved = ErrorRecovery(fs).move_all_errors_to_processed(library)
 	# then
 	assert moved == 1
-	assert fs.files[f"{library}/{LibraryFolder.CONVERTED.value}/a.jpg"] == 10
+	assert fs.files[f"{library}/{LibraryFolder.PROCESSED.value}/a.jpg"] == 10

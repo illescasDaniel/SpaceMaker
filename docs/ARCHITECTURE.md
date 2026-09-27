@@ -27,8 +27,8 @@ Composition root: `bootstrap.services.create_app()` wires outbound adapters into
 
 1. **Home hub** — five modules: Photo backup (Wi‑Fi library receive), USB photo backup (wizard), Receive files (Documents), Send files (PC → phone), Transfer files (temporary multi-device upload+download). See [specs/home-modules/SPEC.md](../specs/home-modules/SPEC.md).
 2. **Extract** — Wi‑Fi QR upload and/or `DeviceRepository` (MTP via **libmtp**, ADB via **adbutils** + `adb`) into `originals/`. Managed tool dir → download → `PATH` after setup. See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md).
-3. **Convert** — reads `originals/`, writes `converted/`, or routes failures to `error/` / `invalid/`.
-4. **Gallery** — indexes `converted/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, share, and transfer sessions.
+3. **Convert** — reads `originals/`, writes `processed/`, or routes failures to `error/` / `invalid/`. When Compress media is off (Easy), uploads are promoted as-is into `processed/`.
+4. **Gallery** — indexes `processed/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, share, and transfer sessions.
 
 Progress for extract and convert streams over WebSockets to the desktop web UI (loopback only). Phone clients use HTTP APIs and tokenized upload/share/receive endpoints.
 
@@ -65,7 +65,7 @@ There is no database of record — the filesystem remains the source of truth.
 State is:
 
 - **Filesystem-based**, through the `FileSystem` port (`LocalFileSystem`
-  adapter) — the library root's `originals/` / `converted/` / `error/` /
+  adapter) — the library root's `originals/` / `processed/` / `error/` /
   `invalid/` folders are the persistence layer for media.
 - **A derived, fully-rebuildable SQLite index**
   (`{library_root}/.index.sqlite`, via the `GalleryIndexPort` /
@@ -73,7 +73,7 @@ State is:
   kind, mtime, size) for fast keyset-paginated timeline, calendar, and
   neighbor queries at large library sizes. It is incrementally synced against
   the filesystem by diffing mtime/size (`SyncGalleryIndex`), and is safe to
-  delete at any time — it rebuilds itself from `converted/` + EXIF/ffprobe on
+  delete at any time — it rebuilds itself from `processed/` + EXIF/ffprobe on
   next gallery load.
 - **In-process/in-memory** for session/runtime state (`AppSession`, held on
   `AppServices.session`).

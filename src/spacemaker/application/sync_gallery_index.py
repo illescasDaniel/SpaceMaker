@@ -22,11 +22,11 @@ class SyncGalleryIndex:
 		self._index = index
 
 	def run(self, library_root: str) -> IndexSyncPlan:
-		converted_root = self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, "")
-		relative_paths = self._filesystem.list_files_recursive(converted_root)
+		processed_root = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, "")
+		relative_paths = self._filesystem.list_files_recursive(processed_root)
 		on_disk = {
 			relative_path: self._filesystem.file_stat(
-				self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, relative_path)
+				self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, relative_path)
 			)
 			for relative_path in relative_paths
 		}
@@ -36,7 +36,7 @@ class SyncGalleryIndex:
 			return plan
 		upserts: list[GalleryIndexRow] = []
 		for relative_path in (*plan.added, *plan.changed):
-			full = self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, relative_path)
+			full = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, relative_path)
 			stat = on_disk[relative_path]
 			captured_at = self._probe.captured_at(full) or datetime.fromtimestamp(stat.mtime)
 			upserts.append(

@@ -26,11 +26,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from _shared.lsp_client import LspClient  # noqa: E402
+from _shared.workspace import resolve_workspace_root  # noqa: E402
 from lang_command import resolve_css_command, resolve_html_command, resolve_ts_command  # noqa: E402
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 
 
-WORKSPACE_ROOT = Path(os.environ.get("WEBNAV_MCP_WORKSPACE", Path.cwd())).resolve()
+WORKSPACE_ROOT = resolve_workspace_root("WEBNAV_MCP_WORKSPACE")
 
 mcp = MCPServer(
 	name="webnav",

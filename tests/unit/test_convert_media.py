@@ -24,7 +24,7 @@ def test_given_avif_in_originals_when_convert_then_moves_to_converted():
 	use_case.run(library)
 	# then
 	assert _paths(fs, library, LibraryFolder.ORIGINALS, rel) not in fs.files
-	assert fs.files[_paths(fs, library, LibraryFolder.CONVERTED, rel)] == 10
+	assert fs.files[_paths(fs, library, LibraryFolder.PROCESSED, rel)] == 10
 
 
 def test_given_pdf_in_originals_when_convert_then_moves_to_invalid():
@@ -46,7 +46,7 @@ def test_given_png_when_encode_valid_then_removes_original():
 	library = "/lib"
 	rel = "a.png"
 	src = _paths(fs, library, LibraryFolder.ORIGINALS, rel)
-	dest = _paths(fs, library, LibraryFolder.CONVERTED, "a.avif")
+	dest = _paths(fs, library, LibraryFolder.PROCESSED, "a.avif")
 	fs.files[src] = 100
 	probe = FakeMediaProbe()
 	probe.readable_images.add(src)
@@ -71,8 +71,8 @@ def test_given_jpeg_pair_with_dng_when_convert_both_then_two_avifs():
 	fs.files[jpg] = 200
 	probe = FakeMediaProbe()
 	probe.readable_images.update({dng, jpg})
-	out_dng = _paths(fs, library, LibraryFolder.CONVERTED, "photo.avif")
-	out_jpg = _paths(fs, library, LibraryFolder.CONVERTED, "photo_jpg.avif")
+	out_dng = _paths(fs, library, LibraryFolder.PROCESSED, "photo.avif")
+	out_jpg = _paths(fs, library, LibraryFolder.PROCESSED, "photo_jpg.avif")
 	probe.valid_images.update({out_dng, out_jpg})
 	converter = FakeMediaConverter()
 	converter.bind_filesystem(fs)
@@ -93,7 +93,7 @@ def test_given_web_jpeg_and_oversized_avif_when_convert_then_keeps_jpeg_in_conve
 	library = "/lib"
 	rel = "web.jpg"
 	src = _paths(fs, library, LibraryFolder.ORIGINALS, rel)
-	dest = _paths(fs, library, LibraryFolder.CONVERTED, "web.avif")
+	dest = _paths(fs, library, LibraryFolder.PROCESSED, "web.avif")
 	fs.files[src] = 100
 	probe = FakeMediaProbe()
 	probe.readable_images.add(src)
@@ -105,7 +105,7 @@ def test_given_web_jpeg_and_oversized_avif_when_convert_then_keeps_jpeg_in_conve
 	ConvertMedia(fs, converter, probe).run(library)
 	# then
 	assert dest not in fs.files
-	assert fs.files[_paths(fs, library, LibraryFolder.CONVERTED, rel)] == 100
+	assert fs.files[_paths(fs, library, LibraryFolder.PROCESSED, rel)] == 100
 
 
 def test_given_encode_fails_twice_when_convert_then_moves_to_error():
@@ -114,7 +114,7 @@ def test_given_encode_fails_twice_when_convert_then_moves_to_error():
 	library = "/lib"
 	rel = "a.png"
 	src = _paths(fs, library, LibraryFolder.ORIGINALS, rel)
-	dest = _paths(fs, library, LibraryFolder.CONVERTED, "a.avif")
+	dest = _paths(fs, library, LibraryFolder.PROCESSED, "a.avif")
 	fs.files[src] = 10
 	probe = FakeMediaProbe()
 	probe.readable_images.add(src)
@@ -142,7 +142,7 @@ def test_given_video_needing_encode_and_no_hw_when_convert_then_moves_to_convert
 	# when
 	use_case.run(library)
 	# then
-	assert fs.files[_paths(fs, library, LibraryFolder.CONVERTED, rel)] == 500
+	assert fs.files[_paths(fs, library, LibraryFolder.PROCESSED, rel)] == 500
 	assert not converter.encoded_videos
 	assert "no hardware video encoder" in use_case.last_failure
 
@@ -153,7 +153,7 @@ def test_given_video_needing_encode_and_h264_hw_when_convert_then_h264_output():
 	library = "/lib"
 	rel = "big.hevc.mp4"
 	src = _paths(fs, library, LibraryFolder.ORIGINALS, rel)
-	dest = _paths(fs, library, LibraryFolder.CONVERTED, "big.hevc.h264.mp4")
+	dest = _paths(fs, library, LibraryFolder.PROCESSED, "big.hevc.h264.mp4")
 	fs.files[src] = 500
 	probe = FakeMediaProbe()
 	probe.videos[src] = VideoProbe("mp4", "hevc", "aac", 5_000_000)
@@ -180,7 +180,7 @@ def test_given_low_bitrate_mp4_when_convert_then_move_as_is():
 	# when
 	ConvertMedia(fs, FakeMediaConverter(), probe).run(library)
 	# then
-	assert fs.files[_paths(fs, library, LibraryFolder.CONVERTED, rel)] == 50
+	assert fs.files[_paths(fs, library, LibraryFolder.PROCESSED, rel)] == 50
 
 
 def test_given_video_when_ffprobe_missing_then_moves_to_error_with_failure():

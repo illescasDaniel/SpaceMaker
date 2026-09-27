@@ -105,9 +105,11 @@ Users choose **which device folders** to include before extract. v1 uses a **mul
 On first extract to a library root, ensure directories exist:
 
 - `originals/`
-- `converted/`
+- `processed/`
 - `error/`
 - `invalid/`
+
+**Legacy migration:** if an older library still has `converted/` and no `processed/`, rename `converted/` → `processed/` on ensure. If both exist, move contents of `converted/` into `processed/` then remove the empty `converted/` directory.
 
 Extract **only** writes into `originals/`, preserving relative paths from device media layout (implementation defines mapping; paths must be stable across runs).
 
@@ -286,7 +288,7 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 
 - **Given** a new empty library root
 - **When** extract starts
-- **Then** `originals/`, `converted/`, `error/`, and `invalid/` exist
+- **Then** `originals/`, `processed/`, `error/`, and `invalid/` exist
 
 ## Failure scenarios
 

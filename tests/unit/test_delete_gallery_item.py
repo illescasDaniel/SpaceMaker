@@ -13,7 +13,7 @@ def test_given_converted_file_when_delete_then_removed_and_caches_cleared(tmp_pa
 	fs = LocalFileSystem()
 	fs.ensure_library_folders(library)
 	rel = "2025/photo.avif"
-	converted = fs.library_path(library, LibraryFolder.CONVERTED, rel)
+	converted = fs.library_path(library, LibraryFolder.PROCESSED, rel)
 	Path(converted).parent.mkdir(parents=True, exist_ok=True)
 	Path(converted).write_bytes(b"x")
 	thumb = Path(thumbnail_path(library, rel))

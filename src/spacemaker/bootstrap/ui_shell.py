@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 
-UI_SHELL_VERSION = "2026.09.home-transfer-save"
+UI_SHELL_VERSION = "2026.09.processed-settings"
 
 _CSP_COMMON = (
 	"default-src 'self'; "

@@ -58,18 +58,19 @@ def test_given_fresh_app_when_get_index_then_home_layout_matches_spec() -> None:
 	assert "aspect-ratio: 4 / 3" in html
 	assert "#view-home.screen.active" in html
 	assert "justify-content: center" in html
-	assert "position: fixed" in html
-	assert 'class="app-footer"' in html
+	assert 'data-view="settings"' in html
+	assert "app-main" in html
+	assert 'class="app-footer"' not in html
 	assert 'id="transfer-save-tip"' in html
 	assert 'id="btn-transfer-open-documents"' in html
 	assert html.count('class="module-tile"') == 5
 
 
-def test_given_default_window_geometry_when_inspect_then_960x720() -> None:
+def test_given_default_window_geometry_when_inspect_then_1152x864() -> None:
 	from spacemaker.bootstrap.window_geometry import DESKTOP_WINDOW_HEIGHT, DESKTOP_WINDOW_WIDTH
 
-	assert DESKTOP_WINDOW_WIDTH == 960
-	assert DESKTOP_WINDOW_HEIGHT == 720
+	assert DESKTOP_WINDOW_WIDTH == 1152
+	assert DESKTOP_WINDOW_HEIGHT == 864
 
 
 def test_given_devtools_probe_when_get_json_version_then_200() -> None:
@@ -196,7 +197,7 @@ def test_given_originals_on_disk_when_convert_start_then_running(tmp_path) -> No
 
 def test_given_converted_files_when_get_settings_then_visualize_ready(tmp_path) -> None:
 	library = tmp_path / "lib"
-	converted = library / "converted"
+	converted = library / "processed"
 	converted.mkdir(parents=True)
 	(converted / "photo.avif").write_bytes(b"x")
 
@@ -241,7 +242,7 @@ def test_given_gallery_item_route_when_get_then_html_200() -> None:
 
 def test_given_converted_file_when_gallery_item_api_then_metadata(tmp_path) -> None:
 	library = tmp_path / "lib"
-	converted = library / "converted"
+	converted = library / "processed"
 	converted.mkdir(parents=True)
 	(converted / "photo.avif").write_bytes(b"x")
 
@@ -266,7 +267,7 @@ def test_given_converted_file_when_gallery_item_api_then_metadata(tmp_path) -> N
 
 def test_given_converted_file_when_open_on_host_then_ok(tmp_path, monkeypatch) -> None:
 	library = tmp_path / "lib"
-	converted = library / "converted"
+	converted = library / "processed"
 	converted.mkdir(parents=True)
 	(converted / "photo.avif").write_bytes(b"x")
 	opened: list[str] = []
@@ -296,7 +297,7 @@ def test_given_converted_file_when_open_on_host_then_ok(tmp_path, monkeypatch) -
 
 def test_given_converted_file_when_delete_item_then_removed(tmp_path) -> None:
 	library = tmp_path / "lib"
-	converted = library / "converted"
+	converted = library / "processed"
 	converted.mkdir(parents=True)
 	(converted / "photo.avif").write_bytes(b"x")
 
@@ -319,7 +320,7 @@ def test_given_converted_file_when_delete_item_then_removed(tmp_path) -> None:
 
 def test_given_media_download_flag_when_get_then_attachment(tmp_path) -> None:
 	library = tmp_path / "lib"
-	converted = library / "converted"
+	converted = library / "processed"
 	converted.mkdir(parents=True)
 	(converted / "photo.avif").write_bytes(b"x")
 
@@ -341,7 +342,7 @@ def test_given_media_download_flag_when_get_then_attachment(tmp_path) -> None:
 
 def test_given_converted_fixture_when_calendar_then_days(tmp_path) -> None:
 	library = tmp_path / "lib"
-	converted = library / "converted"
+	converted = library / "processed"
 	converted.mkdir(parents=True)
 	(converted / "a.avif").write_bytes(b"x")
 
@@ -459,7 +460,9 @@ def test_given_easy_mode_when_first_upload_then_wifi_session_stays_active(tmp_pa
 		files=[("files", ("photo.jpg", b"hello", "image/jpeg"))],
 	)
 	assert upload.status_code == 200
-	assert (library / "originals" / "photo.jpg").is_file()
+	# Compress media off (or tools missing) promotes as-is into processed/;
+	# convert may also drain originals when compress is on.
+	assert (library / "processed" / "photo.jpg").is_file() or (library / "originals" / "photo.jpg").is_file()
 
 	after = client.get("/api/settings").json()
 	assert after["extract"]["phase"] == "running"

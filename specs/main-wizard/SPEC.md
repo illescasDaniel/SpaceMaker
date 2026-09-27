@@ -15,8 +15,8 @@
   - **Start convert** is **disabled** when **`originals/` has zero files** (recursive count) or convert is already **running**.
   - **Start convert** is **enabled** when `originals/` has at least one file, **including while extract is `running` or `paused`**.
   - When the user clicks **Start convert** during an active extract, the server **gracefully stops extract** (same rules as **Stop extract**: finish in-flight file/upload, then end the session/queue), **waits** for extract to finish stopping, then **starts convert** on files already in `originals/`.
-  - Step 3 **Visualize** card is **disabled** only when `converted/` is empty **and** convert is not running (no gallery to show yet).
-  - Step 3 is **enabled** when `converted/` file count **> 0** (including media from a previous session before this launch) **or** convert is **running** / **completed**.
+  - Step 3 **Visualize** card is **disabled** only when `processed/` is empty **and** convert is not running (no gallery to show yet).
+  - Step 3 is **enabled** when `processed/` file count **> 0** (including media from a previous session before this launch) **or** convert is **running** / **completed**.
   - **Open gallery**, LAN URL, and QR are available whenever Step 3 is enabled.
   - SPA routing: `GET /gallery` loads the app and **activates the Gallery view** (not the wizard). Tab switches and **Open gallery** update the browser path (`/` vs `/gallery`) via History API.
 - **Exit:** User closes desktop window; background jobs should honor pause/cancel where implemented (pause: extract first; convert pause: out of scope v1 unless noted in extract spec).
@@ -40,15 +40,15 @@
 - **Warnings (Step 2 area):**
   - **Error bucket:** rendered **only** when `error/` file count **> 0**. When count is **0**, the warning block is **not in the DOM** or is **hidden** with no placeholder — users must not see an empty warning.
   - **Invalid bucket:** same rule for `invalid/` count **> 0** only.
-  - When visible: warning styling; error — **Review**, **Move to converted**; invalid — **Review** only.
+  - When visible: warning styling; error — **Review**, **Move to processed**; invalid — **Review** only.
 - **Step 3 — Visualize:** status line (`Not started` | `In progress: N%` | `Ready: N files`), LAN URL field, **scannable QR** encoding the same URL, **Open gallery** button.
 - **Step 3 status rules:**
-  - `Not started` — `converted/` count is 0 and convert is idle.
+  - `Not started` — `processed/` count is 0 and convert is idle.
   - `In progress: N%` — convert job is running (same percent as Step 2).
-  - `Ready: N files` — `converted/` count **> 0** (N = recursive file count).
+  - `Ready: N files` — `processed/` count **> 0** (N = recursive file count).
 - Real-time progress: WebSocket messages update percent and counts without full page reload.
-- **Global footer:** on every main view, a **floating** footer (fixed near the bottom edge, centered, elevated — not a full-width strip) with **Settings** (downloaded components folder, delete/retry) and **About & Legal** (privacy, third-party, disclaimer). Wireframe: [wireframes/app.html](../../wireframes/app.html) footer + `#view-settings` / `#view-legal`. Layout chrome aligned with [home-modules](../home-modules/SPEC.md) (2026-09-27). **UX approved** (2026-09-22); floating chrome **re-approved** with home-modules 2026-09-27.
-- **About & Legal page content:** Privacy summary + contact email, third-party tool names with **external home page links**, disclaimer summary (backups, no liability). Production loads full markdown from bundled `docs/legal/` (same sections).
+- **Chrome:** sticky header with **Home | Gallery | Settings** — no floating footer. Settings menu, clear preferences, reset gallery, nested Downloaded components, and About & Legal are specified in [home-modules](../home-modules/SPEC.md) and [legal](../legal/SPEC.md). **UX approved** (2026-09-22); sticky Settings chrome **updated** with home-modules 2026-09-27.
+- **About & Legal page content:** Privacy summary + contact email, third-party tool names with **external home page links**, disclaimer summary (backups, no liability). Production loads full markdown from bundled `docs/legal/` (same sections). Opened from Settings (not a footer link).
 
 ## Acceptance criteria (BDD)
 
@@ -60,12 +60,12 @@
 - **And** connection method defaults to **Wi‑Fi**
 - **And** Step 1 status is `Not started`
 - **And** Step 2 shows `Waiting for extract to finish` or equivalent when extract not complete
-- **And** Step 3 shows `Not started` when `converted/` is empty
-- **And** Step 3 card is disabled when `converted/` is empty and convert is idle
+- **And** Step 3 shows `Not started` when `processed/` is empty
+- **And** Step 3 card is disabled when `processed/` is empty and convert is idle
 
-### Scenario: Visualize ready when converted already has files
+### Scenario: Visualize ready when processed already has files
 
-- **Given** SpaceMaker starts and `converted/` already contains at least one file (e.g. from a previous session)
+- **Given** SpaceMaker starts and `processed/` already contains at least one file (e.g. from a previous session)
 - **When** the main wizard is shown
 - **Then** Step 3 status is `Ready: N files` (N > 0)
 - **And** Step 3 card is not disabled
@@ -172,13 +172,13 @@
 - **When** the wizard is displayed
 - **Then** an error warning shows the file count
 - **And** **Review** is available
-- **And** **Move to converted** is available
+- **And** **Move to processed** is available
 
-### Scenario: User moves error files to converted
+### Scenario: User moves error files to processed
 
 - **Given** files exist in `error/`
-- **When** the user clicks **Move to converted**
-- **Then** each file is moved to `converted/` preserving relative paths
+- **When** the user clicks **Move to processed**
+- **Then** each file is moved to `processed/` preserving relative paths
 - **And** `error/` is empty
 - **And** the error warning is hidden
 
@@ -188,7 +188,7 @@
 - **When** the wizard is displayed
 - **Then** an invalid warning shows the file count and review suggestion
 - **And** **Review** is available
-- **And** there is no “move all to converted” action for invalid files
+- **And** there is no “move all to processed” action for invalid files
 
 ### Scenario: Visualize shows LAN access
 
@@ -197,16 +197,16 @@
 - **Then** a gallery URL with host IP and port is shown
 - **And** a scannable QR code encodes that URL (not plain host:port text)
 
-### Scenario: Footer opens About and Legal
+### Scenario: Settings opens About and Legal
 
 - **Given** the user is on the wizard or gallery
-- **When** they click **About & Legal** in the footer
+- **When** they open **Settings** and tap **About & Legal**
 - **Then** the mini legal page is shown with Privacy, Third-party tools, and Disclaimer sections
-- **And** **Back** returns to the previous main view
+- **And** **← Settings** returns to the Settings menu
 
 ### Scenario: Open gallery from Step 3
 
-- **Given** `converted/` contains at least one file
+- **Given** `processed/` contains at least one file
 - **When** the user clicks **Open gallery**
 - **Then** the gallery view opens (same window navigation or tab per wireframe)
 
@@ -234,7 +234,7 @@
 | Layer | Focus |
 |-------|--------|
 | Unit | Step state machine: given extract/convert phase + folder counts → enabled buttons and status strings |
-| Unit | Visualize step: given `converted` count + convert phase → status text and card enabled flag |
+| Unit | Visualize step: given `processed` count + convert phase → status text and card enabled flag |
 | Unit | Warning visibility from `FileSystem` port listing `error/` / `invalid/` (zero → hidden) |
 | Unit | Convert button: disabled when `originals/` empty; start convert stops active extract first |
 | Integration | WebSocket handler emits progress DTOs; one client receives ordered updates (mock use case) |

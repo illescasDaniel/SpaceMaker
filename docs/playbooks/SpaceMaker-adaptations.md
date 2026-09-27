@@ -15,7 +15,7 @@ GamesLibrary has no wireframe folder. SpaceMaker requires `wireframes/*.html` **
 | Folder | Purpose |
 |--------|---------|
 | `originals/` | Extract target; convert consumes and empties |
-| `converted/` | Gallery index; encodes and moved-as-is files |
+| `processed/` | Gallery index; encodes and moved-as-is files (legacy on-disk name `converted/` is migrated to `processed/` on library ensure) |
 | `error/` | Encode failed after one automatic retry |
 | `invalid/` | Unsupported type or unreadable/broken media |
 
@@ -23,7 +23,7 @@ GamesLibrary has no wireframe folder. SpaceMaker requires `wireframes/*.html` **
 
 Authoritative compression flags (historical shell reference): [convert_all_1_1.sh](../reference/convert_all_1_1.sh). **App runtime** uses GPU-only video encode or move-as-is (see [convert-media](../../specs/convert-media/SPEC.md)). Behavior:
 
-**Move as-is (no re-encode)** from `originals/` → `converted/`:
+**Move as-is (no re-encode)** from `originals/` → `processed/`:
 
 - Images already AVIF
 - Videos already AV1 and web-compatible
@@ -37,13 +37,13 @@ Authoritative compression flags (historical shell reference): [convert_all_1_1.s
 
 **DNG + JPEG same stem:** RAW → `stem.avif`; JPEG → `stem_jpg.avif` or `stem_jpeg.avif`; both outputs required.
 
-**Encode videos** to `stem.av1.mp4` when AV1 hardware is available; else `stem.h264.mp4` when H.264 hardware is available. Priority: av1_nvenc → av1_qsv → av1_vaapi → h264_nvenc → h264_qsv → h264_vaapi. **No CPU video encoders.** With no hardware encoder, move source video to `converted/` unchanged. Never library-encode to HEVC. Opus 256k for AV1 outputs; AAC for H.264 outputs; faststart.
+**Encode videos** to `stem.av1.mp4` when AV1 hardware is available; else `stem.h264.mp4` when H.264 hardware is available. Priority: av1_nvenc → av1_qsv → av1_vaapi → h264_nvenc → h264_qsv → h264_vaapi. **No CPU video encoders.** With no hardware encoder, move source video to `processed/` unchanged. Never library-encode to HEVC. Opus 256k for AV1 outputs; AAC for H.264 outputs; faststart.
 
-**Size rollback:** if output > original + 10% and source is web-compatible, discard output and move original to `converted/`. Otherwise keep encode and remove source from `originals/`.
+**Size rollback:** if output > original + 10% and source is web-compatible, discard output and move original to `processed/`. Otherwise keep encode and remove source from `originals/`.
 
-**Failures:** unsupported/broken → `invalid/`. Encode fail → delete partial, retry once; still fail → `error/`. Successful encode → output in `converted/`, source removed from `originals/`.
+**Failures:** unsupported/broken → `invalid/`. Encode fail → delete partial, retry once; still fail → `error/`. Successful encode → output in `processed/`, source removed from `originals/`.
 
-**UI:** warning when `error/` or `invalid/` non-empty — Review; for errors, also Move to converted (unchanged files).
+**UI:** warning when `error/` or `invalid/` non-empty — Review; for errors, also Move to processed (unchanged files).
 
 ## Gallery export (download-friendly formats)
 

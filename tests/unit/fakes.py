@@ -60,6 +60,23 @@ class FakeFileSystem:
 		self.files.pop(path, None)
 		Path(path).unlink(missing_ok=True)
 
+	def delete_directory(self, path: str) -> None:
+		prefix = path.rstrip("/") + "/"
+		for key in list(self.files):
+			if key == path or key.startswith(prefix):
+				self.files.pop(key, None)
+		self.dirs.discard(path)
+		for d in list(self.dirs):
+			if d.startswith(prefix):
+				self.dirs.discard(d)
+		target = Path(path)
+		if target.is_dir():
+			import shutil
+
+			shutil.rmtree(target, ignore_errors=True)
+		elif target.is_file():
+			target.unlink(missing_ok=True)
+
 	def list_files_recursive(self, folder: str) -> list[str]:
 		prefix = folder.rstrip("/") + "/"
 		out: list[str] = []

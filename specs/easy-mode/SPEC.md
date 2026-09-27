@@ -2,16 +2,16 @@
 
 ## Metadata
 
-- **Feature:** Photo backup module — Wi‑Fi upload QR, auto-receive, convert-as-received (when **Compress media** is on), **View gallery** when ready; phone gallery help on Gallery tab
+- **Feature:** Photo backup module — Wi‑Fi upload QR, auto-receive, convert-as-received (when **Compress media** is on) or promote-as-received into `processed/` (when off), **View gallery** when ready; phone gallery help on Gallery tab
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — Photo backup (`#view-easy`); phone upload [wireframes/phone-upload.html](../../wireframes/phone-upload.html). **Phone upload wireframe approved** 2026-09-23.
-- **UX approved:** 2026-09-22 (initial Easy mode); **2026-09-23** (image import issue panels + open-folder actions); **2026-09-26** (**Compress media** preference + info panel)
-- **Related:** [main-wizard](../main-wizard/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md), [packaging](../packaging/SPEC.md)
+- **UX approved:** 2026-09-22 (initial Easy mode); **2026-09-23** (image import issue panels + open-folder actions); **2026-09-26** (**Compress media** preference + info panel); **2026-09-27** (promote to `processed/` when Compress media off; gallery bucket rename)
+- **Related:** [main-wizard](../main-wizard/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md), [packaging](../packaging/SPEC.md), [home-modules](../home-modules/SPEC.md)
 
 ## Triggers & routing
 
 - **Entry:** Opened from Home hub → **Photo backup** tile (`active_module=photo_backup`, `ui_mode=easy`). **USB photo backup** tile opens the wizard (`ui_mode=advanced`). App launch defaults to **Home** hub — no auto Wi‑Fi until Photo backup is entered.
 - **Session:** `ui_mode` is session-only (relaunch → Easy). Entering Home or another module does not imply an Easy↔Advanced toggle (USB is a separate module).
-- **Header tabs:** **Home** (hub or active module) and **Gallery**. All shells follow the **OS light/dark** preference (`prefers-color-scheme` via shared `theme.css`); no per-module forced light/dark.
+- **Header tabs:** **Home** | **Gallery** | **Settings** ([home-modules](../home-modules/SPEC.md)). All shells follow the **OS light/dark** preference (`prefers-color-scheme` via shared `theme.css`); no per-module forced light/dark.
 - **Easy bootstrap:** When the client loads Easy and extract is idle, the server starts **Wi‑Fi receive** automatically (library root from session defaults; no Start extract button).
 
 ## Visual & UI rules
@@ -25,13 +25,13 @@
   3. **Library location line:** e.g. *Photos and videos are saved under `~/Pictures/SpaceMakerLibrary/`* (tilde display of session library root)
   4. **Compress media** preference row (see below) — between library location and Transfer
   5. **Transfer** progress (files received this session; total unknown → count + optional indeterminate bar while receiving)
-  6. **Convert** progress — **only when Compress media is on** (same WebSocket convert job as Advanced). When idle with files already in `converted/`, status reads e.g. **1 file converted, waiting for more** (pluralized). When Compress media is **off**, hide Convert progress and show a short muted status: e.g. *Compression off — new uploads stay as received (no re-encode).*
+  6. **Convert** progress — **only when Compress media is on** (same WebSocket convert job as Advanced). When idle with files already in `processed/`, status reads e.g. **1 file converted, waiting for more** (pluralized). When Compress media is **off**, hide Convert progress and show a short muted status: e.g. *Compression off — new uploads are saved to the gallery as received (no re-encode).*
   7. **Image import issues** (when any **and** Compress media is on): one or two **warning panels** (light theme, same warn styling as Advanced alerts), each shown only when its **image** count **> 0**:
      - **Unsupported:** heading e.g. *2 unsupported images*; hint that files are in the library **`invalid/`** folder and are **not** in the gallery; text action **Click here to open the invalid folder**.
      - **Failed convert:** heading e.g. *1 image failed to convert* (pluralized); hint that files are in **`error/`** (encode failed after retry); text action **Click here to open the error folder**.
      - When both counts are zero, or Compress media is off, the whole block is hidden (no placeholder).
      - Counts are **images only** (same semantics as today’s `image_import_issues` WebSocket field). No per-file list in Easy.
-  8. **View gallery** button — **only when** `converted/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
+  8. **View gallery** button — **only when** `processed/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
   9. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
 - No library picker, connection toggle, or extract/convert buttons on Easy.
 - Phone **upload** page (`/upload`): minimal; system theme via `theme.css`; footer hint varies for **iPhone vs Android** (UA detection). **iPhone:** single **Choose** button (no folder picker). **Android:** **Choose files** + **Choose folder**.
@@ -65,12 +65,12 @@
 
 Allowed `bucket` values: `error`, `invalid` only (no path traversal; resolved under session library root).
 
-## Convert while receiving (Easy only)
+## Convert / promote while receiving (Easy only)
 
 - Auto-convert runs **only when Compress media is on** and compression tools are available.
 - After each completed Wi‑Fi upload (saved or size-skipped), if convert is **idle**, Compress media is **on**, and `originals/` is non-empty, start convert **without** stopping extract.
 - When a convert batch finishes, if `originals/` still has files, Compress media is still on, and Easy concurrent policy applies, start another batch.
-- **When Compress media is off:** do **not** start convert batches. New uploads remain in `originals/` (as received). An already-running convert job may finish its current batch; v1 does not require cancelling in-flight work. Turning Compress media **on** again with files still in `originals/` resumes Easy auto-convert when idle (same concurrent policy).
+- **When Compress media is off:** do **not** start convert batches. Instead, **promote** files from `originals/` into `processed/` **as-is** (same relative path and filename — move-as-is, no re-encode), then refresh the gallery index so **View gallery** / Gallery can show them. Same trigger points as auto-convert drain (after each completed Wi‑Fi upload batch; also when Compress media is turned **off** or remains off with files still in `originals/`). An already-running convert job may finish its current batch; v1 does not require cancelling in-flight work. Turning Compress media **on** again with files still in `originals/` resumes Easy auto-convert when idle (same concurrent policy).
 - **Advanced** **Start convert** still **stops extract first** then converts ([convert-media](../convert-media/SPEC.md)); Advanced ignores the Easy Compress media preference.
 
 ## Acceptance criteria (BDD)
@@ -132,16 +132,17 @@ Allowed `bucket` values: `error`, `invalid` only (no path traversal; resolved un
 - **Then** convert starts while extract remains **running**
 - **And** Easy shows convert progress
 
-### Scenario: Upload with Compress media off leaves originals
+### Scenario: Upload with Compress media off promotes to processed
 
 - **Given** Easy mode with Compress media **off** and an active Wi‑Fi receive session
 - **When** a file lands in `originals/`
 - **Then** convert does not start
-- **And** the file remains in `originals/`
+- **And** the file is moved as-is into `processed/` (same relative path)
+- **And** **View gallery** becomes available once `processed/` is non-empty
 
-### Scenario: View gallery when converted has files
+### Scenario: View gallery when processed has files
 
-- **Given** `converted/` contains at least one file
+- **Given** `processed/` contains at least one file
 - **When** Easy mode is shown
 - **Then** **View gallery** is visible
 - **When** the user activates it
@@ -149,7 +150,7 @@ Allowed `bucket` values: `error`, `invalid` only (no path traversal; resolved un
 
 ### Scenario: View gallery hidden when empty
 
-- **Given** `converted/` is empty and convert is idle
+- **Given** `processed/` is empty and convert/promote is idle
 - **When** Easy mode is shown
 - **Then** **View gallery** is not shown
 
@@ -214,15 +215,14 @@ Allowed `bucket` values: `error`, `invalid` only (no path traversal; resolved un
 
 - Persisting `ui_mode` across app restarts
 - Easy-mode per-file filenames or in-app file list (folder reveal only)
-- **Move to converted** from Easy (Advanced Step 2 only)
+- **Move to processed** from Easy (Advanced Step 2 only — error recovery)
 - Editing encode flags / quality / codec priority in Easy (fixed per [convert-media](../convert-media/SPEC.md))
 - Applying Compress media preference to USB wizard / Advanced Step 2
 - Cancelling an in-flight convert batch when the user turns Compress media off (v1 may let the current batch finish)
-- Auto-moving `originals/` into `converted/` when Compress media is off (files stay in `originals/` until compress/convert runs)
 
 ## Testing strategy
 
 | Layer | Focus |
 |-------|--------|
-| Unit | Easy import panel visibility from `image_import_issues` counts (zero → hidden; partial → one or two panels); Compress media default / tools-unavailable forced off; auto-convert gated on preference |
+| Unit | Easy import panel visibility from `image_import_issues` counts (zero → hidden; partial → one or two panels); Compress media default / tools-unavailable forced off; auto-convert gated on preference; promote-as-is when Compress media off |
 | Integration | `POST /api/library/open-folder` resolves `error` / `invalid` under session library root; rejects unknown bucket; preference persists across simulated relaunch |

@@ -3,10 +3,10 @@ from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import LibraryFolder
 
 
-def test_given_converted_count_when_wizard_actions_then_visualize_enabled():
+def test_given_processed_count_when_wizard_actions_then_visualize_enabled():
 	# given
 	def count_in_folder(root: str, folder: LibraryFolder) -> int:
-		if folder is LibraryFolder.CONVERTED:
+		if folder is LibraryFolder.PROCESSED:
 			return 3
 		return 0
 

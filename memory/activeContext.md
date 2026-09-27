@@ -6,20 +6,18 @@ _Last updated: 2026-09-27_
 
 ## Current focus
 
-**Phases 3–4 complete** — Photo backup **Compress media** preference implemented end-to-end (domain → ports → adapters → settings API → Easy UI).
-
-Wireframe, spec, and architecture approved 2026-09-26.
-
-Synced with `origin/main` (`55939b2`) — Transfer files + gallery orphan cache cleanup now on this branch.
+**Saving promote/processed + Settings chrome** — feature Phases 0–4 complete; committing and pushing, then hardening codenav/webnav MCP (approved plan: character-offset columns, `path:line:col` headers, LSP error surfacing, diagnostics push fallback, shared formatters, unit tests).
 
 ## Next steps
 
-- Manual browser check of Photo backup checkbox / info panel / tools-unavailable state (optional polish).
-- Mark ready for review / merge when user is satisfied.
+- After push: implement MCP nav improvements plan.
+- Manual check: Settings → Clear preferences — list width must stay put (reload if CSS cached).
+- Manual check: upload with Compress off → photo in Gallery; sticky header scroll.
+- Optional: migrate local library `converted/` → `processed/` (also auto on `ensure_library_folders`).
+- Mark ready for review / merge when satisfied.
 
-## Just changed
+## Just changed (this commit)
 
-- Merged `origin/main` into this branch (resolved memory/specs/wireframe conflicts)
-- Domain/ports (Phase 2) + tests + `JsonUserPreferences`, `ManagedCompressionTools`
-- Settings `compress_media` field; Easy auto-convert gated; production Easy UI
-- Specs/wireframe already on branch
+- `LibraryFolder.PROCESSED`; promote-originals when compress off; Clear prefs / Reset library APIs
+- Sticky Settings chrome; window 1152×864; `.screen` width fix (list no longer widens on confirm)
+- MCP: `workspace.py` root resolution + Cursor/Claude mcp.json env pins

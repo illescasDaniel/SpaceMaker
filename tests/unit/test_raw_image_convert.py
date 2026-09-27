@@ -59,7 +59,7 @@ def test_given_dng_when_magick_cannot_read_then_converts_embedded_preview(tmp_pa
 	converter = SubprocessMediaConverter(runner)
 	use_case = ConvertMedia(fs, converter, probe)
 	use_case.run(str(library))
-	dest = fs.library_path(str(library), LibraryFolder.CONVERTED, "IMG_5163.avif")
+	dest = fs.library_path(str(library), LibraryFolder.PROCESSED, "IMG_5163.avif")
 	assert Path(dest).is_file()
 	assert not Path(fs.library_path(str(library), LibraryFolder.ORIGINALS, rel)).exists()
 	assert not Path(fs.library_path(str(library), LibraryFolder.INVALID, rel)).exists()

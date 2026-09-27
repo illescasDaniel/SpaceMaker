@@ -3,7 +3,7 @@
 ## Metadata
 
 - **Feature:** Self-contained SpaceMaker per OS + CPU; third-party CLIs **downloaded** on first run (not shipped inside the exe)
-- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-components`, Settings delete control
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-components`, Settings → Downloaded components delete control
 - **Related:** [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [legal/SPEC.md](../legal/SPEC.md)
 - **Manifest:** [packaging/third-party-manifest.yaml](../../packaging/third-party-manifest.yaml)
 - **Catalog:** [packaging/tool-catalog.json](../../packaging/tool-catalog.json)
@@ -84,7 +84,7 @@ When no portable catalog entry exists for a platform (common for libmtp), skip d
 ## UI
 
 - **Components screen** (`#view-components`): shown when any required tool is not yet resolved; per-tool status (downloading, ready downloaded, using system install, needs manual install); Continue and Retry.
-- **Settings** (`#view-settings`): managed folder path; **Delete downloaded components** removes only the managed tools directory; next launch may re-download.
+- **Settings → Downloaded components** (`#view-settings-tools`, opened from the Settings menu — [home-modules](../home-modules/SPEC.md)): managed folder path; **Delete downloaded components** removes only the managed tools directory; next launch may re-download.
 
 ## Acceptance criteria (BDD)
 
@@ -116,7 +116,7 @@ When no portable catalog entry exists for a platform (common for libmtp), skip d
 
 ### Scenario: Delete downloaded components
 
-- **Given** the user clicks **Delete downloaded components** in Settings
+- **Given** the user clicks **Delete downloaded components** under Settings → Downloaded components
 - **When** the action completes
 - **Then** the managed tools directory is removed
 - **And** system PATH tools are unchanged

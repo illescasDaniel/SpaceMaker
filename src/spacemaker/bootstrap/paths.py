@@ -134,7 +134,12 @@ def ensure_managed_tools_dir() -> Path:
 
 
 def spacemaker_data_dir(*, tools_dir: Path | None = None) -> Path:
-	return (tools_dir or managed_tools_dir()).parent
+	if tools_dir is not None:
+		return tools_dir.parent
+	override = os.environ.get("SPACEMAKER_TOOLS_DIR", "").strip()
+	if override:
+		return Path(override).expanduser().resolve().parent
+	return managed_tools_dir().parent
 
 
 def user_preferences_path(*, tools_dir: Path | None = None) -> Path:

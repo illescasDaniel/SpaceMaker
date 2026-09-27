@@ -5,6 +5,31 @@ Reference material for the AI-agent-facing tooling in this repo: the
 and durable gotchas hit while building this tooling. `AGENTS.md` covers the
 everyday commands and rules; this page is for when you need more.
 
+## MCP config — Cursor vs Claude Code
+
+`codenav` and `webnav` are registered in two host-specific config files
+(intentional duplicates, not a symlink — each host has different path
+interpolation):
+
+| File | Host | Path / project root |
+|------|------|---------------------|
+| `.mcp.json` | Claude Code | `${CLAUDE_PROJECT_DIR:-.}` |
+| `.cursor/mcp.json` | Cursor | `${workspaceFolder}` |
+
+Both pin `uv run --directory …` and the matching
+`CODENAV_MCP_WORKSPACE` / `WEBNAV_MCP_WORKSPACE` env vars. Cursor has been
+observed spawning project MCP stdio with cwd set to `$HOME`, so relative
+script paths alone fail there; Claude expands `${CLAUDE_PROJECT_DIR:-.}`
+and usually uses the project as cwd. When editing launch args or env for
+these servers, update **both** files together (same servers, different
+placeholders).
+
+Workspace root inside the Python servers is resolved by
+`mcp-servers/_shared/workspace.py`: explicit `CODENAV_MCP_WORKSPACE` /
+`WEBNAV_MCP_WORKSPACE`, then `CLAUDE_PROJECT_DIR`, then the repo root
+inferred from that module's path (so a wrong spawn cwd cannot break
+indexing).
+
 ## `codenav` MCP server
 
 `mcp-servers/codenav_mcp/` wraps `ty server` (Astral's type checker running
@@ -19,8 +44,7 @@ don't resolve symbols against `ty`, even though `ty`'s own `workspace/
 symbol` implementation answers those same queries correctly when asked
 directly over LSP. Run it standalone for manual testing with `uv run python
 mcp-servers/codenav_mcp/server.py`; point it at a different workspace via
-the `CODENAV_MCP_WORKSPACE` env var (defaults to the current working
-directory).
+the `CODENAV_MCP_WORKSPACE` env var (otherwise falls back as above).
 
 The generic JSON-RPC/LSP wire protocol (subprocess framing, request/
 response dispatch, document sync) lives in `mcp-servers/_shared/lsp_client.py`
@@ -52,7 +76,7 @@ by default (the existing `app.js` is large and untyped; flip it per-file
 with a `// @ts-check` comment to opt a file into stricter `diagnostics`).
 Run it standalone for manual testing with `uv run python
 mcp-servers/webnav_mcp/server.py`; point it at a different workspace via
-the `WEBNAV_MCP_WORKSPACE` env var.
+the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above).
 
 ## Rules — Cursor vs Claude Code
 

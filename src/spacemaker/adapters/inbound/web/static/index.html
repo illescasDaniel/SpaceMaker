@@ -18,7 +18,8 @@
 			background: var(--bg);
 			color: var(--text);
 			line-height: 1.5;
-			min-height: 100vh;
+			height: 100vh;
+			overflow: hidden;
 			display: flex;
 			flex-direction: column;
 		}
@@ -28,7 +29,15 @@
 			display: flex;
 			flex-direction: column;
 			min-height: 0;
-			padding-bottom: 4.5rem;
+			overflow: hidden;
+		}
+
+		.app-main {
+			flex: 1;
+			min-height: 0;
+			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
 		}
 
 		.top-bar {
@@ -39,6 +48,9 @@
 			border-bottom: 1px solid var(--border);
 			flex-wrap: wrap;
 			gap: 0.75rem;
+			flex-shrink: 0;
+			background: var(--bg);
+			z-index: 20;
 		}
 
 		.logo {
@@ -74,7 +86,17 @@
 			color: #fff;
 		}
 
-		.screen { display: none; padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+		/* width:100% — .app-main is a column flex; margin:auto alone shrink-wraps
+		   the screen to content, so long one-line copy (e.g. Settings confirm) widens the list. */
+		.screen {
+			display: none;
+			padding: 1.5rem;
+			max-width: 1200px;
+			margin: 0 auto;
+			width: 100%;
+			min-width: 0;
+			box-sizing: border-box;
+		}
 		.screen.active { display: block; animation: screen-fade-in var(--dur-base) var(--ease-standard); }
 
 		#view-home.screen.active {
@@ -996,24 +1018,75 @@
 			color: var(--muted);
 		}
 
-		.app-footer {
-			position: fixed;
-			left: 50%;
-			bottom: 1rem;
-			transform: translateX(-50%);
-			z-index: 40;
-			width: max-content;
-			max-width: calc(100% - 2rem);
-			margin: 0;
-			padding: 0.55rem 1.35rem;
-			text-align: center;
-			font-size: 0.85rem;
-			color: var(--muted);
-			background: color-mix(in srgb, var(--surface) 94%, transparent);
+		.settings-menu {
+			list-style: none;
+			margin: 1rem 0 0;
+			padding: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 0.65rem;
+			width: 100%;
+			min-width: 0;
+		}
+
+		.settings-menu-item {
+			display: flex;
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.35rem;
+			padding: 1rem 1.1rem;
+			background: var(--surface);
 			border: 1px solid var(--border);
 			border-radius: var(--radius);
-			box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-			backdrop-filter: blur(10px);
+			text-align: left;
+			min-width: 0;
+			max-width: 100%;
+		}
+
+		.settings-menu-item button.settings-action {
+			font: inherit;
+			font-weight: 600;
+			font-size: 1.05rem;
+			background: none;
+			border: none;
+			color: var(--text);
+			cursor: pointer;
+			padding: 0;
+			text-align: left;
+		}
+
+		.settings-menu-item button.settings-action:hover {
+			color: var(--accent);
+		}
+
+		.settings-menu-item .settings-action-desc {
+			margin: 0;
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+
+		.settings-confirm {
+			margin-top: 1rem;
+			padding: 1rem 1.1rem;
+			background: var(--warn-bg);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			min-width: 0;
+			max-width: 100%;
+			overflow-wrap: anywhere;
+		}
+
+		.settings-confirm p {
+			margin: 0 0 0.75rem;
+			min-width: 0;
+			max-width: 100%;
+			overflow-wrap: anywhere;
+		}
+
+		.settings-confirm-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
 		}
 
 		.components-screen {
@@ -1075,18 +1148,10 @@
 			margin: 1rem 0;
 		}
 
-		.app-footer button {
-			font: inherit;
-			background: none;
-			border: none;
-			color: var(--accent);
-			cursor: pointer;
-			text-decoration: underline;
-			padding: 0;
-		}
-
 		.legal-page {
 			max-width: 42rem;
+			width: 100%;
+			min-width: 0;
 		}
 
 		.legal-page h2 {
@@ -1687,8 +1752,11 @@
 		<nav class="view-tabs" aria-label="Main views">
 			<button type="button" class="active" data-view="home">Home</button>
 			<button type="button" data-view="gallery">Gallery</button>
+			<button type="button" data-view="settings">Settings</button>
 		</nav>
 	</header>
+
+	<div class="app-main">
 
 	<section id="view-components" class="screen" aria-label="Required components">
 		<div class="components-screen">
@@ -1812,7 +1880,7 @@
 				</div>
 			</div>
 			<div class="easy-compress-off-status panel-hidden" id="easy-compress-off-status">
-				<p class="status-line">Compression off — new uploads stay as received (no re-encode).</p>
+				<p class="status-line">Compression off — new uploads are saved to the gallery as received (no re-encode).</p>
 			</div>
 			<p class="status-line easy-import-issues panel-hidden" id="easy-import-issues" role="status"></p>
 			<div class="easy-view-gallery-wrap panel-hidden" id="easy-view-gallery-wrap">
@@ -2024,7 +2092,7 @@
 					<button type="button" class="btn btn-secondary" id="btn-browse-library">Browse…</button>
 				</div>
 				<p class="field-error" id="library-root-error" hidden>Choose an absolute folder path for your library.</p>
-				<p class="folder-hint">Creates <code>originals/</code> <code>converted/</code> <code>error/</code> <code>invalid/</code></p>
+				<p class="folder-hint">Creates <code>originals/</code> <code>processed/</code> <code>error/</code> <code>invalid/</code></p>
 				<p class="label">Mode</p>
 				<div class="row">
 					<button type="button" class="chip selected" id="chip-copy">Copy</button>
@@ -2051,7 +2119,7 @@
 					<h2 class="step-title" id="step2-title">Convert</h2>
 				</div>
 				<p class="status-line">
-					Images → AVIF, videos → AV1 in <code style="color: var(--accent)">converted/</code>.
+					Images → AVIF, videos → AV1 in <code style="color: var(--accent)">processed/</code>.
 					Each finished file leaves <code>originals/</code>.
 				</p>
 				<p class="status-line" id="convert-status"><strong>Status:</strong> Ready</p>
@@ -2068,7 +2136,7 @@
 						<strong><span id="alert-error-count">0</span> files failed conversion</strong> (in <code>error/</code>)
 						<p class="alert-detail" id="alert-error-detail" hidden></p>
 						<div class="alert-actions">
-							<button type="button" class="btn btn-secondary" id="btn-move-errors">Move to converted</button>
+							<button type="button" class="btn btn-secondary" id="btn-move-errors">Move to processed</button>
 						</div>
 					</div>
 				</div>
@@ -2086,7 +2154,7 @@
 					<div class="step-num">3</div>
 					<h2 class="step-title" id="step3-title">Visualize</h2>
 				</div>
-				<p class="status-line">Open the gallery from <code>converted/</code> only.</p>
+				<p class="status-line">Open the gallery from <code>processed/</code> only.</p>
 				<p class="status-line" id="visualize-status"><strong>Status:</strong> Not started</p>
 				<div class="qr-block">
 					<div class="qr-placeholder" id="qr-placeholder" role="img" aria-label="Gallery QR code"></div>
@@ -2226,10 +2294,10 @@
 		</div>
 	</section>
 
-	<!-- ABOUT & LEGAL (footer; not a top tab) -->
+	<!-- ABOUT & LEGAL (opened from Settings) -->
 	<section id="view-legal" class="screen" aria-label="About and legal">
 		<div class="legal-page">
-			<button type="button" class="btn btn-ghost legal-back" id="btn-legal-back">← Back</button>
+			<button type="button" class="btn btn-ghost legal-back" id="btn-legal-back">← Settings</button>
 			<h2>About &amp; Legal</h2>
 			<p>SpaceMaker runs on your computer. Your media stays local unless you use the optional LAN gallery on your network.</p>
 			<p id="about-app-meta" class="muted">SpaceMaker</p>
@@ -2255,10 +2323,47 @@
 
 	<section id="view-settings" class="screen" aria-label="Settings">
 		<div class="legal-page">
-			<button type="button" class="btn btn-ghost legal-back" id="btn-settings-back">← Back</button>
 			<h2>Settings</h2>
+			<ul class="settings-menu">
+				<li class="settings-menu-item">
+					<button type="button" class="settings-action" id="btn-settings-clear-prefs">Clear preferences</button>
+					<p class="settings-action-desc">Reset saved choices such as Compress media back to defaults.</p>
+					<div class="settings-confirm panel-hidden" id="settings-clear-prefs-confirm" role="group" aria-label="Confirm clear preferences">
+						<p><strong>Clear all saved preferences?</strong> Compress media and other choices return to defaults.</p>
+						<div class="settings-confirm-actions">
+							<button type="button" class="btn btn-primary" id="btn-settings-clear-prefs-confirm">Clear preferences</button>
+							<button type="button" class="btn btn-ghost" id="btn-settings-clear-prefs-cancel">Cancel</button>
+						</div>
+					</div>
+				</li>
+				<li class="settings-menu-item">
+					<button type="button" class="settings-action" id="btn-settings-reset-gallery">Reset gallery</button>
+					<p class="settings-action-desc">Delete all library media (originals, processed, error, invalid) and caches.</p>
+					<div class="settings-confirm panel-hidden" id="settings-reset-confirm" role="group" aria-label="Confirm reset gallery">
+						<p><strong>Delete all library media?</strong> This cannot be undone.</p>
+						<div class="settings-confirm-actions">
+							<button type="button" class="btn btn-primary" id="btn-settings-reset-confirm">Delete everything</button>
+							<button type="button" class="btn btn-ghost" id="btn-settings-reset-cancel">Cancel</button>
+						</div>
+					</div>
+				</li>
+				<li class="settings-menu-item">
+					<button type="button" class="settings-action" id="btn-settings-tools">Downloaded components</button>
+					<p class="settings-action-desc">Manage pinned FFmpeg, adb, and other tools SpaceMaker downloaded.</p>
+				</li>
+				<li class="settings-menu-item">
+					<button type="button" class="settings-action" id="btn-settings-legal">About &amp; Legal</button>
+					<p class="settings-action-desc">Privacy, third-party tools, and disclaimer.</p>
+				</li>
+			</ul>
+			<p class="status-line panel-hidden" id="settings-feedback" style="margin-top: 1rem;"></p>
+		</div>
+	</section>
 
-			<h3>Downloaded components</h3>
+	<section id="view-settings-tools" class="screen" aria-label="Downloaded components">
+		<div class="legal-page">
+			<button type="button" class="btn btn-ghost legal-back" id="btn-settings-tools-back">← Settings</button>
+			<h2>Downloaded components</h2>
 			<p>SpaceMaker stores pinned FFmpeg, adb, and other tools in this folder. The app uses these downloads first; your system PATH is used only after you choose <strong>Continue</strong> on the setup screen.</p>
 			<p><strong>Folder:</strong></p>
 			<p class="legal-tools-dir" id="settings-managed-tools-dir">—</p>
@@ -2271,14 +2376,8 @@
 		</div>
 	</section>
 
-	</div>
-
-	<footer class="app-footer">
-		SpaceMaker · local backup &amp; convert ·
-		<button type="button" id="btn-footer-settings">Settings</button>
-		·
-		<button type="button" id="btn-footer-legal">About &amp; Legal</button>
-	</footer>
+	</div><!-- .app-main -->
+	</div><!-- .app-shell -->
 
 	<script>window.SPACEMAKER_SHELL = "desktop";</script>
 	<script src="/static/app.js"></script>

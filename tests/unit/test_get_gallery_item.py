@@ -13,7 +13,7 @@ def test_given_converted_file_when_get_item_then_returns_detail(tmp_path) -> Non
 	library = str(tmp_path / "lib")
 	fs = LocalFileSystem()
 	fs.ensure_library_folders(library)
-	path = fs.library_path(library, LibraryFolder.CONVERTED, "photo.avif")
+	path = fs.library_path(library, LibraryFolder.PROCESSED, "photo.avif")
 	Path(path).write_bytes(b"x")
 	when = datetime(2025, 9, 4, 12, 0, 0)
 	use_case = GetGalleryItem(fs, FakeMediaProbe())
