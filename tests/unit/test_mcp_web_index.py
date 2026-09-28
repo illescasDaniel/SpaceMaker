@@ -85,12 +85,23 @@ def test_given_js_setproperty_and_getpropertyvalue_when_scan_then_usage_recorded
 	assert usages[1].line == 2
 
 
-def test_given_two_roots_when_build_workspace_index_then_kept_separate(tmp_path):
+def test_given_no_roots_arg_when_build_workspace_index_then_single_default_root_over_whole_tree(tmp_path):
 	# given
-	_write(tmp_path / web_index.STATIC_ROOT_REL / "theme.css", ":root {\n\t--bg: #fff;\n}\n")
-	_write(tmp_path / web_index.WIREFRAME_ROOT_REL / "app.html", "<style>\n:root {\n\t--bg: #eee;\n}\n</style>\n")
+	_write(tmp_path / "theme.css", ":root {\n\t--bg: #fff;\n}\n")
 	# when
 	indexes = web_index.build_workspace_index(tmp_path)
+	# then
+	assert [i.name for i in indexes] == [web_index.DEFAULT_ROOT_LABEL]
+	assert indexes[0].var_declarations["--bg"][0].value == "#fff"
+
+
+def test_given_explicit_roots_list_when_build_workspace_index_then_kept_separate(tmp_path):
+	# given
+	_write(tmp_path / "static" / "theme.css", ":root {\n\t--bg: #fff;\n}\n")
+	_write(tmp_path / "wireframes" / "app.html", "<style>\n:root {\n\t--bg: #eee;\n}\n</style>\n")
+	roots = [("static", tmp_path / "static"), ("wireframes", tmp_path / "wireframes")]
+	# when
+	indexes = web_index.build_workspace_index(tmp_path, roots)
 	# then
 	static_idx = next(i for i in indexes if i.name == "static")
 	wireframe_idx = next(i for i in indexes if i.name == "wireframes")
@@ -98,11 +109,29 @@ def test_given_two_roots_when_build_workspace_index_then_kept_separate(tmp_path)
 	assert wireframe_idx.var_declarations["--bg"][0].value == "#eee"
 
 
+def test_given_roots_env_string_when_parse_roots_env_then_labels_map_to_absolute_paths(tmp_path):
+	# given
+	raw = "static=src/static,wireframes=wireframes"
+	# when
+	roots = web_index.parse_roots_env(raw, tmp_path)
+	# then
+	assert roots == [
+		("static", (tmp_path / "src" / "static").resolve()),
+		("wireframes", (tmp_path / "wireframes").resolve()),
+	]
+
+
+def test_given_entry_without_equals_when_parse_roots_env_then_raises(tmp_path):
+	# given / when / then
+	with pytest.raises(ValueError, match="label=relative/path"):
+		web_index.parse_roots_env("static", tmp_path)
+
+
 def test_given_var_declared_and_used_when_format_css_var_then_grouped_by_root(tmp_path):
 	# given
-	_write(tmp_path / web_index.STATIC_ROOT_REL / "theme.css", ":root {\n\t--bg: #fff;\n}\n")
-	_write(tmp_path / web_index.STATIC_ROOT_REL / "shell.css", ".x { background: var(--bg); }\n")
-	indexes = web_index.build_workspace_index(tmp_path)
+	_write(tmp_path / "static" / "theme.css", ":root {\n\t--bg: #fff;\n}\n")
+	_write(tmp_path / "static" / "shell.css", ".x { background: var(--bg); }\n")
+	indexes = web_index.build_workspace_index(tmp_path, [("static", tmp_path / "static")])
 	# when
 	text = web_index.format_css_var(indexes, "bg")
 	# then
@@ -114,11 +143,12 @@ def test_given_var_declared_and_used_when_format_css_var_then_grouped_by_root(tm
 
 def test_given_var_never_defined_or_used_when_format_css_var_then_says_not_found(tmp_path):
 	# given
-	indexes = web_index.build_workspace_index(tmp_path)
+	indexes = web_index.build_workspace_index(tmp_path, [("static", tmp_path / "static")])
 	# when
 	text = web_index.format_css_var(indexes, "--nope")
 	# then
 	assert "not defined or used" in text
+	assert "static" in text
 
 
 def test_given_var_without_fallback_and_no_declaration_when_diagnostics_for_file_then_warns(tmp_path):
@@ -253,15 +283,79 @@ def test_given_css_rule_referenced_in_html_when_diagnostics_for_file_then_no_war
 	assert warnings == []
 
 
-def test_given_only_dynamic_js_hit_when_unreferenced_selectors_then_still_flagged(tmp_path):
-	# given
+def test_given_only_dynamic_js_hit_when_unreferenced_selectors_then_not_flagged(tmp_path):
+	# given: a dynamic prefix hit (`#view-`) is a plausible reference to any
+	# id it's a prefix of, so it suppresses the "never referenced" warning.
 	_write(tmp_path / "a.css", "#view-gallery { display: block; }\n")
 	_write(tmp_path / "app.js", 'document.getElementById("view-" + name);\n')
 	idx = web_index.build_root_index(tmp_path, "static")
 	# when
 	unreferenced = web_index.unreferenced_selectors(idx)
 	# then
-	assert "#view-gallery" in unreferenced
+	assert "#view-gallery" not in unreferenced
+
+
+def test_given_class_attr_inside_js_string_literal_when_scan_js_then_recorded(tmp_path):
+	# given
+	_write(tmp_path / "app.js", "el.innerHTML = '<span class=\"gallery-loading-spinner\">x</span>';\n")
+	# when
+	idx = web_index.build_root_index(tmp_path, "static")
+	# then
+	hit = idx.selector_hits[".gallery-loading-spinner"][0]
+	assert hit.kind == "js"
+	assert hit.detail == "class attribute in JS string"
+
+
+def test_given_id_attr_inside_js_string_literal_when_scan_js_then_recorded(tmp_path):
+	# given
+	_write(tmp_path / "app.js", "el.innerHTML = \"<div id='gallery-root'></div>\";\n")
+	# when
+	idx = web_index.build_root_index(tmp_path, "static")
+	# then
+	hit = idx.selector_hits["#gallery-root"][0]
+	assert hit.kind == "js"
+	assert hit.detail == "id attribute in JS string"
+
+
+def test_given_classname_assign_with_concatenation_when_scan_js_then_last_token_dynamic(tmp_path):
+	# given
+	_write(tmp_path / "app.js", 'el.className = "tool-status resolution-" + kind;\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "static")
+	# then
+	assert idx.selector_hits[".tool-status"][0].dynamic is False
+	assert idx.selector_hits[".resolution-"][0].dynamic is True
+
+
+def test_given_classlist_add_with_concatenation_when_scan_js_then_tagged_dynamic(tmp_path):
+	# given
+	_write(tmp_path / "app.js", 'el.classList.add("is-" + state);\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "static")
+	# then
+	hit = idx.selector_hits[".is-"][0]
+	assert hit.dynamic is True
+	assert hit.detail == "classList.add"
+
+
+def test_given_trailing_space_before_concatenation_when_scan_js_then_not_dynamic(tmp_path):
+	# given: a trailing space means the concatenation starts a fresh class
+	# name, not a suffix of "tool-status".
+	_write(tmp_path / "app.js", 'el.className = "tool-status " + extra;\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "static")
+	# then
+	assert idx.selector_hits[".tool-status"][0].dynamic is False
+
+
+def test_given_dynamic_prefix_hit_when_format_selector_then_surfaced_as_partial_match(tmp_path):
+	# given
+	_write(tmp_path / "app.js", 'document.getElementById("view-" + resolved);\n')
+	idx = web_index.build_root_index(tmp_path, "static")
+	# when
+	text = web_index.format_selector([idx], "#view-gallery")
+	# then
+	assert "dynamic partial match via '#view-'" in text
 
 
 @pytest.mark.parametrize("token", ["#foo", ".foo"])

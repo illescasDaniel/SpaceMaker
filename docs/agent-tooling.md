@@ -30,6 +30,21 @@ Workspace root inside the Python servers is resolved by
 inferred from that module's path (so a wrong spawn cwd cannot break
 indexing).
 
+Both servers are written to be reusable outside this repo (they may ship as
+standalone tools for other projects some day), so every SpaceMaker-specific
+assumption is pushed into **this repo's own `.mcp.json`/`.cursor/mcp.json`
+env vars**, not hardcoded in the server source — following the same
+override-with-sane-default shape as `CODENAV_MCP_WORKSPACE`/
+`WEBNAV_MCP_WORKSPACE` above:
+
+| Env var | Server | Default (generic) | This repo's value |
+|---|---|---|---|
+| `CODENAV_MCP_SOURCE_ROOT` | codenav | the whole workspace | `src` (scopes/speeds up `implementations`' class scan and import-path derivation) |
+| `WEBNAV_MCP_ROOTS` | webnav | one unnamed root spanning the whole workspace | `static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes` (keeps production assets and UX wireframes reported separately) |
+
+A project that unsets these gets a working, if less scoped/labeled, default
+rather than an error or a SpaceMaker-shaped assumption.
+
 ## Why no MCP prompts/resources
 
 Neither server exposes MCP prompts or resources, and this is deliberate, not
@@ -102,12 +117,24 @@ codebase's hexagonal ports: ports are `Protocol`s and adapters never
 explicitly subclass them (`LocalFileSystem` vs `FileSystemPort`), so
 structural typing means there's no nominal edge for the language server to
 walk. `implementations(port_name)` answers this "which adapters implement
-this port?" question — the most common lookup in a hexagonal codebase — in
-two stages:
+this port?" question — the most common lookup in a hexagonal codebase.
 
-1. **Candidates**: classes under `src/` (excluding `ports/`) whose method
+`port_name` must itself resolve to a `Protocol`: `_protocol_class_names()`
+parses the defining file with `ast` (`documentSymbol` doesn't expose base
+classes) and checks whether the class's bases include `Protocol`,
+`typing.Protocol`/`typing_extensions.Protocol`, or a subscripted
+`Protocol[T]`. If it doesn't — a plain class like `AppServices` — the tool
+returns an explanation instead of a (meaningless) result, pointing at
+`symbol_info`/`references` for explicit-subclass lookups.
+
+Answering then happens in two stages:
+
+1. **Candidates**: classes under `SOURCE_ROOT` (see below) whose method
    names, from `documentSymbol`, are a superset of the Protocol's own
-   method names.
+   method names — excluding the port itself (same file + name) and any
+   candidate that is itself a Protocol (e.g. a narrower Protocol that
+   happens to share method names, which would otherwise "implement" a
+   broader one).
 2. **Verification**: for each candidate, `didOpen` an in-memory probe
    document at `<root>/.codenav_probe.py` (an `LspClient` scratch document —
    `open_scratch_document`/`change_scratch_document`/`close_scratch_document`
@@ -123,6 +150,24 @@ under load (~86 concurrent requests for this codebase's size); the fix is to
 await them sequentially in a loop instead — still well under a second for
 this codebase, and it avoids the error entirely.
 
+`SOURCE_ROOT` (the directory `implementations`' candidate scan and
+`_module_path`'s dotted-import derivation both work under) is generic by
+default — the whole workspace — and overridable per project via
+`CODENAV_MCP_SOURCE_ROOT`, the same override-with-default shape as
+`CODENAV_MCP_WORKSPACE`. This repo sets it to `src` in `.mcp.json`/
+`.cursor/mcp.json` to keep the candidate scan scoped and fast; a file
+outside `SOURCE_ROOT` still works for other tools, `_module_path` just
+can't derive a dotted import path for it. Nothing SpaceMaker-specific (no
+`ports/`-directory exclusion, no `src/` literal) remains in the server
+source itself — see "Portability" above.
+
+Name resolution (`resolve_symbol` in `_shared/resolve.py`, used by
+`symbol_info`/`callers`/`implementations`) prefers a case-exact match over a
+case-insensitive one when both exist for the same query — e.g. `repo_root`
+resolves to the module-level function of that exact name rather than tying
+with `REPO_ROOT`. Case-insensitive matches are only considered when no
+case-exact one is available.
+
 It's a purpose-built client, not a generic LSP bridge: `mcp-language-
 server`'s name-based `definition`/`references` tools were tried first and
 don't resolve symbols against `ty`, even though `ty`'s own `workspace/
@@ -137,6 +182,15 @@ as `LspClient`, shared with `webnav` below. Only the `ty`-specific launch
 command (`mcp-servers/codenav_mcp/ty_command.py`) and languageId are
 codenav's own. Location formatting (`path:line:col` headers + snippets)
 lives in `mcp-servers/_shared/format.py`.
+
+`references` (both servers) uses `format_references()`: at or under
+`DEFAULT_REFERENCES_SNIPPET_LIMIT` (8) hits, each gets its own
+`path:line:col` header and a short source snippet, same as `definition`.
+Above that threshold — a widely-used symbol can have dozens of call sites —
+it switches to a compact, file-grouped list with a `(compact list: N > 8
+hits)` header and `L<line>:<col>` entries per file instead of full snippets,
+so a single broad query doesn't flood the response; the line:col pairs are
+still enough to follow up with a targeted `definition`/`hover` call.
 
 ### Positioning (codenav and webnav)
 
@@ -219,10 +273,18 @@ grade. It rescans on every call rather than caching — about 20 files total
 across both roots, a few ms — so there's no cache-invalidation story to get
 wrong.
 
-Two roots are indexed and reported **separately**:
-`src/spacemaker/adapters/inbound/web/static/` (production, `vendor/`
-skipped) and `wireframes/` (UX layout truth) — they define their own
-values/markup, so mixing them into one answer would be misleading.
+Which roots get indexed, and under what labels, is generic and
+project-configurable via `WEBNAV_MCP_ROOTS` (a comma-separated list of
+`label=relative/path` pairs), parsed once in `server.py` and passed into
+`web_index.build_workspace_index(workspace_root, roots)`; `web_index.py`
+itself has no SpaceMaker-specific paths. Unset, it defaults to a single
+unnamed root spanning the whole workspace (minus `node_modules`/`.git`/
+`vendor`) — a reasonable default for a project with no such split. **This
+repo** sets `WEBNAV_MCP_ROOTS` in `.mcp.json`/`.cursor/mcp.json` to index
+two roots **separately**: `src/spacemaker/adapters/inbound/web/static/`
+(production, `vendor/` skipped) and `wireframes/` (UX layout truth) — they
+define their own values/markup, so mixing them into one answer would be
+misleading.
 
 - **`css_var(name)`**: definitions (value + enclosing context, e.g.
   `@media (prefers-color-scheme: dark) › :root`) and usages, grouped by file
@@ -245,16 +307,33 @@ values/markup, so mixing them into one answer would be misleading.
   referenced in <root>'s HTML/JS` for a CSS rule with no matching markup or
   script use.
 
-**Known limitations** (accepted, not bugs): a JS selector built from string
-concatenation (e.g. `getElementById("view-" + resolved)`, one real case at
-`app.js`) is recorded against only its static string prefix and tagged
-"dynamic partial match" rather than silently dropped or guessed at the full
-value — and a dynamic hit never counts as a reference for the unreferenced-
-selector diagnostic, to avoid false negatives. Selectors built from multiple
-concatenated variables, or referenced only via inline event-handler
-attributes (none exist in this codebase), aren't resolved at all. The
-brace-stack CSS parser doesn't account for `{`/`}` appearing inside a CSS
-string value (none occur in this codebase either).
+Markup is scanned wherever it can plausibly appear: `.html` files, and also
+`class="..."`/`id="..."` attributes embedded inside JS string literals
+(e.g. `el.innerHTML = '<span class="gallery-loading-spinner">…'`) — both
+single- and double-quoted, so which quote style the surrounding JS string
+uses doesn't matter.
+
+A JS selector built from string concatenation (e.g.
+`getElementById("view-" + resolved)`, `className = "tool-status
+resolution-" + x`, `classList.add("is-" + s)`) is recorded against only its
+static string prefix and tagged `dynamic=True`, rather than silently
+dropped or guessed at the full runtime value. A dynamic hit **does** count
+as a reference for any longer token it's a prefix of:
+`unreferenced_selectors()` won't flag `#view-gallery` as unused when
+`#view-` has a dynamic hit elsewhere, since the runtime value could
+plausibly be that one — this trades a (rare) false negative for not
+crying wolf on every dynamically-built id/class in the codebase. The same
+`_dynamic_prefix_hits()` lookup surfaces the other direction too:
+`selector("#view-components")` lists the `#view-` dynamic hit as a
+`dynamic partial match via '#view-'`, since it's a plausible source for
+that id at runtime, in addition to any exact hits.
+
+**Known limitations** (accepted, not bugs): selectors built from multiple
+concatenated variables, template literals (`` `view-${x}` ``), or
+referenced only via inline event-handler attributes (none of these occur in
+this codebase) aren't resolved at all. The brace-stack CSS parser doesn't
+account for `{`/`}` appearing inside a CSS string value (none occur in this
+codebase either).
 
 ## Rules — Cursor vs Claude Code
 

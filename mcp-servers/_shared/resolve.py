@@ -117,6 +117,13 @@ async def _exact_candidates(
 	symbols = await client.workspace_symbol(name)
 	ranked = rank_workspace_symbols(symbols, name)
 	exact = [s for s in ranked if _match_tier(str(s.get("name") or ""), name) <= 1]
+	# Prefer a case-exact match (tier 0) over a merely case-insensitive one
+	# (tier 1) when both exist, e.g. `repo_root` vs. a `REPO_ROOT` constant
+	# elsewhere in the workspace — an agent asking for the lowercase name
+	# almost always means the exact symbol, not an unrelated same-letters one.
+	case_exact = [s for s in exact if _match_tier(str(s.get("name") or ""), name) == 0]
+	if case_exact:
+		exact = case_exact
 	if file_path is not None:
 		narrowed = [s for s in exact if _matches_file(s, workspace_root, file_path)]
 		if narrowed:

@@ -248,29 +248,64 @@ DEFAULT_REFERENCE_FILE_LIMIT = 25
 
 
 def format_references_grouped(
-	locations: list[dict[str, Any]], workspace_root: Path, *, file_limit: int = DEFAULT_REFERENCE_FILE_LIMIT
+	locations: list[dict[str, Any]],
+	workspace_root: Path,
+	*,
+	file_limit: int = DEFAULT_REFERENCE_FILE_LIMIT,
+	with_columns: bool = False,
 ) -> str:
 	"""Compact `path: L12, L40, …` grouping (no snippets) for `symbol_info`, where
 	full per-location snippets (as `format_location` gives `references`) would
-	make a one-call summary too long to be useful."""
+	make a one-call summary too long to be useful.
+
+	`with_columns=True` (used by `format_references`'s compact fallback) keeps
+	the column alongside each line (`L12:4`) so a follow-up position-based call
+	(hover/definition) can still target the hit precisely."""
 	if not locations:
 		return "No references found."
-	groups: dict[str, set[int]] = {}
+	groups: dict[str, set[tuple[int, int]]] = {}
 	for loc in locations:
 		uri = loc.get("uri") or loc.get("targetUri", "")
 		rng = _location_range(loc)
-		start_line = int((rng.get("start") or {}).get("line", 0)) + 1
+		start = rng.get("start") or {}
+		start_line = int(start.get("line", 0)) + 1
+		start_col = int(start.get("character", 0)) + 1
 		rel = uri_to_relative(uri, workspace_root)
-		groups.setdefault(rel, set()).add(start_line)
+		groups.setdefault(rel, set()).add((start_line, start_col))
 	total = sum(len(nums) for nums in groups.values())
 	files = sorted(groups.items())
 	shown = files[:file_limit]
+
+	def _tag(line: int, col: int) -> str:
+		return f"L{line}:{col}" if with_columns else f"L{line}"
+
 	lines = [f"{total} reference(s) in {len(files)} file(s):"]
-	lines += [f"{path}: " + ", ".join(f"L{n}" for n in sorted(nums)) for path, nums in shown]
+	lines += [f"{path}: " + ", ".join(_tag(n, c) for n, c in sorted(nums)) for path, nums in shown]
 	omitted = len(files) - len(shown)
 	if omitted > 0:
 		lines.append(f"… and {omitted} more file(s)")
 	return "\n".join(lines)
+
+
+DEFAULT_REFERENCES_SNIPPET_LIMIT = 8
+
+
+def format_references(
+	locations: list[dict[str, Any]],
+	workspace_root: Path,
+	*,
+	snippet_limit: int = DEFAULT_REFERENCES_SNIPPET_LIMIT,
+) -> str:
+	"""Full per-location snippets (`format_location`) for a small number of
+	hits; above `snippet_limit`, falls back to the compact grouped listing
+	(`format_references_grouped`, with columns) so a symbol like `showView`
+	with 20+ call sites doesn't flood the reply with 100+ lines of context."""
+	if not locations:
+		return "No references found at that position."
+	if len(locations) <= snippet_limit:
+		return "\n\n".join(format_location(loc, workspace_root) for loc in locations)
+	grouped = format_references_grouped(locations, workspace_root, with_columns=True)
+	return f"(compact list: {len(locations)} > {snippet_limit} hits)\n{grouped}"
 
 
 def is_hierarchical_document_symbols(symbols: list[dict[str, Any]]) -> bool:
@@ -317,7 +352,9 @@ def _nest_symbol_information(symbols: list[dict[str, Any]]) -> list[dict[str, An
 	roots: list[dict[str, Any]] = []
 	stack: list[dict[str, Any]] = []
 	for node in nodes:
-		while stack and not (stack[-1]["start_line"] <= node["start_line"] and node["end_line"] <= stack[-1]["end_line"]):
+		while stack and not (
+			stack[-1]["start_line"] <= node["start_line"] and node["end_line"] <= stack[-1]["end_line"]
+		):
 			stack.pop()
 		(stack[-1]["children"] if stack else roots).append(node)
 		stack.append(node)

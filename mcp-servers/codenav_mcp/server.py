@@ -17,6 +17,7 @@ Run standalone for manual testing:
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import sys
 from pathlib import Path
@@ -32,6 +33,7 @@ from _shared.format import (  # noqa: E402
 	format_diagnostics,
 	format_location,
 	format_outline,
+	format_references,
 	format_references_grouped,
 	format_workspace_symbols,
 	symbol_kind_label,
@@ -40,12 +42,16 @@ from _shared.format import (  # noqa: E402
 )
 from _shared.lsp_client import LspClient  # noqa: E402
 from _shared.resolve import resolve_symbol  # noqa: E402
-from _shared.workspace import resolve_workspace_root  # noqa: E402
+from _shared.workspace import resolve_source_root, resolve_workspace_root  # noqa: E402
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 from ty_command import resolve_ty_command  # noqa: E402
 
 
 WORKSPACE_ROOT = resolve_workspace_root("CODENAV_MCP_WORKSPACE")
+# Root for import-path derivation and implementations' workspace-wide class
+# scan. Defaults to the whole workspace; set CODENAV_MCP_SOURCE_ROOT (e.g. to
+# "src") in a project's MCP config to scope/speed up the scan.
+SOURCE_ROOT = resolve_source_root("CODENAV_MCP_SOURCE_ROOT", WORKSPACE_ROOT)
 
 _POSITION_NOTE = (
 	"Positions are 1-indexed. `column` is a UTF-16 character offset on the "
@@ -161,9 +167,7 @@ async def references(file_path: str, line: int, column: int, include_declaration
 		locations = await client.references(file_path, line, column, include_declaration=include_declaration)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
-	if not locations:
-		return "No references found at that position."
-	return "\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in locations)
+	return format_references(locations, WORKSPACE_ROOT)
 
 
 @mcp.tool()
@@ -272,14 +276,49 @@ async def callers(name: str, file_path: str | None = None) -> str:
 
 
 def _module_path(abs_path: Path) -> str:
-	"""Dotted import path for a file under `src/` (this project's source root)."""
-	rel = abs_path.relative_to(WORKSPACE_ROOT / "src")
+	"""Dotted import path for a file under `SOURCE_ROOT`."""
+	try:
+		rel = abs_path.relative_to(SOURCE_ROOT)
+	except ValueError as exc:
+		raise ToolInputError(
+			f"{abs_path} is outside the source root ({SOURCE_ROOT}); "
+			"set CODENAV_MCP_SOURCE_ROOT if this project's importable code "
+			"lives under a different directory."
+		) from exc
 	parts = rel.with_suffix("").parts
 	if parts and parts[-1] == "__init__":
 		parts = parts[:-1]
 	if not parts:
 		raise ToolInputError(f"cannot derive an import path for {abs_path}")
 	return ".".join(parts)
+
+
+def _is_protocol_base(base: ast.expr) -> bool:
+	"""`Protocol`, `typing.Protocol`/`typing_extensions.Protocol`, or a
+	subscripted `Protocol[T]` — `documentSymbol` doesn't expose base classes,
+	so `implementations` parses the source directly to tell a Protocol port
+	apart from an ordinary class."""
+	if isinstance(base, ast.Subscript):
+		base = base.value
+	if isinstance(base, ast.Name):
+		return base.id == "Protocol"
+	if isinstance(base, ast.Attribute):
+		return base.attr == "Protocol"
+	return False
+
+
+def _protocol_class_names(source: str) -> set[str]:
+	"""Names of every class in `source` (at any nesting level) that subclasses
+	`Protocol`."""
+	try:
+		tree = ast.parse(source)
+	except SyntaxError:
+		return set()
+	return {
+		node.name
+		for node in ast.walk(tree)
+		if isinstance(node, ast.ClassDef) and any(_is_protocol_base(base) for base in node.bases)
+	}
 
 
 def _method_names(cls_node: dict[str, Any]) -> set[str]:
@@ -309,20 +348,29 @@ def _probe_source(port_module: str, port_name: str, candidate_module: str, candi
 async def implementations(port_name: str) -> str:
 	"""Find concrete classes that structurally satisfy a `Protocol` port.
 
-	This codebase's ports are `Protocol`s and adapters never subclass them
-	explicitly, so ty's own `implementation`/`typeHierarchy` return nothing
-	for them. This scans classes under `src/` (excluding `ports/`) whose
-	method names cover the protocol's, then verifies each candidate with ty's
-	real type checker via an in-memory probe file (never written to disk) —
-	so a result means "assignable", not just "same method names".
+	Many hexagonal codebases define ports as `Protocol`s that adapters never
+	subclass explicitly, so ty's own `implementation`/`typeHierarchy` return
+	nothing for them. This scans classes under SOURCE_ROOT (the whole
+	workspace by default; see CODENAV_MCP_SOURCE_ROOT) whose method names
+	cover the protocol's, then verifies each candidate with ty's real type
+	checker via an in-memory probe file (never written to disk) — so a
+	result means "assignable", not just "same method names". `port_name`
+	must itself resolve to a `Protocol` class; other classes' subclasses are
+	better found with `references`/`symbol_info`.
 	"""
 	try:
 		client = await get_client()
 		port = await resolve_symbol(client, WORKSPACE_ROOT, port_name)
 		port_rel_path = uri_to_relative(port.uri, WORKSPACE_ROOT)
 		port_symbols = await client.document_symbol(port_rel_path)
+		port_source = (WORKSPACE_ROOT / port_rel_path).read_text(encoding="utf-8")
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
+	if port.name not in _protocol_class_names(port_source):
+		return (
+			f"{port.name!r} is not a Protocol; implementations only finds structural "
+			"implementers of Protocol ports (use symbol_info/references for explicit subclasses)."
+		)
 	port_class = next(
 		(n for n in to_symbol_tree(port_symbols) if n["kind"] == 5 and n["name"] == port.name),  # Class
 		None,
@@ -335,11 +383,7 @@ async def implementations(port_name: str) -> str:
 
 	try:
 		port_module = _module_path(WORKSPACE_ROOT / port_rel_path)
-		candidate_files = sorted(
-			p
-			for p in (WORKSPACE_ROOT / "src").rglob("*.py")
-			if "ports" not in p.relative_to(WORKSPACE_ROOT / "src").parts
-		)
+		candidate_files = sorted(SOURCE_ROOT.rglob("*.py"))
 		# Sequential, not `asyncio.gather`: firing ~90 concurrent documentSymbol
 		# requests at ty made it respond with a "content modified" LSP error;
 		# sequential stays fast (under a second for this codebase's size).
@@ -347,14 +391,24 @@ async def implementations(port_name: str) -> str:
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 
+	port_abs_path = (WORKSPACE_ROOT / port_rel_path).resolve()
 	name_matches: list[tuple[Path, str, str]] = []  # (path, class name, module path)
 	for path, symbols in zip(candidate_files, symbol_lists, strict=True):
+		try:
+			candidate_source = path.read_text(encoding="utf-8")
+		except OSError:
+			continue
+		other_protocols = _protocol_class_names(candidate_source)
 		for cls_node in (n for n in to_symbol_tree(symbols) if n["kind"] == 5):
+			if path.resolve() == port_abs_path and cls_node["name"] == port.name:
+				continue  # the port never "implements" itself
+			if cls_node["name"] in other_protocols:
+				continue  # another Protocol, not a concrete implementer
 			if port_method_names <= _method_names(cls_node):
 				name_matches.append((path, cls_node["name"], _module_path(path)))
 
 	if not name_matches:
-		return f"No classes under src/ (excluding ports/) cover {port.name}'s methods: {', '.join(sorted(port_method_names))}."
+		return f"No classes under {SOURCE_ROOT} cover {port.name}'s methods: {', '.join(sorted(port_method_names))}."
 
 	probe_uri = (WORKSPACE_ROOT / _PROBE_RELATIVE_PATH).as_uri()
 	verified: list[str] = []

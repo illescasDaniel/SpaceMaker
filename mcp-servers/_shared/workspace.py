@@ -21,3 +21,17 @@ def resolve_workspace_root(explicit_env: str) -> Path:
 		if raw:
 			return Path(raw).expanduser().resolve()
 	return _REPO_ROOT
+
+
+def resolve_source_root(explicit_env: str, workspace_root: Path) -> Path:
+	"""Root directory for import-path derivation and workspace-wide class
+	scanning (codenav's `implementations`). Not every project keeps its
+	source under `src/`, so default to the workspace root itself (scan
+	everything) rather than assuming a layout; a project that wants a
+	narrower/faster scan sets `explicit_env` (e.g. to `src`) in its MCP
+	server config."""
+	raw = os.environ.get(explicit_env)
+	if raw:
+		path = Path(raw)
+		return path if path.is_absolute() else (workspace_root / path).resolve()
+	return workspace_root

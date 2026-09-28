@@ -20,6 +20,7 @@ from _shared.format import (  # noqa: E402
 	format_diagnostics,
 	format_location,
 	format_outline,
+	format_references,
 	format_references_grouped,
 	format_workspace_symbol,
 	format_workspace_symbols,
@@ -31,8 +32,9 @@ from _shared.format import (  # noqa: E402
 )
 from _shared.lsp_client import LanguageServerExitedError, LspClient, LspRequestError  # noqa: E402
 from _shared.resolve import SymbolResolutionError, resolve_symbol  # noqa: E402
-from _shared.workspace import resolve_workspace_root  # noqa: E402
-from codenav_mcp.server import _check_python_file  # noqa: E402
+from _shared.workspace import resolve_source_root, resolve_workspace_root  # noqa: E402
+from codenav_mcp import server as codenav_server  # noqa: E402
+from codenav_mcp.server import _check_python_file, _protocol_class_names  # noqa: E402
 
 
 def test_given_location_when_format_then_header_includes_line_and_column(tmp_path):
@@ -695,6 +697,40 @@ def test_given_more_files_than_limit_when_format_references_grouped_then_notes_o
 	assert lines[-1] == "… and 1 more file(s)"
 
 
+def test_given_locations_at_or_under_limit_when_format_references_then_full_snippets(tmp_path):
+	# given
+	locs = [
+		{"uri": (tmp_path / "a.py").as_uri(), "range": {"start": {"line": 0, "character": 0}}},
+		{"uri": (tmp_path / "b.py").as_uri(), "range": {"start": {"line": 2, "character": 0}}},
+	]
+	# when
+	text = format_references(locs, tmp_path, snippet_limit=2)
+	# then
+	assert text == "\n\n".join(format_location(loc, tmp_path) for loc in locs)
+
+
+def test_given_locations_over_limit_when_format_references_then_compact_grouped_with_columns(tmp_path):
+	# given
+	locs = [
+		{"uri": (tmp_path / "a.py").as_uri(), "range": {"start": {"line": 0, "character": 4}}},
+		{"uri": (tmp_path / "a.py").as_uri(), "range": {"start": {"line": 5, "character": 0}}},
+		{"uri": (tmp_path / "b.py").as_uri(), "range": {"start": {"line": 2, "character": 0}}},
+	]
+	# when
+	text = format_references(locs, tmp_path, snippet_limit=2)
+	# then
+	assert text.splitlines() == [
+		"(compact list: 3 > 2 hits)",
+		"3 reference(s) in 2 file(s):",
+		"a.py: L1:5, L6:1",
+		"b.py: L3:1",
+	]
+
+
+def test_given_no_locations_when_format_references_then_message(tmp_path):
+	assert format_references([], tmp_path) == "No references found at that position."
+
+
 class _FakeResolveClient:
 	"""Duck-typed stand-in for LspClient: resolve_symbol only calls
 	`workspace_symbol`/`document_symbol`, both trivial to fake for these tests."""
@@ -774,6 +810,28 @@ def test_given_file_path_when_two_exact_matches_then_narrows_to_match(tmp_path):
 	assert resolved.uri == uri_b
 
 
+def test_given_case_exact_and_case_insensitive_match_when_resolve_symbol_then_prefers_exact_case(tmp_path):
+	# given: `repo_root` (a function) and `REPO_ROOT` (a constant elsewhere)
+	# both match case-insensitively; asking for the lowercase name should
+	# resolve straight to the case-exact one instead of raising ambiguous.
+	uri_exact = (tmp_path / "a.py").as_uri()
+	uri_other = (tmp_path / "b.py").as_uri()
+	range_ = {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 9}}
+	exact = {"name": "repo_root", "kind": 12, "location": {"uri": uri_exact, "range": range_}, "selectionRange": range_}
+	other_case = {
+		"name": "REPO_ROOT",
+		"kind": 13,
+		"location": {"uri": uri_other, "range": range_},
+		"selectionRange": range_,
+	}
+	client = _FakeResolveClient([exact, other_case])
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "repo_root"))
+	# then
+	assert resolved.name == "repo_root"
+	assert resolved.uri == uri_exact
+
+
 def test_given_dotted_query_when_hierarchical_members_then_finds_child_node(tmp_path):
 	# given
 	uri = (tmp_path / "svc.py").as_uri()
@@ -844,3 +902,54 @@ def test_given_dotted_query_when_member_missing_then_raises(tmp_path):
 	# when / then
 	with pytest.raises(SymbolResolutionError):
 		asyncio.run(resolve_symbol(client, tmp_path, "AppServices.missing_method"))
+
+
+def test_given_plain_protocol_base_when_protocol_class_names_then_included():
+	source = "from typing import Protocol\n\nclass Port(Protocol):\n\tdef run(self) -> None: ...\n"
+	assert _protocol_class_names(source) == {"Port"}
+
+
+def test_given_qualified_protocol_base_when_protocol_class_names_then_included():
+	source = "import typing\n\nclass Port(typing.Protocol):\n\tdef run(self) -> None: ...\n"
+	assert _protocol_class_names(source) == {"Port"}
+
+
+def test_given_subscripted_protocol_base_when_protocol_class_names_then_included():
+	source = "from typing import Protocol\nfrom typing import TypeVar\n\nT = TypeVar('T')\n\nclass Port(Protocol[T]):\n\tpass\n"
+	assert _protocol_class_names(source) == {"Port"}
+
+
+def test_given_non_protocol_class_when_protocol_class_names_then_excluded():
+	source = "class AppServices:\n\tdef run(self) -> None: ...\n"
+	assert _protocol_class_names(source) == set()
+
+
+def test_given_nested_protocol_class_when_protocol_class_names_then_found_at_any_depth():
+	source = "from typing import Protocol\n\nclass Outer:\n\tclass Inner(Protocol):\n\t\tdef run(self) -> None: ...\n"
+	assert _protocol_class_names(source) == {"Inner"}
+
+
+def test_given_no_source_root_env_when_module_loaded_then_source_root_defaults_to_workspace_root():
+	# codenav_mcp.server reads CODENAV_MCP_SOURCE_ROOT once at import time; in
+	# a plain test environment (no .mcp.json-injected env) it should fall back
+	# to scanning/deriving import paths against the whole workspace, not a
+	# hardcoded "src" layout.
+	assert codenav_server.SOURCE_ROOT == codenav_server.WORKSPACE_ROOT
+
+
+def test_given_explicit_source_root_env_when_resolve_source_root_then_used(tmp_path, monkeypatch):
+	# given
+	monkeypatch.setenv("SOME_SOURCE_ROOT", "src")
+	# when
+	root = resolve_source_root("SOME_SOURCE_ROOT", tmp_path)
+	# then
+	assert root == (tmp_path / "src").resolve()
+
+
+def test_given_no_source_root_env_when_resolve_source_root_then_defaults_to_workspace_root(tmp_path, monkeypatch):
+	# given
+	monkeypatch.delenv("SOME_OTHER_SOURCE_ROOT", raising=False)
+	# when
+	root = resolve_source_root("SOME_OTHER_SOURCE_ROOT", tmp_path)
+	# then
+	assert root == tmp_path

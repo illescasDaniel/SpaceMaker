@@ -9,7 +9,7 @@ Despite the small current footprint, **always act as if this project will grow l
 ## Hard rules
 
 - Use **tabs** for indentation in Python and all project source files — not spaces.
-- Hexagonal layering is mandatory: see `src/spacemaker/domain/ports/application` vs `adapters/` below, and the path-scoped rule (`.cursor/rules/hexagonal-python.mdc` / `.claude/rules/hexagonal-python.md`) for the full import guard and naming conventions.
+- Hexagonal layering is mandatory: see `src/spacemaker/{domain,ports,application}` vs `adapters/` below, and the path-scoped rule (`.cursor/rules/hexagonal-python.mdc` / `.claude/rules/hexagonal-python.md`) for the full import guard and naming conventions.
 - Never skip a Phase Gate. "Implement the plan" / "complete all todos" / an attached plan file / plan-mode approval is **not** design or spec approval — approval must be explicit, in chat.
 
 ## Phase Gate Protocol

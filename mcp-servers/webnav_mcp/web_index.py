@@ -1,18 +1,17 @@
 """Workspace-wide CSS custom-property and class/id selector index for webnav.
 
 The CSS/HTML language servers each see one document at a time, so `var(--x)`
-usages and `#id`/`.class` selectors can't be cross-referenced across files —
-the most common question for this project's `--custom-properties` (defined
-once in `theme.css`, used across every CSS file, inline `<style>` block and
-wireframe). This is a pure-Python scanner, not a language server: no
-`@import` resolution, no CSS parser, regex/brace-stack grade. It rescans on
-every call rather than caching — about 20 files total, a few ms — so there is
-no cache-invalidation story to get wrong.
+usages and `#id`/`.class` selectors can't be cross-referenced across files.
+This is a pure-Python scanner, not a language server: no `@import`
+resolution, no CSS parser, regex/brace-stack grade. It rescans on every call
+rather than caching — a few ms for a typical web-assets tree — so there is no
+cache-invalidation story to get wrong.
 
-Two roots are indexed separately (`static` = the production web assets,
-`wireframes` = UX layout truth): they define their own values/markup, so
-mixing them in one answer would be misleading. Positions are 1-indexed lines,
-matching the rest of the MCP tools.
+One or more named roots are indexed separately, since each may define its
+own values/markup and mixing them into one answer would be misleading (see
+`build_workspace_index`; a project configures its roots via
+`WEBNAV_MCP_ROOTS`, e.g. separating production assets from design-wireframe
+HTML). Positions are 1-indexed lines, matching the rest of the MCP tools.
 """
 
 from __future__ import annotations
@@ -22,8 +21,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-STATIC_ROOT_REL = Path("src/spacemaker/adapters/inbound/web/static")
-WIREFRAME_ROOT_REL = Path("wireframes")
+DEFAULT_ROOT_LABEL = "web"
+# Directories skipped everywhere (vendored/generated code, not this project's own).
+EXCLUDED_DIR_NAMES = {"node_modules", ".git", "vendor", "dist", "build", "__pycache__"}
 
 _VAR_NAME_RE = re.compile(r"--[a-zA-Z0-9_-]+")
 _VAR_DECL_RE = re.compile(r"(--[a-zA-Z0-9_-]+)\s*:\s*([^;{}]+);")
@@ -32,16 +32,21 @@ _SELECTOR_TOKEN_RE = re.compile(r"[.#][a-zA-Z_-][a-zA-Z0-9_-]*")
 
 _STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>(.*?)</style>", re.IGNORECASE | re.DOTALL)
 _STYLE_ATTR_RE = re.compile(r'\bstyle\s*=\s*"([^"]*)"', re.IGNORECASE)
-_ID_ATTR_RE = re.compile(r'\bid\s*=\s*"([^"]+)"', re.IGNORECASE)
-_CLASS_ATTR_RE = re.compile(r'\bclass\s*=\s*"([^"]*)"', re.IGNORECASE)
+# Quote is a backreference (group 1) so `id="x"` and `id='x'` both match; the
+# value is group 2. Used for HTML markup and — since JS string literals may
+# themselves quote HTML (`innerHTML = '<span class="x">'`) — for JS source too.
+_ID_ATTR_RE = re.compile(r"""\bid\s*=\s*(["'])([^"']+)\1""", re.IGNORECASE)
+_CLASS_ATTR_RE = re.compile(r"""\bclass\s*=\s*(["'])([^"']*)\1""", re.IGNORECASE)
 
 _JS_SETPROPERTY_RE = re.compile(r"\.setProperty\(\s*[\"'](--[a-zA-Z0-9_-]+)[\"']")
 _JS_GETPROPERTYVALUE_RE = re.compile(r"\.getPropertyValue\(\s*[\"'](--[a-zA-Z0-9_-]+)[\"']")
 _JS_GET_ELEMENT_BY_ID_RE = re.compile(r"getElementById\(\s*[\"']([^\"']*)[\"']\s*(\+)?")
 _JS_CLASSLIST_RE = re.compile(r"classList\.(add|remove|toggle|contains)\(([^)]*)\)")
 _JS_QUERY_RE = re.compile(r"querySelectorAll?\(\s*[\"']([^\"']*)[\"']")
-_JS_CLASSNAME_ASSIGN_RE = re.compile(r"className\s*\+?=\s*[\"']([^\"']*)[\"']")
-_STRING_LITERAL_RE = re.compile(r"[\"']([^\"']*)[\"']")
+_JS_CLASSNAME_ASSIGN_RE = re.compile(r"className\s*\+?=\s*[\"']([^\"']*)[\"']\s*(\+)?")
+# A string literal, optionally followed by `+` (string concatenation) — used to
+# find dynamic prefixes inside `classList.add(...)` call arguments.
+_STRING_LITERAL_RE = re.compile(r"[\"']([^\"']*)[\"']\s*(\+)?")
 
 
 def _line_at(text: str, index: int) -> int:
@@ -166,7 +171,9 @@ def _scan_css_text(text: str, file_rel: str, root_index: RootIndex, *, line_offs
 		line = _line_at(text, block.start - 1) + line_offset
 		for part in block.selector.split(","):
 			for tok in _SELECTOR_TOKEN_RE.findall(part):
-				root_index.add_selector_hit(SelectorHit(token=tok, kind="css", file=file_rel, line=line, detail="CSS rule"))
+				root_index.add_selector_hit(
+					SelectorHit(token=tok, kind="css", file=file_rel, line=line, detail="CSS rule")
+				)
 
 	for match in _VAR_DECL_RE.finditer(text):
 		name, value = match.group(1), match.group(2).strip()
@@ -193,22 +200,47 @@ def _scan_html_text(text: str, file_rel: str, root_index: RootIndex) -> None:
 		line = _line_at(text, attr_match.start(1))
 		_scan_css_text(inner, file_rel, root_index, line_offset=line - 1)
 
+	_scan_markup_attrs(
+		text, file_rel, root_index, kind="html", id_detail="id attribute", class_detail="class attribute"
+	)
+
+
+def _scan_markup_attrs(
+	text: str, file_rel: str, root_index: RootIndex, *, kind: str, id_detail: str, class_detail: str
+) -> None:
+	"""`id="x"`/`class="a b"` attributes in `text`. Shared by HTML markup
+	(`_scan_html_text`) and by JS source (`_scan_js_text`), since JS often
+	builds markup from string literals (`innerHTML = '<span class="x">'`)."""
 	for match in _ID_ATTR_RE.finditer(text):
 		line = _line_at(text, match.start())
 		root_index.add_selector_hit(
-			SelectorHit(token=f"#{match.group(1)}", kind="html", file=file_rel, line=line, detail="id attribute")
+			SelectorHit(token=f"#{match.group(2)}", kind=kind, file=file_rel, line=line, detail=id_detail)
 		)
 
 	for match in _CLASS_ATTR_RE.finditer(text):
 		line = _line_at(text, match.start())
-		for token in match.group(1).split():
+		for token in match.group(2).split():
 			root_index.add_selector_hit(
-				SelectorHit(token=f".{token}", kind="html", file=file_rel, line=line, detail="class attribute")
+				SelectorHit(token=f".{token}", kind=kind, file=file_rel, line=line, detail=class_detail)
 			)
 
 
 def _js_selector_tokens_from_string(value: str) -> list[str]:
 	return _SELECTOR_TOKEN_RE.findall(value)
+
+
+def _literal_tokens(literal: str, concat_follows: bool) -> list[tuple[str, bool]]:
+	"""Split a class-list string literal into whitespace-separated tokens,
+	tagging the *last* one as a dynamic prefix when something is concatenated
+	right after it (`"tool-status resolution-" + x`). A trailing space in the
+	literal means the concatenation starts a fresh, separate class name rather
+	than extending this one, so nothing is marked dynamic in that case."""
+	tokens = literal.split()
+	if not tokens:
+		return []
+	ends_with_space = literal[-1:].isspace()
+	dynamic_prefix = concat_follows and not ends_with_space
+	return [(tok, dynamic_prefix and i == len(tokens) - 1) for i, tok in enumerate(tokens)]
 
 
 def _scan_js_text(text: str, file_rel: str, root_index: RootIndex) -> None:
@@ -241,20 +273,43 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex) -> None:
 	for match in _JS_CLASSLIST_RE.finditer(text):
 		method, args = match.group(1), match.group(2)
 		line = _line_at(text, match.start())
-		for literal in _STRING_LITERAL_RE.findall(args):
-			root_index.add_selector_hit(
-				SelectorHit(token=f".{literal}", kind="js", file=file_rel, line=line, detail=f"classList.{method}")
-			)
+		for lit_match in _STRING_LITERAL_RE.finditer(args):
+			literal, concat_follows = lit_match.group(1), bool(lit_match.group(2))
+			for token, dynamic in _literal_tokens(literal, concat_follows):
+				root_index.add_selector_hit(
+					SelectorHit(
+						token=f".{token}",
+						kind="js",
+						file=file_rel,
+						line=line,
+						detail=f"classList.{method}",
+						dynamic=dynamic,
+					)
+				)
 
 	for match in _JS_QUERY_RE.finditer(text):
 		line = _line_at(text, match.start())
 		for token in _js_selector_tokens_from_string(match.group(1)):
-			root_index.add_selector_hit(SelectorHit(token=token, kind="js", file=file_rel, line=line, detail="querySelector"))
+			root_index.add_selector_hit(
+				SelectorHit(token=token, kind="js", file=file_rel, line=line, detail="querySelector")
+			)
 
 	for match in _JS_CLASSNAME_ASSIGN_RE.finditer(text):
 		line = _line_at(text, match.start())
-		for token in match.group(1).split():
-			root_index.add_selector_hit(SelectorHit(token=f".{token}", kind="js", file=file_rel, line=line, detail="className"))
+		concat_follows = bool(match.group(2))
+		for token, dynamic in _literal_tokens(match.group(1), concat_follows):
+			root_index.add_selector_hit(
+				SelectorHit(token=f".{token}", kind="js", file=file_rel, line=line, detail="className", dynamic=dynamic)
+			)
+
+	_scan_markup_attrs(
+		text,
+		file_rel,
+		root_index,
+		kind="js",
+		id_detail="id attribute in JS string",
+		class_detail="class attribute in JS string",
+	)
 
 
 def _relevant_files(root: Path) -> list[Path]:
@@ -263,7 +318,9 @@ def _relevant_files(root: Path) -> list[Path]:
 	files = [
 		p
 		for p in root.rglob("*")
-		if p.is_file() and p.suffix.lower() in (".css", ".html", ".js") and "vendor" not in p.relative_to(root).parts
+		if p.is_file()
+		and p.suffix.lower() in (".css", ".html", ".js")
+		and EXCLUDED_DIR_NAMES.isdisjoint(p.relative_to(root).parts)
 	]
 	return sorted(files)
 
@@ -286,11 +343,32 @@ def build_root_index(root: Path, name: str) -> RootIndex:
 	return root_index
 
 
-def build_workspace_index(workspace_root: Path) -> list[RootIndex]:
-	return [
-		build_root_index(workspace_root / STATIC_ROOT_REL, "static"),
-		build_root_index(workspace_root / WIREFRAME_ROOT_REL, "wireframes"),
-	]
+def build_workspace_index(workspace_root: Path, roots: list[tuple[str, Path]] | None = None) -> list[RootIndex]:
+	"""Build one `RootIndex` per configured root. `roots` is a list of
+	`(label, absolute_path)` pairs; when omitted, indexes the whole
+	`workspace_root` as a single root labeled `DEFAULT_ROOT_LABEL` (see
+	`parse_roots_env` for how a project's `WEBNAV_MCP_ROOTS` env var becomes
+	this list — server.py resolves it once at startup)."""
+	if roots is None:
+		roots = [(DEFAULT_ROOT_LABEL, workspace_root)]
+	return [build_root_index(root, name) for name, root in roots]
+
+
+def parse_roots_env(raw: str, workspace_root: Path) -> list[tuple[str, Path]]:
+	"""Parse `WEBNAV_MCP_ROOTS` (`label=relative/path,label2=relative/path2`)
+	into `(label, absolute_path)` pairs for `build_workspace_index`. A
+	project with no such split (most projects) can leave this env var unset
+	and get the single-root default instead."""
+	roots: list[tuple[str, Path]] = []
+	for part in raw.split(","):
+		part = part.strip()
+		if not part:
+			continue
+		label, sep, rel = part.partition("=")
+		if not sep:
+			raise ValueError(f"invalid WEBNAV_MCP_ROOTS entry {part!r}; expected label=relative/path")
+		roots.append((label.strip(), (workspace_root / rel.strip()).resolve()))
+	return roots
 
 
 def _normalize_var_name(name: str) -> str:
@@ -348,8 +426,25 @@ def format_css_var(indexes: list[RootIndex], name: str) -> str:
 			lines.append("Usages: (none)")
 		sections.append("\n".join(lines))
 	if not found:
-		return f"{var_name} is not defined or used anywhere under static/ or wireframes/."
+		return f"{var_name} is not defined or used anywhere under {_root_names(indexes)}."
 	return f"{var_name}\n\n" + "\n\n".join(sections)
+
+
+def _root_names(indexes: list[RootIndex]) -> str:
+	names = [idx.name for idx in indexes]
+	return " or ".join(names) if names else "any configured root"
+
+
+def _dynamic_prefix_hits(idx: RootIndex, token: str) -> list[SelectorHit]:
+	"""Dynamic hits stored under a *different*, shorter key that `token` could
+	resolve to at runtime — e.g. a `getElementById("view-" + x)` hit stored
+	under `#view-` is a plausible match for a query of `#view-components`."""
+	hits: list[SelectorHit] = []
+	for key, key_hits in idx.selector_hits.items():
+		if key == token or not token.startswith(key):
+			continue
+		hits.extend(h for h in key_hits if h.dynamic)
+	return hits
 
 
 def format_selector(indexes: list[RootIndex], token: str) -> str:
@@ -359,13 +454,15 @@ def format_selector(indexes: list[RootIndex], token: str) -> str:
 	sections: list[str] = []
 	found = False
 	for idx in indexes:
-		hits = idx.selector_hits.get(token, [])
-		if not hits:
+		exact_hits = idx.selector_hits.get(token, [])
+		prefix_hits = _dynamic_prefix_hits(idx, token)
+		all_hits = list(exact_hits) + prefix_hits
+		if not all_hits:
 			continue
 		found = True
 		lines = [f"== {idx.name} =="]
 		for kind_label in ("html", "css", "js"):
-			kind_hits = [h for h in hits if h.kind == kind_label]
+			kind_hits = [h for h in all_hits if h.kind == kind_label]
 			if not kind_hits:
 				continue
 			by_file = _group_hits_by_file(kind_hits)
@@ -374,13 +471,23 @@ def format_selector(indexes: list[RootIndex], token: str) -> str:
 				parts = []
 				for h in sorted(file_hits, key=lambda h: h.line):
 					tag = f"L{h.line}"
-					if h.detail:
-						tag += f" ({h.detail}{', dynamic partial match' if h.dynamic else ''})"
+					if h.dynamic and h.token != token:
+						detail = (
+							f"{h.detail}, dynamic partial match via {h.token!r}"
+							if h.detail
+							else f"dynamic partial match via {h.token!r}"
+						)
+					elif h.dynamic:
+						detail = f"{h.detail}, dynamic partial match" if h.detail else "dynamic partial match"
+					else:
+						detail = h.detail
+					if detail:
+						tag += f" ({detail})"
 					parts.append(tag)
 				lines.append(f"  {f}: " + ", ".join(parts))
 		sections.append("\n".join(lines))
 	if not found:
-		return f"{token} was not found under static/ or wireframes/."
+		return f"{token} was not found under {_root_names(indexes)}."
 	return f"{token}\n\n" + "\n\n".join(sections)
 
 
@@ -418,11 +525,16 @@ def undefined_var_usages(idx: RootIndex) -> list[VarUsage]:
 
 
 def unreferenced_selectors(idx: RootIndex) -> list[str]:
+	"""CSS-defined tokens with no HTML/JS reference. A dynamically-built JS hit
+	elsewhere in the root (e.g. `getElementById("view-" + x)`, stored under
+	`#view-`) counts as a reference for any token it's a prefix of, since the
+	runtime value could plausibly be this one — see `_dynamic_prefix_hits`."""
 	unreferenced = []
 	for token, hits in idx.selector_hits.items():
 		has_definition = any(h.kind == "css" for h in hits)
 		has_reference = any(h.kind in ("html", "js") and not h.dynamic for h in hits)
-		if has_definition and not has_reference:
+		has_dynamic_prefix_reference = bool(_dynamic_prefix_hits(idx, token))
+		if has_definition and not has_reference and not has_dynamic_prefix_reference:
 			unreferenced.append(token)
 	return sorted(unreferenced)
 

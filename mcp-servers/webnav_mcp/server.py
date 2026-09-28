@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -27,7 +28,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import web_index  # noqa: E402
 from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error  # noqa: E402
-from _shared.format import format_diagnostics, format_location, format_workspace_symbols  # noqa: E402
+from _shared.format import (  # noqa: E402
+	format_diagnostics,
+	format_location,
+	format_references,
+	format_workspace_symbols,
+)
 from _shared.lsp_client import LspClient  # noqa: E402
 from _shared.workspace import resolve_workspace_root  # noqa: E402
 from lang_command import resolve_css_command, resolve_html_command, resolve_ts_command  # noqa: E402
@@ -35,6 +41,13 @@ from mcp.server.mcpserver import MCPServer  # noqa: E402
 
 
 WORKSPACE_ROOT = resolve_workspace_root("WEBNAV_MCP_WORKSPACE")
+
+# One or more `label=relative/path` roots to index separately (see
+# web_index.build_workspace_index); e.g. splitting production assets from
+# design wireframes. Unset means "index the whole workspace as one root" —
+# most projects have no such split and don't need to set this.
+_raw_web_roots = os.environ.get("WEBNAV_MCP_ROOTS")
+WEB_ROOTS = web_index.parse_roots_env(_raw_web_roots, WORKSPACE_ROOT) if _raw_web_roots else None
 
 _POSITION_NOTE = (
 	"Positions are 1-indexed. `column` is a UTF-16 character offset on the "
@@ -153,7 +166,7 @@ def _index_token_at(file_path: str, line: int, column: int) -> str | None:
 
 
 def _index_answer(token: str) -> str:
-	indexes = web_index.build_workspace_index(WORKSPACE_ROOT)
+	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
 	if token.startswith("--"):
 		return web_index.format_css_var(indexes, token)
 	return web_index.format_selector(indexes, token)
@@ -223,9 +236,7 @@ async def references(file_path: str, line: int, column: int, include_declaration
 		locations = await client.references(file_path, line, column, include_declaration=include_declaration)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
-	if not locations:
-		return "No references found at that position."
-	return "\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in locations)
+	return format_references(locations, WORKSPACE_ROOT)
 
 
 @mcp.tool()
@@ -255,8 +266,8 @@ async def diagnostics(file_path: str) -> str:
 
 	For `.css`/`.html` files, this also includes index-derived warnings the
 	single-file language server can't see: `var(--x)` used with no matching
-	declaration anywhere in the same root (static/wireframes), and CSS
-	selectors (`#id`/`.class`) with no HTML/JS reference in that root.
+	declaration anywhere in the same indexed root, and CSS selectors
+	(`#id`/`.class`) with no HTML/JS reference in that root.
 	"""
 	try:
 		client = await _client_for(file_path)
@@ -265,7 +276,9 @@ async def diagnostics(file_path: str) -> str:
 		return format_tool_error(exc)
 	lines = [format_diagnostics(items)]
 	if Path(file_path).suffix.lower() in (".css", ".html"):
-		located = web_index.root_index_for_file(web_index.build_workspace_index(WORKSPACE_ROOT), _resolve_path(file_path))
+		located = web_index.root_index_for_file(
+			web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS), _resolve_path(file_path)
+		)
 		if located is not None:
 			idx, file_rel = located
 			extra = web_index.diagnostics_for_file(idx, file_rel)
@@ -284,11 +297,11 @@ async def css_var(name: str) -> str:
 	`.css` files and HTML `<style>`/`style="…"` blocks/attributes instead.
 	`name` may be given with or without the leading `--`. Definitions (value
 	+ enclosing context, e.g. `@media (prefers-color-scheme: dark) › :root`)
-	and usages (grouped by file with line numbers) are reported separately
-	for the `static` (production web assets) and `wireframes` roots, since
-	they define their own values.
+	and usages (grouped by file with line numbers) are reported separately per
+	configured root (see `WEBNAV_MCP_ROOTS`; a single unnamed root by default),
+	since each may define its own values.
 	"""
-	indexes = web_index.build_workspace_index(WORKSPACE_ROOT)
+	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
 	return web_index.format_css_var(indexes, name)
 
 
@@ -300,13 +313,15 @@ async def selector(name: str) -> str:
 	and JS usages (`getElementById`, `classList.add/remove/toggle/contains`,
 	`querySelector`/`querySelectorAll`, `className` assignment) — something
 	the single-file CSS/HTML language servers can't do. `name` must include
-	the leading `#` or `.`. Grouped by file with line numbers, separately for
-	the `static` and `wireframes` roots. A JS hit built from string
+	the leading `#` or `.`. Grouped by file with line numbers, separately per
+	configured root (see `WEBNAV_MCP_ROOTS`). A JS hit built from string
 	concatenation (e.g. `getElementById("view-" + x)`) is reported against
-	only its static prefix and labeled "dynamic partial match" rather than
-	silently dropped or guessed.
+	only its static prefix and labeled "dynamic partial match"; a query whose
+	name starts with such a prefix (e.g. `#view-components` against a stored
+	`#view-`) also surfaces that hit, labeled "dynamic partial match via
+	'<prefix>'", instead of being silently dropped or guessed.
 	"""
-	indexes = web_index.build_workspace_index(WORKSPACE_ROOT)
+	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
 	return web_index.format_selector(indexes, name)
 
 

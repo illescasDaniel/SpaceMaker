@@ -10,7 +10,8 @@
 				"${workspaceFolder}/mcp-servers/codenav_mcp/server.py"
 			],
 			"env": {
-				"CODENAV_MCP_WORKSPACE": "${workspaceFolder}"
+				"CODENAV_MCP_WORKSPACE": "${workspaceFolder}",
+				"CODENAV_MCP_SOURCE_ROOT": "src"
 			}
 		},
 		"webnav": {
@@ -23,7 +24,8 @@
 				"${workspaceFolder}/mcp-servers/webnav_mcp/server.py"
 			],
 			"env": {
-				"WEBNAV_MCP_WORKSPACE": "${workspaceFolder}"
+				"WEBNAV_MCP_WORKSPACE": "${workspaceFolder}",
+				"WEBNAV_MCP_ROOTS": "static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes"
 			}
 		}
 	}
