@@ -49,6 +49,7 @@ from spacemaker.bootstrap.services import AppServices, repo_root
 from spacemaker.bootstrap.ui_shell import (
 	CONTENT_SECURITY_POLICY,
 	CONTENT_SECURITY_POLICY_DESKTOP,
+	MEDIA_CACHE_HEADERS,
 	NO_CACHE_HEADERS,
 	stamp_shell_html,
 )
@@ -752,36 +753,30 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		if not files:
 			raise HTTPException(status_code=400, detail="no files")
 		results: list[dict[str, str]] = []
-		try:
-			for upload in files:
-				raw_name = upload.filename or "upload.bin"
-				suffix = Path(raw_name).suffix
-				with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-					temp_path = tmp.name
-					size = 0
-					while True:
-						chunk = await upload.read(1024 * 1024)
-						if not chunk:
-							break
-						tmp.write(chunk)
-						size += len(chunk)
-				try:
-					services.handle_wifi_upload(t, raw_name, temp_path, size)
-					results.append({"file": raw_name, "status": "ok"})
-				except PermissionError as exc:
-					services.filesystem.delete_file(temp_path)
-					raise HTTPException(status_code=409, detail=str(exc)) from exc
-				except ValueError as exc:
-					services.filesystem.delete_file(temp_path)
-					raise HTTPException(status_code=400, detail=str(exc)) from exc
-				except Exception:
-					services.filesystem.delete_file(temp_path)
-					raise
-		finally:
-			# Once per batch, after every file in this request has landed in
-			# originals/ — not per file — so the convert job's initial total
-			# covers the whole batch instead of just whatever was saved first.
-			services.maybe_start_convert_drain()
+		for upload in files:
+			raw_name = upload.filename or "upload.bin"
+			suffix = Path(raw_name).suffix
+			with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+				temp_path = tmp.name
+				size = 0
+				while True:
+					chunk = await upload.read(1024 * 1024)
+					if not chunk:
+						break
+					tmp.write(chunk)
+					size += len(chunk)
+			try:
+				services.handle_wifi_upload(t, raw_name, temp_path, size)
+				results.append({"file": raw_name, "status": "ok"})
+			except PermissionError as exc:
+				services.filesystem.delete_file(temp_path)
+				raise HTTPException(status_code=409, detail=str(exc)) from exc
+			except ValueError as exc:
+				services.filesystem.delete_file(temp_path)
+				raise HTTPException(status_code=400, detail=str(exc)) from exc
+			except Exception:
+				services.filesystem.delete_file(temp_path)
+				raise
 		return {"uploaded": len(results), "files": results}
 
 	@app.get("/api/devices")
@@ -990,7 +985,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		detail = services.get_gallery_item.get(
 			root,
 			path,
-			captured_at=indexed.captured_at if indexed is not None else None,
+			indexed=indexed,
 		)
 		if detail is None:
 			raise HTTPException(status_code=404, detail="not found")
@@ -1109,7 +1104,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			raise HTTPException(status_code=404, detail=str(exc)) from exc
 		except OSError as exc:
 			raise HTTPException(status_code=500, detail="thumbnail generation failed") from exc
-		return FileResponse(thumb_path, media_type="image/jpeg")
+		return FileResponse(thumb_path, media_type="image/jpeg", headers=dict(MEDIA_CACHE_HEADERS))
 
 	@app.get("/favicon.ico")
 	def favicon() -> FileResponse:
@@ -1151,9 +1146,11 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.get("/media/{relative_path:path}")
 	def media_file(relative_path: str, download: int = 0) -> FileResponse:
 		target = _resolve_processed_file(services, relative_path)
-		headers: dict[str, str] | None = None
+		headers: dict[str, str] = {}
 		if download:
-			headers = {"Content-Disposition": _attachment_filename(target)}
+			headers["Content-Disposition"] = _attachment_filename(target)
+		else:
+			headers.update(MEDIA_CACHE_HEADERS)
 		return FileResponse(target, headers=headers)
 
 	@app.websocket("/ws")

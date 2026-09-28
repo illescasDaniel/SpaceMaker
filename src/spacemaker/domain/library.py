@@ -42,5 +42,17 @@ class JobProgress:
 		return min(100, int(100 * self.completed / self.total))
 
 
+def live_job_progress(completed: int, originals_remaining: int) -> JobProgress:
+	"""Progress whose total grows as more files land while a job is running.
+
+	Easy concurrent convert uses ``total = completed + originals_remaining`` so
+	the UI stays accurate when Wi‑Fi uploads arrive mid-pass (the file currently
+	encoding still counts in ``originals/``).
+	"""
+	safe_completed = max(0, completed)
+	safe_remaining = max(0, originals_remaining)
+	return JobProgress(completed=safe_completed, total=safe_completed + safe_remaining)
+
+
 def gallery_index_path(library_root: str) -> str:
 	return str(Path(library_root) / GALLERY_INDEX_FILENAME)

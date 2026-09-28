@@ -38,9 +38,14 @@ tools:
     license_note: Same as ffmpeg
 
   - id: magick
-    purpose: Image transcode to AVIF
+    purpose: Image auto-orient, thumbs, friendly JPEG, AVIF identify / non-progressive AVIF fallback; rasterize formats avifenc cannot read
     homepage: https://imagemagick.org/
     license_note: ImageMagick License (Apache 2.0 style)
+
+  - id: avifenc
+    purpose: Progressive (layered) library image encode to AVIF
+    homepage: https://github.com/AOMediaCodec/libavif
+    license_note: BSD-2-Clause
 
   - id: exiftool
     purpose: Preserve EXIF/metadata on converted images

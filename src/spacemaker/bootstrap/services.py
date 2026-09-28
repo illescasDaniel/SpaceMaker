@@ -85,7 +85,7 @@ from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase
 from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase, can_start_convert
-from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode
+from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode, live_job_progress
 from spacemaker.domain.source_folders import SourceFolder, parse_source_folders
 from spacemaker.domain.transfer_folders import TransferFolder, merge_extra_paths, parse_transfer_folders
 from spacemaker.domain.transfer_session import TransferOrigin, TransferSessionItem
@@ -136,8 +136,8 @@ class AppServices:
 		self.error_recovery = ErrorRecovery(self.filesystem)
 		self.promote_originals = PromoteOriginalsToProcessed(self.filesystem)
 		self.clear_user_preferences = ClearUserPreferences(self.user_preferences)
-		self.reset_library = ResetLibrary(self.filesystem)
 		self.gallery_index = SqliteGalleryIndex()
+		self.reset_library = ResetLibrary(self.filesystem, self.gallery_index)
 		self.sync_gallery_index = SyncGalleryIndex(self.filesystem, self.probe, self.gallery_index)
 		self.gallery = GenerateGallery(self.gallery_index)
 		self.get_gallery_item = GetGalleryItem(self.filesystem, self.probe)
@@ -1070,6 +1070,7 @@ class AppServices:
 				control.after_file()
 		if outcome.disposition.value in {"saved", "skipped"}:
 			self.record_wifi_upload_progress()
+			self.maybe_start_convert_drain()
 
 	def push_state(self) -> None:
 		self.broadcast({"type": "state", "state": self.enriched_snapshot()})
@@ -1551,18 +1552,23 @@ class AppServices:
 		self.bootstrap_photo_backup()
 
 	def maybe_start_convert_drain(self) -> None:
-		# Callers that ingest multiple files per request (e.g. the /api/upload
-		# route) should call this once after the whole batch is saved, not per
-		# file: starting the convert job before every file has landed in
-		# originals/ makes its initial total (and displayed progress) reflect
-		# only whatever was on disk at that instant, not the full batch.
+		# Call after each Wi‑Fi file lands (saved or size-skipped), not only after
+		# the whole multipart request — so convert starts as soon as the first
+		# photo arrives. While convert is already RUNNING, refresh the live total
+		# (completed + originals remaining) instead of starting a second job.
 		with self.session._lock:
 			ui_mode = self.session.ui_mode
 			convert_phase = self.session.convert_phase
 			library_root = self.session.library_root
+			completed = self.session.convert_progress.completed
 		if not library_root:
 			return
 		originals = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
+		if convert_phase is JobPhase.RUNNING:
+			with self.session._lock:
+				self.session.convert_progress = live_job_progress(completed, originals)
+			self.push_state()
+			return
 		compress = self.compress_media_preference()
 		if should_promote_after_upload(
 			ui_mode=ui_mode,
@@ -1603,7 +1609,7 @@ class AppServices:
 				return
 			library_root = self.session.library_root
 			self.session.convert_phase = JobPhase.RUNNING
-			self.session.convert_progress = JobProgress(0, originals)
+			self.session.convert_progress = live_job_progress(0, originals)
 			self.session.last_error = ""
 			concurrent = resolved is ConvertStartPolicy.CONCURRENT_WITH_EXTRACT
 		self._convert_control = ExtractJobControl()
@@ -1624,15 +1630,16 @@ class AppServices:
 			while True:
 				# Each use_case.run() call scans originals/ fresh and reports progress
 				# starting from (0, <files in that scan>). Offset by everything already
-				# completed in earlier drain passes so the UI shows one running total
-				# (e.g. 0/2, 1/2, 2/2) instead of resetting to 0/1 per pass.
+				# completed in earlier drain passes, then recompute total live from
+				# originals remaining so mid-pass uploads bump the displayed total.
 				base_completed = cumulative_completed
 
 				def on_progress(progress: JobProgress, *, _base: int = base_completed) -> None:
+					remaining = self.filesystem.count_files_in_folder(library_root, LibraryFolder.ORIGINALS)
 					with self.session._lock:
-						self.session.convert_progress = JobProgress(
-							completed=_base + progress.completed,
-							total=_base + progress.total,
+						self.session.convert_progress = live_job_progress(
+							_base + progress.completed,
+							remaining,
 						)
 					self.push_state()
 
@@ -1656,10 +1663,10 @@ class AppServices:
 				):
 					break
 				with self.session._lock:
-					self.session.convert_progress = JobProgress(cumulative_completed, cumulative_completed + remaining)
+					self.session.convert_progress = live_job_progress(cumulative_completed, remaining)
 				self.sync_gallery_index.run(library_root)
 				self.push_state()
-			progress = JobProgress(completed=cumulative_completed, total=cumulative_completed + remaining)
+			progress = live_job_progress(cumulative_completed, remaining)
 			with self.session._lock:
 				if batch_progress.total == 0 and remaining > 0:
 					self.session.convert_phase = JobPhase.ERROR

@@ -38,7 +38,8 @@ class SyncGalleryIndex:
 		for relative_path in (*plan.added, *plan.changed):
 			full = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, relative_path)
 			stat = on_disk[relative_path]
-			captured_at = self._probe.captured_at(full) or datetime.fromtimestamp(stat.mtime)
+			display = self._probe.display_metadata(full)
+			captured_at = display.captured_at or datetime.fromtimestamp(stat.mtime)
 			upserts.append(
 				GalleryIndexRow(
 					relative_path=relative_path,
@@ -46,6 +47,12 @@ class SyncGalleryIndex:
 					kind=media_kind_for_filename(relative_path),
 					mtime=stat.mtime,
 					size=stat.size,
+					camera_make=display.camera_make,
+					camera_model=display.camera_model,
+					width=display.width,
+					height=display.height,
+					duration_seconds=display.duration_seconds,
+					gps=display.gps,
 				)
 			)
 		for relative_path in plan.removed:

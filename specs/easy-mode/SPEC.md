@@ -4,7 +4,7 @@
 
 - **Feature:** Photo backup module — Wi‑Fi upload QR, auto-receive, convert-as-received (when **Compress media** is on) or promote-as-received into `processed/` (when off), **View gallery** when ready; phone gallery help on Gallery tab
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — Photo backup (`#view-easy`); phone upload [wireframes/phone-upload.html](../../wireframes/phone-upload.html). **Phone upload wireframe approved** 2026-09-23.
-- **UX approved:** 2026-09-22 (initial Easy mode); **2026-09-23** (image import issue panels + open-folder actions); **2026-09-26** (**Compress media** preference + info panel); **2026-09-27** (promote to `processed/` when Compress media off; gallery bucket rename)
+- **UX approved:** 2026-09-22 (initial Easy mode); **2026-09-23** (image import issue panels + open-folder actions); **2026-09-26** (**Compress media** preference + info panel); **2026-09-27** (promote to `processed/` when Compress media off; gallery bucket rename); **2026-09-28** (convert starts per received file with live progress totals — no wireframe change)
 - **Related:** [main-wizard](../main-wizard/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md), [packaging](../packaging/SPEC.md), [home-modules](../home-modules/SPEC.md)
 
 ## Triggers & routing
@@ -48,7 +48,7 @@
   2. **How:** photos convert to **AVIF**. Videos convert to **AV1** when this computer supports hardware encoding; otherwise they stay as received (or use H.264 hardware when available). Encode flags and routing remain those in [convert-media](../convert-media/SPEC.md) / [SpaceMaker-adaptations](../../docs/playbooks/SpaceMaker-adaptations.md) — Easy does not expose per-flag controls.
   3. **Persistence note:** Your choice is saved and reused the next time you open Photo backup.
 - **Persistence:** the on/off choice is a **disk-backed user preference** restored on later app launches (unlike session-only `ui_mode`). If tools become unavailable on a later launch, the effective UI state is forced off + disabled for that session even if a prior “on” was stored; when tools return, restore the stored choice (default on if never set).
-- **Tools available:** both `magick` and `ffmpeg` resolve via managed tools or `PATH` ([packaging](../packaging/SPEC.md) resolution order). Missing either → compression unavailable. Hardware video encoders are **not** required for the checkbox to be enabled (videos may move-as-is / use H.264 HW per convert-media).
+- **Tools available:** both `magick` and `ffmpeg` resolve via managed tools or `PATH` ([packaging](../packaging/SPEC.md) resolution order). Missing either → compression unavailable. `avifenc` is preferred for progressive library image encode ([convert-media](../convert-media/SPEC.md)) but is **not** required for the checkbox to be enabled (ImageMagick AVIF fallback). Hardware video encoders are **not** required for the checkbox to be enabled (videos may move-as-is / use H.264 HW per convert-media).
 
 ### USB wizard layout
 
@@ -68,9 +68,10 @@ Allowed `bucket` values: `error`, `invalid` only (no path traversal; resolved un
 ## Convert / promote while receiving (Easy only)
 
 - Auto-convert runs **only when Compress media is on** and compression tools are available.
-- After each completed Wi‑Fi upload (saved or size-skipped), if convert is **idle**, Compress media is **on**, and `originals/` is non-empty, start convert **without** stopping extract.
+- After each completed Wi‑Fi **file** (saved or size-skipped) — not after the whole multipart HTTP request — if convert is **idle**, Compress media is **on**, and `originals/` is non-empty, start convert **without** stopping extract. Do **not** wait for later files in the same upload request before starting.
+- While convert is **running**, progress `total` stays accurate as more files land: `total = completed + count(originals/)` (the file currently encoding still counts in `originals/`). New arrivals bump `total` immediately; they are drained in later passes of the same job without starting a second convert job.
 - When a convert batch finishes, if `originals/` still has files, Compress media is still on, and Easy concurrent policy applies, start another batch.
-- **When Compress media is off:** do **not** start convert batches. Instead, **promote** files from `originals/` into `processed/` **as-is** (same relative path and filename — move-as-is, no re-encode), then refresh the gallery index so **View gallery** / Gallery can show them. Same trigger points as auto-convert drain (after each completed Wi‑Fi upload batch; also when Compress media is turned **off** or remains off with files still in `originals/`). An already-running convert job may finish its current batch; v1 does not require cancelling in-flight work. Turning Compress media **on** again with files still in `originals/` resumes Easy auto-convert when idle (same concurrent policy).
+- **When Compress media is off:** do **not** start convert batches. Instead, **promote** files from `originals/` into `processed/` **as-is** (same relative path and filename — move-as-is, no re-encode), then refresh the gallery index so **View gallery** / Gallery can show them. Same trigger points as auto-convert drain (after each completed Wi‑Fi **file**; also when Compress media is turned **off** or remains off with files still in `originals/`). An already-running convert job may finish its current batch; v1 does not require cancelling in-flight work. Turning Compress media **on** again with files still in `originals/` resumes Easy auto-convert when idle (same concurrent policy).
 - **Advanced** **Start convert** still **stops extract first** then converts ([convert-media](../convert-media/SPEC.md)); Advanced ignores the Easy Compress media preference.
 
 ## Acceptance criteria (BDD)
@@ -129,8 +130,16 @@ Allowed `bucket` values: `error`, `invalid` only (no path traversal; resolved un
 
 - **Given** Easy mode, Compress media **on**, tools available, and an active Wi‑Fi receive session
 - **When** the first file lands in `originals/`
-- **Then** convert starts while extract remains **running**
-- **And** Easy shows convert progress
+- **Then** convert starts **immediately** (before any later files in the same multipart upload finish) while extract remains **running**
+- **And** Easy shows convert progress (e.g. `0/1`)
+
+### Scenario: Progress total grows as more files arrive mid-convert
+
+- **Given** Easy mode, Compress media **on**, convert **running** after the first file landed (progress e.g. `0/1`)
+- **When** a second file lands in `originals/` before the first convert pass finishes
+- **Then** convert progress `total` updates to include it (e.g. `0/2`) without starting a second convert job
+- **And** as each file finishes, `completed` / `total` stay consistent (e.g. `1/2` then `2/2`)
+- **And** extract remains **running**
 
 ### Scenario: Upload with Compress media off promotes to processed
 
@@ -224,5 +233,5 @@ Allowed `bucket` values: `error`, `invalid` only (no path traversal; resolved un
 
 | Layer | Focus |
 |-------|--------|
-| Unit | Easy import panel visibility from `image_import_issues` counts (zero → hidden; partial → one or two panels); Compress media default / tools-unavailable forced off; auto-convert gated on preference; promote-as-is when Compress media off |
+| Unit | Easy import panel visibility from `image_import_issues` counts (zero → hidden; partial → one or two panels); Compress media default / tools-unavailable forced off; auto-convert gated on preference; promote-as-is when Compress media off; per-file convert start; live progress total (`completed + originals remaining`) when more files arrive mid-convert |
 | Integration | `POST /api/library/open-folder` resolves `error` / `invalid` under session library root; rejects unknown bucket; preference persists across simulated relaunch |

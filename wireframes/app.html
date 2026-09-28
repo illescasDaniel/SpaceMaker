@@ -48,14 +48,16 @@
 			--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 			--dur-fast: 120ms;
 			--dur-base: 200ms;
+			/* Thumb → full dissolve: noticeable but snappy */
+			--dur-crossfade: 280ms;
 		}
 
 		@media (prefers-reduced-motion: reduce) {
 			:root {
 				--dur-fast: 0.001ms;
 				--dur-base: 0.001ms;
+				--dur-crossfade: 0.001ms;
 			}
-			.gallery-item-spinner { animation: none; }
 		}
 
 		* { box-sizing: border-box; }
@@ -770,14 +772,14 @@
 
 		.gallery-item-stage-wrap {
 			display: grid;
+			grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+			column-gap: 0.65rem;
+			align-items: center;
 			margin-bottom: 1rem;
 		}
 
 		.gallery-item-nav {
 			z-index: 2;
-			align-self: center;
-			justify-self: start;
-			margin-left: 0.5rem;
 			width: 2.75rem;
 			height: 2.75rem;
 			padding: 0;
@@ -792,7 +794,8 @@
 			cursor: pointer;
 			font: inherit;
 			font-size: 1rem;
-			transition: border-color var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard), opacity var(--dur-base) var(--ease-standard);
+			/* Keep disabled arrows clearly visible — do not fade into the stage. */
+			transition: border-color var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 		}
 
 		.gallery-item-nav:hover:not(:disabled) {
@@ -801,18 +804,28 @@
 		}
 
 		.gallery-item-nav:disabled {
-			opacity: 0.35;
+			opacity: 1;
+			color: var(--muted);
+			background: var(--surface2);
+			border-color: var(--border);
+			box-shadow: none;
 			cursor: default;
 		}
 
+		.gallery-item-nav-prev {
+			grid-column: 1;
+			grid-row: 1;
+		}
+
 		.gallery-item-nav-next {
-			justify-self: end;
-			margin-left: 0;
-			margin-right: 0.5rem;
+			grid-column: 3;
+			grid-row: 1;
 		}
 
 		.gallery-item-stage {
 			position: relative;
+			grid-column: 2;
+			grid-row: 1;
 			background: var(--surface2);
 			border: 1px solid var(--border);
 			border-radius: var(--radius);
@@ -820,73 +833,92 @@
 			aspect-ratio: 4 / 3;
 			max-height: 70vh;
 			overflow: hidden;
-			margin-bottom: 1rem;
-		}
-
-		.gallery-item-stage-wrap > .gallery-item-stage,
-		.gallery-item-stage-wrap > .gallery-item-nav {
-			grid-area: 1 / 1;
-		}
-
-		.gallery-item-stage-wrap .gallery-item-stage {
 			margin-bottom: 0;
 			min-width: 0;
+			/* Inner gutter so media never kisses the frame edge (side controls sit outside). */
+			--stage-media-inset: 0.65rem;
 		}
 
-		/* Wraps the current photo/video; slides and fades on prev/next navigation. */
+		/* Wraps the current photo/video. Prev/Next keeps the outgoing frame visible
+		   until the incoming one covers it — no blank flash between items. */
 		.gallery-item-media {
 			position: absolute;
-			inset: 0;
+			inset: var(--stage-media-inset);
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			transition: transform var(--dur-base) var(--ease-standard), opacity var(--dur-base) var(--ease-standard);
+			transition: transform var(--dur-crossfade) var(--ease-standard), opacity var(--dur-crossfade) var(--ease-standard);
 		}
 
-		.gallery-item-media.slide-out-next { transform: translateX(-28px); opacity: 0; }
-		.gallery-item-media.slide-out-prev { transform: translateX(28px); opacity: 0; }
-		.gallery-item-media.slide-in-next-start { transform: translateX(28px); opacity: 0; }
-		.gallery-item-media.slide-in-prev-start { transform: translateX(-28px); opacity: 0; }
+		.gallery-item-media.is-outgoing {
+			z-index: 1;
+			pointer-events: none;
+		}
 
-		/* Blurred thumbnail fills the frame instantly so the layout never collapses to 0px while the full asset loads. */
+		.gallery-item-media.is-incoming {
+			z-index: 2;
+		}
+
+		.gallery-item-media.slide-out-next { transform: translateX(-18px); opacity: 0; }
+		.gallery-item-media.slide-out-prev { transform: translateX(18px); opacity: 0; }
+		/* Incoming stays fully opaque (thumb already covering the stage); only a light nudge. */
+		.gallery-item-media.slide-in-next-start { transform: translateX(18px); }
+		.gallery-item-media.slide-in-prev-start { transform: translateX(-18px); }
+
+		/* Instant thumbnail placeholder: same aspect-fit as the full preview (letterbox/pillarbox
+		   inside the reserved stage). No extra CSS blur — low-res softness from the thumb itself is fine.
+		   Scale with a smooth (bilinear-like) filter — never nearest-neighbor / pixelated.
+		   Stacked under the full preview: the full fades in on top; the thumb does not fade out
+		   at the same time (that dual-fade left a blank gap when the full was not painted yet). */
 		.gallery-item-thumb {
 			position: absolute;
 			inset: 0;
 			width: 100%;
 			height: 100%;
-			object-fit: cover;
-			filter: blur(16px) saturate(1.05) brightness(0.92);
-			transform: scale(1.1);
-			transition: opacity var(--dur-base) var(--ease-standard);
+			object-fit: contain;
+			image-rendering: smooth;
+			z-index: 1;
+			/* Thumb stays put under the full preview; only the full fades in (avoids a blank gap). */
 		}
 
-		.gallery-item-thumb.hidden { opacity: 0; }
+		.gallery-item-thumb.hidden {
+			opacity: 0;
+			/* Instant — full is already opaque above, so fading the thumb would flash the stage. */
+			transition: none;
+			pointer-events: none;
+		}
 
-		.gallery-item-spinner {
+		/* Corner status while the full asset loads — no spinner (loads are usually quick). */
+		.gallery-item-loading {
 			position: absolute;
-			width: 34px;
-			height: 34px;
-			border-radius: 50%;
-			border: 3px solid color-mix(in srgb, var(--text) 18%, transparent);
-			border-top-color: var(--accent);
-			animation: gallery-item-spin 0.8s linear infinite;
+			left: 0.65rem;
+			bottom: 0.65rem;
+			z-index: 3;
+			margin: 0;
+			padding: 0.2rem 0.55rem;
+			border-radius: 6px;
+			font-size: 0.75rem;
+			line-height: 1.3;
+			color: var(--text);
+			background: color-mix(in srgb, var(--surface) 90%, transparent);
+			border: 1px solid var(--border);
+			pointer-events: none;
 			transition: opacity var(--dur-fast) var(--ease-standard);
 		}
 
-		.gallery-item-spinner.hidden { opacity: 0; }
-
-		@keyframes gallery-item-spin {
-			to { transform: rotate(360deg); }
-		}
+		.gallery-item-loading.hidden { opacity: 0; }
 
 		.gallery-item-full {
-			position: relative;
-			max-width: 100%;
-			max-height: 100%;
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
 			object-fit: contain;
+			image-rendering: smooth;
 			display: block;
+			z-index: 2;
 			opacity: 0;
-			transition: opacity var(--dur-base) var(--ease-standard);
+			transition: opacity var(--dur-crossfade) var(--ease-standard);
 		}
 
 		.gallery-item-full.loaded { opacity: 1; }
@@ -2527,7 +2559,7 @@
 				</div>
 			</div>
 			<!-- Empty state (shown when processed/ has no files): -->
-			<p class="gallery-empty-hint" hidden>No media in processed/ yet. Finish convert on the wizard, then return here.</p>
+			<p class="gallery-empty-hint" hidden>No saved media yet</p>
 		</div>
 	</section>
 
@@ -2540,7 +2572,7 @@
 				<div class="gallery-item-stage" id="gallery-item-stage">
 					<div class="gallery-item-media" id="gallery-item-media">
 						<img class="gallery-item-thumb hidden" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%232a3440' width='800' height='600'/%3E%3C/svg%3E" alt="" aria-hidden="true" />
-						<div class="gallery-item-spinner hidden" aria-hidden="true"></div>
+						<p class="gallery-item-loading hidden" aria-live="polite">• Loading…</p>
 						<img class="gallery-item-full loaded" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect fill='%232a3440' width='800' height='600'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='24' text-anchor='middle' dominant-baseline='middle'%3EPreview%3C/text%3E%3C/svg%3E" alt="2025/September/IMG_0042.avif" />
 					</div>
 				</div>
@@ -2701,10 +2733,10 @@
 		// Demo dataset driving the gallery item screen: enough items to show prev/next
 		// navigation, each with its own placeholder colour and metadata.
 		var galleryDemoItems = [
-			{ name: '2025/September/IMG_0042.avif', captured: 'September 4, 2025, 14:32', camera: 'Samsung · SM-S921B', dims: '4032 × 3024', size: '1.2 MB', location: '52.5200° N, 13.4050° E', color: '2a3440', type: 'image' },
-			{ name: '2025/September/IMG_0043.avif', captured: 'September 4, 2025, 14:35', camera: 'Samsung · SM-S921B', dims: '4032 × 3024', size: '1.4 MB', location: '52.5200° N, 13.4050° E', color: '35405a', type: 'image' },
-			{ name: '2025/September/IMG_0044.avif', captured: 'September 4, 2025, 15:02', camera: 'Samsung · SM-S921B', dims: '3024 × 4032', size: '0.9 MB', location: '52.5201° N, 13.4051° E', color: '405a35', type: 'image' },
-			{ name: '2025/September/CLIP_0007.mp4', captured: 'September 4, 2025, 15:10', camera: 'Samsung · SM-S921B', dims: '1920 × 1080', size: '18.4 MB', location: '—', color: '5a3540', type: 'video' },
+			{ name: '2025/September/IMG_0042.avif', captured: 'September 4, 2025, 14:32', camera: 'Samsung · SM-S921B', dims: '4032 × 3024', size: '1.2 MB', location: '52.5200° N, 13.4050° E', color: '2a3440', type: 'image', w: 800, h: 600 },
+			{ name: '2025/September/IMG_0043.avif', captured: 'September 4, 2025, 14:35', camera: 'Samsung · SM-S921B', dims: '4032 × 3024', size: '1.4 MB', location: '52.5200° N, 13.4050° E', color: '35405a', type: 'image', w: 800, h: 600 },
+			{ name: '2025/September/IMG_0044.avif', captured: 'September 4, 2025, 15:02', camera: 'Samsung · SM-S921B', dims: '3024 × 4032', size: '0.9 MB', location: '52.5201° N, 13.4051° E', color: '405a35', type: 'image', w: 600, h: 800 },
+			{ name: '2025/September/CLIP_0007.mp4', captured: 'September 4, 2025, 15:10', camera: 'Samsung · SM-S921B', dims: '1920 × 1080', size: '18.4 MB', location: '—', color: '5a3540', type: 'video', w: 800, h: 450 },
 		];
 		var galleryDemoIndex = 0;
 
@@ -2712,15 +2744,16 @@
 			return 'data:image/svg+xml,' + encodeURIComponent(svgMarkup);
 		}
 
-		function placeholderSvg(color, label) {
-			return svgDataUri('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="#' + color + '" width="800" height="600"/><text x="50%" y="50%" fill="#8b9cb3" font-size="24" text-anchor="middle" dominant-baseline="middle">' + label + '</text></svg>');
+		function placeholderSvg(color, label, w, h) {
+			w = w || 800;
+			h = h || 600;
+			return svgDataUri('<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '"><rect fill="#' + color + '" width="' + w + '" height="' + h + '"/><text x="50%" y="50%" fill="#8b9cb3" font-size="24" text-anchor="middle" dominant-baseline="middle">' + label + '</text></svg>');
 		}
 
 		// Renders the current demo item. `direction` ('next'/'prev'/undefined) picks which
-		// side the new frame slides in from; omit it for a fresh open (no slide).
-		// The blurred placeholder below stands in for the real GET /thumbs/{relative_path}
-		// JPEG (already generated for every item) — production wires that thumbnail as the
-		// instant placeholder, not a freshly-generated blur.
+		// side the new frame nudges in from; omit it for a fresh open (no slide).
+		// Prev/Next: keep the outgoing media until the incoming thumb covers it (no blank flash),
+		// then aspect-fit thumb + corner "• Loading…" dissolve into the full preview.
 		function renderGalleryItem(direction) {
 			var item = galleryDemoItems[galleryDemoIndex];
 			var stage = document.getElementById('gallery-item-stage');
@@ -2728,19 +2761,43 @@
 			var metaEl = document.querySelector('.gallery-meta');
 			var friendly = document.getElementById('btn-wireframe-friendly');
 			var isVideo = item.type === 'video';
+			var outgoing = document.getElementById('gallery-item-media');
+			if (!outgoing) {
+				outgoing = stage.querySelector('.gallery-item-media.is-incoming') || stage.querySelector('.gallery-item-media');
+			}
 
-			var mediaClass = 'gallery-item-media';
+			if (outgoing) {
+				outgoing.id = '';
+				outgoing.classList.add('is-outgoing');
+				outgoing.classList.remove('is-incoming');
+				if (direction === 'next') outgoing.classList.add('slide-out-next');
+				else if (direction === 'prev') outgoing.classList.add('slide-out-prev');
+				else {
+					// Fresh open / replace: drop previous immediately.
+					outgoing.remove();
+					outgoing = null;
+				}
+				if (outgoing) {
+					window.setTimeout(function () {
+						if (outgoing && outgoing.parentNode) outgoing.remove();
+					}, 300);
+				}
+			}
+
+			var mediaClass = 'gallery-item-media is-incoming';
 			if (direction === 'next') mediaClass += ' slide-in-next-start';
 			if (direction === 'prev') mediaClass += ' slide-in-prev-start';
 
-			stage.innerHTML =
-				'<div class="' + mediaClass + '" id="gallery-item-media">' +
-					'<img class="gallery-item-thumb" src="' + placeholderSvg(item.color, 'Loading…') + '" alt="" aria-hidden="true" />' +
-					'<div class="gallery-item-spinner" aria-hidden="true"></div>' +
-					(isVideo
-						? '<video class="gallery-item-full" controls aria-label="' + item.name + '"></video>'
-						: '<img class="gallery-item-full" alt="' + item.name + '" />') +
-				'</div>';
+			var media = document.createElement('div');
+			media.className = mediaClass;
+			media.id = 'gallery-item-media';
+			media.innerHTML =
+				'<img class="gallery-item-thumb" src="' + placeholderSvg(item.color, 'Thumb', item.w, item.h) + '" alt="" aria-hidden="true" />' +
+				'<p class="gallery-item-loading" aria-live="polite">• Loading…</p>' +
+				(isVideo
+					? '<video class="gallery-item-full" controls aria-label="' + item.name + '"></video>'
+					: '<img class="gallery-item-full" alt="' + item.name + '" />');
+			stage.appendChild(media);
 
 			titleEl.textContent = item.name;
 			metaEl.innerHTML =
@@ -2756,7 +2813,6 @@
 			document.getElementById('btn-gallery-item-prev').disabled = galleryDemoIndex === 0;
 			document.getElementById('btn-gallery-item-next').disabled = galleryDemoIndex === galleryDemoItems.length - 1;
 
-			var media = document.getElementById('gallery-item-media');
 			if (direction) {
 				// Force layout so the slide-in-start transform is applied before we clear it,
 				// otherwise the browser coalesces both states and skips the animation.
@@ -2764,38 +2820,62 @@
 				media.classList.remove('slide-in-next-start', 'slide-in-prev-start');
 			}
 
-			// Simulate the full-resolution asset arriving after a short network delay: the
-			// blurred thumbnail + spinner are visible immediately, then cross-fade out.
+			// Simulate full asset arrival: wait until the full bitmap is ready, fade it in
+			// over the still-visible thumb, then drop the thumb (no dual fade → no blank flash).
 			window.setTimeout(function () {
-				var fullEl = stage.querySelector('.gallery-item-full');
-				var thumbEl = stage.querySelector('.gallery-item-thumb');
-				var spinnerEl = stage.querySelector('.gallery-item-spinner');
-				if (!fullEl) return;
-				var fullSrc = placeholderSvg(item.color, isVideo ? 'Video' : 'Preview');
+				var fullEl = media.querySelector('.gallery-item-full');
+				var thumbEl = media.querySelector('.gallery-item-thumb');
+				var loadingEl = media.querySelector('.gallery-item-loading');
+				if (!fullEl || !media.isConnected) return;
+				var fullSrc = placeholderSvg(item.color, isVideo ? 'Video' : 'Preview', item.w, item.h);
+
+				function finishReveal() {
+					if (!media.isConnected) return;
+					if (loadingEl) loadingEl.classList.add('hidden');
+					fullEl.classList.add('loaded');
+					function hideThumb(e) {
+						if (e?.propertyName && e.propertyName !== 'opacity') return;
+						fullEl.removeEventListener('transitionend', hideThumb);
+						if (thumbEl) thumbEl.classList.add('hidden');
+					}
+					fullEl.addEventListener('transitionend', hideThumb);
+					window.setTimeout(function () { hideThumb(); }, 350);
+				}
+
+				function whenFullReady(run) {
+					if (isVideo) {
+						// Poster paint is async; give the element a frame after setting poster.
+						requestAnimationFrame(function () { requestAnimationFrame(run); });
+						return;
+					}
+					var done = false;
+					function once() {
+						if (done) return;
+						done = true;
+						fullEl.removeEventListener('load', once);
+						if (fullEl.decode) {
+							fullEl.decode().then(run, run);
+						} else {
+							run();
+						}
+					}
+					fullEl.addEventListener('load', once);
+					if (fullEl.complete && fullEl.naturalWidth) once();
+				}
+
 				if (isVideo) {
 					fullEl.poster = fullSrc;
 				} else {
 					fullEl.src = fullSrc;
 				}
-				fullEl.classList.add('loaded');
-				if (thumbEl) thumbEl.classList.add('hidden');
-				if (spinnerEl) spinnerEl.classList.add('hidden');
-			}, 550);
+				whenFullReady(finishReveal);
+			}, 650);
 		}
 
 		function goToGalleryDemoItem(newIndex, direction) {
 			if (newIndex < 0 || newIndex >= galleryDemoItems.length) return;
-			var media = document.getElementById('gallery-item-media');
-			if (media) {
-				media.classList.add(direction === 'next' ? 'slide-out-next' : 'slide-out-prev');
-				window.setTimeout(function () {
-					galleryDemoIndex = newIndex;
-					renderGalleryItem(direction);
-				}, 160);
-			} else {
-				galleryDemoIndex = newIndex;
-				renderGalleryItem(direction);
-			}
+			galleryDemoIndex = newIndex;
+			renderGalleryItem(direction);
 		}
 
 		document.querySelectorAll('.thumb-link[data-item-demo]').forEach(function (btn) {

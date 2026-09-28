@@ -29,6 +29,8 @@ CONTENT_SECURITY_POLICY = f"{_CSP_COMMON}script-src 'self' 'unsafe-inline'"
 CONTENT_SECURITY_POLICY_DESKTOP = f"{_CSP_COMMON}script-src 'self' 'unsafe-inline' 'unsafe-eval'"
 
 NO_CACHE_HEADERS = {"Cache-Control": "no-store, must-revalidate"}
+# Long-lived browser cache for gallery thumbs and inline media (paths are content-stable until replaced).
+MEDIA_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
 
 _SHELL_SCRIPT_RE = re.compile(
 	r"<script>\s*window\.SPACEMAKER_SHELL\s*=\s*(\"(?:desktop|mobile_gallery)\");"

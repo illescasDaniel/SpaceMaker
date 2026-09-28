@@ -13,7 +13,7 @@ def _converted_path(library: str, relative: str) -> str:
 	return f"{library}/{LibraryFolder.PROCESSED.value}/{relative}"
 
 
-def test_given_new_file_on_disk_when_run_then_probed_and_added_to_index():
+def test_given_new_file_on_disk_when_run_then_stores_display_metadata_on_index():
 	# given
 	library = "/lib"
 	full = _converted_path(library, "a.avif")
@@ -21,15 +21,38 @@ def test_given_new_file_on_disk_when_run_then_probed_and_added_to_index():
 	fs.files[full] = 10
 	fs.mtimes[full] = 100.0
 	probe = FakeMediaProbe(captured_at_map={full: datetime(2025, 9, 4)})
+	probe.bind_filesystem(fs)
+
+	class RichProbe(FakeMediaProbe):
+		def display_metadata(self, path: str):
+			from pathlib import Path as P
+
+			from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
+
+			self.captured_at_calls.append(path)
+			return GalleryDisplayMetadata(
+				filename=P(path).name,
+				captured_at=self.captured_at_map.get(path),
+				camera_make="Sony",
+				camera_model="A7",
+				width=4000,
+				height=3000,
+				duration_seconds=None,
+				file_size_bytes=self._fs.files.get(path, 0),
+				gps="",
+			)
+
+	rich = RichProbe(captured_at_map={full: datetime(2025, 9, 4)})
+	rich.bind_filesystem(fs)
 	index = FakeGalleryIndex()
-	sync = SyncGalleryIndex(fs, probe, index)
+	sync = SyncGalleryIndex(fs, rich, index)
 	# when
-	plan = sync.run(library)
+	sync.run(library)
 	# then
-	assert plan.added == ("a.avif",)
 	row = index.get(library, "a.avif")
 	assert row is not None
-	assert row.captured_at == datetime(2025, 9, 4)
+	assert row.camera_make == "Sony"
+	assert row.width == 4000
 
 
 def test_given_unchanged_file_when_run_twice_then_second_run_does_not_reprobe():

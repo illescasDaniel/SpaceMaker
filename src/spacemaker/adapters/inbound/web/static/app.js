@@ -69,29 +69,76 @@
 		el.appendChild(document.createTextNode(" " + detailText));
 	}
 
+	function pathLooksLikeVideo(relativePath) {
+		return /\.(mp4|mov|mkv|webm|avi|m4v|mts|m2ts)$/i.test(relativePath || "");
+	}
+
+	function prefetchGalleryMedia(relativePath) {
+		if (!relativePath) {
+			return;
+		}
+		var thumb = new Image();
+		var full;
+		thumb.src = "/thumbs/" + encodeURI(relativePath);
+		if (!pathLooksLikeVideo(relativePath)) {
+			full = new Image();
+			full.src = "/media/" + encodeURI(relativePath);
+		}
+	}
+
 	function setStageLoading(stage, direction) {
 		if (!stage) {
 			return;
 		}
-		stage.textContent = "";
-		var media = document.createElement("div");
-		media.className = "gallery-item-media";
+		var outgoing = document.getElementById("gallery-item-media");
+		var media;
+		var thumb;
+		var loading;
+		var early;
+		if (!outgoing) {
+			outgoing = stage.querySelector(".gallery-item-media.is-incoming") || stage.querySelector(".gallery-item-media");
+		}
+		if (outgoing && direction) {
+			outgoing.id = "";
+			outgoing.classList.add("is-outgoing");
+			outgoing.classList.remove("is-incoming");
+			outgoing.classList.add(direction === "next" ? "slide-out-next" : "slide-out-prev");
+			window.setTimeout(function () {
+				if (outgoing.parentNode) {
+					outgoing.remove();
+				}
+			}, 300);
+		} else {
+			stage.textContent = "";
+			outgoing = null;
+		}
+		media = document.createElement("div");
+		media.className = "gallery-item-media is-incoming";
 		media.id = "gallery-item-media";
 		if (direction === "next") {
 			media.classList.add("slide-in-next-start");
 		} else if (direction === "prev") {
 			media.classList.add("slide-in-prev-start");
 		}
-		var thumb = document.createElement("img");
+		thumb = document.createElement("img");
 		thumb.className = "gallery-item-thumb";
 		thumb.alt = "";
 		thumb.setAttribute("aria-hidden", "true");
 		thumb.src = "/thumbs/" + encodeURI(galleryItemPath);
-		var spinner = document.createElement("div");
-		spinner.className = "gallery-item-spinner";
-		spinner.setAttribute("aria-hidden", "true");
+		loading = document.createElement("p");
+		loading.className = "gallery-item-loading";
+		loading.setAttribute("aria-live", "polite");
+		loading.textContent = "• Loading…";
 		media.appendChild(thumb);
-		media.appendChild(spinner);
+		media.appendChild(loading);
+		// Start full image fetch immediately (do not wait for metadata API). Videos wait on preview_in_browser.
+		if (!pathLooksLikeVideo(galleryItemPath)) {
+			early = document.createElement("img");
+			early.className = "gallery-item-full";
+			early.alt = "";
+			early.src = "/media/" + encodeURI(galleryItemPath);
+			media.appendChild(early);
+		}
 		stage.appendChild(media);
 		if (direction) {
 			// Force layout so the slide-in-start transform applies before we clear it,
@@ -112,34 +159,65 @@
 		stage.appendChild(p);
 	}
 
+	function revealGalleryFull(media, full, thumb) {
+		var loadingEl = media?.querySelector(".gallery-item-loading") || null;
+		function startFade() {
+			if (!media?.isConnected || !full) {
+				return;
+			}
+			if (loadingEl) {
+				loadingEl.classList.add("hidden");
+			}
+			full.classList.add("loaded");
+			function hideThumb(e) {
+				if (e?.propertyName && e.propertyName !== "opacity") {
+					return;
+				}
+				full.removeEventListener("transitionend", hideThumb);
+				if (thumb) {
+					thumb.classList.add("hidden");
+				}
+			}
+			full.addEventListener("transitionend", hideThumb);
+			window.setTimeout(function () {
+				hideThumb();
+			}, 350);
+		}
+		function afterPainted() {
+			if (full.tagName === "IMG" && typeof full.decode === "function") {
+				full.decode().then(startFade, startFade);
+			} else {
+				startFade();
+			}
+		}
+		requestAnimationFrame(function () {
+			requestAnimationFrame(afterPainted);
+		});
+	}
+
 	function renderGalleryItemStage(stage, payload, meta) {
 		if (!stage) {
 			return;
 		}
-		var media = stage.querySelector(".gallery-item-media");
+		var media = stage.querySelector("#gallery-item-media") || stage.querySelector(".gallery-item-media.is-incoming");
 		if (!media) {
 			return;
 		}
-		media.querySelectorAll(".gallery-item-full, .gallery-no-preview").forEach(function (el) {
-			el.remove();
-		});
 		var thumb = media.querySelector(".gallery-item-thumb");
-		var spinner = media.querySelector(".gallery-item-spinner");
+		var loadingEl = media.querySelector(".gallery-item-loading");
 		var mediaUrl = "/media/" + encodeURI(payload.relative_path);
 		var label = meta.filename || payload.relative_path;
+		var earlyFull = media.querySelector(".gallery-item-full");
 		var video;
 		var noPreview;
 		var full;
 		function reveal() {
-			full.classList.add("loaded");
-			if (thumb) {
-				thumb.classList.add("hidden");
-			}
-			if (spinner) {
-				spinner.classList.add("hidden");
-			}
+			revealGalleryFull(media, full, thumb);
 		}
 		if (payload.kind === "video") {
+			if (earlyFull) {
+				earlyFull.remove();
+			}
 			if (payload.preview_in_browser) {
 				video = document.createElement("video");
 				video.className = "gallery-item-full";
@@ -156,11 +234,24 @@
 				noPreview.textContent =
 					"No in-browser preview for this codec (e.g. HEVC). Use Open on desktop or download the file.";
 				media.appendChild(noPreview);
-				if (spinner) {
-					spinner.classList.add("hidden");
+				if (loadingEl) {
+					loadingEl.classList.add("hidden");
 				}
 			}
 			return;
+		}
+		if (earlyFull && earlyFull.tagName === "IMG") {
+			full = earlyFull;
+			full.alt = label;
+			if (full.complete && full.naturalWidth > 0) {
+				reveal();
+			} else {
+				full.addEventListener("load", reveal, { once: true });
+			}
+			return;
+		}
+		if (earlyFull) {
+			earlyFull.remove();
 		}
 		full = document.createElement("img");
 		full.className = "gallery-item-full";
@@ -526,6 +617,8 @@
 				}
 				galleryItemNeighbors = { prev: results[0], next: results[1] };
 				updateGalleryItemNav();
+				prefetchGalleryMedia(results[0]);
+				prefetchGalleryMedia(results[1]);
 			},
 		);
 	}
@@ -546,26 +639,16 @@
 		if (!target) {
 			return;
 		}
-		var media = document.getElementById("gallery-item-media");
-		var advance = function () {
-			galleryItemPath = target;
-			galleryItemNeighbors = { prev: null, next: null };
-			updateGalleryItemNav();
-			var itemPath = "/gallery/item/" + encodeURI(galleryItemPath);
-			if (location.pathname !== itemPath) {
-				history.pushState({ view: "gallery-item", path: galleryItemPath }, "", itemPath);
-			}
-			loadGalleryItemDetail(direction);
-			refreshGalleryItemNeighbors(galleryItemPath);
-		};
-		if (media) {
-			// Previous/Next only slides the preview — it doesn't replay the
-			// container-level open animation that a fresh navigation gets.
-			media.classList.add(direction === "next" ? "slide-out-next" : "slide-out-prev");
-			window.setTimeout(advance, 160);
-		} else {
-			advance();
+		// No blank delay — setStageLoading keeps outgoing media until the incoming thumb covers it.
+		galleryItemPath = target;
+		galleryItemNeighbors = { prev: null, next: null };
+		updateGalleryItemNav();
+		var itemPath = "/gallery/item/" + encodeURI(galleryItemPath);
+		if (location.pathname !== itemPath) {
+			history.pushState({ view: "gallery-item", path: galleryItemPath }, "", itemPath);
 		}
+		loadGalleryItemDetail(direction);
+		refreshGalleryItemNeighbors(galleryItemPath);
 	}
 
 	function showGalleryItem(relativePath, options) {
@@ -758,6 +841,7 @@
 			ffmpeg: "ffmpeg / ffprobe",
 			ffprobe: "ffprobe",
 			magick: "magick (ImageMagick)",
+			avifenc: "avifenc (libavif)",
 			exiftool: "exiftool",
 			idevice_id: "idevice_id (libimobiledevice)",
 			idevicepair: "idevicepair (libimobiledevice)",
@@ -2407,7 +2491,7 @@
 				galleryNextCursor = payload.next_cursor || null;
 				galleryHasMore = Boolean(galleryNextCursor);
 				if (isFirstPage && !items.length) {
-					showGalleryTimelineMessage("No media in processed/ yet.");
+					showGalleryTimelineMessage("No saved media yet");
 					galleryHasMore = false;
 					return;
 				}

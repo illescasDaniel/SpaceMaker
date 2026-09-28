@@ -33,7 +33,8 @@ def sweep_legacy_hash_export_caches(filesystem: FileSystemPort, library_root: st
 	exports_dir = str(Path(library_root) / EXPORTS_DIR_NAME)
 	for relative in filesystem.list_files_recursive(exports_dir):
 		# Legacy layout was flat; path-mirrored caches live under subdirs or include a source suffix.
-		if "/" in relative or "\\" in relative:
+		normalized = relative.replace("\\", "/")
+		if "/" in normalized:
 			continue
-		if is_legacy_hash_export_filename(relative):
-			_delete_if_present(filesystem, str(Path(exports_dir) / relative))
+		if is_legacy_hash_export_filename(normalized):
+			_delete_if_present(filesystem, str(Path(exports_dir) / normalized))

@@ -42,14 +42,14 @@
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 	--dur-fast: 120ms;
 	--dur-base: 200ms;
+	/* Thumb → full dissolve / prev-next handoff: noticeable but snappy */
+	--dur-crossfade: 280ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
 	:root {
 		--dur-fast: 0.001ms;
 		--dur-base: 0.001ms;
-	}
-	.gallery-item-spinner {
-		animation: none;
+		--dur-crossfade: 0.001ms;
 	}
 }

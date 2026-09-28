@@ -69,6 +69,9 @@ RAW_EXTENSIONS: frozenset[str] = frozenset(
 
 JPEG_EXTENSIONS: frozenset[str] = frozenset({"jpg", "jpeg"})
 
+# Formats libavif avifenc reads without a Magick rasterize step (JPEG/PNG/Y4M; we use JPEG/PNG).
+AVIFENC_NATIVE_EXTENSIONS: frozenset[str] = frozenset({"jpg", "jpeg", "png"})
+
 WEB_VIDEO_CONTAINERS: frozenset[str] = frozenset({"mp4", "webm", "mov"})
 WEB_VIDEO_CODECS: frozenset[str] = frozenset({"h264", "hevc", "vp9", "av1"})
 WEB_AUDIO_CODECS: frozenset[str] = frozenset({"aac", "mp3", "opus", "vorbis", "flac"})
@@ -100,3 +103,8 @@ def media_kind_for_extension(ext: str) -> MediaKind:
 
 def is_raw_extension(ext: str) -> bool:
 	return ext.lower() in RAW_EXTENSIONS
+
+
+def is_avifenc_native_extension(ext: str) -> bool:
+	"""True when avifenc can encode the file without a Magick rasterize step."""
+	return ext.lower() in AVIFENC_NATIVE_EXTENSIONS

@@ -7,6 +7,8 @@ from spacemaker.domain.video_encode import HardwareVideoEncoder
 
 
 class MediaConverterPort(Protocol):
+	"""Outbound media encode. Image AVIF prefers progressive avifenc when available."""
+
 	def library_video_encoder(self) -> HardwareVideoEncoder: ...
 
 	def encode_image_to_avif(self, source: str, destination: str) -> None: ...

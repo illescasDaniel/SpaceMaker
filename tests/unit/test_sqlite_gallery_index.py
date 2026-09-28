@@ -15,7 +15,7 @@ def test_given_new_library_root_when_connect_then_creates_index_file_with_schema
 	conn = index._connect(library)
 	# then
 	assert index.db_path(library).is_file()
-	assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+	assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
 	assert conn.execute("SELECT COUNT(*) FROM gallery_items").fetchone()[0] == 0
 
 

@@ -24,9 +24,20 @@
 - **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`. Cache paths are a pure function of the source relative path: append `.jpg` to the full relative path (keep the original suffix), e.g. `2025/vacation.avif` → `.thumbnails/2025/vacation.avif.jpg`. This keeps distinct sources from colliding when they share a stem (`vacation.avif` vs `vacation.mp4`). Thumbnail and export cache paths are **not** stored in the gallery index.
 - **Friendly export cache:** on-demand **Download as JPEG** / **Download as MP4** outputs (when a re-encode is needed) live under `{library_root}/.exports/` with the same injective path-mirror rule — append `.jpg` or `.mp4` to the full relative path (e.g. `2025/vacation.avif` → `.exports/2025/vacation.avif.jpg`). Reuse when the cache file exists and is at least as new as the source. Safe to delete anytime; regenerates on the next friendly download. Already-friendly sources (JPEG / H.264+AAC MP4) are served from `processed/` and write nothing under `.exports/`.
 - **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
-- **Performance:** cached thumbs; a persisted, incrementally-synced index (derived from `processed/` + EXIF/probe metadata, never a source of truth by itself) backs timeline/calendar/day queries so response time does not scale with total library size. Timeline loads via cursor-paginated pages with infinite scroll. Smooth, responsive scrolling at **50,000+ items**, with a bounded mounted-tile working set (not the full library) regardless of scroll distance.
-- **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, `max-height: 55vh` on desktop; phone shell ~50vh). **Previous** / **Next** overlay buttons on the preview move to the adjacent item in **timeline order** (newest-first, same as the grid); disabled at the first/last item. Metadata block under preview includes **On disk** (absolute path, full-width wrap). Actions depend on shell:
-- **Progressive preview loading:** the preview area reserves its final size up front (never renders at zero/near-zero size). The item's existing thumbnail (`GET /thumbs/{relative_path}` — same one used in the grid) fills it immediately as a placeholder, with a loading indicator over it, while the full-size preview loads in the background; the full preview then replaces the thumbnail. This applies on initial open and on every **Previous**/**Next** step.
+- **Performance:** cached thumbs; long-lived `Cache-Control` on `/thumbs/` and inline `/media/`; image item open starts full media fetch immediately (metadata must not gate it); neighbor thumb/media prefetch after paths are known; a persisted, incrementally-synced index (derived from `processed/` + EXIF/probe metadata, never a source of truth by itself) backs timeline/calendar/day queries and preferably item display metadata so response time does not scale with total library size. Timeline loads via cursor-paginated pages with infinite scroll. Smooth, responsive scrolling at **50,000+ items**, with a bounded mounted-tile working set (not the full library) regardless of scroll distance.
+- **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, `max-height: 55vh` on desktop; phone shell ~50vh). **Previous** / **Next** controls sit **beside** the preview stage (not overlaid on the media), with a clear gutter so they never cover image/video content; media is inset inside the stage frame. Both controls remain visible at the first and last item — the boundary control is **disabled** (muted styling, still opaque — not faded to near-invisible) and does not wrap. Stepping uses **timeline order** (newest-first, same as the grid). Metadata block under preview includes **On disk** (absolute path, full-width wrap). Actions depend on shell:
+- **Progressive preview loading:** the preview area reserves its final size up front (never renders at zero/near-zero size). The item's existing thumbnail (`GET /thumbs/{relative_path}` — same one used in the grid) shows immediately as a placeholder using the **same aspect-fit** as the full preview (`object-fit: contain` — letterbox/pillarbox, not cover/crop). A corner status **`• Loading…`** (bottom-left of the media area; no spinner) shows while the full-size preview loads; the full preview then reveals over the thumbnail. This applies on initial open and on every **Previous**/**Next** step.
+	- **No extra CSS blur** on the placeholder (no `filter: blur(…)` / scale trick). Natural low-resolution softness from the thumb JPEG is fine.
+	- **Smooth scaling:** both the placeholder thumb and the full preview scale with a bilinear-like filter (`image-rendering: auto` / `smooth`) — never nearest-neighbor / pixelated.
+	- **Reveal (no blank flash):** wait until the full bitmap is loaded/decoded; fade the full preview in **on top of** the still-visible thumb; only then hide the thumb (do not fade thumb and full out/in together). Prefer a short crossfade duration (~280ms) — smooth but not slow. Respect `prefers-reduced-motion`.
+	- **Previous/Next handoff:** keep the outgoing media visible until the incoming thumb covers the stage (overlap + light nudge) — do not blank the stage between items.
+	- **Loading chrome:** corner `• Loading…` on a small chip/backdrop; no center spinner.
+- **Item open performance:**
+	- For **images**, the browser starts `GET /media/{relative_path}` **as soon as the item opens** (path is already known). It must **not** wait for `GET /api/gallery/item` / ExifTool before beginning that fetch. Videos may wait on the item API for `preview_in_browser` before attaching `<video>`.
+	- Item metadata (camera, dimensions, GPS, etc.) may appear **after** the full preview has started loading; the meta panel must not gate the media request.
+	- Prefer serving display metadata from the derived gallery index when present (populated during index sync) so item open does not re-run ExifTool/ffprobe on every open; fall back to probe when the index lacks those fields.
+	- `GET /thumbs/{relative_path}` and `GET /media/{relative_path}` (inline preview, not forced download) send long-lived `Cache-Control` so revisit / prev-next / LAN reloads can use the browser cache. SPA HTML stays `no-store`. Forced downloads (`?download=1` / `Content-Disposition: attachment`) are unaffected.
+	- After neighbors are known, the client **prefetches** `/thumbs/` and `/media/` for the previous and next timeline neighbors so stepping feels snappy.
   - **Desktop app** (`index.html`): **Open** (default app), **Open containing folder**, **Download as JPEG** / **MP4**, **Delete**.
   - **Standalone phone gallery** (`gallery_mobile.html`): **Download**, **Download as JPEG** / **MP4**, **Delete**.
 - Export progress in an on-page alert with progress bar.
@@ -151,19 +162,46 @@
 
 - **Given** at least two files in `processed/` in timeline order
 - **When** the user opens one item’s detail page
-- **Then** **Previous** and **Next** controls are shown on the preview
+- **Then** **Previous** and **Next** controls are shown **beside** the preview stage (not overlaid on the media)
+- **And** media content has inset/gutter so it does not sit under those controls
 - **And** **Next** opens the next item in timeline order (older when viewing newest-first)
 - **And** **Previous** opens the prior item in timeline order
-- **And** the control for the boundary item is disabled (no wrap)
+- **And** the control for the boundary item is disabled but still clearly visible (no wrap)
+- **And** stepping to the next/previous item does not flash a blank stage (outgoing media stays until the incoming thumb covers it)
 - **And** this works via a per-item neighbor lookup, without requiring the full library's item list to be loaded client-side
 
 ### Scenario: Full preview loads progressively from the thumbnail
 
 - **Given** the gallery item page is opening, or the user has just chosen **Previous**/**Next**
 - **When** the full-size preview has not finished loading yet
-- **Then** the item's existing thumbnail (`GET /thumbs/{relative_path}`) fills the preview area immediately, with a loading indicator over it
+- **Then** the item's existing thumbnail (`GET /thumbs/{relative_path}`) appears immediately in the preview area using **aspect-fit** (`object-fit: contain` — same fit as the eventual full preview)
+- **And** a corner status **`• Loading…`** is shown (no spinner)
+- **And** the placeholder is **not** given an extra CSS blur filter (low-res softness from the thumb itself is OK)
+- **And** the placeholder and full preview use smooth (bilinear-like) image scaling — not nearest-neighbor / pixelated
 - **And** the preview area is already at its final size — it does not render at zero or near-zero size while waiting
-- **And** once the full-size preview loads, it replaces the thumbnail and the loading indicator is removed
+- **When** the full-size preview has loaded and decoded
+- **Then** it fades in on top of the still-visible thumbnail (short smooth transition; no blank flash)
+- **And** the thumbnail is hidden only after the full preview is opaque
+- **And** the **`• Loading…`** status is removed
+
+### Scenario: Image full preview fetch does not wait on metadata
+
+- **Given** the user opens an **image** gallery item (initial open or Previous/Next)
+- **When** the item page begins loading
+- **Then** `GET /media/{relative_path}` for that image starts without waiting for `GET /api/gallery/item` to finish
+- **And** metadata below the preview may populate when the item API returns (possibly after the media request has already started)
+
+### Scenario: Thumbs and media are cacheable
+
+- **Given** a gallery thumb or inline media URL is requested
+- **When** the response is returned (and it is not a forced download)
+- **Then** the response includes a long-lived `Cache-Control` header suitable for browser caching
+
+### Scenario: Neighbors are prefetched after item load
+
+- **Given** the user is on a gallery item page with a previous and/or next neighbor in timeline order
+- **When** the current item's detail has loaded enough to know those neighbor paths
+- **Then** the client prefetches `/thumbs/` and `/media/` for each available neighbor
 
 ### Scenario: Delete gallery item from disk
 

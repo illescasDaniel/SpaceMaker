@@ -4,6 +4,12 @@ Open items only. Finished work: `memory/archive.md`.
 
 ## SpaceMaker app
 
+- [ ] **Aspect-preserving gallery thumbnails** — Image thumbs are Magick center-cropped to 320² (`WxH^` + `-extent`); should fit-within preserving aspect so item-detail progressive placeholder matches framing. Grid keeps CSS `object-fit: cover` on square tiles. Discovered 2026-09-28; save-changes first, then wireframe + SPEC.
+- [x] **Early Photo Backup convert + live totals** — Per-file Easy convert start (not end-of-multipart); `live_job_progress(completed, originals_remaining)`; drain refresh while RUNNING. Spec + arch approved 2026-09-28; Phases 3–4 done. Awaiting manual multi-file upload smoke.
+- [x] **Gallery item progressive transition** — Fade full over still thumb (no blank flash); corner `• Loading…`; prev/next beside stage with media inset; disabled arrows stay visible. Wireframe + SPEC + architecture approved 2026-09-28; production CSS/JS updated. Awaiting manual smoke.
+- [x] **Gallery item progressive preview polish** — Thumb placeholder aspect-fits like full preview (`object-fit: contain`); no extra CSS blur; smooth (bilinear-like) scaling. Folded into the transition work above.
+- [x] **Reset gallery WinError 32** — Open `.index.sqlite` connection blocked delete on Windows; `GalleryIndexPort.close` + `ResetLibrary` closes before unlink. Unit-covered; awaiting manual re-try.
+- [x] **Progressive AVIF + gallery open speed** — Specs + architecture approved; Phases 3–4 done (avifenc catalog/encode, index display metadata, immediate `/media/` + Cache-Control + neighbor prefetch). Awaiting manual smoke.
 - [x] **Photo backup compress preference** — Full SDD (wireframe → spec → architecture → tests → impl) approved in chat 2026-09-26. Compress media checkbox, persistence, tools gate, Easy auto-convert gating.
 - [x] **Promote uncompressed + processed/ + Settings chrome** — Full SDD 2026-09-27. Compress-off promotes originals→`processed/`; rename `converted/`→`processed/` (+ migration); sticky Home|Gallery|Settings; clear prefs / reset library / legal / tools; window 1152×864. Awaiting manual smoke + PR.
 - [x] **Gallery orphan cache cleanup** — injective path-mirrored thumbs/exports;

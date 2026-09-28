@@ -78,11 +78,12 @@ class FakeFileSystem:
 			target.unlink(missing_ok=True)
 
 	def list_files_recursive(self, folder: str) -> list[str]:
-		prefix = folder.rstrip("/") + "/"
+		prefix = folder.replace("\\", "/").rstrip("/") + "/"
 		out: list[str] = []
 		for path in self.files:
-			if path.startswith(prefix):
-				out.append(path[len(prefix) :])
+			normalized = path.replace("\\", "/")
+			if normalized.startswith(prefix):
+				out.append(normalized[len(prefix) :])
 		return sorted(out)
 
 	def list_files_in_library_folder(self, library_root: str, folder: LibraryFolder) -> list[str]:
@@ -186,11 +187,12 @@ class FakeMediaProbe:
 		return self.captured_at_map.get(path)
 
 	def display_metadata(self, path: str) -> GalleryDisplayMetadata:
+		self.captured_at_calls.append(path)
 		p = Path(path)
 		size = self._fs.files.get(path, 0) if hasattr(self, "_fs") else 0
 		return GalleryDisplayMetadata(
 			filename=p.name,
-			captured_at=None,
+			captured_at=self.captured_at_map.get(path),
 			camera_make="",
 			camera_model="",
 			width=None,
@@ -325,3 +327,6 @@ class FakeGalleryIndex:
 
 	def count(self, library_root: str) -> int:
 		return len(self._bucket(library_root))
+
+	def close(self, library_root: str) -> None:
+		self.rows.pop(library_root, None)

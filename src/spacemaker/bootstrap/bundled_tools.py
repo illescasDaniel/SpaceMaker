@@ -15,6 +15,7 @@ class BundledTool(StrEnum):
 	FFMPEG = "ffmpeg"
 	FFPROBE = "ffprobe"
 	MAGICK = "magick"
+	AVIFENC = "avifenc"
 	EXIFTOOL = "exiftool"
 	IDEVICE_ID = "idevice_id"
 	IDEVICE_PAIR = "idevicepair"

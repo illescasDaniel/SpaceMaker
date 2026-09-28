@@ -6,13 +6,13 @@
 - **Use case:** `ConvertMedia`
 - **Ports:** `MediaConverter`, `FileSystem`, optional `MediaProbe` (ffprobe/magick identify abstracted)
 - **Reference:** [docs/reference/convert_all_1_1.sh](../../docs/reference/convert_all_1_1.sh)
-- **Packaging:** Adapters invoke **bundled** `ffmpeg`, `ffprobe`, `magick`, `exiftool` — [packaging/SPEC.md](../packaging/SPEC.md)
+- **Packaging:** Adapters invoke **bundled** `ffmpeg`, `ffprobe`, `magick`, `avifenc`, `exiftool` — [packaging/SPEC.md](../packaging/SPEC.md)
 - **UI:** [main-wizard](../main-wizard/SPEC.md) Step 2
 
 ## Triggers & routing
 
 - **Start (Advanced):** User clicks **Start convert** when enabled (see [main-wizard](../main-wizard/SPEC.md): enabled when `originals/` non-empty, including during extract; click **stops extract first** then converts).
-- **Start (Easy):** [easy-mode](../easy-mode/SPEC.md) — after each Wi‑Fi upload into `originals/`, when **Compress media** is on and tools are available, convert drains automatically **without** stopping extract; re-queues while files remain. When Compress media is off, Easy does not start convert; instead it **promotes** uploads as-is from `originals/` → `processed/` (see easy-mode).
+- **Start (Easy):** [easy-mode](../easy-mode/SPEC.md) — after each Wi‑Fi **file** lands in `originals/` (saved or size-skipped; not after the whole multipart request), when **Compress media** is on and tools are available, convert drains automatically **without** stopping extract; re-queues while files remain. While convert is running, progress `total` is live: `completed + count(originals/)`. When Compress media is off, Easy does not start convert; instead it **promotes** uploads as-is from `originals/` → `processed/` (see easy-mode).
 - **Input:** All files under `originals/` (recursive), processed in deterministic order (e.g. sorted relative path).
 - **Output:** Each source file ends with no copy left in `originals/` except transient in-flight (success, move-as-is, `error/`, or `invalid/`).
 
@@ -84,9 +84,16 @@ Move from `originals/` to `processed/` with **same relative path and filename** 
 ## Image encode
 
 - **Output path:** `{stem}.avif` beside source relative layout under `processed/` (see RAW+JPEG collision below).
-- **Command policy (ImageMagick):** `-depth 10 -quality 80 -define avif:chroma-subsampling=444`
-- **Metadata:** ExifTool `-TagsFromFile source -all:all` onto output (overwrite output tags).
+- **Progressive AVIF (preferred when `avifenc` is resolvable):** encode a **layered progressive** AVIF so compatible browsers can paint a base layer while higher layers stream in (plain `<img src>` / gallery `/media/` — no special viewer). Flags: `avifenc --progressive -d 10 -q 80 -y 444`. Then ExifTool `-TagsFromFile source -all:all` onto output; strip Orientation when pixels are already oriented.
+- **Input routing when `avifenc` is available** (prefer fewer steps — no Magick pre-pass when unnecessary):
+	1. **JPEG / PNG** — call `avifenc` on the source directly (`avifenc` applies JPEG EXIF orientation).
+	2. **RAW** — ExifTool extract `PreviewImage` / `JpgFromRaw` to a temp JPEG, then `avifenc` on that temp (no Magick). If no preview → `invalid/`.
+	3. **Other supported images** (HEIC, TIFF, JXL, WebP, etc.) — Magick rasterizes to a temp PNG (`-auto-orient`), then `avifenc` on the temp.
+- **Fallback (`avifenc` missing):** ImageMagick single-layer AVIF — `-auto-orient -depth 10 -quality 80 -define avif:chroma-subsampling=444` — same ExifTool metadata step. Convert still succeeds; progressive paint is unavailable for that encode. RAW still uses ExifTool preview then Magick encode when Magick cannot read RAW directly.
+- **Already AVIF:** move-as-is (no re-encode) — existing files are **not** rewritten as progressive. Progressive applies only to newly encoded images.
+- **Metadata:** ExifTool `-TagsFromFile source -all:all` onto output (overwrite output tags). ExifTool tag-copy failure: log warning; still accept output if image validates (v1).
 - **Validation:** output size > 0 and `magick identify` succeeds.
+- **Magick remains required** for gallery thumbs, friendly JPEG export, identify, and rasterizing formats `avifenc` cannot read — progressive encode does **not** remove ImageMagick as a project dependency.
 
 ### RAW + JPEG same stem (collision)
 
@@ -98,7 +105,9 @@ Both RAW and JPEG siblings must each produce a validated AVIF when both exist.
 
 ### RAW fallback
 
-If ImageMagick cannot read RAW: extract `PreviewImage`, else `JpgFromRaw` via ExifTool to temp, encode temp. If no preview → move source to `invalid/`.
+When `avifenc` is available: extract `PreviewImage`, else `JpgFromRaw` via ExifTool to temp JPEG, then `avifenc` on the temp. If no preview → move source to `invalid/`.
+
+When `avifenc` is missing: if ImageMagick cannot read RAW, same ExifTool preview extract then Magick AVIF encode. If no preview → `invalid/`.
 
 ## Video encode
 
@@ -169,6 +178,31 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 - **Then** `{stem}.avif` exists in `processed/`
 - **And** the png is removed from `originals/`
 
+### Scenario: Image encode prefers progressive avifenc
+
+- **Given** `avifenc` and `magick` are resolvable
+- **And** a JPEG or PNG in `originals/`
+- **When** convert encodes the image
+- **Then** the output is produced by calling `avifenc --progressive` on the source (no Magick rasterize step)
+- **And** ExifTool copies metadata onto the output
+- **And** `{stem}.avif` exists in `processed/`
+
+### Scenario: Image encode uses Magick only to rasterize formats avifenc cannot read
+
+- **Given** `avifenc` and `magick` are resolvable
+- **And** a HEIC (or other non-JPEG/PNG image `avifenc` cannot read) in `originals/`
+- **When** convert encodes the image
+- **Then** Magick rasterizes to a temp PNG, then `avifenc --progressive` encodes that temp
+- **And** `{stem}.avif` exists in `processed/`
+
+### Scenario: Image encode falls back to magick when avifenc missing
+
+- **Given** `magick` is resolvable and `avifenc` is not
+- **And** a non-AVIF image in `originals/`
+- **When** convert encodes the image
+- **Then** a valid AVIF is still produced via ImageMagick
+- **And** `{stem}.avif` exists in `processed/`
+
 ### Scenario: DNG and JPEG both produce AVIF
 
 - **Given** `photo.dng` and `photo.jpg` in the same folder under `originals/`
@@ -218,11 +252,19 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 - **When** each file reaches terminal state
 - **Then** WebSocket progress updates completed count and percent
 
+### Scenario: Easy live progress total while receiving
+
+- **Given** Easy concurrent convert is running with progress reflecting files known so far
+- **When** additional files land in `originals/` before the current pass finishes
+- **Then** WebSocket progress `total` grows to `completed + count(originals/)` without a second convert job
+- **And** Advanced Step 2 convert (stop-extract-first) is unchanged
+
 ## Failure scenarios
 
 | Case | Expected |
 |------|----------|
 | ffmpeg/magick missing | Fail fast at job start with clear error; no mass delete |
+| avifenc missing | Image encode uses ImageMagick fallback; convert does not fail solely for missing avifenc |
 | Disk full during encode | Treat as encode failure → retry → error |
 | exiftool tag copy fails | Log warning; still accept output if image validates (v1) |
 
@@ -252,3 +294,4 @@ Never delete `originals/` source until validation passes (except move-as-is path
 - User-adjustable CRF/quality in UI
 - Parallel encode worker pool sizing (implementation detail; must be safe)
 - Re-converting files already in `processed/` without putting sources back in `originals/`
+- Re-encoding existing AVIF in `processed/` solely to add progressive layers

@@ -16,6 +16,11 @@
 				"strategy": "file",
 				"url": "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-31/ImageMagick-7.1.2-31-gcc-x86_64.AppImage"
 			},
+			"avifenc": {
+				"strategy": "zip",
+				"url": "https://github.com/AOMediaCodec/libavif/releases/download/v1.4.2/linux-artifacts.zip",
+				"files": { "avifenc": "avifenc" }
+			},
 			"exiftool": {
 				"strategy": "archive",
 				"url": "https://sourceforge.net/projects/exiftool/files/Image-ExifTool-13.59.tar.gz/download",
@@ -34,6 +39,11 @@
 				"files": { "ffmpeg": "ffmpeg", "ffprobe": "ffprobe" }
 			},
 			"ffprobe": { "companion_of": "ffmpeg" },
+			"avifenc": {
+				"strategy": "zip",
+				"url": "https://github.com/AOMediaCodec/libavif/releases/download/v1.4.2/linux-artifacts.zip",
+				"files": { "avifenc": "avifenc" }
+			},
 			"exiftool": {
 				"strategy": "archive",
 				"url": "https://sourceforge.net/projects/exiftool/files/Image-ExifTool-13.59.tar.gz/download",
@@ -52,6 +62,11 @@
 				"files": { "ffmpeg": "bin/ffmpeg.exe", "ffprobe": "bin/ffprobe.exe" }
 			},
 			"ffprobe": { "companion_of": "ffmpeg" },
+			"avifenc": {
+				"strategy": "zip",
+				"url": "https://github.com/AOMediaCodec/libavif/releases/download/v1.4.2/windows-artifacts.zip",
+				"files": { "avifenc": "avifenc.exe" }
+			},
 			"exiftool": {
 				"strategy": "zip_flatten",
 				"url": "https://sourceforge.net/projects/exiftool/files/exiftool-13.59_64.zip/download",
@@ -66,7 +81,12 @@
 				"files": { "adb": "platform-tools/adb" }
 			},
 			"ffmpeg": { "strategy": "static_ffmpeg_wheel", "version": "2.13" },
-			"ffprobe": { "companion_of": "ffmpeg" }
+			"ffprobe": { "companion_of": "ffmpeg" },
+			"avifenc": {
+				"strategy": "zip",
+				"url": "https://github.com/AOMediaCodec/libavif/releases/download/v1.4.2/macOS-artifacts.zip",
+				"files": { "avifenc": "avifenc" }
+			}
 		},
 		"macos-x86_64": {
 			"adb": {
@@ -75,7 +95,12 @@
 				"files": { "adb": "platform-tools/adb" }
 			},
 			"ffmpeg": { "strategy": "static_ffmpeg_wheel", "version": "2.13" },
-			"ffprobe": { "companion_of": "ffmpeg" }
+			"ffprobe": { "companion_of": "ffmpeg" },
+			"avifenc": {
+				"strategy": "zip",
+				"url": "https://github.com/AOMediaCodec/libavif/releases/download/v1.4.2/macOS-artifacts.zip",
+				"files": { "avifenc": "avifenc" }
+			}
 		}
 	}
 }

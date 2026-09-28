@@ -18,7 +18,7 @@ from spacemaker.domain.gallery_index import (
 from spacemaker.domain.media import MediaKind
 
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS gallery_items (
@@ -26,11 +26,23 @@ CREATE TABLE IF NOT EXISTS gallery_items (
 	captured_at REAL NOT NULL,
 	kind TEXT NOT NULL,
 	mtime REAL NOT NULL,
-	size INTEGER NOT NULL
+	size INTEGER NOT NULL,
+	camera_make TEXT NOT NULL DEFAULT '',
+	camera_model TEXT NOT NULL DEFAULT '',
+	width INTEGER,
+	height INTEGER,
+	duration_seconds REAL,
+	gps TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_gallery_items_captured_at
 	ON gallery_items (captured_at DESC, relative_path DESC);
 """
+
+_SELECT_ITEMS = (
+	"SELECT relative_path, captured_at, kind, mtime, size, "
+	"camera_make, camera_model, width, height, duration_seconds, gps "
+	"FROM gallery_items"
+)
 
 
 def _month_bounds(year: int, month: int) -> tuple[float, float]:
@@ -111,14 +123,35 @@ class SqliteGalleryIndex:
 		conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
 		conn.commit()
 
-	def _row_from_record(self, record: tuple[str, float, str, float, int]) -> GalleryIndexRow:
-		relative_path, captured_at, kind, mtime, size = record
+	def _row_from_record(
+		self,
+		record: tuple[str, float, str, float, int, str, str, int | None, int | None, float | None, str],
+	) -> GalleryIndexRow:
+		(
+			relative_path,
+			captured_at,
+			kind,
+			mtime,
+			size,
+			camera_make,
+			camera_model,
+			width,
+			height,
+			duration_seconds,
+			gps,
+		) = record
 		return GalleryIndexRow(
 			relative_path=relative_path,
 			captured_at=from_epoch_seconds(captured_at),
 			kind=MediaKind(kind),
 			mtime=mtime,
 			size=size,
+			camera_make=camera_make or "",
+			camera_model=camera_model or "",
+			width=width,
+			height=height,
+			duration_seconds=duration_seconds,
+			gps=gps or "",
 		)
 
 	def snapshot_stats(self, library_root: str) -> dict[str, FileStat]:
@@ -133,13 +166,30 @@ class SqliteGalleryIndex:
 			with conn:
 				if upserts:
 					conn.executemany(
-						"INSERT INTO gallery_items (relative_path, captured_at, kind, mtime, size) "
-						"VALUES (?, ?, ?, ?, ?) "
+						"INSERT INTO gallery_items ("
+						"relative_path, captured_at, kind, mtime, size, "
+						"camera_make, camera_model, width, height, duration_seconds, gps"
+						") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
 						"ON CONFLICT(relative_path) DO UPDATE SET "
 						"captured_at = excluded.captured_at, kind = excluded.kind, "
-						"mtime = excluded.mtime, size = excluded.size",
+						"mtime = excluded.mtime, size = excluded.size, "
+						"camera_make = excluded.camera_make, camera_model = excluded.camera_model, "
+						"width = excluded.width, height = excluded.height, "
+						"duration_seconds = excluded.duration_seconds, gps = excluded.gps",
 						[
-							(row.relative_path, to_epoch_seconds(row.captured_at), row.kind.value, row.mtime, row.size)
+							(
+								row.relative_path,
+								to_epoch_seconds(row.captured_at),
+								row.kind.value,
+								row.mtime,
+								row.size,
+								row.camera_make,
+								row.camera_model,
+								row.width,
+								row.height,
+								row.duration_seconds,
+								row.gps,
+							)
 							for row in upserts
 						],
 					)
@@ -159,7 +209,7 @@ class SqliteGalleryIndex:
 		with self._lock:
 			conn = self._connect(library_root)
 			record = conn.execute(
-				"SELECT relative_path, captured_at, kind, mtime, size FROM gallery_items WHERE relative_path = ?",
+				_SELECT_ITEMS + " WHERE relative_path = ?",
 				(relative_path,),
 			).fetchone()
 			return None if record is None else self._row_from_record(record)
@@ -169,14 +219,14 @@ class SqliteGalleryIndex:
 			conn = self._connect(library_root)
 			if cursor is None:
 				records = conn.execute(
-					"SELECT relative_path, captured_at, kind, mtime, size FROM gallery_items "
+					_SELECT_ITEMS + " "
 					"ORDER BY captured_at DESC, relative_path DESC LIMIT ?",
 					(limit + 1,),
 				).fetchall()
 			else:
 				ts = to_epoch_seconds(cursor.captured_at)
 				records = conn.execute(
-					"SELECT relative_path, captured_at, kind, mtime, size FROM gallery_items "
+					_SELECT_ITEMS + " "
 					"WHERE (captured_at < ?) OR (captured_at = ? AND relative_path < ?) "
 					"ORDER BY captured_at DESC, relative_path DESC LIMIT ?",
 					(ts, ts, cursor.relative_path, limit + 1),
@@ -204,7 +254,7 @@ class SqliteGalleryIndex:
 			conn = self._connect(library_root)
 			start, end = _day_bounds(year, month, day)
 			records = conn.execute(
-				"SELECT relative_path, captured_at, kind, mtime, size FROM gallery_items "
+				_SELECT_ITEMS + " "
 				"WHERE captured_at >= ? AND captured_at < ? "
 				"ORDER BY captured_at DESC, relative_path DESC",
 				(start, end),
@@ -224,14 +274,14 @@ class SqliteGalleryIndex:
 			captured_at = current[0]
 			if direction == "next":
 				record = conn.execute(
-					"SELECT relative_path, captured_at, kind, mtime, size FROM gallery_items "
+					_SELECT_ITEMS + " "
 					"WHERE (captured_at < ?) OR (captured_at = ? AND relative_path < ?) "
 					"ORDER BY captured_at DESC, relative_path DESC LIMIT 1",
 					(captured_at, captured_at, relative_path),
 				).fetchone()
 			else:
 				record = conn.execute(
-					"SELECT relative_path, captured_at, kind, mtime, size FROM gallery_items "
+					_SELECT_ITEMS + " "
 					"WHERE (captured_at > ?) OR (captured_at = ? AND relative_path > ?) "
 					"ORDER BY captured_at ASC, relative_path ASC LIMIT 1",
 					(captured_at, captured_at, relative_path),
@@ -242,3 +292,10 @@ class SqliteGalleryIndex:
 		with self._lock:
 			conn = self._connect(library_root)
 			return conn.execute("SELECT COUNT(*) FROM gallery_items").fetchone()[0]
+
+	def close(self, library_root: str) -> None:
+		"""Release the cached connection so the index file can be deleted (Windows)."""
+		with self._lock:
+			conn = self._connections.pop(library_root, None)
+			if conn is not None:
+				conn.close()

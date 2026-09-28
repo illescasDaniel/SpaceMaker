@@ -4,8 +4,10 @@ import base64
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import PurePosixPath
 
 from spacemaker.domain.gallery import GalleryItem
+from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.media import MediaKind
 
 
@@ -33,9 +35,29 @@ class GalleryIndexRow:
 	kind: MediaKind
 	mtime: float
 	size: int
+	# Display fields probed at index sync so item open need not re-run ExifTool/ffprobe.
+	camera_make: str = ""
+	camera_model: str = ""
+	width: int | None = None
+	height: int | None = None
+	duration_seconds: float | None = None
+	gps: str = ""
 
 	def as_item(self) -> GalleryItem:
 		return GalleryItem(relative_path=self.relative_path, captured_at=self.captured_at, kind=self.kind)
+
+	def as_display_metadata(self) -> GalleryDisplayMetadata:
+		return GalleryDisplayMetadata(
+			filename=PurePosixPath(self.relative_path).name,
+			captured_at=self.captured_at,
+			camera_make=self.camera_make,
+			camera_model=self.camera_model,
+			width=self.width,
+			height=self.height,
+			duration_seconds=self.duration_seconds,
+			file_size_bytes=self.size,
+			gps=self.gps,
+		)
 
 
 @dataclass(frozen=True, slots=True)

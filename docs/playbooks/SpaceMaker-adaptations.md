@@ -33,7 +33,7 @@ Authoritative compression flags (historical shell reference): [convert_all_1_1.s
 
 **Web-compatible (image, size rollback only):** jpg/jpeg/png/webp/gif/avif — not RAW/HEIC/TIFF/JXL.
 
-**Encode images** to AVIF: ImageMagick `-depth 10 -quality 80 -define avif:chroma-subsampling=444`; ExifTool copy all tags from source. RAW fallback: PreviewImage then JpgFromRaw; if none → `invalid/`.
+**Encode images** to progressive (layered) AVIF when `avifenc` is available: `avifenc --progressive -d 10 -q 80 -y 444` on JPEG/PNG directly; RAW via ExifTool embedded preview then `avifenc`; other formats (HEIC/TIFF/JXL/WebP/…) Magick-rasterize to temp PNG then `avifenc`. ExifTool copy all tags from source (Orientation stripped when already applied). If `avifenc` is missing, fall back to ImageMagick single-layer AVIF (`-depth 10 -quality 80 -define avif:chroma-subsampling=444`). Already-AVIF → move-as-is (not rewritten as progressive). Magick stays required for thumbs, friendly JPEG, identify, and rasterizing formats `avifenc` cannot read.
 
 **DNG + JPEG same stem:** RAW → `stem.avif`; JPEG → `stem_jpg.avif` or `stem_jpeg.avif`; both outputs required.
 
@@ -71,7 +71,7 @@ Local FastAPI + static UI in pywebview; no cloud dependency. **Home hub** is the
 - Hexagonal: `DeviceRepository` port; adapters `AdbDeviceRepository`, `AfcDeviceRepository` (adbutils on all OSes for ADB).
 - **iPhone USB:** **AfcDeviceRepository** on Linux — `idevice_*` + `ifuse` on `PATH`; **usbmuxd** (Arch: udev starts it on plug-in, not `systemctl enable`).
 - **ADB:** **adbutils** + managed or `PATH` `adb` per OS/CPU; USB transfer Add mounts via **adbfs** on PATH (e.g. `adbfs-rootless-git`).
-- **Convert:** managed or `PATH` ffmpeg, ffprobe, magick, exiftool — see `packaging/tool-catalog.json`.
+- **Convert:** managed or `PATH` ffmpeg, ffprobe, magick, avifenc, exiftool — see `packaging/tool-catalog.json`.
 - **Legal:** ship privacy, disclaimer, third-party notice in portable binary + in-app About (`specs/legal/SPEC.md`).
 - **Move** from device: prefer ADB; AFC move may be unsupported per file.
 - Spec: [specs/extract-media/SPEC.md](../../specs/extract-media/SPEC.md).

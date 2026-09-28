@@ -2,6 +2,36 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-28 — Easy Wi‑Fi convert: per-file start + live progress totals
+
+- **Context:** The 2026-09-25 batch-once trigger waited until the whole multipart `/api/upload` finished before starting Easy convert, so folder uploads delayed conversion. Waiting was chosen so the initial `0/N` total was correct; starting on the first file previously baked in `total=1`. Spec already required convert to start when the first file lands.
+- **Decision:** Trigger `maybe_start_convert_drain` after each saved/skipped Wi‑Fi file (from `handle_wifi_upload`); remove the batch-only `/api/upload` `finally`. While convert is `RUNNING`, refresh progress with `live_job_progress(completed, count(originals/))` so `total` grows as more files arrive mid-pass. Keep the in-place `_run_convert` drain loop; `on_progress` uses the same live formula so fixed pass scans cannot clobber a grown total.
+- **Rationale:** Satisfies “convert as soon as photos start arriving” without regressing the multi-file progress display; live total is correct because the file currently encoding still sits in `originals/`.
+
+## 2026-09-28 — Gallery item: fade-over-thumb + side nav + Loading chip
+
+- **Context:** Progressive item preview used a center spinner and dual fade (thumb out + full in), which flashed the empty stage; prev/next sat overlaid on the media and disabled arrows used low opacity so they vanished on boundary items.
+- **Decision:** Fade full preview in over a still-visible thumb (hide thumb only after opaque); corner `• Loading…` chip (no spinner); prev/next in a 3-column layout beside the stage with media inset; disabled arrows stay fully opaque (muted only). Client CSS/JS only (`theme.css` `--dur-crossfade`, `shell-gallery.css` / `index.html`, `app.js`).
+- **Rationale:** Matches approved wireframe/SPEC; eliminates blank flashes and keeps controls always readable without covering content.
+
+## 2026-09-28 — Gallery progressive preview: aspect-fit, no CSS blur, smooth scale
+
+- **Context:** Item-page placeholder used `object-fit: cover` plus `filter: blur(16px)` (and scale), while the full preview used `contain`. That made loading look cropped/blurred, then “snap” to fit; spinner was hard to see on busy images. User also asked for bilinear-like scaling so upscaled thumbs are not pixelated.
+- **Decision:** Placeholder and full preview both use `object-fit: contain` and `image-rendering: auto`/`smooth`; drop CSS blur/scale on the thumb; give `.gallery-item-spinner` a disc backdrop. No domain/port changes (presentation only). Wireframe + gallery SPEC updated.
+- **Rationale:** Loading state should match final framing; native low-res softness is enough; explicit smooth rendering avoids nearest-neighbor upscales.
+
+## 2026-09-28 — Reset gallery closes SQLite before deleting index
+
+- **Context:** `POST /api/library/reset` raised `PermissionError: [WinError 32]` on `.index.sqlite` because `SqliteGalleryIndex` caches an open connection (WAL), and Windows cannot unlink an open database.
+- **Decision:** Add `GalleryIndexPort.close(library_root)`; `SqliteGalleryIndex.close` drops and closes the cached connection; `ResetLibrary` takes the index port and calls `close` before deleting `.index.sqlite` (+ WAL/SHM sidecars).
+- **Rationale:** Keeps the unlock next to the wipe in the use case (not only in the HTTP handler); works on Windows without changing journal mode.
+
+## 2026-09-28 — Progressive AVIF: avifenc-direct; Magick not removed
+
+- **Context:** Gallery open speed plan adds progressive (layered) AVIF via `avifenc`. An earlier draft used Magick `-auto-orient` → temp PNG → `avifenc` for every image. User asked whether Magick could be dropped from that chain to save a dependency.
+- **Decision:** Prefer `avifenc --progressive` **directly** on JPEG/PNG; RAW via ExifTool preview → `avifenc`; only Magick-rasterize formats `avifenc` cannot read (HEIC/TIFF/JXL/WebP/…). Keep Magick as a project dependency (thumbs, friendly JPEG, identify, rasterize, non-progressive fallback). Add `BundledTool.AVIFENC` + manifest entry; extend `GalleryIndexRow` with optional display-metadata fields for non-blocking item open.
+- **Rationale:** Removes an unnecessary temp raster for the common case without pretending Magick can leave the tool graph. Managed download of official libavif release zips remains the packaging path (PATH/`pacman -S libavif` as fallback).
+
 ## 2026-09-28 — webnav: prefer npm `.cmd` shims on Windows
 
 - **Context:** Live smoke on Windows found webnav's JS/HTML/CSS language servers failing with `File not found: None` / WinError 193. Two stacked causes: (1) incomplete `node_modules` (only Biome present — language-server packages never installed), so resolution fell through to bare `npx`; (2) even after `npm ci`, `_resolve_bin` preferred the extensionless POSIX shim under `node_modules/.bin/`, which `CreateProcess` cannot run (WinError 193 "%1 is not a valid Win32 application"). `format_tool_error` also rendered spawn failures without a filename as the misleading `Cannot read None: …`.

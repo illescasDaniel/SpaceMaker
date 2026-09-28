@@ -14,7 +14,11 @@ from spacemaker.adapters.outbound.media.ffmpeg_encoders import (
 from spacemaker.adapters.outbound.media.raw_preview import extract_raw_embedded_jpeg
 from spacemaker.adapters.outbound.media.tool_runner import ToolExecutionError, ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
-from spacemaker.domain.media import is_raw_extension, normalize_extension
+from spacemaker.domain.media import (
+	is_avifenc_native_extension,
+	is_raw_extension,
+	normalize_extension,
+)
 from spacemaker.domain.video_encode import HardwareVideoEncoder
 
 
@@ -23,35 +27,93 @@ class SubprocessMediaConverter:
 		self._runner = runner or ToolRunner()
 		self._encoder_text: str | None = None
 		self._library_encoder: HardwareVideoEncoder | None = None
+		self._avifenc_available: bool | None = None
 
 	def encode_image_to_avif(self, source: str, destination: str) -> None:
 		source_path = Path(source).resolve()
 		dest_path = str(Path(destination).resolve())
 		Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
+		if self._has_avifenc():
+			self._progressive_encode_avif(source_path, dest_path)
+		else:
+			self._magick_encode_path(source_path, dest_path)
+		self._copy_image_metadata(source_path, dest_path)
+
+	def _has_avifenc(self) -> bool:
+		if self._avifenc_available is not None:
+			return self._avifenc_available
+		try:
+			self._runner.path(BundledTool.AVIFENC)
+			self._avifenc_available = True
+		except FileNotFoundError:
+			self._avifenc_available = False
+		return self._avifenc_available
+
+	def _progressive_encode_avif(self, source_path: Path, dest_path: str) -> None:
+		ext = normalize_extension(source_path.name)
+		if is_avifenc_native_extension(ext):
+			self._avifenc_encode(str(source_path), dest_path)
+			return
+		if is_raw_extension(ext):
+			self._encode_raw_via_preview(source_path, dest_path, progressive=True)
+			return
+		with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+			raster_path = Path(tmp.name)
+		try:
+			self._runner.run(
+				BundledTool.MAGICK,
+				[str(source_path), "-auto-orient", str(raster_path)],
+			)
+			self._avifenc_encode(str(raster_path), dest_path)
+		finally:
+			raster_path.unlink(missing_ok=True)
+
+	def _magick_encode_path(self, source_path: Path, dest_path: str) -> None:
 		try:
 			self._magick_encode_avif(str(source_path), dest_path)
 		except ToolExecutionError:
 			ext = normalize_extension(source_path.name)
 			if not is_raw_extension(ext):
 				raise
-			with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-				preview_path = Path(tmp.name)
-			try:
-				exiftool = self._runner.path(BundledTool.EXIFTOOL)
-				if not extract_raw_embedded_jpeg(
-					source=source_path,
-					destination=preview_path,
-					exiftool=exiftool,
-				):
-					raise ToolExecutionError(
-						BundledTool.MAGICK,
-						["magick", str(source_path)],
-						subprocess.CompletedProcess([], 1, "", "no embedded RAW preview"),
-					)
+			self._encode_raw_via_preview(source_path, dest_path, progressive=False)
+
+	def _encode_raw_via_preview(self, source_path: Path, dest_path: str, *, progressive: bool) -> None:
+		with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+			preview_path = Path(tmp.name)
+		try:
+			exiftool = self._runner.path(BundledTool.EXIFTOOL)
+			if not extract_raw_embedded_jpeg(
+				source=source_path,
+				destination=preview_path,
+				exiftool=exiftool,
+			):
+				raise ToolExecutionError(
+					BundledTool.MAGICK if not progressive else BundledTool.AVIFENC,
+					["raw-preview", str(source_path)],
+					subprocess.CompletedProcess([], 1, "", "no embedded RAW preview"),
+				)
+			if progressive:
+				self._avifenc_encode(str(preview_path), dest_path)
+			else:
 				self._magick_encode_avif(str(preview_path), dest_path)
-			finally:
-				preview_path.unlink(missing_ok=True)
-		self._copy_image_metadata(source_path, dest_path)
+		finally:
+			preview_path.unlink(missing_ok=True)
+
+	def _avifenc_encode(self, source_path: str, dest_path: str) -> None:
+		self._runner.run(
+			BundledTool.AVIFENC,
+			[
+				"--progressive",
+				"-d",
+				"10",
+				"-q",
+				"80",
+				"-y",
+				"444",
+				source_path,
+				dest_path,
+			],
+		)
 
 	def _magick_encode_avif(self, source_path: str, dest_path: str) -> None:
 		self._runner.run(

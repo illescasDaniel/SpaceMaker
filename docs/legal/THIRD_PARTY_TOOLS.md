@@ -11,7 +11,8 @@ Machine-readable manifest: [packaging/third-party-manifest.yaml](../../packaging
 | **idevice_id**, **idevicepair**, **ideviceinfo**, **ifuse** (libimobiledevice) | iPhone USB / DCIM (Linux, system `PATH` only) | https://libimobiledevice.org/ |
 | **ffmpeg** | Encode video to AV1 / H.264 | https://ffmpeg.org/ |
 | **ffprobe** | Validate videos; read bitrate/duration | https://ffmpeg.org/ |
-| **magick** (ImageMagick) | Encode images to AVIF | https://imagemagick.org/ |
+| **magick** (ImageMagick) | Auto-orient; thumbs; friendly JPEG; AVIF identify / non-progressive AVIF fallback | https://imagemagick.org/ |
+| **avifenc** (libavif) | Progressive (layered) library image → AVIF | https://github.com/AOMediaCodec/libavif |
 | **exiftool** | Copy EXIF/metadata to AVIF outputs | https://exiftool.org/ |
 
 ## Licenses
@@ -23,6 +24,7 @@ License texts shipped inside upstream archives are stored next to the downloaded
 - **libimobiledevice / ifuse:** LGPL-2.1+
 - **FFmpeg / ffprobe:** LGPL or GPL depending on build configuration (documented per release)
 - **ImageMagick:** ImageMagick License
+- **libavif / avifenc:** BSD-2-Clause
 - **ExifTool:** Artistic License / GPL (variant documented per release)
 
 SpaceMaker’s own license is in the repository [LICENSE](../../LICENSE) file (MIT).
