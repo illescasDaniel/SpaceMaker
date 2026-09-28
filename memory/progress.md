@@ -13,6 +13,12 @@ Open items only. Finished work: `memory/archive.md`.
 - [x] **codenav/webnav search_symbol polish** — name-column (not keyword), SymbolKind labels, result cap 50, skippable live ty smoke, HTML/CSS search documented as unsupported (2026-09-27)
 - [x] **codenav/webnav decorator name columns** — `_name_position` walks range + lookahead past `@…` so decorated class search→hover works (2026-09-27)
 - [x] **codenav/webnav live-test fixes** — ranked search before cap, text errors (missing file/unsupported/timeout/exited), dead-server restart, ty root `mcp-servers` (2026-09-28)
+- [ ] **codenav/webnav live-smoke bugs** (found 2026-09-28)
+  - codenav `implementations`: lists the port itself (`WebSocketLike` in `bootstrap/services.py` → itself) and accepts non-Protocol input (`AppServices` → itself); exclude the queried class and reject non-`Protocol` names.
+  - codenav name resolution: `callers("repo_root")` is ambiguous with `REPO_ROOT` constant — prefer exact-case match before case-insensitive.
+  - webnav `diagnostics` false "never referenced": `.gallery-loading-spinner` (class inside a JS `innerHTML` string, `app.js`) and `.resolution-*` (`className = "tool-status resolution-" + x`) — scan `class="…"` in JS strings, and let dynamic-prefix hits suppress matching selectors.
+  - webnav `selector("#view-components")` omits the `"view-" + resolved` dynamic partial match (only shows under `#view-`); surface prefix matches when the queried name starts with the prefix.
+  - Nit: webnav JS `references` prints a 5-line snippet per hit (22 hits for `showView` ≈ 100+ lines); use the compact grouped-by-file format past a few hits, like `symbol_info`.
 - [x] **codenav/webnav: intent-level tools + workspace CSS index** — multi-line diagnostic formatting fix; codenav `symbol_info`/`outline`/`callers`/`implementations` (name-based, `_shared/resolve.py`, type-verified `Protocol` conformance probe); webnav `web_index.py` cross-file `--custom-property`/`#id`/`.class` scanner + `css_var`/`selector` tools + `references`/`definition`/`diagnostics` enrichment; docs + `tests/unit/test_mcp_web_index.py` (25 tests); full `uv run pytest` green (357 passed) (2026-09-28)
 - [x] **Gate fixes (ruff/ty)** — import sort + unused `Path`; keep FastAPI `app` ref for `app.state.services` monkeypatch (2026-09-28)
 - [x] **Biome warnings** — remove unused `lastMainView`; Settings confirm `div role=group` → `fieldset` (app + wireframe) (2026-09-28)
