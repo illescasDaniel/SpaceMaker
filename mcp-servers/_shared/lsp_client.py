@@ -34,6 +34,10 @@ class LspRequestError(RuntimeError):
 		super().__init__(message)
 
 
+class LanguageServerExitedError(RuntimeError):
+	"""The language server process ended while a request was pending."""
+
+
 @dataclass
 class OpenFile:
 	uri: str
@@ -61,6 +65,10 @@ class LspClient:
 		if self._proc is None:
 			raise NotStartedError("LspClient.start() must be awaited before use")
 		return self._proc
+
+	@property
+	def is_alive(self) -> bool:
+		return self._proc is not None and self._proc.returncode is None
 
 	async def start(self) -> None:
 		if self._started:
@@ -106,10 +114,27 @@ class LspClient:
 			self._stderr_task.cancel()
 		with contextlib.suppress(ProcessLookupError):
 			self._proc.terminate()
+		with contextlib.suppress(asyncio.TimeoutError, ProcessLookupError):
+			await asyncio.wait_for(self._proc.wait(), timeout=3)
+		self._started = False
+		self._proc = None
 
 	# -- wire protocol -----------------------------------------------------
 
 	async def _read_loop(self) -> None:
+		try:
+			await self._read_messages()
+		finally:
+			self._fail_pending()
+
+	def _fail_pending(self) -> None:
+		# Without this, requests in flight when the server dies wait out their full timeout.
+		pending, self._pending = self._pending, {}
+		for fut in pending.values():
+			if not fut.done():
+				fut.set_exception(LanguageServerExitedError(f"language server exited: {' '.join(self.command)}"))
+
+	async def _read_messages(self) -> None:
 		proc = self._running_proc
 		if proc.stdout is None:
 			raise NotStartedError("language server subprocess has no stdout pipe")

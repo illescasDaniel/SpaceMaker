@@ -13,8 +13,16 @@ _MCP_ROOT = Path(__file__).resolve().parents[2] / "mcp-servers"
 if str(_MCP_ROOT) not in sys.path:
 	sys.path.insert(0, str(_MCP_ROOT))
 
-from _shared.format import format_location, uri_to_relative  # noqa: E402
-from _shared.lsp_client import LspClient, LspRequestError  # noqa: E402
+from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error  # noqa: E402
+from _shared.format import (  # noqa: E402
+	format_location,
+	format_workspace_symbol,
+	format_workspace_symbols,
+	rank_workspace_symbols,
+	uri_to_relative,
+	workspace_symbol_position,
+)
+from _shared.lsp_client import LanguageServerExitedError, LspClient, LspRequestError  # noqa: E402
 from _shared.workspace import resolve_workspace_root  # noqa: E402
 
 
@@ -194,3 +202,233 @@ def test_given_empty_pull_and_push_cache_when_diagnostics_then_prefers_cache(tmp
 	items = asyncio.run(client.diagnostics(str(src)))
 	# then
 	assert items == cached
+
+
+def test_given_class_keyword_range_when_format_workspace_symbol_then_column_on_name(tmp_path):
+	# given — ty-style SymbolInformation range starts at `class`
+	src = tmp_path / "mod.py"
+	src.write_text("class Foo:\n\tpass\n", encoding="utf-8")
+	sym = {
+		"name": "Foo",
+		"kind": 5,
+		"location": {
+			"uri": src.as_uri(),
+			"range": {
+				"start": {"line": 0, "character": 0},
+				"end": {"line": 0, "character": 9},
+			},
+		},
+	}
+	# when
+	line = format_workspace_symbol(sym, tmp_path)
+	uri, row, col = workspace_symbol_position(sym)
+	# then
+	assert line == "Foo  [Class]  (mod.py:1:7)"
+	assert uri == src.as_uri()
+	assert (row, col) == (0, 6)
+
+
+def test_given_selection_range_when_workspace_symbol_position_then_uses_it(tmp_path):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("class Bar:\n\tpass\n", encoding="utf-8")
+	sym = {
+		"name": "Bar",
+		"kind": 5,
+		"location": {
+			"uri": src.as_uri(),
+			"range": {
+				"start": {"line": 0, "character": 0},
+				"end": {"line": 1, "character": 5},
+			},
+		},
+		"selectionRange": {
+			"start": {"line": 0, "character": 6},
+			"end": {"line": 0, "character": 9},
+		},
+	}
+	# when
+	_uri, row, col = workspace_symbol_position(sym)
+	# then
+	assert (row, col) == (0, 6)
+
+
+def test_given_name_missing_from_line_when_workspace_symbol_position_then_range_start(tmp_path):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("x = 1\n", encoding="utf-8")
+	sym = {
+		"name": "Missing",
+		"kind": 13,
+		"location": {
+			"uri": src.as_uri(),
+			"range": {
+				"start": {"line": 0, "character": 2},
+				"end": {"line": 0, "character": 3},
+			},
+		},
+	}
+	# when
+	_uri, row, col = workspace_symbol_position(sym)
+	# then
+	assert (row, col) == (0, 2)
+
+
+def test_given_decorator_range_when_workspace_symbol_position_then_name_on_next_line(tmp_path):
+	# given — ty often starts SymbolInformation on `@dataclass`
+	src = tmp_path / "mod.py"
+	src.write_text("@dataclass\nclass Foo:\n\tpass\n", encoding="utf-8")
+	sym = {
+		"name": "Foo",
+		"kind": 5,
+		"location": {
+			"uri": src.as_uri(),
+			"range": {
+				"start": {"line": 0, "character": 0},
+				"end": {"line": 0, "character": 10},
+			},
+		},
+	}
+	# when
+	line = format_workspace_symbol(sym, tmp_path)
+	_uri, row, col = workspace_symbol_position(sym)
+	# then
+	assert line == "Foo  [Class]  (mod.py:2:7)"
+	assert (row, col) == (1, 6)
+
+
+def test_given_stacked_decorators_when_workspace_symbol_position_then_finds_name(tmp_path):
+	# given — single-line decorator range + several `@` lines before the def
+	src = tmp_path / "mod.py"
+	src.write_text(
+		"@a\n@b\n@c\n@d\ndef target():\n\tpass\n",
+		encoding="utf-8",
+	)
+	sym = {
+		"name": "target",
+		"kind": 12,
+		"location": {
+			"uri": src.as_uri(),
+			"range": {
+				"start": {"line": 0, "character": 0},
+				"end": {"line": 0, "character": 2},
+			},
+		},
+	}
+	# when
+	_uri, row, col = workspace_symbol_position(sym)
+	# then — `def target` is line index 4; name starts after "def "
+	assert (row, col) == (4, 4)
+
+
+def test_given_many_symbols_when_format_workspace_symbols_then_caps_with_note(tmp_path):
+	# given
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	symbols = [
+		{
+			"name": f"S{i}",
+			"kind": 13,
+			"location": {
+				"uri": src.as_uri(),
+				"range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+			},
+		}
+		for i in range(3)
+	]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, limit=2)
+	# then
+	assert text.count("\n") == 2  # two results + truncation line
+	assert "S0  [Variable]" in text
+	assert "S1  [Variable]" in text
+	assert "S2" not in text
+	assert "… and 1 more (showing first 2)" in text
+
+
+def _symbol(name: str, uri: str) -> dict:
+	return {
+		"name": name,
+		"kind": 12,
+		"location": {"uri": uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}}},
+	}
+
+
+def test_given_fuzzy_hits_before_exact_when_rank_then_exact_prefix_substring_order():
+	# given — ty returns fuzzy subsequence hits in workspace order
+	names = ["test_lsp_client_thing", "get_client", "LspClientFactory", "lspclient", "LspClient", "MyLspClient"]
+	symbols = [_symbol(n, "file:///x.py") for n in names]
+	# when
+	ranked = [sym["name"] for sym in rank_workspace_symbols(symbols, "LspClient")]
+	# then
+	assert ranked == [
+		"LspClient",
+		"lspclient",
+		"LspClientFactory",
+		"MyLspClient",
+		"test_lsp_client_thing",
+		"get_client",
+	]
+
+
+def test_given_exact_match_past_cap_when_format_workspace_symbols_then_shown_first(tmp_path):
+	# given
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	symbols = [_symbol(f"get_thing_{i}", src.as_uri()) for i in range(5)] + [_symbol("get", src.as_uri())]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="get", limit=2)
+	# then
+	assert text.splitlines()[0].startswith("get  [Function]")
+
+
+def test_given_missing_file_when_ensure_open_then_tool_error_names_path(tmp_path):
+	# given
+	client = _started_client(tmp_path)
+	# when
+	with pytest.raises(TOOL_ERRORS) as caught:
+		asyncio.run(client.ensure_open("nope/missing.py"))
+	text = format_tool_error(caught.value)
+	# then
+	assert text.startswith("File not found: ")
+	assert "missing.py" in text
+
+
+def test_given_timeout_when_format_tool_error_then_mentions_retry():
+	# given / when
+	text = format_tool_error(TimeoutError())
+	# then
+	assert "timed out" in text
+	assert "retry" in text
+
+
+def test_given_unsupported_input_when_format_tool_error_then_passes_message_through():
+	# given / when
+	text = format_tool_error(ToolInputError("webnav has no language server for 'a.md'"))
+	# then
+	assert text == "webnav has no language server for 'a.md'"
+
+
+def test_given_pending_request_when_server_exits_then_request_fails_fast(tmp_path):
+	# given
+	client = _started_client(tmp_path)
+
+	async def _run() -> None:
+		async def _exit() -> None:
+			await asyncio.sleep(0)
+			client._fail_pending()
+
+		task = asyncio.create_task(_exit())
+		# when / then — raises immediately instead of waiting out the timeout
+		with pytest.raises(LanguageServerExitedError):
+			await client._request("textDocument/hover", {}, timeout=5)
+		await task
+
+	asyncio.run(_run())
+
+
+def test_given_never_started_when_is_alive_then_false(tmp_path):
+	# given
+	client = LspClient(workspace_root=tmp_path, command=["true"], language_id="python")
+	# when / then
+	assert client.is_alive is False

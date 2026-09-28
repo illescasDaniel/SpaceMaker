@@ -91,7 +91,8 @@ lines-after-imports = 2
 python-version = "3.11"
 python = ".venv"
 python-platform = "all"
-root = ["./src", "."]
+# mcp-servers: lets tests import `_shared` / `codenav_mcp` the way the servers do at runtime.
+root = ["./src", ".", "./mcp-servers"]
 
 [tool.ty.src]
 exclude = ["scripts/**", "wireframes/**"]

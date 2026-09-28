@@ -58,14 +58,31 @@ lives in `mcp-servers/_shared/format.py`.
 `line` and `column` are **1-indexed**. `column` is a UTF-16 **character
 offset** on the line — not a visual/display column. A leading `\t` counts
 as **one** character, so after a single tab the next character starts at
-column 2. Prefer `search_symbol` (returns `path:line:col`) and pass those
-numbers through unchanged; guessing display width from a tab-expanded
-editor view will miss the symbol. `definition` / `references` headers use
-the same `path:line:col` form so agents can copy positions into follow-up
-calls.
+column 2. Prefer `search_symbol` (returns `Name  [Kind]  (path:line:col)`)
+and pass those numbers through unchanged; guessing display width from a
+tab-expanded editor view will miss the symbol. Search positions target the
+**identifier name** (not the `class`/`def`/`function` keyword or a leading
+decorator line): when the LSP range starts on `@…`, formatting walks the
+range and a short lookahead to the `class`/`def` line. Those positions are
+safe to feed into `hover` / `definition` / `references`. ty's symbol search
+is fuzzy (subsequence) and unordered, so results are ranked before capping:
+exact name → case-insensitive exact → prefix → substring → other fuzzy hits.
+Results are capped (default 50) with a trailing “and N more” note when
+truncated.
+`definition` / `references` headers use the same `path:line:col` form so
+agents can copy positions into follow-up calls.
 
 JSON-RPC errors from the language server are surfaced as tool text
 (`LSP error on …`) rather than looking like empty “not found” results.
+Other expected failures — missing file, non-UTF-8 file, unsupported
+extension (webnav), request timeout, language server exited — are also
+returned as text (`_shared/errors.py`) instead of the MCP framework's opaque
+“Error executing tool”. If the language server process dies, in-flight
+requests fail immediately and the next tool call starts a fresh one.
+
+`pyproject.toml` lists `mcp-servers` as a ty `root`, so tests importing
+`_shared` / `codenav_mcp` resolve (clean `ty check`, and codenav
+`references` include test usages).
 `diagnostics` falls back to the push `publishDiagnostics` cache when pull
 diagnostics are unsupported or empty (common for HTML/CSS servers).
 
@@ -88,9 +105,11 @@ falling back to `PATH` and then `npx` — same fallback chain as codenav's ty
 resolver.
 
 `search_symbol` only covers JS: the HTML/CSS language servers don't
-implement a useful `workspace/symbol`. CSS custom-property hover and
-`var(--name)` usage lookup are also limited by the CSS language server —
-not something webnav reimplements. `jsconfig.json` has `checkJs: false`
+implement a useful `workspace/symbol`, and webnav does **not** reimplement
+HTML/CSS symbol search (document/id/class lookups stay out of scope). CSS
+custom-property hover and `var(--name)` usage lookup are also limited by
+the CSS language server — not something webnav reimplements. `jsconfig.json`
+has `checkJs: false`
 by default (the existing `app.js` is large and untyped; flip it per-file
 with a `// @ts-check` comment to opt a file into stricter `diagnostics`).
 Run it standalone for manual testing with `uv run python

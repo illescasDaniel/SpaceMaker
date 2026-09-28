@@ -23,8 +23,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from _shared.format import format_location, uri_to_relative  # noqa: E402
-from _shared.lsp_client import LspClient, LspRequestError  # noqa: E402
+from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error  # noqa: E402
+from _shared.format import format_location, format_workspace_symbols  # noqa: E402
+from _shared.lsp_client import LspClient  # noqa: E402
 from _shared.workspace import resolve_workspace_root  # noqa: E402
 from lang_command import resolve_css_command, resolve_html_command, resolve_ts_command  # noqa: E402
 from mcp.server.mcpserver import MCPServer  # noqa: E402
@@ -70,7 +71,7 @@ def _js_include_globs(workspace_root: Path) -> list[str]:
 async def _get_ts_client() -> LspClient:
 	global _ts_client
 	async with _client_lock:
-		if _ts_client is None:
+		if _ts_client is None or not _ts_client.is_alive:
 			_ts_client = LspClient(
 				workspace_root=WORKSPACE_ROOT,
 				command=resolve_ts_command(WORKSPACE_ROOT),
@@ -90,7 +91,7 @@ async def _get_ts_client() -> LspClient:
 async def _get_html_client() -> LspClient:
 	global _html_client
 	async with _client_lock:
-		if _html_client is None:
+		if _html_client is None or not _html_client.is_alive:
 			_html_client = LspClient(
 				workspace_root=WORKSPACE_ROOT,
 				command=resolve_html_command(WORKSPACE_ROOT),
@@ -103,7 +104,7 @@ async def _get_html_client() -> LspClient:
 async def _get_css_client() -> LspClient:
 	global _css_client
 	async with _client_lock:
-		if _css_client is None:
+		if _css_client is None or not _css_client.is_alive:
 			_css_client = LspClient(
 				workspace_root=WORKSPACE_ROOT,
 				command=resolve_css_command(WORKSPACE_ROOT),
@@ -121,11 +122,7 @@ async def _client_for(file_path: str) -> LspClient:
 		return await _get_html_client()
 	if suffix == ".css":
 		return await _get_css_client()
-	raise ValueError(f"webnav has no language server for {file_path!r} (supported: .js/.mjs/.cjs/.html/.css)")
-
-
-def _format_lsp_error(exc: LspRequestError) -> str:
-	return f"LSP error on {exc.method}: {exc}"
+	raise ToolInputError(f"webnav has no language server for {file_path!r} (supported: .js/.mjs/.cjs/.html/.css)")
 
 
 @mcp.tool()
@@ -139,8 +136,8 @@ async def hover(file_path: str, line: int, column: int) -> str:
 	try:
 		client = await _client_for(file_path)
 		result = await client.hover(file_path, line, column)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	contents = result.get("contents")
 	if not contents:
 		return "No hover information at that position."
@@ -162,8 +159,8 @@ async def definition(file_path: str, line: int, column: int) -> str:
 	try:
 		client = await _client_for(file_path)
 		locations = await client.definition(file_path, line, column)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	if not locations:
 		return "No definition found at that position."
 	return "\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in locations)
@@ -180,8 +177,8 @@ async def references(file_path: str, line: int, column: int, include_declaration
 	try:
 		client = await _client_for(file_path)
 		locations = await client.references(file_path, line, column, include_declaration=include_declaration)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	if not locations:
 		return "No references found at that position."
 	return "\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in locations)
@@ -192,26 +189,20 @@ async def search_symbol(query: str) -> str:
 	"""Search JS files for a symbol by name (function, class, const, etc.).
 
 	JS-only: the HTML/CSS language servers don't implement useful
-	workspace-wide symbol search. Use this to find a symbol's file/position
-	first, then pass that position to definition/references/hover.
-	Returned positions use the same character-offset column convention as the
-	other tools.
+	workspace-wide symbol search (webnav does not reimplement it). Use this
+	to find a symbol's file/position first, then pass that position to
+	definition/references/hover. Returned positions point at the identifier
+	name and use the same character-offset column convention as the other
+	tools. Results include a SymbolKind label and are capped.
 	"""
 	try:
 		client = await _get_ts_client()
 		symbols = await client.workspace_symbol(query)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	if not symbols:
 		return f"No symbols matching {query!r}."
-	lines = []
-	for sym in symbols:
-		loc = sym.get("location", {})
-		rng = loc.get("range", {})
-		start = rng.get("start", {})
-		rel = uri_to_relative(loc.get("uri", ""), WORKSPACE_ROOT)
-		lines.append(f"{sym.get('name', '?')}  ({rel}:{start.get('line', 0) + 1}:{start.get('character', 0) + 1})")
-	return "\n".join(lines)
+	return format_workspace_symbols(symbols, WORKSPACE_ROOT, query=query)
 
 
 @mcp.tool()
@@ -220,8 +211,8 @@ async def diagnostics(file_path: str) -> str:
 	try:
 		client = await _client_for(file_path)
 		items = await client.diagnostics(file_path)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	if not items:
 		return "No diagnostics."
 	lines = []

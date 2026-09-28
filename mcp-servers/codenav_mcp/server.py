@@ -25,8 +25,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from _shared.format import format_location, uri_to_relative  # noqa: E402
-from _shared.lsp_client import LspClient, LspRequestError  # noqa: E402
+from _shared.errors import TOOL_ERRORS, format_tool_error  # noqa: E402
+from _shared.format import format_location, format_workspace_symbols  # noqa: E402
+from _shared.lsp_client import LspClient  # noqa: E402
 from _shared.workspace import resolve_workspace_root  # noqa: E402
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 from ty_command import resolve_ty_command  # noqa: E402
@@ -58,7 +59,7 @@ _client_lock = asyncio.Lock()
 async def get_client() -> LspClient:
 	global _client
 	async with _client_lock:
-		if _client is None:
+		if _client is None or not _client.is_alive:
 			_client = LspClient(
 				workspace_root=WORKSPACE_ROOT,
 				command=resolve_ty_command(WORKSPACE_ROOT),
@@ -66,10 +67,6 @@ async def get_client() -> LspClient:
 			)
 			await _client.start()
 		return _client
-
-
-def _format_lsp_error(exc: LspRequestError) -> str:
-	return f"LSP error on {exc.method}: {exc}"
 
 
 @mcp.tool()
@@ -83,8 +80,8 @@ async def hover(file_path: str, line: int, column: int) -> str:
 	try:
 		client = await get_client()
 		result = await client.hover(file_path, line, column)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	contents = result.get("contents")
 	if not contents:
 		return "No hover information at that position."
@@ -111,8 +108,8 @@ async def definition(file_path: str, line: int, column: int) -> str:
 	try:
 		client = await get_client()
 		locations = await client.definition(file_path, line, column)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	if not locations:
 		return "No definition found at that position."
 	return "\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in locations)
@@ -129,8 +126,8 @@ async def references(file_path: str, line: int, column: int, include_declaration
 	try:
 		client = await get_client()
 		locations = await client.references(file_path, line, column, include_declaration=include_declaration)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	if not locations:
 		return "No references found at that position."
 	return "\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in locations)
@@ -142,24 +139,18 @@ async def search_symbol(query: str) -> str:
 
 	Use this to find a symbol's file/position first, then pass that position
 	to definition/references/hover for precise, type-resolved navigation.
-	Returned positions use the same character-offset column convention as the
-	other tools.
+	Returned positions point at the identifier name (not the `class`/`def`
+	keyword) and use the same character-offset column convention as the
+	other tools. Results include a SymbolKind label and are capped.
 	"""
 	try:
 		client = await get_client()
 		symbols = await client.workspace_symbol(query)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	if not symbols:
 		return f"No symbols matching {query!r}."
-	lines = []
-	for sym in symbols:
-		loc = sym.get("location", {})
-		rng = loc.get("range", {})
-		start = rng.get("start", {})
-		rel = uri_to_relative(loc.get("uri", ""), WORKSPACE_ROOT)
-		lines.append(f"{sym.get('name', '?')}  ({rel}:{start.get('line', 0) + 1}:{start.get('character', 0) + 1})")
-	return "\n".join(lines)
+	return format_workspace_symbols(symbols, WORKSPACE_ROOT, query=query)
 
 
 @mcp.tool()
@@ -168,8 +159,8 @@ async def diagnostics(file_path: str) -> str:
 	try:
 		client = await get_client()
 		items = await client.diagnostics(file_path)
-	except LspRequestError as exc:
-		return _format_lsp_error(exc)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	if not items:
 		return "No diagnostics."
 	lines = []

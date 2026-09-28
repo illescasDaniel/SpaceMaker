@@ -2,6 +2,24 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-28 — codenav/webnav: ranked search, text errors, server restart, ty root
+
+- **Context:** Live testing: `search_symbol("get")` put the exact `get` method at result #50 of 384 (ty fuzzy search, workspace order) — one more fuzzy hit and the cap would hide it; `search_symbol("LspClient")` listed unrelated test names first. Missing file / non-JS path in webnav raised → opaque "Error executing tool". A dead language server was cached forever (every call waits 20s timeout). `ty check` failed on MCP tests (`_shared` unresolved), and codenav `references` missed test usages for the same reason.
+- **Decision:** (1) `rank_workspace_symbols` (exact → ci-exact → prefix → substring → other) before capping. (2) `_shared/errors.py`: `TOOL_ERRORS` + `format_tool_error`; webnav raises `ToolInputError`. (3) `LspClient` fails pending futures on reader EOF (`LanguageServerExitedError`) and exposes `is_alive`; servers recreate dead clients. (4) ty `root` += `./mcp-servers`; integration test imports `codenav_mcp.ty_command`.
+- **Rationale:** Agents chain search → hover; ranking keeps the intended symbol visible. Actionable text beats opaque failures. Self-healing avoids needing an MCP reload after an LSP crash. Clean ty gate and complete references for MCP code.
+
+## 2026-09-27 — search_symbol: walk past decorator lines for name column
+
+- **Context:** Live `search_symbol("LspClient")` returned `lsp_client.py:45:1` (`@dataclass`); hover/definition/references at that column were empty. Name-column logic only searched the LSP range-start line.
+- **Decision:** Shared `_name_position` searches within `location.range` then up to 8 lines past start for the identifier; unit tests for decorator + stacked decorators; ty integration smoke for `@dataclass class SmokeDecorated`.
+- **Rationale:** ty SymbolInformation often starts on decorators; agents chain search → hover and need the real name column without reimplementing LSP.
+
+## 2026-09-27 — search_symbol: name columns, kind labels, result cap, live ty smoke
+
+- **Context:** Live MCP smoke showed `codenav` `search_symbol` returning ty's SymbolInformation range start (`class` at column 1). Chaining that column into hover/definition/references returned empty; the identifier column worked. Search also omitted kind and could dump unbounded lists. HTML/CSS still lack useful `workspace/symbol`.
+- **Decision:** (1) Shared `format_workspace_symbol(s)`: prefer `selectionRange`, else find `name` on the range line, else `range.start`; include LSP SymbolKind label; cap at 50 with “and N more”. (2) Both MCP servers use the helper. (3) Fast unit tests + skippable integration smoke starting `ty` on a tiny temp workspace. (4) Document that webnav does not reimplement HTML/CSS symbol search. (5) `LspClient.stop` waits for process exit.
+- **Rationale:** Agents' typical flow is search → hover/refs; keyword columns break that for ty. Kind/cap improve scanability without new tools. Live smoke stays opt-in via integration mark; no HTML/CSS indexer invented.
+
 ## 2026-09-27 — Harden codenav/webnav: character columns, path:line:col, LSP errors, diag fallback
 
 - **Context:** Live MCP smoke tests worked, but agents missed symbols after tab-indented lines (visual column vs character offset), `definition`/`references` headers omitted columns so follow-up calls were awkward, JSON-RPC errors looked like empty “not found”, and HTML/CSS pull diagnostics often returned empty despite push cache. Format helpers were duplicated in both servers with no unit tests.

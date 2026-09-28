@@ -1,4 +1,4 @@
-_Last updated: 2026-09-27_
+_Last updated: 2026-09-28_
 
 ## Branch
 
@@ -6,17 +6,18 @@ _Last updated: 2026-09-27_
 
 ## Current focus
 
-**codenav/webnav MCP harden** — character-offset columns, `path:line:col` headers, LSP error surfacing, diagnostics push fallback, shared formatters, unit tests.
+**codenav/webnav live-test fixes** — ranked search, text errors, dead-server restart, ty root for `mcp-servers` (uncommitted).
 
 ## Next steps
 
-- Reload Cursor MCP servers (or restart) so live tools pick up the harden.
+- Reload MCP servers so live tools pick up ranking/error handling (verified offline via direct tool-function calls).
+- Fix pre-existing ruff/ty gate failures from `42a68fd` (see progress.md).
 - Manual app checks still open: Clear prefs list width; Compress-off upload → Gallery; sticky header.
 - Mark photo-backup branch ready for review / merge when satisfied.
 
 ## Just changed
 
-- `_shared/format.py`; `LspRequestError`; diagnostics cache fallback; both MCP servers use shared formatters + clearer docs
-- `docs/agent-tooling.md` Positioning section
-- `tests/unit/test_mcp_nav_format.py` (10 fast tests)
-- Prior commit `42a68fd`: processed/, promote-originals, Settings chrome, MCP workspace root
+- `mcp-servers/_shared/errors.py` (new), `format.py` (`rank_workspace_symbols`), `lsp_client.py` (`LanguageServerExitedError`, `is_alive`, `_fail_pending`)
+- Both servers: `TOOL_ERRORS` handling, restart dead clients, pass `query` to formatter
+- `pyproject.toml` ty root += `./mcp-servers`; integration smoke imports `codenav_mcp.ty_command`
+- 7 new unit tests; `docs/agent-tooling.md` updated
