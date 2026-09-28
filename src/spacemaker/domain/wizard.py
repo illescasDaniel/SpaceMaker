@@ -73,7 +73,7 @@ def convert_step_state(
 
 def visualize_step_state(
 	*,
-	converted_count: int,
+	processed_count: int,
 	convert_phase: JobPhase,
 	progress_percent: int,
 ) -> WizardStepState:
@@ -84,11 +84,11 @@ def visualize_step_state(
 			percent=progress_percent,
 			can_start=True,
 		)
-	if converted_count > 0:
-		label = "file" if converted_count == 1 else "files"
+	if processed_count > 0:
+		label = "file" if processed_count == 1 else "files"
 		return WizardStepState(
 			phase=StepPhase.COMPLETED,
-			status_text=f"Ready: {converted_count} {label}",
+			status_text=f"Ready: {processed_count} {label}",
 			percent=100,
 			can_start=True,
 		)

@@ -28,8 +28,8 @@ Composition root: `bootstrap.services.create_app()` wires outbound adapters into
 1. **Home hub** — six modules: Photo backup (Wi‑Fi library receive), USB photo backup (wizard), **USB file transfer** (cable → Documents, no convert), Receive files (Documents), Send files (PC → phone), Transfer files (temporary multi-device upload+download). See [specs/home-modules/SPEC.md](../specs/home-modules/SPEC.md), [specs/usb-file-transfer/SPEC.md](../specs/usb-file-transfer/SPEC.md), [specs/transfer-files/SPEC.md](../specs/transfer-files/SPEC.md).
 2. **Extract** — Wi‑Fi QR upload and/or `DeviceRepository` (ADB via **adbutils** + `adb`, iPhone AFC via **ifuse**) into `originals/`. Managed tool dir → download → `PATH` after setup. See [specs/packaging/SPEC.md](../specs/packaging/SPEC.md).
 3. **USB file transfer** — `TransferUsbFiles` + `DeviceRepository.list_file_paths` / `list_extra_file_paths` (ADB/AFC); Add files/folder via **adbfs** / **ifuse** mounts into `documents_directory()/SpaceMaker/` with Android storage prefixes stripped; reuses pause/stop control; no convert/gallery.
-4. **Convert** — reads `originals/`, writes `converted/`, or routes failures to `error/` / `invalid/`.
-5. **Gallery** — indexes `converted/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, share, and transfer sessions.
+4. **Convert** — reads `originals/`, writes `processed/`, or routes failures to `error/` / `invalid/`. When Compress media is off (Easy), uploads are promoted as-is into `processed/`.
+5. **Gallery** — indexes `processed/`; optional LAN URL + QR for phone browsing. Tokenized LAN pages for upload, receive, share, and transfer sessions.
 
 Progress for extract and convert streams over WebSockets to the desktop web UI (loopback only). Phone clients use HTTP APIs and tokenized upload/share/receive endpoints.
 
@@ -66,7 +66,7 @@ There is no database of record — the filesystem remains the source of truth.
 State is:
 
 - **Filesystem-based**, through the `FileSystem` port (`LocalFileSystem`
-  adapter) — the library root's `originals/` / `converted/` / `error/` /
+  adapter) — the library root's `originals/` / `processed/` / `error/` /
   `invalid/` folders are the persistence layer for media.
 - **A derived, fully-rebuildable SQLite index**
   (`{library_root}/.index.sqlite`, via the `GalleryIndexPort` /
@@ -74,10 +74,15 @@ State is:
   kind, mtime, size) for fast keyset-paginated timeline, calendar, and
   neighbor queries at large library sizes. It is incrementally synced against
   the filesystem by diffing mtime/size (`SyncGalleryIndex`), and is safe to
-  delete at any time — it rebuilds itself from `converted/` + EXIF/ffprobe on
+  delete at any time — it rebuilds itself from `processed/` + EXIF/ffprobe on
   next gallery load.
 - **In-process/in-memory** for session/runtime state (`AppSession`, held on
   `AppServices.session`).
+- **Disk-backed user preferences** via `UserPreferencesPort` (e.g. Photo backup
+  **Compress media** on/off) — survive app relaunch; distinct from session-only
+  fields like `ui_mode`. Compression tool readiness is exposed through
+  `CompressionToolsPort` (magick + ffmpeg resolvable), with effective checkbox
+  state resolved in `domain/compress_media.py`.
 - Long-running work (extract/convert) runs on a `ThreadPoolExecutor` owned by
   `AppServices`, tracked via `Future` handles rather than a job table.
 

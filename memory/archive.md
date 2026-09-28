@@ -5,6 +5,13 @@ at session start — see `.cursor/skills/agent-memory/SKILL.md`. Kept for
 reference; entries are grouped by the area they came from, newest additions
 at the top of each section.
 
+## Promote uncompressed + processed/ + Settings (2026-09-27) — branch `cursor/photo-backup-convert-toggle-50ae`
+
+### Done
+
+- [x] Full SDD: wireframe + specs approved in chat; `LibraryFolder.PROCESSED`; on-ensure migration from `converted/`; `PromoteOriginalsToProcessed` when compress off; Clear prefs / Reset library use cases + APIs; sticky Home|Gallery|Settings; default window 1152×864; `.screen` width fix so Settings confirm copy does not widen the menu
+- [x] MCP workspace root helper (`mcp-servers/_shared/workspace.py`) + Cursor/Claude mcp.json env pins so spawn cwd `$HOME` cannot break indexing
+
 ## USB file transfer (2026-09-27) — branch `cursor/usb-file-transfer-c861`
 
 ### Done

@@ -33,7 +33,7 @@ class GetGalleryItem:
 		*,
 		captured_at: datetime | None = None,
 	) -> GalleryItemDetail | None:
-		full = self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, relative_path)
+		full = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, relative_path)
 		if not self._filesystem.exists(full):
 			return None
 		path = Path(full)

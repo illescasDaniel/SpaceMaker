@@ -25,6 +25,19 @@ class NotStartedError(RuntimeError):
 	pass
 
 
+class LspRequestError(RuntimeError):
+	"""JSON-RPC error response from the language server."""
+
+	def __init__(self, method: str, code: Any, message: str) -> None:
+		self.method = method
+		self.code = code
+		super().__init__(message)
+
+
+class LanguageServerExitedError(RuntimeError):
+	"""The language server process ended while a request was pending."""
+
+
 @dataclass
 class OpenFile:
 	uri: str
@@ -53,6 +66,10 @@ class LspClient:
 			raise NotStartedError("LspClient.start() must be awaited before use")
 		return self._proc
 
+	@property
+	def is_alive(self) -> bool:
+		return self._proc is not None and self._proc.returncode is None
+
 	async def start(self) -> None:
 		if self._started:
 			return
@@ -74,12 +91,12 @@ class LspClient:
 					"textDocument": {
 						"synchronization": {"didSave": True},
 						"publishDiagnostics": {},
+						"documentSymbol": {"hierarchicalDocumentSymbolSupport": True},
+						"callHierarchy": {},
 					},
 					"workspace": {"workspaceFolders": True},
 				},
-				"workspaceFolders": [
-					{"uri": self.workspace_root.as_uri(), "name": self.workspace_root.name}
-				],
+				"workspaceFolders": [{"uri": self.workspace_root.as_uri(), "name": self.workspace_root.name}],
 			},
 		)
 		self._notify("initialized", {})
@@ -99,10 +116,27 @@ class LspClient:
 			self._stderr_task.cancel()
 		with contextlib.suppress(ProcessLookupError):
 			self._proc.terminate()
+		with contextlib.suppress(asyncio.TimeoutError, ProcessLookupError):
+			await asyncio.wait_for(self._proc.wait(), timeout=3)
+		self._started = False
+		self._proc = None
 
 	# -- wire protocol -----------------------------------------------------
 
 	async def _read_loop(self) -> None:
+		try:
+			await self._read_messages()
+		finally:
+			self._fail_pending()
+
+	def _fail_pending(self) -> None:
+		# Without this, requests in flight when the server dies wait out their full timeout.
+		pending, self._pending = self._pending, {}
+		for fut in pending.values():
+			if not fut.done():
+				fut.set_exception(LanguageServerExitedError(f"language server exited: {' '.join(self.command)}"))
+
+	async def _read_messages(self) -> None:
 		proc = self._running_proc
 		if proc.stdout is None:
 			raise NotStartedError("language server subprocess has no stdout pipe")
@@ -156,16 +190,20 @@ class LspClient:
 	async def _request(self, method: str, params: dict[str, Any], timeout: float = 20) -> dict[str, Any]:
 		self._next_id += 1
 		msg_id = self._next_id
-		fut: asyncio.Future = asyncio.get_event_loop().create_future()
+		fut: asyncio.Future = asyncio.get_running_loop().create_future()
 		self._pending[msg_id] = fut
 		self._send({"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params})
 		stdin = self._running_proc.stdin
 		if stdin is not None:
 			await stdin.drain()
 		try:
-			return await asyncio.wait_for(fut, timeout=timeout)
+			resp = await asyncio.wait_for(fut, timeout=timeout)
 		finally:
 			self._pending.pop(msg_id, None)
+		if "error" in resp:
+			err = resp["error"] or {}
+			raise LspRequestError(method, err.get("code"), str(err.get("message", err)))
+		return resp
 
 	def _notify(self, method: str, params: dict[str, Any]) -> None:
 		self._send({"jsonrpc": "2.0", "method": method, "params": params})
@@ -208,9 +246,7 @@ class LspClient:
 					"contentChanges": [{"text": text}],
 				},
 			)
-			self._open_files[uri] = OpenFile(
-				uri=uri, version=new_version, mtime_ns=stat.st_mtime_ns, size=stat.st_size
-			)
+			self._open_files[uri] = OpenFile(uri=uri, version=new_version, mtime_ns=stat.st_mtime_ns, size=stat.st_size)
 		return uri
 
 	# -- LSP calls used by the MCP tools --------------------------------------
@@ -254,8 +290,68 @@ class LspClient:
 
 	async def diagnostics(self, file_path: str) -> list[dict[str, Any]]:
 		uri = await self.ensure_open(file_path)
-		resp = await self._request("textDocument/diagnostic", {"textDocument": {"uri": uri}})
+		cached = self._diagnostics.get(uri, [])
+		try:
+			resp = await self._request("textDocument/diagnostic", {"textDocument": {"uri": uri}})
+		except LspRequestError:
+			# HTML/CSS servers often only push publishDiagnostics and reject pull.
+			return cached
 		result = resp.get("result") or {}
 		if result.get("kind") == "unchanged":
-			return self._diagnostics.get(uri, [])
-		return result.get("items", [])
+			return cached
+		items = result.get("items")
+		if items is None:
+			return cached
+		if not items and cached:
+			return cached
+		return items
+
+	async def document_symbol(self, file_path: str) -> list[dict[str, Any]]:
+		uri = await self.ensure_open(file_path)
+		resp = await self._request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
+		return resp.get("result") or []
+
+	async def prepare_call_hierarchy(self, file_path: str, line: int, column: int) -> list[dict[str, Any]]:
+		uri = await self.ensure_open(file_path)
+		resp = await self._request(
+			"textDocument/prepareCallHierarchy",
+			{"textDocument": {"uri": uri}, "position": {"line": line - 1, "character": column - 1}},
+		)
+		return resp.get("result") or []
+
+	async def incoming_calls(self, item: dict[str, Any]) -> list[dict[str, Any]]:
+		resp = await self._request("callHierarchy/incomingCalls", {"item": item})
+		return resp.get("result") or []
+
+	# -- scratch (in-memory-only) documents -----------------------------------
+	#
+	# For codenav's Protocol-conformance probe: a document that is never
+	# written to disk, so it can't use `ensure_open`'s stat/read-based sync.
+
+	async def open_scratch_document(self, uri: str, text: str) -> None:
+		self._notify(
+			"textDocument/didOpen",
+			{"textDocument": {"uri": uri, "languageId": self.language_id, "version": 1, "text": text}},
+		)
+		self._open_files[uri] = OpenFile(uri=uri, version=1, mtime_ns=-1, size=len(text))
+
+	async def change_scratch_document(self, uri: str, text: str) -> None:
+		version = self._open_files[uri].version + 1
+		self._notify(
+			"textDocument/didChange",
+			{"textDocument": {"uri": uri, "version": version}, "contentChanges": [{"text": text}]},
+		)
+		self._open_files[uri] = OpenFile(uri=uri, version=version, mtime_ns=-1, size=len(text))
+
+	async def close_scratch_document(self, uri: str) -> None:
+		self._notify("textDocument/didClose", {"textDocument": {"uri": uri}})
+		self._open_files.pop(uri, None)
+		self._diagnostics.pop(uri, None)
+
+	async def pull_diagnostics(self, uri: str) -> list[dict[str, Any]]:
+		"""Pull diagnostics for an already-open `uri` directly, with no cache
+		fallback — used for the scratch-document probe above, where there is no
+		prior `publishDiagnostics` push to fall back to."""
+		resp = await self._request("textDocument/diagnostic", {"textDocument": {"uri": uri}})
+		result = resp.get("result") or {}
+		return result.get("items") or []

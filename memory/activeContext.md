@@ -1,18 +1,19 @@
-_Last updated: 2026-09-27_
+_Last updated: 2026-09-28_
+
+## Branch
+
+`cursor/photo-backup-convert-toggle-50ae`
 
 ## Current focus
 
-**USB file transfer** on `cursor/usb-file-transfer-c861` — ready to land. User verified
-ADB + iPhone (AFC) USB transfer on device. MTP stripped; Browse = Add files/folder +
-path flatten.
-
-## Just changed
-
-- Full USB transfer stack (domain/ports/use cases/ADB adbfs + AFC ifuse/UI/API/tests)
-- Spec/docs/packaging: MTP removed; ADB + AFC only for cable
-- Memory: flag ADB Browse performance for pre-production review
+**Photo backup PR #2** — merged `origin/main` (USB file transfer + MCP uv workspace on branch); landing via `/save-pr-changes`.
 
 ## Next steps
 
-- Land PR (`/save-pr-changes` in flight)
-- After merge: pre-prod review of slow ADB Browse / listing (see `progress.md`)
+- Manual app checks still open: Clear prefs list width; Compress-off upload → Gallery; sticky header.
+- After merge: reload codenav/webnav MCP (`python -m codenav_mcp.server` / `python -m webnav_mcp.server`).
+
+## Just changed
+
+- Merge `origin/main` into photo-backup branch (USB transfer + Settings/processed/`compress_media` combined).
+- Commit `ef5d6e5`: mcp-servers uv workspace (382 tests + Biome green).

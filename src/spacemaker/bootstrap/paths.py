@@ -134,7 +134,17 @@ def ensure_managed_tools_dir() -> Path:
 
 
 def spacemaker_data_dir(*, tools_dir: Path | None = None) -> Path:
-	return (tools_dir or managed_tools_dir()).parent
+	if tools_dir is not None:
+		return tools_dir.parent
+	override = os.environ.get("SPACEMAKER_TOOLS_DIR", "").strip()
+	if override:
+		return Path(override).expanduser().resolve().parent
+	return managed_tools_dir().parent
+
+
+def user_preferences_path(*, tools_dir: Path | None = None) -> Path:
+	"""Disk-backed preferences (e.g. Compress media) next to managed tools data."""
+	return spacemaker_data_dir(tools_dir=tools_dir) / "preferences.json"
 
 
 def components_setup_complete_marker(*, tools_dir: Path | None = None) -> Path:

@@ -17,7 +17,7 @@ class SubprocessThumbnailGenerator:
 		self._runner = runner or ToolRunner()
 
 	def ensure_thumb(self, library_root: str, relative_path: str) -> str:
-		source = Path(self._library_converted_path(library_root, relative_path))
+		source = Path(self._library_processed_path(library_root, relative_path))
 		if not source.is_file():
 			raise FileNotFoundError(relative_path)
 		dest = Path(thumbnail_path(library_root, relative_path))
@@ -31,8 +31,8 @@ class SubprocessThumbnailGenerator:
 			self._thumb_image(source, dest)
 		return str(dest)
 
-	def _library_converted_path(self, library_root: str, relative: str) -> str:
-		base = Path(library_root) / LibraryFolder.CONVERTED.value
+	def _library_processed_path(self, library_root: str, relative: str) -> str:
+		base = Path(library_root) / LibraryFolder.PROCESSED.value
 		return str((base / relative).resolve())
 
 	def _thumb_image(self, source: Path, dest: Path) -> None:

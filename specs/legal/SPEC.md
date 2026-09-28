@@ -3,9 +3,9 @@
 ## Metadata
 
 - **Feature:** Transparency for downloaded/managed binaries, privacy, and liability
-- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-legal`
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-legal` (opened from Settings)
 - **Documents:** [docs/legal/](../../docs/legal/)
-- **Related:** [packaging/SPEC.md](../packaging/SPEC.md)
+- **Related:** [packaging/SPEC.md](../packaging/SPEC.md), [home-modules/SPEC.md](../home-modules/SPEC.md)
 
 ## Requirements
 
@@ -46,14 +46,14 @@ Ship [DISCLAIMER.md](../../docs/legal/DISCLAIMER.md) covering:
 
 | Surface | Content |
 |---------|---------|
-| **In-app footer → Settings** | Mini page (`#view-settings`); managed tools folder path; **Delete downloaded components**; retry downloads |
-| **In-app footer → About & Legal** | Mini page (`#view-legal`); summaries + mailto contact; third-party home links |
+| **Settings → About & Legal** | Mini page (`#view-legal`); summaries + mailto contact; third-party home links. Entry is the last row on `#view-settings` ([home-modules](../home-modules/SPEC.md)). |
+| **Settings → Downloaded components** | Nested `#view-settings-tools`; managed tools folder path; **Delete downloaded components**; retry downloads ([packaging](../packaging/SPEC.md)) |
 | **First run** | Components setup screen when tools are not yet resolved |
 | **Release artifact** | Full `docs/legal/*.md` embedded or shipped beside the binary |
 
-No traditional installer welcome screen in v1.
+No floating footer entry points in v1. No traditional installer welcome screen in v1.
 
-Wireframe **approved** 2026-09-22 (updated for portable release model).
+Wireframe **approved** 2026-09-22 (updated for portable release model); **updated** 2026-09-27 (Settings tab entry; About & Legal last on settings menu).
 
 ## Acceptance criteria (BDD)
 
@@ -69,17 +69,17 @@ Wireframe **approved** 2026-09-22 (updated for portable release model).
 - **When** CI validates the manifest
 - **Then** every `BundledTool` enum value has a manifest entry
 
-### Scenario: Footer opens legal mini page
+### Scenario: Settings opens legal mini page
 
-- **Given** the running app
-- **When** the user clicks footer **About & Legal**
-- **Then** in-app page shows Privacy, Third-party tools (with project URLs), managed folder path, delete control, Disclaimer
+- **Given** the user is on the Settings menu
+- **When** they tap **About & Legal**
+- **Then** in-app page shows Privacy, Third-party tools (with project URLs), and Disclaimer
 
 ### Scenario: Back from legal page
 
-- **Given** the user opened About & Legal from any main view (Home, a module, Gallery, etc.)
-- **When** they click **Back**
-- **Then** they return to the view they came from
+- **Given** the user opened About & Legal from Settings
+- **When** they click **← Settings**
+- **Then** they return to `#view-settings`
 
 ## Testing strategy
 

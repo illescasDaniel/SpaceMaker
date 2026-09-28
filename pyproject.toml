@@ -27,7 +27,7 @@ spacemaker = "spacemaker.desktop:main"
 
 [dependency-groups]
 dev = [
-	"mcp>=2.2.0",
+	"codenav-mcp",
 	"mkdocs>=1.6.1",
 	"mkdocs-material>=9.7.7",
 	"pyinstaller>=6.19",
@@ -38,6 +38,7 @@ dev = [
 	"ruff>=0.15",
 	"taskipy>=1.14",
 	"ty>=0.0.75",
+	"webnav-mcp",
 ]
 
 [build-system]
@@ -46,6 +47,13 @@ build-backend = "uv_build"
 
 [tool.uv]
 default-groups = ["dev"]
+
+[tool.uv.workspace]
+members = ["mcp-servers/_shared", "mcp-servers/codenav_mcp", "mcp-servers/webnav_mcp"]
+
+[tool.uv.sources]
+codenav-mcp = { workspace = true }
+webnav-mcp = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -91,13 +99,16 @@ lines-after-imports = 2
 python-version = "3.11"
 python = ".venv"
 python-platform = "all"
-root = ["./src", "."]
+# mcp-servers/*: each is its own workspace package under src/; listing their
+# src/ roots lets `_shared` / `codenav_mcp` / `webnav_mcp` resolve as the
+# servers (and their own tests) import them at runtime.
+root = ["./src", ".", "./mcp-servers/_shared/src", "./mcp-servers/codenav_mcp/src", "./mcp-servers/webnav_mcp/src"]
 
 [tool.ty.src]
 exclude = ["scripts/**", "wireframes/**"]
 
 [[tool.ty.overrides]]
-include = ["tests/**"]
+include = ["tests/**", "mcp-servers/*/tests/**"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "ignore"
 invalid-assignment = "ignore"

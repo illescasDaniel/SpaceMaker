@@ -13,7 +13,7 @@ class DeleteGalleryItem:
 	def run(self, library_root: str, relative_path: str) -> bool:
 		if not is_safe_gallery_relative_path(relative_path):
 			raise ValueError("invalid path")
-		full = self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, relative_path)
+		full = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, relative_path)
 		if not self._filesystem.exists(full):
 			return False
 		self._filesystem.delete_file(full)

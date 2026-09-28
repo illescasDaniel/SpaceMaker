@@ -70,12 +70,12 @@ class ConvertMedia:
 			self._move_to_folder(library_root, relative, LibraryFolder.INVALID)
 			return
 		if route is ConversionRoute.MOVE_AS_IS:
-			self._move_to_folder(library_root, relative, LibraryFolder.CONVERTED)
+			self._move_to_folder(library_root, relative, LibraryFolder.PROCESSED)
 			return
 		if kind is MediaKind.VIDEO and self._converter.library_video_encoder() is HardwareVideoEncoder.NONE:
 			if route is ConversionRoute.ENCODE:
 				self.last_failure = f"{relative}: no hardware video encoder available; kept original in gallery"
-			self._move_to_folder(library_root, relative, LibraryFolder.CONVERTED)
+			self._move_to_folder(library_root, relative, LibraryFolder.PROCESSED)
 			return
 		if self._try_skip_existing_valid(library_root, relative):
 			return
@@ -88,7 +88,7 @@ class ConvertMedia:
 
 	def _try_skip_existing_valid(self, library_root: str, relative: str) -> bool:
 		out_rel = self._planned_output_relative(library_root, relative)
-		dest = self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, out_rel)
+		dest = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, out_rel)
 		if not self._filesystem.exists(dest) or self._filesystem.file_size(dest) <= 0:
 			return False
 		if not self._output_valid(relative, dest):
@@ -108,7 +108,7 @@ class ConvertMedia:
 	def _encode_once(self, library_root: str, relative: str, video_probe: VideoProbe | None) -> bool:
 		source = self._filesystem.library_path(library_root, LibraryFolder.ORIGINALS, relative)
 		out_rel = self._planned_output_relative(library_root, relative)
-		dest = self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, out_rel)
+		dest = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, out_rel)
 		self._filesystem.ensure_parent_directory(dest)
 		if self._filesystem.exists(dest):
 			self._filesystem.delete_file(dest)
@@ -146,7 +146,7 @@ class ConvertMedia:
 		if output_exceeds_rollback_threshold(source_size, output_size):
 			if self._should_rollback_source(relative, video_probe):
 				self._filesystem.delete_file(dest)
-				self._move_to_folder(library_root, relative, LibraryFolder.CONVERTED)
+				self._move_to_folder(library_root, relative, LibraryFolder.PROCESSED)
 				return True
 		self._filesystem.delete_file(source)
 		return True
@@ -166,7 +166,7 @@ class ConvertMedia:
 		if media_kind_for_extension(ext) is MediaKind.IMAGE:
 			stem_avif = image_avif_relative_path(relative, collision_avif_exists=False)
 			collision = self._filesystem.exists(
-				self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, stem_avif),
+				self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, stem_avif),
 			)
 			return image_avif_relative_path(relative, collision_avif_exists=collision)
 		encoder = self._converter.library_video_encoder()

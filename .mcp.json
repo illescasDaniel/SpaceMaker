@@ -1,12 +1,34 @@
 {
-  "mcpServers": {
-    "codenav": {
-      "command": "uv",
-      "args": ["run", "python", "mcp-servers/codenav_mcp/server.py"]
-    },
-    "webnav": {
-      "command": "uv",
-      "args": ["run", "python", "mcp-servers/webnav_mcp/server.py"]
-    }
-  }
+	"mcpServers": {
+		"codenav": {
+			"command": "uv",
+			"args": [
+				"run",
+				"--directory",
+				"${CLAUDE_PROJECT_DIR:-.}",
+				"python",
+				"-m",
+				"codenav_mcp.server"
+			],
+			"env": {
+				"CODENAV_MCP_WORKSPACE": "${CLAUDE_PROJECT_DIR:-.}",
+				"CODENAV_MCP_SOURCE_ROOT": "src"
+			}
+		},
+		"webnav": {
+			"command": "uv",
+			"args": [
+				"run",
+				"--directory",
+				"${CLAUDE_PROJECT_DIR:-.}",
+				"python",
+				"-m",
+				"webnav_mcp.server"
+			],
+			"env": {
+				"WEBNAV_MCP_WORKSPACE": "${CLAUDE_PROJECT_DIR:-.}",
+				"WEBNAV_MCP_ROOTS": "static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes"
+			}
+		}
+	}
 }

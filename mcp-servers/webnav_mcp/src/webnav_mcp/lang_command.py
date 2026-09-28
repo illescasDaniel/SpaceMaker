@@ -26,8 +26,16 @@ def resolve_ts_command(workspace_root: Path) -> list[str]:
 
 
 def resolve_html_command(workspace_root: Path) -> list[str]:
-	return _resolve_bin(workspace_root, "vscode-html-language-server", ["--package=vscode-langservers-extracted", "vscode-html-language-server"])
+	return _resolve_bin(
+		workspace_root,
+		"vscode-html-language-server",
+		["--package=vscode-langservers-extracted", "vscode-html-language-server"],
+	)
 
 
 def resolve_css_command(workspace_root: Path) -> list[str]:
-	return _resolve_bin(workspace_root, "vscode-css-language-server", ["--package=vscode-langservers-extracted", "vscode-css-language-server"])
+	return _resolve_bin(
+		workspace_root,
+		"vscode-css-language-server",
+		["--package=vscode-langservers-extracted", "vscode-css-language-server"],
+	)

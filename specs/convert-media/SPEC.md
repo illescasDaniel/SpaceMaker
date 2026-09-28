@@ -1,4 +1,4 @@
-# Convert media (originals/ → converted/ | error/ | invalid/)
+# Convert media (originals/ → processed/ | error/ | invalid/)
 
 ## Metadata
 
@@ -12,7 +12,7 @@
 ## Triggers & routing
 
 - **Start (Advanced):** User clicks **Start convert** when enabled (see [main-wizard](../main-wizard/SPEC.md): enabled when `originals/` non-empty, including during extract; click **stops extract first** then converts).
-- **Start (Easy):** [easy-mode](../easy-mode/SPEC.md) — after each Wi‑Fi upload into `originals/`, convert drains automatically **without** stopping extract; re-queues while files remain.
+- **Start (Easy):** [easy-mode](../easy-mode/SPEC.md) — after each Wi‑Fi upload into `originals/`, when **Compress media** is on and tools are available, convert drains automatically **without** stopping extract; re-queues while files remain. When Compress media is off, Easy does not start convert; instead it **promotes** uploads as-is from `originals/` → `processed/` (see easy-mode).
 - **Input:** All files under `originals/` (recursive), processed in deterministic order (e.g. sorted relative path).
 - **Output:** Each source file ends with no copy left in `originals/` except transient in-flight (success, move-as-is, `error/`, or `invalid/`).
 
@@ -45,12 +45,12 @@ flowchart TD
   avif{Image AVIF?}
   av1v{Video AV1 web OK?}
   low{Web video bitrate le 1.5Mbps?}
-  move[Move file to converted same name]
-  enc[Encode to converted]
+  move[Move file to processed same name]
+  enc[Encode to processed]
   ok{Output valid?}
   sz{Output size gt orig plus 10pct?}
   web{Source web compatible?}
-  drop[Delete output move orig to converted]
+  drop[Delete output move orig to processed]
   keep[Keep output remove orig from originals]
   retry[Retry once]
   err[Move orig to error]
@@ -75,7 +75,7 @@ flowchart TD
 
 ## Move-as-is (no re-encode)
 
-Move from `originals/` to `converted/` with **same relative path and filename** when:
+Move from `originals/` to `processed/` with **same relative path and filename** when:
 
 - Image extension is avif, or
 - Video stream codec is av1 and file passes full video web-compatible check, or
@@ -83,7 +83,7 @@ Move from `originals/` to `converted/` with **same relative path and filename** 
 
 ## Image encode
 
-- **Output path:** `{stem}.avif` beside source relative layout under `converted/` (see RAW+JPEG collision below).
+- **Output path:** `{stem}.avif` beside source relative layout under `processed/` (see RAW+JPEG collision below).
 - **Command policy (ImageMagick):** `-depth 10 -quality 80 -define avif:chroma-subsampling=444`
 - **Metadata:** ExifTool `-TagsFromFile source -all:all` onto output (overwrite output tags).
 - **Validation:** output size > 0 and `magick identify` succeeds.
@@ -102,11 +102,11 @@ If ImageMagick cannot read RAW: extract `PreviewImage`, else `JpgFromRaw` via Ex
 
 ## Video encode
 
-- **Output:** `{stem}.av1.mp4` under `converted/` (skip if input already ends with `.av1.mp4` case-insensitive — move-as-is path).
+- **Output:** `{stem}.av1.mp4` under `processed/` (skip if input already ends with `.av1.mp4` case-insensitive — move-as-is path).
 - **Hardware only:** no CPU encoders (no libsvtav1 / libx264) for library convert or friendly MP4 export.
 - **Encoder priority:** av1_nvenc → av1_qsv → av1_vaapi (if render node present) → **h264_nvenc → h264_qsv → h264_vaapi** (if render node present). Never encode to HEVC/H.265 for library output (no in-browser preview).
-- **No hardware encoder:** videos that would otherwise be re-encoded are **moved as-is** to `converted/` (same relative path). Gallery may omit inline preview for non-preview codecs (e.g. HEVC).
-- **H.264 hardware fallback output:** `{stem}.h264.mp4` under `converted/` when AV1 hardware is unavailable but H.264 hardware is.
+- **No hardware encoder:** videos that would otherwise be re-encoded are **moved as-is** to `processed/` (same relative path). Gallery may omit inline preview for non-preview codecs (e.g. HEVC).
+- **H.264 hardware fallback output:** `{stem}.h264.mp4` under `processed/` when AV1 hardware is unavailable but H.264 hardware is.
 - **Audio:** libopus 256k; map metadata; movflags +faststart.
 - **Validation:** size > 0 and ffprobe reports readable duration.
 
@@ -114,15 +114,15 @@ If ImageMagick cannot read RAW: extract `PreviewImage`, else `JpgFromRaw` via Ex
 
 If encoded output size > `source_size + source_size // 10`:
 
-- If source is **web-compatible** (image or video per rules): delete output; **move** original to `converted/`.
+- If source is **web-compatible** (image or video per rules): delete output; **move** original to `processed/`.
 - Else: keep output; remove original from `originals/`.
 
 ## Encode failure & retry
 
-1. Delete partial output in `converted/` if present.
+1. Delete partial output in `processed/` if present.
 2. Leave source in `originals/`.
 3. **Retry same file once** automatically.
-4. If second attempt fails validation or encoder error: move source to `error/` (no partial in `converted/`).
+4. If second attempt fails validation or encoder error: move source to `error/` (no partial in `processed/`).
 
 ## Invalid (no retry)
 
@@ -135,7 +135,7 @@ Move to `invalid/` when:
 
 ## Idempotency
 
-If target output already exists in `converted/`, size > 0, and validates:
+If target output already exists in `processed/`, size > 0, and validates:
 
 - Skip encode; remove source from `originals/` if still present (finish interrupted run).
 
@@ -145,7 +145,7 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 
 ## User recovery (via UI)
 
-- **Move error to converted:** move all files from `error/` → `converted/` unchanged (see main-wizard spec).
+- **Move error to processed:** move all files from `error/` → `processed/` unchanged (see main-wizard spec).
 
 ## Acceptance criteria (BDD)
 
@@ -153,20 +153,20 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 
 - **Given** an avif file in `originals/`
 - **When** convert runs
-- **Then** the file is moved to `converted/` with same name
+- **Then** the file is moved to `processed/` with same name
 - **And** `originals/` no longer contains it
 
 ### Scenario: Web-compatible low bitrate video move-as-is
 
 - **Given** a web-compatible mp4 under 1.5 Mbps in `originals/`
 - **When** convert runs
-- **Then** the file is moved to `converted/` unchanged
+- **Then** the file is moved to `processed/` unchanged
 
 ### Scenario: Successful image encode removes source
 
 - **Given** a png in `originals/`
 - **When** convert encodes to valid avif
-- **Then** `{stem}.avif` exists in `converted/`
+- **Then** `{stem}.avif` exists in `processed/`
 - **And** the png is removed from `originals/`
 
 ### Scenario: DNG and JPEG both produce AVIF
@@ -181,14 +181,14 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 
 - **Given** a web-compatible jpeg where avif encode would be larger than 110% of source
 - **When** convert runs
-- **Then** no oversized avif remains in `converted/`
-- **And** the jpeg is moved to `converted/`
+- **Then** no oversized avif remains in `processed/`
+- **And** the jpeg is moved to `processed/`
 
 ### Scenario: Non-web-compatible keeps larger encode
 
 - **Given** a heic where avif is larger than 110% of source
 - **When** convert runs
-- **Then** the avif is kept in `converted/`
+- **Then** the avif is kept in `processed/`
 - **And** heic is removed from `originals/`
 
 ### Scenario: Encode fails twice then error folder
@@ -196,7 +196,7 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 - **Given** a supported file whose encode fails validation twice
 - **When** convert finishes that file
 - **Then** the file is in `error/`
-- **And** no invalid partial exists in `converted/`
+- **And** no invalid partial exists in `processed/`
 
 ### Scenario: PDF goes to invalid
 
@@ -207,7 +207,7 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 
 ### Scenario: Skip valid existing output
 
-- **Given** valid `{stem}.avif` already in `converted/` and source still in `originals/`
+- **Given** valid `{stem}.avif` already in `processed/` and source still in `originals/`
 - **When** convert runs
 - **Then** encode is skipped
 - **And** source is removed from `originals/`
@@ -251,4 +251,4 @@ Never delete `originals/` source until validation passes (except move-as-is path
 
 - User-adjustable CRF/quality in UI
 - Parallel encode worker pool sizing (implementation detail; must be safe)
-- Re-converting files already in `converted/` without putting sources back in `originals/`
+- Re-converting files already in `processed/` without putting sources back in `originals/`

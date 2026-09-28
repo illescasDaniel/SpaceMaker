@@ -5,7 +5,11 @@ import shutil
 from pathlib import Path
 
 from spacemaker.domain.gallery_index import FileStat
-from spacemaker.domain.library import LIBRARY_FOLDERS, LibraryFolder
+from spacemaker.domain.library import (
+	LEGACY_CONVERTED_FOLDER_NAME,
+	LIBRARY_FOLDERS,
+	LibraryFolder,
+)
 from spacemaker.domain.library_paths import SKIPPED_LIBRARY_DIR_NAMES, skip_library_relative_path
 
 
@@ -13,8 +17,29 @@ class LocalFileSystem:
 	def ensure_library_folders(self, library_root: str) -> None:
 		root = Path(library_root)
 		root.mkdir(parents=True, exist_ok=True)
+		self._migrate_legacy_converted(root)
 		for folder in LIBRARY_FOLDERS:
 			(root / folder.value).mkdir(parents=True, exist_ok=True)
+
+	def _migrate_legacy_converted(self, root: Path) -> None:
+		legacy = root / LEGACY_CONVERTED_FOLDER_NAME
+		processed = root / LibraryFolder.PROCESSED.value
+		if not legacy.is_dir():
+			return
+		if not processed.exists():
+			legacy.rename(processed)
+			return
+		for path in legacy.rglob("*"):
+			if not path.is_file():
+				continue
+			rel = path.relative_to(legacy)
+			dest = processed / rel
+			dest.parent.mkdir(parents=True, exist_ok=True)
+			if dest.exists():
+				path.unlink(missing_ok=True)
+			else:
+				shutil.move(str(path), str(dest))
+		shutil.rmtree(legacy, ignore_errors=True)
 
 	def file_size(self, path: str) -> int:
 		return Path(path).stat().st_size
@@ -39,6 +64,13 @@ class LocalFileSystem:
 
 	def delete_file(self, path: str) -> None:
 		Path(path).unlink(missing_ok=True)
+
+	def delete_directory(self, path: str) -> None:
+		target = Path(path)
+		if target.is_dir():
+			shutil.rmtree(target, ignore_errors=True)
+		elif target.is_file():
+			target.unlink(missing_ok=True)
 
 	def list_files_recursive(self, folder: str) -> list[str]:
 		base = Path(folder)

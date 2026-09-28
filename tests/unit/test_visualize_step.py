@@ -6,7 +6,7 @@ def test_given_converted_files_when_visualize_step_then_ready_count():
 	# given
 	# when
 	state = visualize_step_state(
-		converted_count=42,
+		processed_count=42,
 		convert_phase=JobPhase.IDLE,
 		progress_percent=0,
 	)
@@ -20,7 +20,7 @@ def test_given_empty_converted_when_visualize_step_then_not_started():
 	# given
 	# when
 	state = visualize_step_state(
-		converted_count=0,
+		processed_count=0,
 		convert_phase=JobPhase.IDLE,
 		progress_percent=0,
 	)
@@ -33,7 +33,7 @@ def test_given_convert_running_when_visualize_step_then_in_progress():
 	# given
 	# when
 	state = visualize_step_state(
-		converted_count=0,
+		processed_count=0,
 		convert_phase=JobPhase.RUNNING,
 		progress_percent=55,
 	)

@@ -96,13 +96,13 @@ def _path_is_under_base(base: Path, target: Path) -> bool:
 	return True
 
 
-def _resolve_converted_file(services: AppServices, relative_path: str) -> Path:
+def _resolve_processed_file(services: AppServices, relative_path: str) -> Path:
 	if not is_safe_gallery_relative_path(relative_path):
 		raise HTTPException(status_code=403, detail="invalid path")
 	root = services.session.library_root
 	if not root:
 		raise HTTPException(status_code=404)
-	base = Path(services.filesystem.library_path(root, LibraryFolder.CONVERTED, "")).resolve()
+	base = Path(services.filesystem.library_path(root, LibraryFolder.PROCESSED, "")).resolve()
 	target = (base / relative_path).resolve()
 	if not _path_is_under_base(base, target):
 		raise HTTPException(status_code=403, detail="invalid path")
@@ -173,6 +173,7 @@ class SettingsBody(BaseModel):
 	source_folders: list[str] | None = None
 	transfer_folders: list[str] | None = None
 	transfer_extra_paths: list[str] | None = None
+	compress_media: bool | None = None
 
 
 class UsbTransferExtrasBody(BaseModel):
@@ -324,13 +325,23 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.put("/api/settings")
 	def put_settings(request: Request, body: SettingsBody) -> dict[str, object]:
 		require_loopback(request)
+		# Compress media may change during an active receive session.
+		compress_changed = False
+		if body.compress_media is not None:
+			before = services.compress_media_preference().enabled
+			after = services.set_compress_media(body.compress_media)
+			compress_changed = after.enabled != before
 		with services.session._lock:
 			if body.ui_mode is not None:
 				services.session.ui_mode = body.ui_mode
 			if services.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
+				if compress_changed:
+					services.maybe_start_convert_drain()
 				services.push_state()
 				return services.enriched_snapshot()
 			if services.session.usb_transfer_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
+				if compress_changed:
+					services.maybe_start_convert_drain()
 				services.push_state()
 				return services.enriched_snapshot()
 			library_root = normalize_library_root(body.library_root)
@@ -376,6 +387,27 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 				services.session.transfer_extra_paths = merge_extra_paths([], body.transfer_extra_paths)
 			if services.session.library_root:
 				services.filesystem.ensure_library_folders(services.session.library_root)
+		if compress_changed:
+			services.maybe_start_convert_drain()
+		services.push_state()
+		return services.enriched_snapshot()
+
+	@app.post("/api/preferences/clear")
+	def clear_preferences(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		services.clear_user_preferences.run()
+		services.maybe_start_convert_drain()
+		services.push_state()
+		return services.enriched_snapshot()
+
+	@app.post("/api/library/reset")
+	def reset_library(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		root = _session_library_root(services)
+		if not root:
+			raise HTTPException(status_code=400, detail="library_root required")
+		services.stop_convert_and_wait(timeout_seconds=30.0)
+		services.reset_library.run(root)
 		services.push_state()
 		return services.enriched_snapshot()
 
@@ -911,12 +943,12 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		services.stop_convert_and_wait(timeout_seconds=300.0)
 		return services.enriched_snapshot()
 
-	@app.post("/api/error/move-to-converted")
+	@app.post("/api/error/move-to-processed")
 	def move_errors(request: Request) -> dict[str, int]:
 		require_loopback(request)
 		if not services.session.library_root:
 			raise HTTPException(status_code=400, detail="library_root required")
-		moved = services.error_recovery.move_all_errors_to_converted(services.session.library_root)
+		moved = services.error_recovery.move_all_errors_to_processed(services.session.library_root)
 		services.sync_gallery_index.run(services.session.library_root)
 		services.push_state()
 		return {"moved": moved}
@@ -989,7 +1021,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	@app.post("/api/gallery/open")
 	def gallery_open_on_host(request: Request, body: GalleryOpenBody) -> dict[str, bool]:
 		require_loopback(request)
-		target = _resolve_converted_file(services, body.relative_path)
+		target = _resolve_processed_file(services, body.relative_path)
 		try:
 			if body.target == "file":
 				open_file_with_default_app(str(target))
@@ -1014,7 +1046,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			export_format = ExportFormat(body.format)
 		except ValueError as exc:
 			raise HTTPException(status_code=400, detail="unknown export format") from exc
-		_resolve_converted_file(services, body.relative_path)
+		_resolve_processed_file(services, body.relative_path)
 		job = services.start_gallery_export(root, body.relative_path, export_format)
 		return job.to_dict()
 
@@ -1065,7 +1097,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		root = services.session.library_root
 		if not root:
 			raise HTTPException(status_code=404)
-		base = Path(services.filesystem.library_path(root, LibraryFolder.CONVERTED, "")).resolve()
+		base = Path(services.filesystem.library_path(root, LibraryFolder.PROCESSED, "")).resolve()
 		target = (base / relative_path).resolve()
 		if not _path_is_under_base(base, target):
 			raise HTTPException(status_code=403, detail="invalid path")
@@ -1118,7 +1150,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 
 	@app.get("/media/{relative_path:path}")
 	def media_file(relative_path: str, download: int = 0) -> FileResponse:
-		target = _resolve_converted_file(services, relative_path)
+		target = _resolve_processed_file(services, relative_path)
 		headers: dict[str, str] | None = None
 		if download:
 			headers = {"Content-Disposition": _attachment_filename(target)}

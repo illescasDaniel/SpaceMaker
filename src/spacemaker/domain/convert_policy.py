@@ -22,8 +22,29 @@ def should_auto_drain_after_upload(
 	ui_mode: UiMode,
 	convert_phase: JobPhase,
 	originals_count: int,
+	compress_media: bool = True,
 ) -> bool:
+	"""Easy auto-convert after Wi‑Fi upload — gated on Compress media preference."""
 	if ui_mode is not UiMode.EASY:
+		return False
+	if not compress_media:
+		return False
+	if convert_phase is JobPhase.RUNNING:
+		return False
+	return originals_count > 0
+
+
+def should_promote_after_upload(
+	*,
+	ui_mode: UiMode,
+	convert_phase: JobPhase,
+	originals_count: int,
+	compress_media: bool,
+) -> bool:
+	"""Easy promote originals → processed when Compress media is off."""
+	if ui_mode is not UiMode.EASY:
+		return False
+	if compress_media:
 		return False
 	if convert_phase is JobPhase.RUNNING:
 		return False

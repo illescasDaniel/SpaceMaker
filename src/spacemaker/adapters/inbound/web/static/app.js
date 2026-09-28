@@ -1,6 +1,5 @@
 (function () {
 	var clientShell = window.SPACEMAKER_SHELL || "desktop";
-	var lastMainView = "home";
 	var uiMode = "easy";
 	var state = null;
 
@@ -485,7 +484,6 @@
 				);
 			});
 			if (isMainHubView(resolved) || resolved === "gallery") {
-				lastMainView = resolved === "gallery" ? "gallery" : "home";
 				if (resolved === "gallery") {
 					loadGallery();
 				}
@@ -503,6 +501,10 @@
 					}
 				}
 			}
+		} else if (resolved === "settings" || resolved === "settings-tools" || resolved === "legal") {
+			document.querySelectorAll(".view-tabs button").forEach(function (b) {
+				b.classList.toggle("active", b.getAttribute("data-view") === "settings");
+			});
 		}
 	}
 
@@ -861,7 +863,7 @@
 			return;
 		}
 		var viewId = currentViewId();
-		if (viewId === "view-settings" || viewId === "view-legal") {
+		if (viewId === "view-settings" || viewId === "view-settings-tools" || viewId === "view-legal") {
 			renderComponentsList(next.managed_tools || {});
 			return;
 		}
@@ -1111,8 +1113,17 @@
 		var transferFill = document.getElementById("easy-transfer-fill");
 		var convertStatus = document.getElementById("easy-convert-status");
 		var convertFill = document.getElementById("easy-convert-fill");
+		var convertProgressBlock = document.getElementById("easy-convert-progress-block");
+		var compressOffStatus = document.getElementById("easy-compress-off-status");
+		var compressCheckbox = document.getElementById("easy-compress-checkbox");
+		var compressLabel = document.getElementById("easy-compress-pref-label");
+		var compressToolsHint = document.getElementById("easy-compress-tools-hint");
 		var viewGalleryWrap = document.getElementById("easy-view-gallery-wrap");
-		var converted = next.library_counts?.converted || 0;
+		var processed = next.library_counts?.processed || 0;
+		var compress = next.compress_media || {};
+		var compressOn = compress.enabled !== false;
+		var compressControlEnabled = compress.control_enabled !== false;
+		var toolsAvailable = compress.tools_available !== false;
 		var ep = next.extract.progress || { completed: 0, percent: 0 };
 		var cp = next.convert.progress || { completed: 0, total: 0, percent: 0 };
 		var photoLibraryHint = document.getElementById("photo-library-hint");
@@ -1124,6 +1135,22 @@
 		var parts;
 		if (photoLibraryHint && libDisplay) {
 			photoLibraryHint.textContent = "Photos and videos are saved under " + libDisplay;
+		}
+		if (compressCheckbox && document.activeElement !== compressCheckbox) {
+			compressCheckbox.checked = compressOn;
+			compressCheckbox.disabled = !compressControlEnabled;
+		}
+		if (compressLabel) {
+			compressLabel.classList.toggle("is-disabled", !compressControlEnabled);
+		}
+		if (compressToolsHint) {
+			compressToolsHint.classList.toggle("panel-hidden", toolsAvailable);
+		}
+		if (convertProgressBlock) {
+			convertProgressBlock.classList.toggle("panel-hidden", !compressOn);
+		}
+		if (compressOffStatus) {
+			compressOffStatus.classList.toggle("panel-hidden", compressOn);
 		}
 		setQrUrlField("easy-qr-url", wifi.upload_url || "");
 		if (wifi.active && uploadQr) {
@@ -1160,9 +1187,9 @@
 				convertStatus.textContent = next.last_error;
 			} else if (next.convert.phase === "done" && cp.total > 0) {
 				convertStatus.textContent = "Completed — " + cp.completed + " file(s)";
-			} else if (converted > 0) {
+			} else if (processed > 0) {
 				convertStatus.textContent = easyFileCountLabel(
-					converted,
+					processed,
 					"file converted, waiting for more",
 					"files converted, waiting for more",
 				);
@@ -1174,7 +1201,7 @@
 			convertFill.style.width = (next.convert.phase === "running" ? cp.percent : 0) + "%";
 		}
 		if (viewGalleryWrap) {
-			viewGalleryWrap.classList.toggle("panel-hidden", converted <= 0);
+			viewGalleryWrap.classList.toggle("panel-hidden", processed <= 0);
 		}
 		var importIssues = document.getElementById("easy-import-issues");
 		if (importIssues) {
@@ -1182,10 +1209,10 @@
 			errN = issues.errors || 0;
 			invN = issues.invalid || 0;
 			parts = [];
-			if (errN > 0) {
+			if (compressOn && errN > 0) {
 				parts.push(errN + (errN === 1 ? " image failed to convert" : " images failed to convert"));
 			}
-			if (invN > 0) {
+			if (compressOn && invN > 0) {
 				parts.push(invN + (invN === 1 ? " unsupported image" : " unsupported images"));
 			}
 			if (parts.length) {
@@ -1910,6 +1937,7 @@
 	function pushSettings() {
 		var sel = document.getElementById("select-device");
 		var modeCopy = document.getElementById("chip-copy");
+		var compressCheckbox = document.getElementById("easy-compress-checkbox");
 		var deviceId = sel ? sel.value : "";
 		var body = {
 			library_root: libraryRootForSave(),
@@ -1920,6 +1948,11 @@
 			device_label: deviceLabels[deviceId] || "",
 			source_folders: selectedFolders(),
 		};
+		/* Only send when the control is enabled — avoid overwriting a stored
+		   preference while tools are unavailable (checkbox forced off). */
+		if (compressCheckbox && !compressCheckbox.disabled) {
+			body.compress_media = compressCheckbox.checked;
+		}
 		return api("PUT", "/api/settings", body)
 			.then(function (data) {
 				clearFormBanner();
@@ -2374,7 +2407,7 @@
 				galleryNextCursor = payload.next_cursor || null;
 				galleryHasMore = Boolean(galleryNextCursor);
 				if (isFirstPage && !items.length) {
-					showGalleryTimelineMessage("No media in converted/ yet.");
+					showGalleryTimelineMessage("No media in processed/ yet.");
 					galleryHasMore = false;
 					return;
 				}
@@ -2706,7 +2739,7 @@
 			if (!galleryItemPath) {
 				return;
 			}
-			if (!window.confirm("Delete this file from converted/ on this computer? This cannot be undone.")) {
+			if (!window.confirm("Delete this file from processed/ on this computer? This cannot be undone.")) {
 				return;
 			}
 			api("DELETE", "/api/gallery/item?path=" + encodeURIComponent(galleryItemPath))
@@ -3066,43 +3099,73 @@
 				});
 		});
 
-		function rememberMainViewBeforeFooterPage() {
-			var active = document.querySelector(".screen.active");
-			if (
-				active &&
-				(active.id === "view-home" ||
-					active.id === "view-easy" ||
-					active.id === "view-wizard" ||
-					active.id === "view-receive-files" ||
-					active.id === "view-send-files" ||
-					active.id === "view-transfer-files" ||
-					active.id === "view-gallery" ||
-					active.id === "view-gallery-item")
-			) {
-				lastMainView = active.id === "view-gallery-item" || active.id === "view-gallery" ? "gallery" : "home";
+		function showSettingsFeedback(message) {
+			var feedback = document.getElementById("settings-feedback");
+			if (!feedback) {
+				return;
 			}
+			feedback.textContent = message;
+			feedback.classList.remove("panel-hidden");
 		}
 
-		document.getElementById("btn-footer-settings").addEventListener("click", function () {
-			rememberMainViewBeforeFooterPage();
+		function hideSettingsConfirms() {
+			document.getElementById("settings-clear-prefs-confirm")?.classList.add("panel-hidden");
+			document.getElementById("settings-reset-confirm")?.classList.add("panel-hidden");
+		}
+
+		onClick("btn-settings-clear-prefs", function () {
+			hideSettingsConfirms();
+			document.getElementById("settings-clear-prefs-confirm")?.classList.remove("panel-hidden");
+		});
+		onClick("btn-settings-clear-prefs-cancel", function () {
+			document.getElementById("settings-clear-prefs-confirm")?.classList.add("panel-hidden");
+		});
+		onClick("btn-settings-clear-prefs-confirm", function () {
+			api("POST", "/api/preferences/clear")
+				.then(applyState)
+				.then(function () {
+					hideSettingsConfirms();
+					showSettingsFeedback("Preferences cleared.");
+				})
+				.catch(function (err) {
+					showFormBanner(err.message || "Could not clear preferences.");
+				});
+		});
+		onClick("btn-settings-reset-gallery", function () {
+			hideSettingsConfirms();
+			document.getElementById("settings-reset-confirm")?.classList.remove("panel-hidden");
+		});
+		onClick("btn-settings-reset-cancel", function () {
+			document.getElementById("settings-reset-confirm")?.classList.add("panel-hidden");
+		});
+		onClick("btn-settings-reset-confirm", function () {
+			api("POST", "/api/library/reset")
+				.then(applyState)
+				.then(function () {
+					hideSettingsConfirms();
+					showSettingsFeedback("Library reset.");
+					if (document.getElementById("view-gallery")?.classList.contains("active")) {
+						loadGallery();
+					}
+				})
+				.catch(function (err) {
+					showFormBanner(err.message || "Could not reset the library.");
+				});
+		});
+		onClick("btn-settings-tools", function () {
 			if (state?.managed_tools) {
 				renderComponentsList(state.managed_tools);
 			}
-			showView("settings");
+			showView("settings-tools");
 		});
-		document.getElementById("btn-footer-legal").addEventListener("click", function () {
-			rememberMainViewBeforeFooterPage();
+		onClick("btn-settings-legal", function () {
 			showView("legal");
 		});
-		document.getElementById("btn-settings-back").addEventListener("click", function () {
-			if (state && toolsBlockMainApp(state)) {
-				showView("components", { skipHistory: true });
-				return;
-			}
-			showView(lastMainView === "gallery" ? "gallery" : "home");
+		onClick("btn-settings-tools-back", function () {
+			showView("settings");
 		});
 		document.getElementById("btn-legal-back").addEventListener("click", function () {
-			showView(lastMainView === "gallery" ? "gallery" : "home");
+			showView("settings");
 		});
 		onClick("btn-components-continue", function () {
 			api("POST", "/api/tools/components-continue")
@@ -3168,10 +3231,20 @@
 			this.setAttribute("aria-expanded", open ? "true" : "false");
 		});
 		bindInfoPanelToggle("btn-easy-qr-info", "easy-qr-info-panel");
+		bindInfoPanelToggle("btn-easy-compress-info", "easy-compress-info-panel");
 		bindInfoPanelToggle("btn-receive-qr-info", "receive-qr-info-panel");
 		bindInfoPanelToggle("btn-send-qr-info", "send-qr-info-panel");
 		bindInfoPanelToggle("btn-transfer-qr-info", "transfer-qr-info-panel");
 		bindInfoPanelToggle("btn-wifi-qr-info", "wifi-qr-info-panel");
+		var easyCompressCheckbox = document.getElementById("easy-compress-checkbox");
+		if (easyCompressCheckbox) {
+			easyCompressCheckbox.addEventListener("change", function () {
+				if (easyCompressCheckbox.disabled) {
+					return;
+				}
+				pushSettings();
+			});
+		}
 
 		function switchConnectionMethod(method) {
 			syncConnectionButtons(method);
@@ -3338,7 +3411,7 @@
 				});
 		});
 		document.getElementById("btn-move-errors").addEventListener("click", function () {
-			api("POST", "/api/error/move-to-converted")
+			api("POST", "/api/error/move-to-processed")
 				.then(function () {
 					return api("GET", "/api/settings");
 				})

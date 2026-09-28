@@ -27,14 +27,14 @@ def wizard_actions(
 	convert_job_active: bool = False,
 ) -> dict[str, object]:
 	originals = originals_count_for(library_root, count_in_folder)
-	converted = count_in_folder(library_root, LibraryFolder.CONVERTED) if library_root else 0
+	converted = count_in_folder(library_root, LibraryFolder.PROCESSED) if library_root else 0
 	controls = extract_control_flags(extract_phase)
 	if connection_method is ConnectionMethod.WIFI:
 		controls["start"] = controls["start"] and bool(library_root)
 	else:
 		controls["start"] = controls["start"] and has_device and has_source_folders and bool(library_root)
 	visualize = visualize_step_state(
-		converted_count=converted,
+		processed_count=converted,
 		convert_phase=convert_phase,
 		progress_percent=convert_progress_percent,
 	)

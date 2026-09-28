@@ -46,7 +46,7 @@ class ExportFriendlyMedia:
 		*,
 		on_progress: Callable[[int], None] | None = None,
 	) -> ExportResult:
-		source = self._filesystem.library_path(library_root, LibraryFolder.CONVERTED, relative_path)
+		source = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, relative_path)
 		if not self._filesystem.exists(source):
 			raise FileNotFoundError(relative_path)
 		source_path = Path(source)
