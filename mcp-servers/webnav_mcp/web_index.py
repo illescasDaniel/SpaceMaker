@@ -32,6 +32,11 @@ _SELECTOR_TOKEN_RE = re.compile(r"[.#][a-zA-Z_-][a-zA-Z0-9_-]*")
 
 _STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>(.*?)</style>", re.IGNORECASE | re.DOTALL)
 _STYLE_ATTR_RE = re.compile(r'\bstyle\s*=\s*"([^"]*)"', re.IGNORECASE)
+# A `src=` attribute means the tag has no inline body to scan (the capture
+# group would just be empty in that case, so this isn't strictly required —
+# kept for clarity and to skip a wasted regex pass over long external files
+# that got inlined between the tags by mistake).
+_SCRIPT_BLOCK_RE = re.compile(r"<script\b(?![^>]*\bsrc\s*=)[^>]*>(.*?)</script>", re.IGNORECASE | re.DOTALL)
 # Quote is a backreference (group 1) so `id="x"` and `id='x'` both match; the
 # value is group 2. Used for HTML markup and — since JS string literals may
 # themselves quote HTML (`innerHTML = '<span class="x">'`) — for JS source too.
@@ -44,6 +49,13 @@ _JS_GET_ELEMENT_BY_ID_RE = re.compile(r"getElementById\(\s*[\"']([^\"']*)[\"']\s
 _JS_CLASSLIST_RE = re.compile(r"classList\.(add|remove|toggle|contains)\(([^)]*)\)")
 _JS_QUERY_RE = re.compile(r"querySelectorAll?\(\s*[\"']([^\"']*)[\"']")
 _JS_CLASSNAME_ASSIGN_RE = re.compile(r"className\s*\+?=\s*[\"']([^\"']*)[\"']\s*(\+)?")
+# A local variable conventionally named like a class list (e.g. `mediaClass`,
+# `rowClasses`) being built up with `+=` (`mediaClass += ' slide-in-next-start'`)
+# rather than assigned straight to `.className`. Narrower than matching any
+# `identifier += 'literal'`, which would flag unrelated string-building code.
+# The exact identifier `className` is excluded — `_JS_CLASSNAME_ASSIGN_RE`
+# above already covers it — so the two regexes don't double-record a hit.
+_JS_CLASS_VAR_CONCAT_RE = re.compile(r"\b(?!className\b)\w*[Cc]lass\w*\s*\+=\s*[\"']([^\"']*)[\"']\s*(\+)?")
 # A string literal, optionally followed by `+` (string concatenation) — used to
 # find dynamic prefixes inside `classList.add(...)` call arguments.
 _STRING_LITERAL_RE = re.compile(r"[\"']([^\"']*)[\"']\s*(\+)?")
@@ -200,25 +212,37 @@ def _scan_html_text(text: str, file_rel: str, root_index: RootIndex) -> None:
 		line = _line_at(text, attr_match.start(1))
 		_scan_css_text(inner, file_rel, root_index, line_offset=line - 1)
 
+	for script_match in _SCRIPT_BLOCK_RE.finditer(text):
+		inner = script_match.group(1)
+		offset = _line_at(text, script_match.start(1)) - 1
+		_scan_js_text(inner, file_rel, root_index, line_offset=offset)
+
 	_scan_markup_attrs(
 		text, file_rel, root_index, kind="html", id_detail="id attribute", class_detail="class attribute"
 	)
 
 
 def _scan_markup_attrs(
-	text: str, file_rel: str, root_index: RootIndex, *, kind: str, id_detail: str, class_detail: str
+	text: str,
+	file_rel: str,
+	root_index: RootIndex,
+	*,
+	kind: str,
+	id_detail: str,
+	class_detail: str,
+	line_offset: int = 0,
 ) -> None:
 	"""`id="x"`/`class="a b"` attributes in `text`. Shared by HTML markup
 	(`_scan_html_text`) and by JS source (`_scan_js_text`), since JS often
 	builds markup from string literals (`innerHTML = '<span class="x">'`)."""
 	for match in _ID_ATTR_RE.finditer(text):
-		line = _line_at(text, match.start())
+		line = _line_at(text, match.start()) + line_offset
 		root_index.add_selector_hit(
 			SelectorHit(token=f"#{match.group(2)}", kind=kind, file=file_rel, line=line, detail=id_detail)
 		)
 
 	for match in _CLASS_ATTR_RE.finditer(text):
-		line = _line_at(text, match.start())
+		line = _line_at(text, match.start()) + line_offset
 		for token in match.group(2).split():
 			root_index.add_selector_hit(
 				SelectorHit(token=f".{token}", kind=kind, file=file_rel, line=line, detail=class_detail)
@@ -243,22 +267,22 @@ def _literal_tokens(literal: str, concat_follows: bool) -> list[tuple[str, bool]
 	return [(tok, dynamic_prefix and i == len(tokens) - 1) for i, tok in enumerate(tokens)]
 
 
-def _scan_js_text(text: str, file_rel: str, root_index: RootIndex) -> None:
+def _scan_js_text(text: str, file_rel: str, root_index: RootIndex, *, line_offset: int = 0) -> None:
 	text = _strip_js_comments(text)
 
 	for match in _JS_SETPROPERTY_RE.finditer(text):
-		line = _line_at(text, match.start())
+		line = _line_at(text, match.start()) + line_offset
 		root_index.add_usage(VarUsage(name=match.group(1), file=file_rel, line=line, has_fallback=True))
 
 	for match in _JS_GETPROPERTYVALUE_RE.finditer(text):
-		line = _line_at(text, match.start())
+		line = _line_at(text, match.start()) + line_offset
 		root_index.add_usage(VarUsage(name=match.group(1), file=file_rel, line=line, has_fallback=True))
 
 	for match in _JS_GET_ELEMENT_BY_ID_RE.finditer(text):
 		literal, has_concat = match.group(1), bool(match.group(2))
 		if not literal:
 			continue
-		line = _line_at(text, match.start())
+		line = _line_at(text, match.start()) + line_offset
 		root_index.add_selector_hit(
 			SelectorHit(
 				token=f"#{literal}",
@@ -272,7 +296,7 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex) -> None:
 
 	for match in _JS_CLASSLIST_RE.finditer(text):
 		method, args = match.group(1), match.group(2)
-		line = _line_at(text, match.start())
+		line = _line_at(text, match.start()) + line_offset
 		for lit_match in _STRING_LITERAL_RE.finditer(args):
 			literal, concat_follows = lit_match.group(1), bool(lit_match.group(2))
 			for token, dynamic in _literal_tokens(literal, concat_follows):
@@ -288,18 +312,28 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex) -> None:
 				)
 
 	for match in _JS_QUERY_RE.finditer(text):
-		line = _line_at(text, match.start())
+		line = _line_at(text, match.start()) + line_offset
 		for token in _js_selector_tokens_from_string(match.group(1)):
 			root_index.add_selector_hit(
 				SelectorHit(token=token, kind="js", file=file_rel, line=line, detail="querySelector")
 			)
 
 	for match in _JS_CLASSNAME_ASSIGN_RE.finditer(text):
-		line = _line_at(text, match.start())
+		line = _line_at(text, match.start()) + line_offset
 		concat_follows = bool(match.group(2))
 		for token, dynamic in _literal_tokens(match.group(1), concat_follows):
 			root_index.add_selector_hit(
 				SelectorHit(token=f".{token}", kind="js", file=file_rel, line=line, detail="className", dynamic=dynamic)
+			)
+
+	for match in _JS_CLASS_VAR_CONCAT_RE.finditer(text):
+		line = _line_at(text, match.start()) + line_offset
+		concat_follows = bool(match.group(2))
+		for token, dynamic in _literal_tokens(match.group(1), concat_follows):
+			root_index.add_selector_hit(
+				SelectorHit(
+					token=f".{token}", kind="js", file=file_rel, line=line, detail="class-var +=", dynamic=dynamic
+				)
 			)
 
 	_scan_markup_attrs(
@@ -309,6 +343,7 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex) -> None:
 		kind="js",
 		id_detail="id attribute in JS string",
 		class_detail="class attribute in JS string",
+		line_offset=line_offset,
 	)
 
 

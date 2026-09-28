@@ -241,6 +241,58 @@ def test_given_classname_assignment_when_scan_js_then_tokens_recorded(tmp_path):
 	assert idx.selector_hits[".selected"][0].detail == "className"
 
 
+def test_given_classname_assign_inside_inline_script_when_scan_html_then_recorded_with_correct_line(tmp_path):
+	# given: inline <script> was previously not scanned at all, so a
+	# selector referenced only from a wireframe's own inline JS looked unused.
+	_write(
+		tmp_path / "index.html",
+		"<html>\n<body>\n<script>\n\trow.className = 'file-row';\n</script>\n</body>\n</html>\n",
+	)
+	# when
+	idx = web_index.build_root_index(tmp_path, "static")
+	# then
+	hit = idx.selector_hits[".file-row"][0]
+	assert hit.kind == "js"
+	assert hit.detail == "className"
+	assert hit.line == 4
+
+
+def test_given_orphan_css_rule_referenced_only_from_inline_script_when_diagnostics_then_no_warning(tmp_path):
+	# given
+	_write(
+		tmp_path / "index.html",
+		"<style>.file-row { color: red; }</style>\n<script>\nrow.className = 'file-row';\n</script>\n",
+	)
+	idx = web_index.build_root_index(tmp_path, "static")
+	# when
+	warnings = web_index.diagnostics_for_file(idx, "index.html")
+	# then
+	assert warnings == []
+
+
+def test_given_script_tag_with_src_attribute_when_scan_html_then_body_not_double_scanned(tmp_path):
+	# given: an external script has no inline body between the tags; this
+	# just documents that the empty capture is harmless, not a crash.
+	_write(tmp_path / "index.html", '<script src="app.js"></script>\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "static")
+	# then
+	assert idx.selector_hits == {}
+
+
+def test_given_class_variable_built_with_plus_equals_when_scan_js_then_tokens_recorded(tmp_path):
+	# given: a local variable conventionally named like a class list
+	# (`mediaClass`), grown with `+=`, rather than a direct `.className` write.
+	_write(tmp_path / "app.js", "var mediaClass = 'gallery-item-media';\nmediaClass += ' slide-in-next-start';\n")
+	# when
+	idx = web_index.build_root_index(tmp_path, "static")
+	# then
+	hit = idx.selector_hits[".slide-in-next-start"][0]
+	assert hit.kind == "js"
+	assert hit.detail == "class-var +="
+	assert hit.dynamic is False
+
+
 def test_given_dynamic_get_element_by_id_concat_when_scan_js_then_tagged_dynamic_partial(tmp_path):
 	# given
 	_write(tmp_path / "app.js", 'document.getElementById("view-" + resolved);\n')

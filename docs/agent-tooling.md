@@ -307,11 +307,22 @@ misleading.
   referenced in <root>'s HTML/JS` for a CSS rule with no matching markup or
   script use.
 
-Markup is scanned wherever it can plausibly appear: `.html` files, and also
-`class="..."`/`id="..."` attributes embedded inside JS string literals
-(e.g. `el.innerHTML = '<span class="gallery-loading-spinner">…'`) — both
-single- and double-quoted, so which quote style the surrounding JS string
-uses doesn't matter.
+Markup and script are scanned wherever they can plausibly appear: `.html`
+files (including their inline `<script>` blocks, at the block's own line
+offset — a `<script src="...">` with no inline body is a no-op scan, not a
+special case), `.js` files, and also `class="..."`/`id="..."` attributes
+embedded inside JS string literals (e.g. `el.innerHTML = '<span
+class="gallery-loading-spinner">…'`) — both single- and double-quoted, so
+which quote style the surrounding JS string uses doesn't matter. This
+matters most for wireframes, which are self-contained HTML with their JS
+inline: before inline `<script>` scanning existed, every class/id touched
+only from a wireframe's own script looked unreferenced.
+
+Besides a direct `el.className = "..."` assignment, a local variable
+conventionally named like a class list (contains `class`/`Class`, e.g.
+`mediaClass`) built up with `+=` (`mediaClass += ' slide-in-next-start'`)
+is also recorded, tagged `class-var +=` — narrower than matching any
+`identifier += 'literal'`, which would flag unrelated string-building code.
 
 A JS selector built from string concatenation (e.g.
 `getElementById("view-" + resolved)`, `className = "tool-status
