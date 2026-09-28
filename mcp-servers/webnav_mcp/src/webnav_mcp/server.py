@@ -11,7 +11,7 @@ for `.html`/`.css`. Mirrors codenav_mcp's shape and its shared
 `_shared.lsp_client.LspClient`; see docs/agent-tooling.md for details.
 
 Run standalone for manual testing:
-    uv run python mcp-servers/webnav_mcp/server.py
+    uv run python -m webnav_mcp.server
 """
 
 from __future__ import annotations
@@ -19,25 +19,20 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sys
 from pathlib import Path
 
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import web_index  # noqa: E402
-from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error  # noqa: E402
-from _shared.format import (  # noqa: E402
+from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
+from _shared.format import (
 	format_diagnostics,
 	format_location,
 	format_references,
 	format_workspace_symbols,
 )
-from _shared.lsp_client import LspClient  # noqa: E402
-from _shared.workspace import resolve_workspace_root  # noqa: E402
-from lang_command import resolve_css_command, resolve_html_command, resolve_ts_command  # noqa: E402
-from mcp.server.mcpserver import MCPServer  # noqa: E402
+from _shared.lsp_client import LspClient
+from _shared.workspace import resolve_workspace_root
+from mcp.server.mcpserver import MCPServer
+from webnav_mcp import web_index
+from webnav_mcp.lang_command import resolve_css_command, resolve_html_command, resolve_ts_command
 
 
 WORKSPACE_ROOT = resolve_workspace_root("WEBNAV_MCP_WORKSPACE")

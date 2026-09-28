@@ -1,0 +1,27 @@
+[project]
+name = "codenav-mcp"
+version = "0.1.0"
+description = "MCP server exposing ty's language-server features (hover, definition, references, workspace symbol search, diagnostics) as MCP tools"
+requires-python = ">=3.11"
+dependencies = [
+	"mcp>=2.2.0",
+	"ty>=0.0.75",
+	"mcp-nav-shared",
+]
+
+[tool.uv.sources]
+mcp-nav-shared = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short -rs"
+pythonpath = ["src"]
+timeout = 60
+timeout_method = "thread"
+markers = [
+	"integration: live language-server smoke test",
+]

@@ -11,8 +11,8 @@ import os
 from pathlib import Path
 
 
-# mcp-servers/_shared/workspace.py → repo root is three parents up.
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# mcp-servers/_shared/src/_shared/workspace.py → repo root is five parents up.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 def resolve_workspace_root(explicit_env: str) -> Path:

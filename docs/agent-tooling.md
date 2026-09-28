@@ -25,7 +25,7 @@ these servers, update **both** files together (same servers, different
 placeholders).
 
 Workspace root inside the Python servers is resolved by
-`mcp-servers/_shared/workspace.py`: explicit `CODENAV_MCP_WORKSPACE` /
+`mcp-servers/_shared/src/_shared/workspace.py`: explicit `CODENAV_MCP_WORKSPACE` /
 `WEBNAV_MCP_WORKSPACE`, then `CLAUDE_PROJECT_DIR`, then the repo root
 inferred from that module's path (so a wrong spawn cwd cannot break
 indexing).
@@ -44,6 +44,35 @@ override-with-sane-default shape as `CODENAV_MCP_WORKSPACE`/
 
 A project that unsets these gets a working, if less scoped/labeled, default
 rather than an error or a SpaceMaker-shaped assumption.
+
+## Package layout (uv workspace)
+
+`mcp-servers/` is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
+(`[tool.uv.workspace]` in the root `pyproject.toml`), not just a folder of
+scripts — each server is its own installable package, so either can be
+released standalone later without restructuring:
+
+- `mcp-servers/_shared/` → distribution `mcp-nav-shared`, import name
+  `_shared`. No runtime deps; shared LSP client, symbol resolution,
+  formatting, and workspace-root discovery.
+- `mcp-servers/codenav_mcp/` → distribution `codenav-mcp`, import name
+  `codenav_mcp`. Depends on `mcp-nav-shared` via `tool.uv.sources`
+  (`{ workspace = true }`), resolved to the local sibling rather than PyPI.
+- `mcp-servers/webnav_mcp/` → distribution `webnav-mcp`, import name
+  `webnav_mcp`. Same `mcp-nav-shared` dependency wiring.
+
+Each follows the repo's own `src/<pkg>/` layout and has its own
+`pyproject.toml` with a package-local `[tool.pytest.ini_options]`
+(`testpaths = ["tests"]`, `pythonpath = ["src"]`) — necessary because pytest
+walks upward for the nearest ini file, and without a local one a bare
+`pytest` run from inside e.g. `mcp-servers/codenav_mcp/` would pick up the
+root's `testpaths = ["tests"]` instead. The root project depends on both
+servers as dev dependencies (also workspace-sourced), and `uv sync` installs
+all three editable into the one shared venv — this is what lets
+`.mcp.json`/`.cursor/mcp.json` launch them as `python -m codenav_mcp.server`
+/ `python -m webnav_mcp.server` (proper package imports, no `sys.path`
+hacks) and lets each package's `tests/` run standalone from its own
+directory as well as from the repo root.
 
 ## Why no MCP prompts/resources
 
@@ -71,7 +100,7 @@ The LSP mirrors position-based lookups 1:1, which forces an agent to
 `references` separately just to answer "what does this do" or "who calls
 this". Four composite tools answer those questions in one call, all
 name-based (no column arithmetic) via the shared `resolve_symbol()` helper
-in `mcp-servers/_shared/resolve.py`:
+in `mcp-servers/_shared/src/_shared/resolve.py`:
 
 - **`symbol_info(name, file_path=None, include_references=True)`** — the
   default first call for "what is this": header, hover text (signature +
@@ -102,7 +131,7 @@ composite tool has narrowed things down to a specific position.
 and not guaranteed: ty may return hierarchical `DocumentSymbol` nodes
 (`range`/`selectionRange`/`children`) or flat `SymbolInformation` entries
 (`location` only, no nesting), depending on what the client advertised at
-`initialize`. `mcp-servers/_shared/lsp_client.py` advertises
+`initialize`. `mcp-servers/_shared/src/_shared/lsp_client.py` advertises
 `hierarchicalDocumentSymbolSupport: true`, but code that consumes the result
 still branches on `is_hierarchical_document_symbols()` (`_shared/format.py`)
 rather than assuming one shape — `to_symbol_tree()` normalizes either shape
@@ -173,15 +202,16 @@ server`'s name-based `definition`/`references` tools were tried first and
 don't resolve symbols against `ty`, even though `ty`'s own `workspace/
 symbol` implementation answers those same queries correctly when asked
 directly over LSP. Run it standalone for manual testing with `uv run python
-mcp-servers/codenav_mcp/server.py`; point it at a different workspace via
+-m codenav_mcp.server`; point it at a different workspace via
 the `CODENAV_MCP_WORKSPACE` env var (otherwise falls back as above).
 
 The generic JSON-RPC/LSP wire protocol (subprocess framing, request/
-response dispatch, document sync) lives in `mcp-servers/_shared/lsp_client.py`
-as `LspClient`, shared with `webnav` below. Only the `ty`-specific launch
-command (`mcp-servers/codenav_mcp/ty_command.py`) and languageId are
+response dispatch, document sync) lives in
+`mcp-servers/_shared/src/_shared/lsp_client.py` as `LspClient`, shared with
+`webnav` below. Only the `ty`-specific launch command
+(`mcp-servers/codenav_mcp/src/codenav_mcp/ty_command.py`) and languageId are
 codenav's own. Location formatting (`path:line:col` headers + snippets)
-lives in `mcp-servers/_shared/format.py`.
+lives in `mcp-servers/_shared/src/_shared/format.py`.
 
 `references` (both servers) uses `format_references()`: at or under
 `DEFAULT_REFERENCES_SNIPPET_LIMIT` (8) hits, each gets its own
@@ -219,9 +249,9 @@ returned as text (`_shared/errors.py`) instead of the MCP framework's opaque
 “Error executing tool”. If the language server process dies, in-flight
 requests fail immediately and the next tool call starts a fresh one.
 
-`pyproject.toml` lists `mcp-servers` as a ty `root`, so tests importing
-`_shared` / `codenav_mcp` resolve (clean `ty check`, and codenav
-`references` include test usages).
+`pyproject.toml` lists each `mcp-servers/*/src` directory as a ty `root`, so
+tests importing `_shared` / `codenav_mcp` / `webnav_mcp` resolve (clean `ty
+check`, and codenav `references` include test usages).
 `diagnostics` falls back to the push `publishDiagnostics` cache when pull
 diagnostics are unsupported or empty (common for HTML/CSS servers).
 All four positional tools reject non-Python files (`.py`/`.pyi` only) up
@@ -246,7 +276,7 @@ MCP tool set, routed by file extension:
 
 Both come from the `vscode-langservers-extracted` npm package. `npm install`
 (already required for Biome) pulls all three binaries into `node_modules/
-.bin/`; `mcp-servers/webnav_mcp/lang_command.py` resolves them there first,
+.bin/`; `mcp-servers/webnav_mcp/src/webnav_mcp/lang_command.py` resolves them there first,
 falling back to `PATH` and then `npx` — same fallback chain as codenav's ty
 resolver.
 
@@ -256,7 +286,7 @@ general HTML/CSS symbol search. `jsconfig.json` has `checkJs: false`
 by default (the existing `app.js` is large and untyped; flip it per-file
 with a `// @ts-check` comment to opt a file into stricter `diagnostics`).
 Run it standalone for manual testing with `uv run python
-mcp-servers/webnav_mcp/server.py`; point it at a different workspace via
+-m webnav_mcp.server`; point it at a different workspace via
 the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above). See
 **Positioning** under codenav above — the same column rules apply.
 
@@ -266,8 +296,8 @@ The CSS/HTML language servers each see one document at a time, so `var(--x)`
 custom-property usages and `#id`/`.class` selectors can't be cross-referenced
 across files that way — the most common question for this project's
 `--custom-properties` (defined once in `theme.css`, used across every CSS
-file, inline `<style>` block and wireframe). `mcp-servers/webnav_mcp/
-web_index.py` answers this with a **pure-Python scanner, not a language
+file, inline `<style>` block and wireframe). `mcp-servers/webnav_mcp/src/
+webnav_mcp/web_index.py` answers this with a **pure-Python scanner, not a language
 server**: no `@import` resolution, no real CSS parser, regex/brace-stack
 grade. It rescans on every call rather than caching — about 20 files total
 across both roots, a few ms — so there's no cache-invalidation story to get

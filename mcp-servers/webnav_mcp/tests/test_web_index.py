@@ -2,17 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
-
-
-_MCP_ROOT = Path(__file__).resolve().parents[2] / "mcp-servers"
-if str(_MCP_ROOT) not in sys.path:
-	sys.path.insert(0, str(_MCP_ROOT))
-
-from webnav_mcp import web_index  # noqa: E402
+from webnav_mcp import web_index
 
 
 def _write(path: Path, text: str) -> Path:

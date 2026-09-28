@@ -7,7 +7,8 @@
 				"--directory",
 				"${CLAUDE_PROJECT_DIR:-.}",
 				"python",
-				"${CLAUDE_PROJECT_DIR:-.}/mcp-servers/codenav_mcp/server.py"
+				"-m",
+				"codenav_mcp.server"
 			],
 			"env": {
 				"CODENAV_MCP_WORKSPACE": "${CLAUDE_PROJECT_DIR:-.}",
@@ -21,7 +22,8 @@
 				"--directory",
 				"${CLAUDE_PROJECT_DIR:-.}",
 				"python",
-				"${CLAUDE_PROJECT_DIR:-.}/mcp-servers/webnav_mcp/server.py"
+				"-m",
+				"webnav_mcp.server"
 			],
 			"env": {
 				"WEBNAV_MCP_WORKSPACE": "${CLAUDE_PROJECT_DIR:-.}",

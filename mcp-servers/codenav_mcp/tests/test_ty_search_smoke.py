@@ -8,21 +8,19 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
+from _shared.format import format_workspace_symbol, workspace_symbol_position
+from _shared.lsp_client import LspClient
+from codenav_mcp.ty_command import resolve_ty_command
 
 
 pytestmark = pytest.mark.integration
 
-_MCP_ROOT = Path(__file__).resolve().parents[2] / "mcp-servers"
-if str(_MCP_ROOT) not in sys.path:
-	sys.path.insert(0, str(_MCP_ROOT))
-
-from _shared.format import format_workspace_symbol, workspace_symbol_position  # noqa: E402
-from _shared.lsp_client import LspClient  # noqa: E402
-from codenav_mcp.ty_command import resolve_ty_command  # noqa: E402
+# tests/test_ty_search_smoke.py -> codenav_mcp -> mcp-servers -> repo root,
+# where the shared uv-workspace .venv (and its `ty` binary) lives.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _ty_available(workspace: Path) -> bool:
@@ -37,7 +35,7 @@ def _ty_available(workspace: Path) -> bool:
 
 
 @pytest.mark.skipif(
-	not _ty_available(Path(__file__).resolve().parents[2]),
+	not _ty_available(_REPO_ROOT),
 	reason="ty not available for live LSP smoke",
 )
 def test_given_ty_workspace_when_search_class_then_name_column_hovers(tmp_path):
@@ -46,7 +44,7 @@ def test_given_ty_workspace_when_search_class_then_name_column_hovers(tmp_path):
 	mod.write_text("class SmokeTarget:\n\tpass\n", encoding="utf-8")
 	client = LspClient(
 		workspace_root=tmp_path,
-		command=resolve_ty_command(Path(__file__).resolve().parents[2]),
+		command=resolve_ty_command(_REPO_ROOT),
 		language_id="python",
 	)
 
@@ -73,7 +71,7 @@ def test_given_ty_workspace_when_search_class_then_name_column_hovers(tmp_path):
 
 
 @pytest.mark.skipif(
-	not _ty_available(Path(__file__).resolve().parents[2]),
+	not _ty_available(_REPO_ROOT),
 	reason="ty not available for live LSP smoke",
 )
 def test_given_ty_decorated_class_when_search_then_name_column_hovers(tmp_path):
@@ -85,7 +83,7 @@ def test_given_ty_decorated_class_when_search_then_name_column_hovers(tmp_path):
 	)
 	client = LspClient(
 		workspace_root=tmp_path,
-		command=resolve_ty_command(Path(__file__).resolve().parents[2]),
+		command=resolve_ty_command(_REPO_ROOT),
 		language_id="python",
 	)
 

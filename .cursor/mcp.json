@@ -7,7 +7,8 @@
 				"--directory",
 				"${workspaceFolder}",
 				"python",
-				"${workspaceFolder}/mcp-servers/codenav_mcp/server.py"
+				"-m",
+				"codenav_mcp.server"
 			],
 			"env": {
 				"CODENAV_MCP_WORKSPACE": "${workspaceFolder}",
@@ -21,7 +22,8 @@
 				"--directory",
 				"${workspaceFolder}",
 				"python",
-				"${workspaceFolder}/mcp-servers/webnav_mcp/server.py"
+				"-m",
+				"webnav_mcp.server"
 			],
 			"env": {
 				"WEBNAV_MCP_WORKSPACE": "${workspaceFolder}",

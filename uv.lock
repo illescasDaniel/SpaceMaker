@@ -3,10 +3,18 @@ revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten'",
     "python_full_version < '3.12'",
+]
+
+[manifest]
+members = [
+    "codenav-mcp",
+    "mcp-nav-shared",
+    "spacemaker",
+    "webnav-mcp",
 ]
 
 [[package]]
@@ -380,6 +388,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e4/46/7eea92b6aa2d68af78e049cbecec5f757f1aad44ecdecdc16bbad7eead51/clr_loader-0.3.1.tar.gz", hash = "sha256:2e073e9aaf49d1ae2f56ecba27987ad5fb68be4bcd9dd34a5bed8f0e4e128366", size = 86805, upload-time = "2026-04-18T17:49:44.287Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5e/da/ec1a6e36624000b6df0dd61183c42342ee5814c073315e802cadaad04d2f/clr_loader-0.3.1-py3-none-any.whl", hash = "sha256:cbad189de20d202a7d621956b0fc38049e13c9bf7ca2923441eff725cd121aa1", size = 55730, upload-time = "2026-04-18T17:49:42.99Z" },
+]
+
+[[package]]
+name = "codenav-mcp"
+version = "0.1.0"
+source = { editable = "mcp-servers/codenav_mcp" }
+dependencies = [
+    { name = "mcp" },
+    { name = "mcp-nav-shared" },
+    { name = "ty" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", specifier = ">=2.2.0" },
+    { name = "mcp-nav-shared", editable = "mcp-servers/_shared" },
+    { name = "ty", specifier = ">=0.0.75" },
 ]
 
 [[package]]
@@ -876,6 +901,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/76/31/ac54fb0fdd5b37de7
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1b/ff/8e7eade68b8a28f7da0ed1085544341b51f9c935dbf6b95c76b7edfea6a0/mcp-2.2.0-py3-none-any.whl", hash = "sha256:bde982589473a060ae145e3406e9a5333fe538c97229ba841f5a7f92be004f81", size = 365656, upload-time = "2026-09-07T16:06:19.711Z" },
 ]
+
+[[package]]
+name = "mcp-nav-shared"
+version = "0.1.0"
+source = { editable = "mcp-servers/_shared" }
 
 [[package]]
 name = "mcp-types"
@@ -1980,7 +2010,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "mcp" },
+    { name = "codenav-mcp" },
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "pyinstaller" },
@@ -1991,6 +2021,7 @@ dev = [
     { name = "ruff" },
     { name = "taskipy" },
     { name = "ty" },
+    { name = "webnav-mcp" },
 ]
 
 [package.metadata]
@@ -2012,7 +2043,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "mcp", specifier = ">=2.2.0" },
+    { name = "codenav-mcp", editable = "mcp-servers/codenav_mcp" },
     { name = "mkdocs", specifier = ">=1.6.1" },
     { name = "mkdocs-material", specifier = ">=9.7.7" },
     { name = "pyinstaller", specifier = ">=6.19" },
@@ -2023,6 +2054,7 @@ dev = [
     { name = "ruff", specifier = ">=0.15" },
     { name = "taskipy", specifier = ">=1.14" },
     { name = "ty", specifier = ">=0.0.75" },
+    { name = "webnav-mcp", editable = "mcp-servers/webnav_mcp" },
 ]
 
 [[package]]
@@ -2222,6 +2254,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/07/f6/d0e5b343768e8bcb4cda79f0f2f55051bf26177ecd5651f84c07567461cf/watchdog-6.0.0-py3-none-win32.whl", hash = "sha256:07df1fdd701c5d4c8e55ef6cf55b8f0120fe1aef7ef39a1c6fc6bc2e606d517a", size = 79065, upload-time = "2024-11-01T14:07:09.525Z" },
     { url = "https://files.pythonhosted.org/packages/db/d9/c495884c6e548fce18a8f40568ff120bc3a4b7b99813081c8ac0c936fa64/watchdog-6.0.0-py3-none-win_amd64.whl", hash = "sha256:cbafb470cf848d93b5d013e2ecb245d4aa1c8fd0504e863ccefa32445359d680", size = 79070, upload-time = "2024-11-01T14:07:10.686Z" },
     { url = "https://files.pythonhosted.org/packages/33/e8/e40370e6d74ddba47f002a32919d91310d6074130fe4e17dabcafc15cbf1/watchdog-6.0.0-py3-none-win_ia64.whl", hash = "sha256:a1914259fa9e1454315171103c6a30961236f508b9b623eae470268bbcc6a22f", size = 79067, upload-time = "2024-11-01T14:07:11.845Z" },
+]
+
+[[package]]
+name = "webnav-mcp"
+version = "0.1.0"
+source = { editable = "mcp-servers/webnav_mcp" }
+dependencies = [
+    { name = "mcp" },
+    { name = "mcp-nav-shared" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", specifier = ">=2.2.0" },
+    { name = "mcp-nav-shared", editable = "mcp-servers/_shared" },
 ]
 
 [[package]]

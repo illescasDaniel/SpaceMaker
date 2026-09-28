@@ -7,4 +7,6 @@ quality_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${quality_dir}/internal/lib.sh"
 
 lib_require_venv
-lib_uv_run pytest tests/unit tests/integration -q "$@"
+lib_uv_run pytest tests/unit tests/integration \
+	mcp-servers/_shared/tests mcp-servers/codenav_mcp/tests mcp-servers/webnav_mcp/tests \
+	-q "$@"

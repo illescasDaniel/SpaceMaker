@@ -12,23 +12,18 @@ ty's own workspace/symbol implementation answers those same queries
 correctly when asked directly over LSP).
 
 Run standalone for manual testing:
-    uv run python mcp-servers/codenav_mcp/server.py
+    uv run python -m codenav_mcp.server
 """
 
 from __future__ import annotations
 
 import ast
 import asyncio
-import sys
 from pathlib import Path
 from typing import Any
 
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error  # noqa: E402
-from _shared.format import (  # noqa: E402
+from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
+from _shared.format import (
 	format_callers,
 	format_diagnostics,
 	format_location,
@@ -40,11 +35,11 @@ from _shared.format import (  # noqa: E402
 	to_symbol_tree,
 	uri_to_relative,
 )
-from _shared.lsp_client import LspClient  # noqa: E402
-from _shared.resolve import resolve_symbol  # noqa: E402
-from _shared.workspace import resolve_source_root, resolve_workspace_root  # noqa: E402
-from mcp.server.mcpserver import MCPServer  # noqa: E402
-from ty_command import resolve_ty_command  # noqa: E402
+from _shared.lsp_client import LspClient
+from _shared.resolve import resolve_symbol
+from _shared.workspace import resolve_source_root, resolve_workspace_root
+from codenav_mcp.ty_command import resolve_ty_command
+from mcp.server.mcpserver import MCPServer
 
 
 WORKSPACE_ROOT = resolve_workspace_root("CODENAV_MCP_WORKSPACE")
