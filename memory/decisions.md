@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-28 — Standalone MCP packages ship README + MIT LICENSE
+
+- **Context:** Docs front doors only mentioned `codenav`; the three uv-workspace packages under `mcp-servers/` had no package README or LICENSE and omitted `license`/`readme`/`authors` in `pyproject.toml`, which is weak for installable-outside-monorepo reuse.
+- **Decision:** Added `README.md` + MIT `LICENSE` (same copyright as the repo root) to `mcp-nav-shared`, `codenav-mcp`, and `webnav-mcp`; set `license`/`readme`/`authors` on each `[project]`. Updated SpaceMaker front doors (root README, `docs/index.md`, `ARCHITECTURE.md`, `AGENTS.md` Orient, `agent-tooling.md` At a glance) to name both servers and link the package READMEs. No parent `mcp-servers/README.md` — package READMEs + `docs/agent-tooling.md` are the two layers.
+- **Rationale:** Standalone consumers need self-contained package docs and an unambiguous license next to the `pyproject.toml`; SpaceMaker-specific agent wiring stays in `docs/agent-tooling.md` to avoid duplicating a second deep source of truth.
+
 ## 2026-09-28 — Align `mcp-nav-shared` import name with distribution name
 
 - **Context:** Folder was renamed to `mcp-servers/mcp-nav-shared`, but the Python import stayed `_shared` via `[tool.uv.build-backend] module-name = "_shared"`, leaving a confusing split.

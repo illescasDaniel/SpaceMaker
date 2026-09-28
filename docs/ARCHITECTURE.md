@@ -101,5 +101,6 @@ State is:
 
 ## Developer setup
 
-See [agent-tooling.md](agent-tooling.md) for the `codenav` MCP server, the
-Cursor/Claude Code rule-pairing scheme, and other Windows/tooling gotchas.
+See [agent-tooling.md](agent-tooling.md) for the `codenav` and `webnav` MCP
+servers, the Cursor/Claude Code rule-pairing scheme, and other
+Windows/tooling gotchas.

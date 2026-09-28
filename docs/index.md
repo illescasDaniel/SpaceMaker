@@ -1,9 +1,10 @@
 # SpaceMaker — Agent Knowledge Base
 
 This site is the semantic knowledge base for AI agents and contributors working on
-SpaceMaker. It complements the `codenav` MCP server (see
-[agent-tooling.md](agent-tooling.md)), which answers *what calls what*
-through `ty`'s type-resolved code navigation; these pages describe *why*.
+SpaceMaker. It complements the `codenav` and `webnav` MCP servers (see
+[agent-tooling.md](agent-tooling.md)): `codenav` answers *what calls what* in
+Python via `ty`'s type-resolved navigation; `webnav` does the same for
+JS/HTML/CSS under `static/` and `wireframes/`. These pages describe *why*.
 
 Serve locally with:
 

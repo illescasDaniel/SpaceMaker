@@ -6,7 +6,7 @@ _Last updated: 2026-09-28_
 
 ## Current focus
 
-None — `mcp-nav-shared` folder + import rename saved.
+None — MCP docs coverage (README/docs/AGENTS + package READMEs/LICENSEs) done.
 
 ## Next steps
 
@@ -15,5 +15,6 @@ None — `mcp-nav-shared` folder + import rename saved.
 
 ## Just changed
 
-- Folder `mcp-servers/_shared` → `mcp-servers/mcp-nav-shared`; import `_shared` → `mcp_nav_shared`.
-- Docs/workspace/pytest/ty paths updated; MCP package tests green.
+- Front doors name both `codenav` and `webnav`; AGENTS Orient lists intent-level / CSS-index tools.
+- `docs/agent-tooling.md` At a glance + package README links.
+- Per-package `README.md` + MIT `LICENSE` + `license`/`readme`/`authors` in `mcp-servers/*/pyproject.toml`.

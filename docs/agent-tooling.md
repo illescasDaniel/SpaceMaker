@@ -1,9 +1,20 @@
 # Agent tooling reference
 
 Reference material for the AI-agent-facing tooling in this repo: the
-`codenav` MCP server, how the Cursor/Claude Code rule pairs are maintained,
-and durable gotchas hit while building this tooling. `AGENTS.md` covers the
-everyday commands and rules; this page is for when you need more.
+`codenav` and `webnav` MCP servers, how the Cursor/Claude Code rule pairs
+are maintained, and durable gotchas hit while building this tooling.
+`AGENTS.md` covers the everyday commands and rules; this page is for when
+you need more. Package-level READMEs under `mcp-servers/*/README.md` are
+aimed at standalone consumers; SpaceMaker-specific wiring stays here.
+
+## At a glance
+
+| Server | Language surface | Backend | Start here | This repo's roots |
+|--------|------------------|---------|------------|-------------------|
+| [`codenav`](../mcp-servers/codenav_mcp/README.md) | Python (`.py`/`.pyi`) | `ty` language server | `symbol_info`, `outline`, `callers`, `implementations` | `CODENAV_MCP_SOURCE_ROOT=src` |
+| [`webnav`](../mcp-servers/webnav_mcp/README.md) | JS / HTML / CSS | `typescript-language-server` + vscode HTML/CSS servers | `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `static/` + `wireframes/` |
+
+Shared helpers: [`mcp-nav-shared`](../mcp-servers/mcp-nav-shared/README.md).
 
 ## MCP config — Cursor vs Claude Code
 
@@ -52,14 +63,17 @@ rather than an error or a SpaceMaker-shaped assumption.
 scripts — each server is its own installable package, so either can be
 released standalone later without restructuring:
 
-- `mcp-servers/mcp-nav-shared/` → distribution `mcp-nav-shared`, import name
-  `mcp_nav_shared`. No runtime deps; shared LSP client, symbol resolution,
-  formatting, and workspace-root discovery.
-- `mcp-servers/codenav_mcp/` → distribution `codenav-mcp`, import name
-  `codenav_mcp`. Depends on `mcp-nav-shared` via `tool.uv.sources`
-  (`{ workspace = true }`), resolved to the local sibling rather than PyPI.
-- `mcp-servers/webnav_mcp/` → distribution `webnav-mcp`, import name
-  `webnav_mcp`. Same `mcp-nav-shared` dependency wiring.
+- [`mcp-servers/mcp-nav-shared/`](../mcp-servers/mcp-nav-shared/README.md) →
+  distribution `mcp-nav-shared`, import name `mcp_nav_shared`. No runtime
+  deps; shared LSP client, symbol resolution, formatting, and
+  workspace-root discovery.
+- [`mcp-servers/codenav_mcp/`](../mcp-servers/codenav_mcp/README.md) →
+  distribution `codenav-mcp`, import name `codenav_mcp`. Depends on
+  `mcp-nav-shared` via `tool.uv.sources` (`{ workspace = true }`),
+  resolved to the local sibling rather than PyPI.
+- [`mcp-servers/webnav_mcp/`](../mcp-servers/webnav_mcp/README.md) →
+  distribution `webnav-mcp`, import name `webnav_mcp`. Same
+  `mcp-nav-shared` dependency wiring.
 
 Each follows the repo's own `src/<pkg>/` layout and has its own
 `pyproject.toml` with a package-local `[tool.pytest.ini_options]`

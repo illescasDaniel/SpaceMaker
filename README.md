@@ -121,7 +121,9 @@ Uses an isolated temp profile and offscreen Qt WebEngine (same 1200×900 viewpor
 - [AGENTS.md](AGENTS.md) — spec-driven development, phase gates, agent workflow
 - [specs/](specs/) — feature specifications and acceptance criteria
 - `uv run task docs-serve` — browsable docs site (architecture, testing conventions) at `http://127.0.0.1:8000`
-- `codenav` MCP server — type-resolved code navigation (symbol search, definition, references); see [AGENTS.md](AGENTS.md) "Orient before editing"
+- [`codenav`](mcp-servers/codenav_mcp/README.md) MCP — Python navigation via `ty` (symbol search, definition, references; name-based `symbol_info` / `outline` / `callers` / `implementations`)
+- [`webnav`](mcp-servers/webnav_mcp/README.md) MCP — JS/HTML/CSS navigation for `static/` + `wireframes/` (same tool shape; plus `css_var` / `selector` for cross-file CSS)
+- Deep reference: [docs/agent-tooling.md](docs/agent-tooling.md); when to use them: [AGENTS.md](AGENTS.md) "Orient before editing"
 
 ## License
 

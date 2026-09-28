@@ -2,7 +2,10 @@
 name = "webnav-mcp"
 version = "0.1.0"
 description = "MCP server exposing JS/HTML/CSS language-server features plus a workspace-wide CSS custom-property/selector index as MCP tools"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Daniel Illescas Romero", email = "contact@daniel-ir.eu" }]
 dependencies = [
 	"mcp>=2.2.0",
 	"mcp-nav-shared",
