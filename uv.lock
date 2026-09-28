@@ -403,7 +403,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "mcp", specifier = ">=2.2.0" },
-    { name = "mcp-nav-shared", editable = "mcp-servers/_shared" },
+    { name = "mcp-nav-shared", editable = "mcp-servers/mcp-nav-shared" },
     { name = "ty", specifier = ">=0.0.75" },
 ]
 
@@ -905,7 +905,7 @@ wheels = [
 [[package]]
 name = "mcp-nav-shared"
 version = "0.1.0"
-source = { editable = "mcp-servers/_shared" }
+source = { editable = "mcp-servers/mcp-nav-shared" }
 
 [[package]]
 name = "mcp-types"
@@ -2268,7 +2268,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "mcp", specifier = ">=2.2.0" },
-    { name = "mcp-nav-shared", editable = "mcp-servers/_shared" },
+    { name = "mcp-nav-shared", editable = "mcp-servers/mcp-nav-shared" },
 ]
 
 [[package]]

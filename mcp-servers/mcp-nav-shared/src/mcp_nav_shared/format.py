@@ -309,7 +309,7 @@ def format_references(
 
 
 def is_hierarchical_document_symbols(symbols: list[dict[str, Any]]) -> bool:
-	"""A server offered `hierarchicalDocumentSymbolSupport` (`_shared/lsp_client.py`
+	"""A server offered `hierarchicalDocumentSymbolSupport` (`mcp_nav_shared/lsp_client.py`
 	declares it in `initialize`) returns nested `DocumentSymbol` (a `range`/
 	`selectionRange` pair directly on the symbol, optional `children`) instead
 	of flat `SymbolInformation` (a `location` field)."""

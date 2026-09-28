@@ -1,8 +1,8 @@
-"""Fast unit tests for `_shared.format` (no live language servers)."""
+"""Fast unit tests for `mcp_nav_shared.format` (no live language servers)."""
 
 from __future__ import annotations
 
-from _shared.format import (
+from mcp_nav_shared.format import (
 	format_callers,
 	format_diagnostic,
 	format_diagnostics,

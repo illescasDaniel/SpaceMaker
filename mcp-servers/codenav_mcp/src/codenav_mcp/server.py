@@ -22,8 +22,8 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
-from _shared.format import (
+from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
+from mcp_nav_shared.format import (
 	format_callers,
 	format_diagnostics,
 	format_location,
@@ -35,9 +35,9 @@ from _shared.format import (
 	to_symbol_tree,
 	uri_to_relative,
 )
-from _shared.lsp_client import LspClient
-from _shared.resolve import resolve_symbol
-from _shared.workspace import resolve_source_root, resolve_workspace_root
+from mcp_nav_shared.lsp_client import LspClient
+from mcp_nav_shared.resolve import resolve_symbol
+from mcp_nav_shared.workspace import resolve_source_root, resolve_workspace_root
 from codenav_mcp.ty_command import resolve_ty_command
 from mcp.server.mcpserver import MCPServer
 

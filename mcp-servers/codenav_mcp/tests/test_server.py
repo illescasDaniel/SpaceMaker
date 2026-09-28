@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from _shared.errors import ToolInputError, format_tool_error
+from mcp_nav_shared.errors import ToolInputError, format_tool_error
 from codenav_mcp import server as codenav_server
 from codenav_mcp.server import _check_python_file, _protocol_class_names
 

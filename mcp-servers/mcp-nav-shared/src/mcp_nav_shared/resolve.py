@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from _shared.errors import ToolInputError
-from _shared.format import (
+from mcp_nav_shared.errors import ToolInputError
+from mcp_nav_shared.format import (
 	_match_tier,
 	format_workspace_symbol,
 	is_hierarchical_document_symbols,
@@ -20,7 +20,7 @@ from _shared.format import (
 	uri_to_relative,
 	workspace_symbol_position,
 )
-from _shared.lsp_client import LspClient
+from mcp_nav_shared.lsp_client import LspClient
 
 
 class SymbolResolutionError(ToolInputError):

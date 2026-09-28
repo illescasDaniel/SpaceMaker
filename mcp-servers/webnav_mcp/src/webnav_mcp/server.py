@@ -8,7 +8,7 @@ routed by file extension: `typescript-language-server` for `.js`/`.mjs`/
 `.cjs` (via `allowJs`, no TypeScript required), and `vscode-html-language-
 server`/`vscode-css-language-server` (from `vscode-langservers-extracted`)
 for `.html`/`.css`. Mirrors codenav_mcp's shape and its shared
-`_shared.lsp_client.LspClient`; see docs/agent-tooling.md for details.
+`mcp_nav_shared.lsp_client.LspClient`; see docs/agent-tooling.md for details.
 
 Run standalone for manual testing:
     uv run python -m webnav_mcp.server
@@ -21,15 +21,15 @@ import json
 import os
 from pathlib import Path
 
-from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
-from _shared.format import (
+from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
+from mcp_nav_shared.format import (
 	format_diagnostics,
 	format_location,
 	format_references,
 	format_workspace_symbols,
 )
-from _shared.lsp_client import LspClient
-from _shared.workspace import resolve_workspace_root
+from mcp_nav_shared.lsp_client import LspClient
+from mcp_nav_shared.workspace import resolve_workspace_root
 from mcp.server.mcpserver import MCPServer
 from webnav_mcp import web_index
 from webnav_mcp.lang_command import resolve_css_command, resolve_html_command, resolve_ts_command

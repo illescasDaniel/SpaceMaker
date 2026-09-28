@@ -8,5 +8,5 @@ source "${quality_dir}/internal/lib.sh"
 
 lib_require_venv
 lib_uv_run pytest tests/unit tests/integration \
-	mcp-servers/_shared/tests mcp-servers/codenav_mcp/tests mcp-servers/webnav_mcp/tests \
+	mcp-servers/mcp-nav-shared/tests mcp-servers/codenav_mcp/tests mcp-servers/webnav_mcp/tests \
 	-q "$@"

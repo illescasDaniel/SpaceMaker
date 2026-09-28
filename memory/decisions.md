@@ -2,6 +2,18 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-28 — Align `mcp-nav-shared` import name with distribution name
+
+- **Context:** Folder was renamed to `mcp-servers/mcp-nav-shared`, but the Python import stayed `_shared` via `[tool.uv.build-backend] module-name = "_shared"`, leaving a confusing split.
+- **Decision:** Renamed `src/_shared/` → `src/mcp_nav_shared/`, dropped the `module-name` override (uv's default for `mcp-nav-shared` is `mcp_nav_shared`), and updated all `from _shared…` imports in codenav/webnav/tests/docs.
+- **Rationale:** Distribution, folder, and import should read as one package; the underscore import is the normal Python spelling of the hyphenated dist name.
+
+## 2026-09-28 — Rename shared MCP folder `_shared` → `mcp-nav-shared`
+
+- **Context:** After the uv workspace split, the on-disk folder was still `mcp-servers/_shared/` while the distribution name was already `mcp-nav-shared` — easy to confuse when browsing the tree or editing workspace member paths.
+- **Decision:** `git mv mcp-servers/_shared mcp-servers/mcp-nav-shared`. Python import name stays `_shared` (`[tool.uv.build-backend] module-name = "_shared"`). Updated workspace members, ty `root`, `pytest.sh`, `docs/agent-tooling.md` paths, and the package-path assertion in `test_workspace.py`.
+- **Rationale:** Folder name matching the distribution name removes the last naming split that wasn't load-bearing; renaming the import package would have been pure churn for no packaging benefit.
+
 ## 2026-09-28 — mcp-servers: turn `_shared`/`codenav_mcp`/`webnav_mcp` into a uv workspace of three installable packages
 
 - **Context:** Following the earlier standalone-reuse generalization (env-var config, no hardcoded SpaceMaker paths — see the 2026-09-28 entry below), the user asked to extract the ad hoc `tests/unit/test_mcp_nav_format.py` / `test_mcp_web_index.py` / `tests/integration/test_mcp_ty_search_smoke.py` into per-server folders under `mcp-servers/` so each server could be bundled standalone, then — when offered a choice between a light file move and a full package split — confirmed going further: making `_shared` "a small helper/shared package with its own tests" that the other two servers depend on as a real dependency, not just a shared folder.

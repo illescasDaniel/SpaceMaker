@@ -1,11 +1,11 @@
-"""Fast unit tests for `_shared.resolve` (no live language servers)."""
+"""Fast unit tests for `mcp_nav_shared.resolve` (no live language servers)."""
 
 from __future__ import annotations
 
 import asyncio
 
 import pytest
-from _shared.resolve import SymbolResolutionError, resolve_symbol
+from mcp_nav_shared.resolve import SymbolResolutionError, resolve_symbol
 
 
 class _FakeResolveClient:

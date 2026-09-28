@@ -1,4 +1,4 @@
-"""Fast unit tests for `_shared.lsp_client` (no live language servers)."""
+"""Fast unit tests for `mcp_nav_shared.lsp_client` (no live language servers)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from _shared.lsp_client import LanguageServerExitedError, LspClient, LspRequestError
+from mcp_nav_shared.lsp_client import LanguageServerExitedError, LspClient, LspRequestError
 
 
 def test_given_message_when_lsp_request_error_then_exposes_method():

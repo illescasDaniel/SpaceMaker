@@ -49,7 +49,7 @@ build-backend = "uv_build"
 default-groups = ["dev"]
 
 [tool.uv.workspace]
-members = ["mcp-servers/_shared", "mcp-servers/codenav_mcp", "mcp-servers/webnav_mcp"]
+members = ["mcp-servers/mcp-nav-shared", "mcp-servers/codenav_mcp", "mcp-servers/webnav_mcp"]
 
 [tool.uv.sources]
 codenav-mcp = { workspace = true }
@@ -100,9 +100,9 @@ python-version = "3.11"
 python = ".venv"
 python-platform = "all"
 # mcp-servers/*: each is its own workspace package under src/; listing their
-# src/ roots lets `_shared` / `codenav_mcp` / `webnav_mcp` resolve as the
+# src/ roots lets `mcp_nav_shared` / `codenav_mcp` / `webnav_mcp` resolve as the
 # servers (and their own tests) import them at runtime.
-root = ["./src", ".", "./mcp-servers/_shared/src", "./mcp-servers/codenav_mcp/src", "./mcp-servers/webnav_mcp/src"]
+root = ["./src", ".", "./mcp-servers/mcp-nav-shared/src", "./mcp-servers/codenav_mcp/src", "./mcp-servers/webnav_mcp/src"]
 
 [tool.ty.src]
 exclude = ["scripts/**", "wireframes/**"]

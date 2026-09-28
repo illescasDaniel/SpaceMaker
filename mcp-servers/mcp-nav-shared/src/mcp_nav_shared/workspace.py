@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 
-# mcp-servers/_shared/src/_shared/workspace.py → repo root is five parents up.
+# mcp-servers/mcp-nav-shared/src/mcp_nav_shared/workspace.py → repo root is five parents up.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 

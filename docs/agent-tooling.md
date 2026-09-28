@@ -25,7 +25,7 @@ these servers, update **both** files together (same servers, different
 placeholders).
 
 Workspace root inside the Python servers is resolved by
-`mcp-servers/_shared/src/_shared/workspace.py`: explicit `CODENAV_MCP_WORKSPACE` /
+`mcp-servers/mcp-nav-shared/src/mcp_nav_shared/workspace.py`: explicit `CODENAV_MCP_WORKSPACE` /
 `WEBNAV_MCP_WORKSPACE`, then `CLAUDE_PROJECT_DIR`, then the repo root
 inferred from that module's path (so a wrong spawn cwd cannot break
 indexing).
@@ -52,8 +52,8 @@ rather than an error or a SpaceMaker-shaped assumption.
 scripts — each server is its own installable package, so either can be
 released standalone later without restructuring:
 
-- `mcp-servers/_shared/` → distribution `mcp-nav-shared`, import name
-  `_shared`. No runtime deps; shared LSP client, symbol resolution,
+- `mcp-servers/mcp-nav-shared/` → distribution `mcp-nav-shared`, import name
+  `mcp_nav_shared`. No runtime deps; shared LSP client, symbol resolution,
   formatting, and workspace-root discovery.
 - `mcp-servers/codenav_mcp/` → distribution `codenav-mcp`, import name
   `codenav_mcp`. Depends on `mcp-nav-shared` via `tool.uv.sources`
@@ -100,7 +100,7 @@ The LSP mirrors position-based lookups 1:1, which forces an agent to
 `references` separately just to answer "what does this do" or "who calls
 this". Four composite tools answer those questions in one call, all
 name-based (no column arithmetic) via the shared `resolve_symbol()` helper
-in `mcp-servers/_shared/src/_shared/resolve.py`:
+in `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/resolve.py`:
 
 - **`symbol_info(name, file_path=None, include_references=True)`** — the
   default first call for "what is this": header, hover text (signature +
@@ -131,11 +131,11 @@ composite tool has narrowed things down to a specific position.
 and not guaranteed: ty may return hierarchical `DocumentSymbol` nodes
 (`range`/`selectionRange`/`children`) or flat `SymbolInformation` entries
 (`location` only, no nesting), depending on what the client advertised at
-`initialize`. `mcp-servers/_shared/src/_shared/lsp_client.py` advertises
+`initialize`. `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/lsp_client.py` advertises
 `hierarchicalDocumentSymbolSupport: true`, but code that consumes the result
-still branches on `is_hierarchical_document_symbols()` (`_shared/format.py`)
+still branches on `is_hierarchical_document_symbols()` (`mcp_nav_shared/format.py`)
 rather than assuming one shape — `to_symbol_tree()` normalizes either shape
-into one common tree for `outline`, while `_shared/resolve.py`'s dotted
+into one common tree for `outline`, while `mcp_nav_shared/resolve.py`'s dotted
 lookup branches directly (it needs the raw `selectionRange`/`range`
 precision the normalized tree discards).
 
@@ -190,7 +190,7 @@ can't derive a dotted import path for it. Nothing SpaceMaker-specific (no
 `ports/`-directory exclusion, no `src/` literal) remains in the server
 source itself — see "Portability" above.
 
-Name resolution (`resolve_symbol` in `_shared/resolve.py`, used by
+Name resolution (`resolve_symbol` in `mcp_nav_shared/resolve.py`, used by
 `symbol_info`/`callers`/`implementations`) prefers a case-exact match over a
 case-insensitive one when both exist for the same query — e.g. `repo_root`
 resolves to the module-level function of that exact name rather than tying
@@ -207,11 +207,11 @@ the `CODENAV_MCP_WORKSPACE` env var (otherwise falls back as above).
 
 The generic JSON-RPC/LSP wire protocol (subprocess framing, request/
 response dispatch, document sync) lives in
-`mcp-servers/_shared/src/_shared/lsp_client.py` as `LspClient`, shared with
+`mcp-servers/mcp-nav-shared/src/mcp_nav_shared/lsp_client.py` as `LspClient`, shared with
 `webnav` below. Only the `ty`-specific launch command
 (`mcp-servers/codenav_mcp/src/codenav_mcp/ty_command.py`) and languageId are
 codenav's own. Location formatting (`path:line:col` headers + snippets)
-lives in `mcp-servers/_shared/src/_shared/format.py`.
+lives in `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/format.py`.
 
 `references` (both servers) uses `format_references()`: at or under
 `DEFAULT_REFERENCES_SNIPPET_LIMIT` (8) hits, each gets its own
@@ -245,12 +245,12 @@ JSON-RPC errors from the language server are surfaced as tool text
 (`LSP error on …`) rather than looking like empty “not found” results.
 Other expected failures — missing file, non-UTF-8 file, unsupported
 extension (webnav), request timeout, language server exited — are also
-returned as text (`_shared/errors.py`) instead of the MCP framework's opaque
+returned as text (`mcp_nav_shared/errors.py`) instead of the MCP framework's opaque
 “Error executing tool”. If the language server process dies, in-flight
 requests fail immediately and the next tool call starts a fresh one.
 
 `pyproject.toml` lists each `mcp-servers/*/src` directory as a ty `root`, so
-tests importing `_shared` / `codenav_mcp` / `webnav_mcp` resolve (clean `ty
+tests importing `mcp_nav_shared` / `codenav_mcp` / `webnav_mcp` resolve (clean `ty
 check`, and codenav `references` include test usages).
 `diagnostics` falls back to the push `publishDiagnostics` cache when pull
 diagnostics are unsupported or empty (common for HTML/CSS servers).
@@ -259,7 +259,7 @@ front with a `ToolInputError` — ty otherwise mis-parses e.g. a `.md` file as
 Python and `diagnostics` returns a wall of bogus syntax errors for it.
 `diagnostics` (both servers) is capped the same way as `search_symbol`
 (`format_diagnostics`, `DEFAULT_DIAGNOSTICS_LIMIT = 200` in
-`_shared/format.py`), with a trailing "… and N more" line, so a badly
+`mcp_nav_shared/format.py`), with a trailing "… and N more" line, so a badly
 broken file can't flood the caller either.
 
 ## `webnav` MCP server

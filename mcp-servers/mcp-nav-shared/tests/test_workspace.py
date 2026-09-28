@@ -1,8 +1,8 @@
-"""Fast unit tests for `_shared.workspace`."""
+"""Fast unit tests for `mcp_nav_shared.workspace`."""
 
 from __future__ import annotations
 
-from _shared.workspace import resolve_source_root, resolve_workspace_root
+from mcp_nav_shared.workspace import resolve_source_root, resolve_workspace_root
 
 
 def test_given_explicit_env_when_resolve_workspace_root_then_prefers_it(tmp_path, monkeypatch):
@@ -37,8 +37,8 @@ def test_given_no_env_when_resolve_workspace_root_then_repo_from_package(monkeyp
 	monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
 	# when
 	root = resolve_workspace_root("CODENAV_MCP_WORKSPACE")
-	# then — mcp-servers/_shared/src/_shared/workspace.py → five parents = repo root
-	assert (root / "mcp-servers" / "_shared" / "src" / "_shared" / "workspace.py").is_file()
+	# then — mcp-servers/mcp-nav-shared/src/mcp_nav_shared/workspace.py → five parents = repo root
+	assert (root / "mcp-servers" / "mcp-nav-shared" / "src" / "mcp_nav_shared" / "workspace.py").is_file()
 
 
 def test_given_explicit_source_root_env_when_resolve_source_root_then_used(tmp_path, monkeypatch):

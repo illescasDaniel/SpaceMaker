@@ -1,4 +1,4 @@
-"""Fast unit tests for `_shared.errors` (no live language servers)."""
+"""Fast unit tests for `mcp_nav_shared.errors` (no live language servers)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
-from _shared.lsp_client import LspClient
+from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
+from mcp_nav_shared.lsp_client import LspClient
 
 
 class _FakeStdin:
