@@ -11,7 +11,7 @@
 
 ### Third-party tools (managed download + PATH fallback)
 
-Official SpaceMaker **portable binaries** download pinned third-party CLIs into the user data folder on first launch. Users are **not** required to install FFmpeg, ImageMagick, ExifTool, libmtp, or adb separately when downloads succeed.
+Official SpaceMaker **portable binaries** download pinned third-party CLIs into the user data folder on first launch. Users are **not** required to install FFmpeg, ImageMagick, ExifTool, or adb separately when downloads succeed.
 
 When a download fails, the app may use a tool from the user `PATH` or instruct manual installation. Privacy policy and in-app copy must state that **first launch uses the network** to fetch these programs.
 

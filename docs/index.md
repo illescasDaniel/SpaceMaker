@@ -53,7 +53,7 @@ Core entities, value objects, and invariants living in `src/spacemaker/domain/`.
 ### Ports & Adapters
 
 Outbound ports (`src/spacemaker/ports/`) and their concrete adapters
-(`src/spacemaker/adapters/`) — FFmpeg, adb/MTP, filesystem, web UI.
+(`src/spacemaker/adapters/`) — FFmpeg, adb/AFC, filesystem, web UI.
 
 ### Specs & Wireframes
 

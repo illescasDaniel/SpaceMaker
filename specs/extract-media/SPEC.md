@@ -2,26 +2,26 @@
 
 ## Metadata
 
-- **Feature:** Copy or move photos/videos into library `originals/` via **Wi‑Fi phone upload** (default), **MTP**, **ADB**, or **iPhone (USB)** (AFC on Linux)
-- **Wireframes:** [wireframes/app.html](../../wireframes/app.html) Step 1; phone page [wireframes/phone-upload.html](../../wireframes/phone-upload.html)
+- **Feature:** Copy or move photos/videos into library `originals/` via **Wi‑Fi phone upload** (default), **ADB**, or **iPhone (USB)** (AFC on Linux)
+- **Wireframes:** [wireframes/app.html](../../wireframes/app.html) Step 1; phone page [wireframes/phone-upload.html](../../wireframes/phone-upload.html). **Wireframe updated** 2026-09-27 — MTP removed (**approved**).
 - **Use case:** `ExtractMedia`
 - **Ports:** `DeviceRepository` (outbound), `FileSystem` (outbound)
 - **UI:** [main-wizard](../main-wizard/SPEC.md) Step 1
 - **Packaging:** Bundled native tools — [packaging/SPEC.md](../packaging/SPEC.md)
+- **Spec note:** MTP / libmtp removed from product 2026-09-27 (unreliable exclusive USB access). Android USB = ADB only.
 
-## Connection method (Wi‑Fi, MTP, ADB, iPhone USB)
+## Connection method (Wi‑Fi, ADB, iPhone USB)
 
 | Method | UI label | Default | Notes |
 |--------|----------|---------|--------|
 | **Wi‑Fi** | `Wi‑Fi` | **Yes** | No cable. Phone browser on same LAN uploads files during an extract **session**. Does not use `DeviceRepository`. |
-| **MTP** | `MTP` | No | USB file transfer mode; no USB debugging required. |
 | **ADB** | `ADB (cable)` | No | USB; requires USB debugging + authorized device. |
 | **AFC** | `iPhone (USB)` | No | **Linux only** (v1). Apple File Conduit over **usbmuxd**; DCIM-focused; system packages on `PATH` (no catalog download). |
 
-- User selects exactly one method via a **segmented toggle** on Step 1.
+- User selects exactly one method via a **segmented toggle** on Step 1 (**no MTP**).
 - Selection is persisted for the session (v1 session-only is OK).
 - Changing method while idle **re-runs device detection** for USB backends only.
-- **USB extract** must not start if the chosen backend reports no device (unless user explicitly picks a mounted MTP volume — see detection).
+- **USB extract** must not start if the chosen backend reports no device.
 - **Wi‑Fi extract** starts a **receive session** (token in upload URL); no device picker or source-folder checklist.
 
 ### Wi‑Fi receive session
@@ -39,40 +39,35 @@
 
 ### Platform tooling (adapters)
 
-**MTP (users vs app):** On Windows and Linux, MTP is already “native” for humans (Explorer, Nautilus/Dolphin, etc.). Users only need **File transfer / MTP** on the phone. They do **not** need to install libmtp manually on those OSes for normal use.
+| OS | ADB adapter |
+|----|-------------|
+| **All** | [adbutils](https://github.com/openatx/adbutils) + managed or `PATH` `adb` |
 
-**MTP (app):** SpaceMaker needs a programmatic MTP client. Use **libmtp** (same stack on **Windows, Linux, and macOS**) in `MtpDeviceRepository` — CLI tools (`mtp-detect`, `mtp-getfile`, …) or a thin binding. Release builds **download** libmtp tools when a portable catalog entry exists; otherwise the user installs libmtp via their package manager and SpaceMaker uses `PATH`.
-
-| OS | MTP (SpaceMaker adapter) | ADB adapter |
-|----|--------------------------|-------------|
-| **All** | **libmtp** (one code path), managed download or `PATH` | [adbutils](https://github.com/openatx/adbutils) + managed or `PATH` `adb` |
-
-- **Portable app:** Download pinned `adb` (and libmtp tools when catalog provides them) into the user data folder — see [packaging/SPEC.md](../packaging/SPEC.md). Fall back to `PATH` when download fails.
+- **Portable app:** Download pinned `adb` into the user data folder — see [packaging/SPEC.md](../packaging/SPEC.md). Fall back to `PATH` when download fails.
 - **Dev:** app downloads into managed tools dir; optional `SPACEMAKER_TOOLS_DIR` or `SPACEMAKER_DEV=1` for PATH fallback.
-- **Not** primary v1: Windows WPD COM-only adapter, macOS gphoto2-only path (optional fallback later if libmtp fails on a device).
-- **Domain/application** depend only on `DeviceRepository` — never import adbutils or libmtp directly.
+- **Domain/application** depend only on `DeviceRepository` — never import adbutils directly.
 - Adapter resolves tool path via bootstrap (managed dir → download → `PATH`); missing tools surface in the Components screen and per-feature errors.
 - Unit tests use fakes; integration tests mock subprocess/adbutils.
+- **Not in product:** MTP / libmtp / GVFS (removed 2026-09-27).
 
 ### Info button (help content)
 
 An **info** control (ⓘ) beside the connection method opens a panel or modal with:
 
 1. **Wi‑Fi:** PC and phone on the **same Wi‑Fi**; click **Start extract**; scan QR or open URL; pick files/folders on the phone. Allow firewall for the app port if prompted. Move is not available.
-2. **MTP:** plug phone → unlock → choose **File transfer / MTP** (not “charge only”). If libmtp was not downloaded, install it via your OS package manager when the app asks.
-3. **ADB (cable):** Developer options → USB debugging → accept RSA prompt on phone. SpaceMaker downloads `adb` when possible; otherwise install platform-tools and ensure `adb` is on `PATH`.
-4. **iPhone (USB):** **Linux only.** Install `usbmuxd`, `libimobiledevice`, and `ifuse`. On Arch/CachyOS, **plug in** the iPhone to start `usbmuxd` via udev (the unit has no `systemctl enable`). Unlock, tap **Trust**, keep unlocked during extract. **Camera (DCIM)** is the useful folder; iCloud-optimized photos may be absent on device.
+2. **ADB (cable):** Developer options → USB debugging → accept RSA prompt on phone. SpaceMaker downloads `adb` when possible; otherwise install platform-tools and ensure `adb` is on `PATH`.
+3. **iPhone (USB):** **Linux only.** Install `usbmuxd`, `libimobiledevice`, and `ifuse`. On Arch/CachyOS, **plug in** the iPhone to start `usbmuxd` via udev (the unit has no `systemctl enable`). Unlock, tap **Trust**, keep unlocked during extract. **Camera (DCIM)** is the useful folder; iCloud-optimized photos may be absent on device.
 
 Copy is concise; link to future docs page optional.
 
 ### iPhone USB tooling (AFC adapter)
 
-- **Protocol:** Apple File Conduit (AFC) via **usbmuxd** — not MTP, not ADB.
-- **Adapter:** `AfcDeviceRepository` — `idevice_id`, `ideviceinfo`, `idevicepair` (trust), `ifuse` mount, then directory walk + copy (same pattern as GVFS MTP).
-- **Delivery:** Like **libmtp** — no portable catalog download; resolve `idevice_id`, `idevicepair`, `ideviceinfo`, and `ifuse` from managed dir (if present) then **`PATH`**. User installs distro packages when missing.
+- **Protocol:** Apple File Conduit (AFC) via **usbmuxd** — not ADB.
+- **Adapter:** `AfcDeviceRepository` — `idevice_id`, `ideviceinfo`, `idevicepair` (trust), `ifuse` mount, then directory walk + copy.
+- **Delivery:** No portable catalog download; resolve `idevice_id`, `idevicepair`, `ideviceinfo`, and `ifuse` from managed dir (if present) then **`PATH`**. User installs distro packages when missing.
 - **Platform:** **Linux only** for v1. On Windows/macOS, device API returns **501** with a clear message; UI shows setup unavailable.
 - **Daemon:** If `/run/usbmuxd` (or `/var/run/usbmuxd`) is missing, surface **usbmuxd not running** with hint to plug in the iPhone (udev) or `systemctl start usbmuxd` — not `enable`, and not a failed download.
-- **Move:** Delete on device via mounted path when supported; same per-file failure rules as MTP.
+- **Move:** Delete on device via mounted path when supported; if delete fails, log error, keep PC copy, count file as failed move.
 
 ## Source folders (device scope)
 
@@ -86,13 +81,14 @@ Users choose **which device folders** to include before extract. v1 uses a **mul
 
 - At least **one** folder must remain selected; **Start extract** is disabled when none are selected.
 - Selection is **session-scoped** (persist with other Step 1 settings for the running app).
-- **MTP:** adapter maps the same labels to paths under the mounted volume (relative paths under the GVFS/libmtp root).
+- **ADB:** paths as in the table above (and common `/storage/emulated/0/…` aliases as the adapter already resolves).
+- **AFC:** map labels to folders under the ifuse mount (typically DCIM).
 - **Queue:** `list_media_paths` (or equivalent) returns only files under selected roots; order remains deterministic (sorted path).
 - Changing folder selection while extract is **idle** updates the next job’s file list; changing it during **running** or **paused** is disabled until the job stops.
 
 ## Triggers & routing
 
-- **Start (USB):** User selects library root, **MTP, ADB, or iPhone (USB)**, **source folders**, Copy or Move mode, connected device, clicks **Start extract**.
+- **Start (USB):** User selects library root, **ADB or iPhone (USB)**, **source folders**, Copy or Move mode, connected device, clicks **Start extract**.
 - **Start (Wi‑Fi, Advanced):** User selects library root, **Wi‑Fi**, clicks **Start extract** — receive session opens (QR/URL).
 - **Start (Wi‑Fi, Easy):** [easy-mode](../easy-mode/SPEC.md) — receive session starts automatically when Easy loads (default library root; no Start button).
 - **Pause:** User clicks **Pause extract** — finish the **current file** transfer, then enter **`paused`**; no new files start until **Resume**.
@@ -131,7 +127,7 @@ Checksum optional v1: size-only is acceptable if spec tests cover size match.
 | Copy | File remains | File present |
 | Move | File removed from device | File present |
 
-Move requires backend support (**ADB** usually supports delete; **MTP** may not — if delete fails, log error, keep PC copy, count file as failed move).
+Move requires backend support (**ADB** usually supports delete; **AFC** may not — if delete fails, log error, keep PC copy, count file as failed move).
 
 ## Acceptance criteria (BDD)
 
@@ -140,7 +136,8 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 - **Given** the user opens Step 1 for the first time in a session
 - **When** the extract form is shown
 - **Then** **Wi‑Fi** is selected
-- **And** **MTP** and **ADB (cable)** are available as alternates
+- **And** **ADB (cable)** and **iPhone (USB)** are available as alternates
+- **And** no MTP option is shown
 
 ### Scenario: Wi‑Fi upload saves to originals
 
@@ -176,8 +173,8 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 
 ### Scenario: User switches to ADB and refreshes detection
 
-- **Given** the user is on Step 1 with MTP selected and no MTP device
-- **When** the user selects **ADB (recommended)**
+- **Given** the user is on Step 1 with Wi‑Fi selected
+- **When** the user selects **ADB (cable)**
 - **Then** device status is refreshed using the ADB backend
 - **And** an authorized ADB device shows as connected when present
 
@@ -185,21 +182,13 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 
 - **Given** the user is on Step 1
 - **When** the user activates the connection method **info** control
-- **Then** help text is shown for both MTP and ADB
-- **And** the text does not ask Windows/Linux users to install libmtp for everyday use
+- **Then** help text is shown for Wi‑Fi, ADB, and iPhone (USB)
 - **And** adb authorization steps are included for ADB
-
-### Scenario: Device detected via MTP
-
-- **Given** MTP is selected and a phone is mounted via MTP
-- **When** extract UI loads device status
-- **Then** a **human-readable device name** is shown (e.g. phone model or MTP volume label)
-- **And** a **connected** indicator (e.g. green status dot) is visible
-- **And** raw backend ids (e.g. `libmtp:0`, GVFS mount paths) are **not** shown as the primary status text
+- **And** no MTP / libmtp instructions are shown
 
 ### Scenario: Device detected via ADB
 
-- **Given** ADB (recommended) is selected and adb reports one authorized device
+- **Given** ADB (cable) is selected and adb reports one authorized device
 - **When** extract UI loads device status
 - **Then** device model or a friendly label is shown with **connected** indicator
 - **And** the device picker shows friendly labels, not bare serials unless no model is available
@@ -249,7 +238,7 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 - **Given** the selected backend reports no device
 - **When** the user attempts Start extract
 - **Then** extract does not start
-- **And** user sees a clear error naming the active method (MTP or ADB)
+- **And** user sees a clear error naming the active method (ADB or iPhone USB)
 
 ### Scenario: Wi‑Fi start without USB device
 
@@ -294,18 +283,18 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 
 | Failure | Behavior |
 |---------|----------|
-| Wrong method (MTP selected but only ADB available) | Status “No device”; info points user to switch method or fix setup |
-| Missing host tool (no libmtp on macOS, no adb) | Block Start; message names missing dependency |
+| Wrong method (ADB selected but only iPhone present, or vice versa) | Status “No device”; info points user to switch method or fix setup |
+| Missing host tool (no adb / no ifuse) | Block Start; message names missing dependency |
 | Device disconnect mid-transfer | Pause with error; completed files remain; retry skips done files |
 | Disk full | Fail current file; surface error |
 | Permission denied on library root | Fail before transfer batch |
 | Single file read error on device | Skip file, increment failed count, continue batch (v1) |
-| Move unsupported on MTP | That file fails move; copy already on PC is kept |
+| Move unsupported on AFC | That file fails move; copy already on PC is kept |
 
 ## Validation rules
 
 - Library root must be writable.
-- Connection method must be `wifi`, `mtp`, `adb`, or `afc` (internal enum); UI labels as above.
+- Connection method must be `wifi`, `adb`, or `afc` (internal enum); UI labels as above. Reject / ignore legacy `mtp`.
 - USB extract uses the repository implementation matching the selected method for the whole job (no mixing backends mid-run).
 - Wi‑Fi extract uses upload receive use case + `FileSystem` only (no `DeviceRepository`).
 - **Wi‑Fi:** Move mode must not be applied; at least one source folder is not required.
@@ -318,16 +307,17 @@ Move requires backend support (**ADB** usually supports delete; **MTP** may not 
 |-------|--------|
 | Unit | Idempotency: existing dest size → skip |
 | Unit | Copy vs Move calls correct `DeviceRepository` methods |
-| Unit | Factory selects fake MTP vs fake ADB vs fake AFC repo from user choice |
+| Unit | Factory selects fake ADB vs fake AFC repo from user choice |
 | Unit | AFC: walk mounted DCIM paths, pull/delete via test mount (no real ifuse) |
 | Unit | Progress callback once per terminal file state |
 | Unit | Pause/stop: given running queue → pause stops after current file; stop leaves partial progress |
 | Unit | Folder filter: only paths under selected roots enter queue |
-| Integration | Mock libmtp/adbutils boundaries; `tmp_path` filesystem |
+| Integration | Mock adbutils boundaries; `tmp_path` filesystem |
 | Out of scope CI | Real devices, real adb on CI |
 
 ## Out of scope
 
+- **MTP / libmtp / GVFS** (removed from product)
 - iPhone USB on **Windows/macOS** (Linux trial only)
 - Bundled/downloadable usbmuxd/ifuse in AppImage (system packages only)
 - Wi‑Fi ADB (follow-up)

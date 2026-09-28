@@ -16,8 +16,6 @@ class BundledTool(StrEnum):
 	FFPROBE = "ffprobe"
 	MAGICK = "magick"
 	EXIFTOOL = "exiftool"
-	MTP_DETECT = "mtp-detect"
-	MTP_GETFILE = "mtp-getfile"
 	IDEVICE_ID = "idevice_id"
 	IDEVICE_PAIR = "idevicepair"
 	IDEVICE_INFO = "ideviceinfo"

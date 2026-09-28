@@ -51,6 +51,36 @@ Append-only log (newest first). Never rewrite history.
 - **Decision:** (1) `LibraryFolder.PROCESSED = "processed"` with on-ensure migration from legacy `converted/`. (2) Easy drain: when compress off, `PromoteOriginalsToProcessed` move-as-is then sync gallery; when on, existing convert drain. (3) Ports/use cases `clear()` preferences + `ResetLibrary` (all buckets + `.thumbnails`/`.exports`/`.index.sqlite`); APIs `POST /api/preferences/clear` and `POST /api/library/reset`. (4) Sticky `.top-bar` + scrollable `.app-main`; no floating footer; default window 1152×864. (5) `spacemaker_data_dir` honors `SPACEMAKER_TOOLS_DIR` parent so prefs isolate in tests.
 - **Rationale:** Gallery stays single-bucket (`processed/`); compress-off is still “no re-encode” but visible; Settings consolidates destructive/legal/tools entry points.
 
+## 2026-09-27 — USB transfer: Add files/folder + flatten Android storage prefixes
+
+- **Context:** Browse was folder-dialog-first (files only after cancel). Destination paths kept Android roots (`storage/self/primary/…`, `sdcard/…`), creating deep unused folder trees under Documents/SpaceMaker.
+- **Decision:** (1) UI: **Add files…** + **Add folder…** (native dialogs cannot mix). (2) Domain `strip_android_user_storage_prefix` applied in `documents_transfer_destination` and `normalize_device_relative_path` (extras). Prefixes: `storage/self/primary`, `storage/emulated/0`, `sdcard`. (3) Keep adbfs `subdir=` preference so the dialog opens on user storage when possible.
+- **Rationale:** Matches Send/Transfer dual-picker UX; destinations read as `Download/…` / `WhatsApp/…` instead of mount aliases.
+
+## 2026-09-27 — No preset pre-check; Browse extras expand via adb find
+
+- **Context:** User asked never to preselect folders. Browse-picked folders transferred 0 files because the queue only filtered `list_file_paths` (preset roots like Download/DCIM), so mount-relative extras like `WhatsApp/Media` never matched absolute `/sdcard/...` paths and were never discovered.
+- **Decision:** (1) `default_transfer_folders` → empty; UI/session start with no checks. (2) Port `list_extra_file_paths`; ADB resolves extras under mount device root / common prefixes with `find`; AFC walks under mount. (3) `path_matches_extra_sources` matches consecutive path components so absolute ADB paths still align with mount-relative extras.
+- **Rationale:** Presets are opt-in; Browse must transfer any picked tree, not only known library folders.
+
+## 2026-09-27 — Lazy adbfs mount; never FUSE-walk on every snapshot
+
+- **Context:** After Browse/adbfs landed, selecting ADB (wizard or USB transfer) froze the app. `enriched_snapshot` called `browse_root` whenever `device_id` was set — including USB photo-backup auto-select — then `os.walk` over the FUSE tree hung on entries like `.$Trash$`. Crash left `/tmp/spacemaker-adbfs-*` mounted.
+- **Decision:** (1) Browse snapshot is a no-op outside `USB_FILE_TRANSFER`. (2) ADB presets use shell exist-probe; `mount_available` = adbfs on PATH; mount only via `POST /api/usb-transfer/mount` (Browse / extras). (3) Shallow top-level dir probe only; adbfs/ifuse/fusermount timeouts; orphan `/tmp/spacemaker-adbfs-*` cleanup on enter/mount.
+- **Rationale:** Device listing and settings must stay fast; FUSE is only needed for the native Browse dialog.
+
+## 2026-09-27 — Remove MTP; ADB + adbfs / AFC + ifuse for USB
+
+- **Context:** MTP via libmtp/GVFS was unreliable (exclusive USB with Dolphin `mtp:/`, busy-device panics). User asked to strip MTP app-wide and ship ADB + iPhone Browse.
+- **Decision:** (1) Delete `ConnectionMethod.MTP`, `MtpDeviceRepository`, libmtp tools from packaging/Components/docs. (2) USB file transfer defaults to **ADB**; extract keeps Wi‑Fi default with ADB/AFC cable options only. (3) Cache device repos on `AppServices`; `AdbDeviceRepository.browse_root` mounts via **adbfs** (`ANDROID_SERIAL`, PATH-only); shell exist-probe when adbfs missing so presets/transfer still work; AFC Browse via existing ifuse. (4) `release_device_mounts` on module enter/leave/Home/shutdown and connection-method change.
+- **Rationale:** One Android cable path users already authorize (USB debugging); FUSE mounts give native Browse dialogs without fighting the OS MTP stack. adbfs is not catalog-downloaded (distro/AUR).
+
+## 2026-09-27 — USB transfer Browse: mount-scoped extras + exist-only presets (MTP first)
+
+- **Context:** Users need to see which common phone folders exist and add more sources via the OS file dialog at the phone mount. Spec approved; arch gate skipped once for MTP delivery.
+- **Decision:** (1) `DeviceRepositoryPort.browse_root` — MTP returns GVFS path when mounted; ADB returns None until adbfs; AFC returns ifuse mount. (2) Probe preset folders from directory names under the mount; UI hides missing labels. Without a mount, show full catalog + Browse disabled. (3) Session `transfer_extra_paths` (device-relative); DesktopApi `choose_device_folder` then `choose_device_files` at mount; `POST /api/usb-transfer/extras` maps host picks under mount. (4) `TransferUsbFiles` queue = presets ∪ extras.
+- **Rationale:** Native dialogs only work on real host mounts; GVFS is the existing MTP path. Extras stay mount-scoped to avoid escaping into the PC filesystem.
+
 ## 2026-09-27 — Transfer desktop Download saves to Documents/SpaceMaker; Home centered + 960×720
 
 - **Context:** Desktop Transfer **Download** used `<a download>` which pywebview ignores. User wanted copies in `Documents/SpaceMaker` with visible feedback. Also asked for a smaller default window and a centered Home grid.
@@ -74,6 +104,12 @@ Append-only log (newest first). Never rewrite history.
 - **Context:** Approved wireframe + easy-mode spec + architecture for a **Compress media** checkbox on Photo backup (Easy): default on, forced off when compression CLIs missing, persisted across launches, gates Easy auto-convert.
 - **Decision:** (1) Domain `compress_media.py` + ports `UserPreferencesPort` / `CompressionToolsPort`. (2) Adapter `JsonUserPreferences` at `{spacemaker_data_dir}/preferences.json` (atomic write); `ManagedCompressionTools` over managed-tool snapshot (`magick` + `ffmpeg`). (3) `PUT /api/settings` accepts `compress_media` even during extract; turning on resumes Easy drain. Client omits the field when the checkbox is disabled so a stored “on” is not overwritten while tools are missing. (4) Easy UI matches wireframe (checkbox, ⓘ why/how, tools hint, hide Convert progress when off). Hardware encoders are **not** part of the tools gate.
 - **Rationale:** First disk-backed user preference separate from session-only `AppSession`; JSON next to managed-tools data reuses existing OS data-dir layout. Verified live: tools-unavailable forced-off + info panel; unit/integration tests green (unrelated pre-existing raw/magick unit failure when ImageMagick absent).
+
+## 2026-09-26 — USB file transfer: separate `TransferFolder` + `list_file_paths`; reuse Documents root and extract job control
+
+- **Context:** New Home module for cable-only arbitrary-file transfer (MTP/ADB/AFC) into Documents, no convert. Spec approved 2026-09-26. Needed domain/ports without conflating photo-library extract.
+- **Decision:** (1) `TransferFolder` enum (Download/Documents/DCIM/Pictures/Movies/Music) separate from media-only `SourceFolder`, so extract defaults stay DCIM/Pictures/Movies. (2) Extend `DeviceRepositoryPort` with `list_file_paths` (any file type); keep `list_media_paths` for extract. Adapter bodies stubbed `NotImplementedError` until Phase 4. (3) Use case `TransferUsbFiles` writes under `documents_directory()/SpaceMaker/` via `documents_transfer_destination` (same root as Receive files), reuses `ExtractJobControl` + `extract_control_flags` for pause/stop. (4) `AppModule.USB_FILE_TRANSFER`; iPhone limit banner gated by `shows_iphone_limit_banner` (AFC only).
+- **Rationale:** Extending `SourceFolder` would change extract’s `ALL_SOURCE_FOLDERS` defaults. A second list API avoids teaching media extractors to return PDFs. Shared Documents root matches Receive files UX; shared job control avoids a parallel pause/stop implementation.
 
 ## 2026-09-25 — Transfer files: ephemeral staging + SHA-256 name collision; fifth Home module
 

@@ -55,6 +55,39 @@ class DesktopApi:
 			return normalize_library_root(str(first))
 		return current
 
+	def choose_device_files(self, mount_root: str = "") -> list[str]:
+		"""Native multi-file picker starting at the phone mount root."""
+		windows = webview.windows
+		if not windows:
+			return []
+		directory = (mount_root or "").strip()
+		if not directory or not Path(directory).is_dir():
+			return []
+		result = windows[0].create_file_dialog(
+			webview.FileDialog.OPEN,
+			directory=directory,
+			allow_multiple=True,
+		)
+		if not result:
+			return []
+		if isinstance(result, (list, tuple)):
+			return [str(item) for item in result]
+		return [str(result)]
+
+	def choose_device_folder(self, mount_root: str = "") -> str:
+		"""Native folder picker starting at the phone mount root."""
+		windows = webview.windows
+		if not windows:
+			return ""
+		directory = (mount_root or "").strip()
+		if not directory or not Path(directory).is_dir():
+			return ""
+		result = windows[0].create_file_dialog(webview.FileDialog.FOLDER, directory=directory)
+		if not result:
+			return ""
+		first = result[0] if isinstance(result, (list, tuple)) else result
+		return str(first)
+
 	def share_folder_file_count(self, folder: str) -> int:
 		text = (folder or "").strip()
 		if not text:

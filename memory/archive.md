@@ -12,6 +12,16 @@ at the top of each section.
 - [x] Full SDD: wireframe + specs approved in chat; `LibraryFolder.PROCESSED`; on-ensure migration from `converted/`; `PromoteOriginalsToProcessed` when compress off; Clear prefs / Reset library use cases + APIs; sticky Home|Gallery|Settings; default window 1152×864; `.screen` width fix so Settings confirm copy does not widen the menu
 - [x] MCP workspace root helper (`mcp-servers/_shared/workspace.py`) + Cursor/Claude mcp.json env pins so spawn cwd `$HOME` cannot break indexing
 
+## USB file transfer (2026-09-27) — branch `cursor/usb-file-transfer-c861`
+
+### Done
+
+- [x] USB file transfer Home module — full SDD (wireframe/spec/architecture/tests/impl); cable-only arbitrary files into Documents
+- [x] Strip MTP app-wide; ADB (adbfs Browse) + AFC (ifuse) only for cable
+- [x] Lazy adbfs mount; Add files… / Add folder…; flatten Android storage prefixes on destination
+- [x] Real-device verification: ADB + iPhone USB transfer working (2026-09-27)
+- Open follow-up (kept in `progress.md`): ADB Browse / listing very slow — review before production
+
 ## Transfer files + Home polish (2026-09-27) — branch `cursor/transfer-files-5ada`
 
 ### Done

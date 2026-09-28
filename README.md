@@ -13,13 +13,13 @@ SpaceMaker runs as a **local desktop application** (embedded web UI + FastAPI se
 Four modules from one screen — only one Wi‑Fi session at a time:
 
 - **Photo backup** — minimal flow: scan a QR code, files land in your library, convert runs as they arrive, open the gallery when ready.
-- **USB photo backup** — full **Extract → Convert → Visualize** wizard with Wi‑Fi, MTP, or ADB (cable) and Copy/Move modes.
+- **USB photo backup** — full **Extract → Convert → Visualize** wizard with Wi‑Fi or ADB (cable) and Copy/Move modes.
 - **Receive files** — send arbitrary files from phone to PC into `~/Documents/SpaceMaker/`.
 - **Send files** — pick files or folders on the desktop; phone downloads via QR.
 
 ### Backup & convert
 
-- Pull media from **Wi‑Fi upload**, **MTP**, or **ADB** into `originals/`.
+- Pull media from **Wi‑Fi upload** or **ADB** into `originals/`.
 - Convert to **web-friendly outputs**: images toward **AVIF**, video via **hardware AV1 or H.264** when available (see [conversion policy](docs/playbooks/SpaceMaker-adaptations.md)).
 - Library layout: `originals/`, `converted/`, `error/` (encode failed after retry), `invalid/` (unsupported or broken inputs).
 - Review and recover problem files from the wizard or Easy-mode warnings.
@@ -33,7 +33,7 @@ Four modules from one screen — only one Wi‑Fi session at a time:
 ### Portable releases
 
 - **Linux:** primary artifact is an **AppImage** (relocatable runtime + Qt WebEngine).
-- **First run:** pinned third-party CLIs (FFmpeg, ImageMagick, adb, libmtp, exiftool, …) are **downloaded** into your user data folder — not bundled inside the binary. **Settings** shows status; **Continue** on the setup screen (or `SPACEMAKER_DEV=1` for contributors) allows system `PATH` fallbacks.
+- **First run:** pinned third-party CLIs (FFmpeg, ImageMagick, adb, exiftool, …) are **downloaded** into your user data folder — not bundled inside the binary. **Settings** shows status; **Continue** on the setup screen (or `SPACEMAKER_DEV=1` for contributors) allows system `PATH` fallbacks.
 - **Windows / macOS:** optional PyInstaller onefile builds — see [packaging/README.md](packaging/README.md).
 
 Details: [specs/packaging/SPEC.md](specs/packaging/SPEC.md), [tools/README.md](tools/README.md).
