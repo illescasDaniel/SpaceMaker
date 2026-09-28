@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import secrets
 import threading
 import time
@@ -97,6 +98,9 @@ from spacemaker.domain.usb_file_transfer import (
 	transfer_control_flags,
 )
 from spacemaker.domain.video_encode import HardwareVideoEncoder
+
+
+logger = logging.getLogger(__name__)
 
 
 class WebSocketLike(Protocol):
@@ -1485,6 +1489,7 @@ class AppServices:
 				else:
 					self.session.usb_transfer_phase = JobPhase.DONE
 		except Exception as exc:
+			logger.exception("USB transfer job crashed")
 			with self.session._lock:
 				self.session.usb_transfer_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)
@@ -1539,6 +1544,7 @@ class AppServices:
 				else:
 					self.session.extract_phase = JobPhase.DONE
 		except Exception as exc:
+			logger.exception("Extract job crashed")
 			with self.session._lock:
 				self.session.extract_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)
@@ -1700,6 +1706,7 @@ class AppServices:
 					else:
 						self.session.last_error = ""
 		except Exception as exc:
+			logger.exception("Convert job crashed")
 			with self.session._lock:
 				self.session.convert_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)

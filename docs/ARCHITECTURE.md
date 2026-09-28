@@ -86,6 +86,20 @@ State is:
 - Long-running work (extract/convert) runs on a `ThreadPoolExecutor` owned by
   `AppServices`, tracked via `Future` handles rather than a job table.
 
+## Logging
+
+A rotating file log (`{data_dir}/logs/spacemaker.log`, 3 × 5 MB, next to
+`preferences.json`) is configured once at process start
+(`bootstrap/logging_setup.py`, called from `desktop.py`'s `main()`) by
+attaching a handler to the `"spacemaker"` logger. Every module gets file
+logging for free via `logging.getLogger(__name__)`, since all package
+loggers live under the `spacemaker.*` name and propagate up to it — no
+per-module setup needed. This exists so failures that are otherwise
+invisible to the UI (a convert job's per-file failure reason, a thumbnail
+generation crash) survive an app restart and can be inspected later,
+rather than only living in transient in-memory session state
+(`AppSession.last_error`).
+
 ## Refactor-relevant rules
 
 - New outbound capabilities belong behind a **port** in `ports/`, wired to a

@@ -21,7 +21,8 @@
 - **Timeline view:** group by **Year**, then **Month**; responsive thumbnail grid with **`object-fit: cover`** on thumb images.
 - **Calendar view:** month navigation (prev/next); weekday header row; days with media highlighted; selecting a day shows that day’s thumbnails below the grid.
 - **Mobile:** layout must remain usable at ~320px width.
-- **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`. Cache paths are a pure function of the source relative path: append `.jpg` to the full relative path (keep the original suffix), e.g. `2025/vacation.avif` → `.thumbnails/2025/vacation.avif.jpg`. This keeps distinct sources from colliding when they share a stem (`vacation.avif` vs `vacation.mp4`). Thumbnail and export cache paths are **not** stored in the gallery index.
+- **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`. Cache paths are a pure function of the source relative path: append `.jpg` to the full relative path (keep the original suffix), e.g. `2025/vacation.avif` → `.thumbnails/2025/vacation.avif.jpg`. This keeps distinct sources from colliding when they share a stem (`vacation.avif` vs `vacation.mp4`). Thumbnail and export cache paths are **not** stored in the gallery index. Generation writes to a temp file beside the cache path and atomically renames it into place, so a concurrent reader never observes a partial thumbnail JPEG. A generation failure returns a non-cached error response (not a long-lived-cached broken image), so the browser retries on the next request instead of caching a dead thumbnail forever; the failure is also recorded in the app log file (see Logging in `docs/ARCHITECTURE.md`) for later diagnosis.
+- **Thumbnail framing:** the generated thumbnail file itself preserves the source image's exact aspect ratio — fit within a max edge (longest side capped, shorter side scales proportionally; never letterboxed/padded, never center-cropped to a square). Square/cropped framing is a **display-only** CSS concern (`object-fit: cover` in the grid, see above); the cached JPEG bytes are never pre-cropped, so the same file also works as an aspect-correct placeholder on the item page (`object-fit: contain`, see Progressive preview loading below) without a framing mismatch when the full image loads in.
 - **Friendly export cache:** on-demand **Download as JPEG** / **Download as MP4** outputs (when a re-encode is needed) live under `{library_root}/.exports/` with the same injective path-mirror rule — append `.jpg` or `.mp4` to the full relative path (e.g. `2025/vacation.avif` → `.exports/2025/vacation.avif.jpg`). Reuse when the cache file exists and is at least as new as the source. Safe to delete anytime; regenerates on the next friendly download. Already-friendly sources (JPEG / H.264+AAC MP4) are served from `processed/` and write nothing under `.exports/`.
 - **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
 - **Performance:** cached thumbs; long-lived `Cache-Control` on `/thumbs/` and inline `/media/`; image item open starts full media fetch immediately (metadata must not gate it); neighbor thumb/media prefetch after paths are known; a persisted, incrementally-synced index (derived from `processed/` + EXIF/probe metadata, never a source of truth by itself) backs timeline/calendar/day queries and preferably item display metadata so response time does not scale with total library size. Timeline loads via cursor-paginated pages with infinite scroll. Smooth, responsive scrolling at **50,000+ items**, with a bounded mounted-tile working set (not the full library) regardless of scroll distance.
@@ -149,6 +150,14 @@
 - **Given** an `.av1.mp4` in `processed/`
 - **When** gallery displays the item
 - **Then** a video indicator or poster frame is shown on the tile
+
+### Scenario: Thumbnail generation failure does not stick
+
+- **Given** thumbnail generation fails for a file (e.g. the source is only partially written, or the tool errors)
+- **When** `GET /thumbs/{relative_path}` is requested
+- **Then** the response is a non-2xx error without long-lived cache headers
+- **And** the failure is written to the app log file
+- **And** the next request for the same thumbnail retries generation rather than reusing a broken cached response
 
 ### Scenario: Open gallery item page
 

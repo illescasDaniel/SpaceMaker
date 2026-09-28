@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 
 from spacemaker.domain.conversion import (
@@ -10,6 +11,7 @@ from spacemaker.domain.conversion import (
 	video_av1_relative_path,
 )
 from spacemaker.domain.extract_control import ExtractJobControl
+from spacemaker.domain.gallery_cache_paths import convert_staging_path, convert_staging_root
 from spacemaker.domain.library import JobProgress, LibraryFolder
 from spacemaker.domain.media import MediaKind, media_kind_for_extension, normalize_extension
 from spacemaker.domain.video_encode import HardwareVideoEncoder, video_h264_web_relative_path
@@ -17,6 +19,9 @@ from spacemaker.domain.web_compat import VideoProbe, is_web_compatible_image_for
 from spacemaker.ports.outbound.filesystem import FileSystemPort
 from spacemaker.ports.outbound.media_converter import MediaConverterPort
 from spacemaker.ports.outbound.media_probe import MediaProbePort
+
+
+logger = logging.getLogger(__name__)
 
 
 class ConvertMedia:
@@ -39,6 +44,7 @@ class ConvertMedia:
 		on_progress: Callable[[JobProgress], None] | None = None,
 	) -> JobProgress:
 		self.last_failure = ""
+		self._filesystem.delete_directory(convert_staging_root(library_root))
 		rel_paths = self._filesystem.list_files_in_library_folder(library_root, LibraryFolder.ORIGINALS)
 		total = len(rel_paths)
 		completed = 0
@@ -59,6 +65,7 @@ class ConvertMedia:
 			video_probe = self._video_probe_for(relative, source)
 		except FileNotFoundError as exc:
 			self.last_failure = f"{relative}: {exc}"
+			logger.warning(self.last_failure)
 			self._move_to_folder(library_root, relative, LibraryFolder.ERROR)
 			return
 		kind = media_kind_for_extension(normalize_extension(relative))
@@ -75,6 +82,7 @@ class ConvertMedia:
 		if kind is MediaKind.VIDEO and self._converter.library_video_encoder() is HardwareVideoEncoder.NONE:
 			if route is ConversionRoute.ENCODE:
 				self.last_failure = f"{relative}: no hardware video encoder available; kept original in gallery"
+				logger.warning(self.last_failure)
 			self._move_to_folder(library_root, relative, LibraryFolder.PROCESSED)
 			return
 		if self._try_skip_existing_valid(library_root, relative):
@@ -103,51 +111,60 @@ class ConvertMedia:
 			ok = self._encode_once(library_root, relative, video_probe)
 			if ok:
 				return
+		logger.error("%s: encode failed twice, moved to error/ (%s)", relative, self.last_failure)
 		self._move_to_folder(library_root, relative, LibraryFolder.ERROR)
 
 	def _encode_once(self, library_root: str, relative: str, video_probe: VideoProbe | None) -> bool:
 		source = self._filesystem.library_path(library_root, LibraryFolder.ORIGINALS, relative)
 		out_rel = self._planned_output_relative(library_root, relative)
 		dest = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, out_rel)
-		self._filesystem.ensure_parent_directory(dest)
-		if self._filesystem.exists(dest):
-			self._filesystem.delete_file(dest)
+		staging = convert_staging_path(library_root, out_rel)
+		self._filesystem.ensure_parent_directory(staging)
+		if self._filesystem.exists(staging):
+			self._filesystem.delete_file(staging)
 		ext = normalize_extension(relative)
 		try:
 			if media_kind_for_extension(ext) is MediaKind.IMAGE:
 				if not self._probe.image_readable(source):
 					self._move_to_folder(library_root, relative, LibraryFolder.INVALID)
 					return True
-				self._converter.encode_image_to_avif(source, dest)
+				self._converter.encode_image_to_avif(source, staging)
 			else:
 				if video_probe is None:
 					self.last_failure = f"{relative}: could not probe video"
+					logger.warning(self.last_failure)
 					return False
 				encoder = self._converter.library_video_encoder()
 				if encoder is HardwareVideoEncoder.AV1:
-					self._converter.encode_video_to_av1(source, dest)
+					self._converter.encode_video_to_av1(source, staging)
 				elif encoder is HardwareVideoEncoder.H264:
-					self._converter.encode_video_to_h264_aac(source, dest)
+					self._converter.encode_video_to_h264_aac(source, staging)
 				else:
 					self.last_failure = f"{relative}: no hardware video encoder"
+					logger.warning(self.last_failure)
 					return False
 		except (OSError, RuntimeError) as exc:
 			self.last_failure = f"{relative}: {exc}"
-			if self._filesystem.exists(dest):
-				self._filesystem.delete_file(dest)
+			logger.warning(self.last_failure)
+			if self._filesystem.exists(staging):
+				self._filesystem.delete_file(staging)
 			return False
-		if not self._output_valid(relative, dest):
+		if not self._output_valid(relative, staging):
 			self.last_failure = f"{relative}: encoded output failed validation"
-			if self._filesystem.exists(dest):
-				self._filesystem.delete_file(dest)
+			logger.warning(self.last_failure)
+			if self._filesystem.exists(staging):
+				self._filesystem.delete_file(staging)
 			return False
 		source_size = self._filesystem.file_size(source)
-		output_size = self._filesystem.file_size(dest)
+		output_size = self._filesystem.file_size(staging)
 		if output_exceeds_rollback_threshold(source_size, output_size):
 			if self._should_rollback_source(relative, video_probe):
-				self._filesystem.delete_file(dest)
+				self._filesystem.delete_file(staging)
 				self._move_to_folder(library_root, relative, LibraryFolder.PROCESSED)
 				return True
+		if self._filesystem.exists(dest):
+			self._filesystem.delete_file(dest)
+		self._filesystem.move_file(staging, dest)
 		self._filesystem.delete_file(source)
 		return True
 

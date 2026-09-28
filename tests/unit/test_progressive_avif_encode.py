@@ -54,6 +54,7 @@ def test_given_avifenc_and_jpeg_when_encode_then_avifenc_progressive_without_mag
 	text = log.read_text()
 	assert "avifenc" in text
 	assert "--progressive" in text
+	assert "--ignore-xmp" in text
 	assert "magick" not in text
 
 

@@ -110,6 +110,7 @@ class SubprocessMediaConverter:
 				"80",
 				"-y",
 				"444",
+				"--ignore-xmp",
 				source_path,
 				dest_path,
 			],

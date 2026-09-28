@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 import tempfile
 from contextlib import asynccontextmanager
@@ -65,6 +66,9 @@ from spacemaker.domain.transfer_folders import merge_extra_paths
 from spacemaker.domain.transfer_session import TransferOrigin
 from spacemaker.domain.ui_mode import UiMode
 from spacemaker.domain.usb_file_transfer import default_transfer_folders
+
+
+logger = logging.getLogger(__name__)
 
 
 def _gallery_item_dict(item: GalleryItem) -> dict[str, str]:
@@ -1102,8 +1106,9 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 			thumb_path = services.thumbnails.ensure_thumb(root, relative_path)
 		except FileNotFoundError as exc:
 			raise HTTPException(status_code=404, detail=str(exc)) from exc
-		except OSError as exc:
-			raise HTTPException(status_code=500, detail="thumbnail generation failed") from exc
+		except (OSError, RuntimeError) as exc:
+			logger.warning("GET /thumbs/%s failed: %s", relative_path, exc)
+			raise HTTPException(status_code=503, detail="thumbnail generation failed") from exc
 		return FileResponse(thumb_path, media_type="image/jpeg", headers=dict(MEDIA_CACHE_HEADERS))
 
 	@app.get("/favicon.ico")
