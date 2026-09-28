@@ -39,9 +39,13 @@ _SYMBOL_KINDS: dict[int, str] = {
 }
 
 DEFAULT_SEARCH_SYMBOL_LIMIT = 50
+DEFAULT_DIAGNOSTICS_LIMIT = 200
 # When the LSP range starts on a decorator line (or is a single-line decorator
 # span), walk this many lines past start to find the identifier.
 _NAME_LOOKAHEAD_LINES = 8
+
+# LSP DiagnosticSeverity (same spec as SymbolKind above).
+_DIAGNOSTIC_SEVERITIES: dict[int, str] = {1: "error", 2: "warning", 3: "info", 4: "hint"}
 
 
 def uri_to_path(uri: str) -> Path:
@@ -208,4 +212,164 @@ def format_workspace_symbols(
 	omitted = len(symbols) - len(shown)
 	if omitted > 0:
 		lines.append(f"… and {omitted} more (showing first {len(shown)})")
+	return "\n".join(lines)
+
+
+def format_diagnostic(item: dict[str, Any]) -> str:
+	"""One diagnostic as `L:C [severity code] first line`, with any further
+	message lines (e.g. ty's `Code is unreachable` / `This may depend on your
+	current environment and settings` two-liner) indented on their own lines
+	so every line that doesn't start with whitespace is exactly one diagnostic."""
+	rng = item.get("range") or {}
+	start = rng.get("start") or {}
+	severity = _DIAGNOSTIC_SEVERITIES.get(item.get("severity"), "?")
+	code = item.get("code")
+	tag = f"{severity} {code}" if code not in (None, "") else severity
+	lines = str(item.get("message", "")).splitlines() or [""]
+	header = f"{start.get('line', 0) + 1}:{start.get('character', 0) + 1} [{tag}] {lines[0]}"
+	return "\n".join([header, *(f"    {line}" for line in lines[1:])])
+
+
+def format_diagnostics(items: list[dict[str, Any]], *, limit: int = DEFAULT_DIAGNOSTICS_LIMIT) -> str:
+	"""Format LSP diagnostics, capped like `format_workspace_symbols` so a badly
+	broken file (or one mis-parsed as the wrong language) can't flood the
+	caller with an unbounded wall of text."""
+	if not items:
+		return "No diagnostics."
+	shown = items[: max(0, limit)]
+	lines = [format_diagnostic(item) for item in shown]
+	omitted = len(items) - len(shown)
+	if omitted > 0:
+		lines.append(f"… and {omitted} more (showing first {len(shown)})")
+	return "\n".join(lines)
+
+
+DEFAULT_REFERENCE_FILE_LIMIT = 25
+
+
+def format_references_grouped(
+	locations: list[dict[str, Any]], workspace_root: Path, *, file_limit: int = DEFAULT_REFERENCE_FILE_LIMIT
+) -> str:
+	"""Compact `path: L12, L40, …` grouping (no snippets) for `symbol_info`, where
+	full per-location snippets (as `format_location` gives `references`) would
+	make a one-call summary too long to be useful."""
+	if not locations:
+		return "No references found."
+	groups: dict[str, set[int]] = {}
+	for loc in locations:
+		uri = loc.get("uri") or loc.get("targetUri", "")
+		rng = _location_range(loc)
+		start_line = int((rng.get("start") or {}).get("line", 0)) + 1
+		rel = uri_to_relative(uri, workspace_root)
+		groups.setdefault(rel, set()).add(start_line)
+	total = sum(len(nums) for nums in groups.values())
+	files = sorted(groups.items())
+	shown = files[:file_limit]
+	lines = [f"{total} reference(s) in {len(files)} file(s):"]
+	lines += [f"{path}: " + ", ".join(f"L{n}" for n in sorted(nums)) for path, nums in shown]
+	omitted = len(files) - len(shown)
+	if omitted > 0:
+		lines.append(f"… and {omitted} more file(s)")
+	return "\n".join(lines)
+
+
+def is_hierarchical_document_symbols(symbols: list[dict[str, Any]]) -> bool:
+	"""A server offered `hierarchicalDocumentSymbolSupport` (`_shared/lsp_client.py`
+	declares it in `initialize`) returns nested `DocumentSymbol` (a `range`/
+	`selectionRange` pair directly on the symbol, optional `children`) instead
+	of flat `SymbolInformation` (a `location` field)."""
+	return bool(symbols) and "range" in symbols[0] and "location" not in symbols[0]
+
+
+def _document_symbol_node(sym: dict[str, Any]) -> dict[str, Any]:
+	rng = sym.get("range") or {}
+	start = rng.get("start") or {}
+	end = rng.get("end") or {}
+	return {
+		"name": str(sym.get("name") or "?"),
+		"kind": sym.get("kind"),
+		"start_line": int(start.get("line", 0)),
+		"end_line": int(end.get("line", start.get("line", 0))),
+		"children": [_document_symbol_node(child) for child in sym.get("children") or []],
+	}
+
+
+def _nest_symbol_information(symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
+	"""Nest ty's flat `SymbolInformation` list by range containment: sort by
+	start line (widest span first among ties), then fold each symbol into the
+	innermost still-open ancestor whose range contains it."""
+	nodes: list[dict[str, Any]] = []
+	for sym in symbols:
+		loc = sym.get("location") or {}
+		rng = loc.get("range") or {}
+		start = rng.get("start") or {}
+		end = rng.get("end") or {}
+		nodes.append(
+			{
+				"name": str(sym.get("name") or "?"),
+				"kind": sym.get("kind"),
+				"start_line": int(start.get("line", 0)),
+				"end_line": int(end.get("line", start.get("line", 0))),
+				"children": [],
+			}
+		)
+	nodes.sort(key=lambda n: (n["start_line"], -(n["end_line"] - n["start_line"])))
+	roots: list[dict[str, Any]] = []
+	stack: list[dict[str, Any]] = []
+	for node in nodes:
+		while stack and not (stack[-1]["start_line"] <= node["start_line"] and node["end_line"] <= stack[-1]["end_line"]):
+			stack.pop()
+		(stack[-1]["children"] if stack else roots).append(node)
+		stack.append(node)
+	return roots
+
+
+def to_symbol_tree(symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
+	"""Normalize either shape `documentSymbol` can return (see
+	`is_hierarchical_document_symbols`) into a common node shape: `{name,
+	kind, start_line, end_line, children}`, 0-based lines. Shared by
+	`format_outline` and codenav's `implementations`/`symbol_info` (method-name
+	matching, tree search) — one nesting implementation instead of two shape-
+	specific ones scattered across callers."""
+	if is_hierarchical_document_symbols(symbols):
+		return [_document_symbol_node(sym) for sym in symbols]
+	return _nest_symbol_information(symbols)
+
+
+def format_outline(symbols: list[dict[str, Any]], *, indent: str = "  ") -> str:
+	"""Indented `name  [Kind]  :line` tree, from either shape `documentSymbol`
+	can return (see `is_hierarchical_document_symbols`)."""
+	if not symbols:
+		return "No symbols found."
+	roots = to_symbol_tree(symbols)
+
+	def walk(nodes: list[dict[str, Any]], depth: int) -> None:
+		for node in nodes:
+			kind = symbol_kind_label(node["kind"])
+			lines.append(f"{indent * depth}{node['name']}  [{kind}]  :{node['start_line'] + 1}")
+			walk(node["children"], depth + 1)
+
+	lines: list[str] = []
+	walk(roots, 0)
+	return "\n".join(lines)
+
+
+def format_callers(incoming_calls: list[dict[str, Any]], workspace_root: Path) -> str:
+	"""`callHierarchy/incomingCalls` results as `caller  [Kind]  (path:line)
+	calls at L.., L..` — the caller's own position plus every call-site line
+	within it, so an agent sees who calls a function without imports/type-only
+	usages mixed in (unlike `references`)."""
+	if not incoming_calls:
+		return "No callers found."
+	lines = []
+	for call in incoming_calls:
+		frm = call.get("from") or {}
+		name = str(frm.get("name") or "?")
+		kind = symbol_kind_label(frm.get("kind"))
+		rel = uri_to_relative(frm.get("uri", ""), workspace_root)
+		sel_start = (frm.get("selectionRange") or {}).get("start") or {}
+		caller_line = int(sel_start.get("line", 0)) + 1
+		call_site_lines = sorted({int((r.get("start") or {}).get("line", 0)) + 1 for r in call.get("fromRanges") or []})
+		call_sites = ", ".join(f"L{n}" for n in call_site_lines) or f"L{caller_line}"
+		lines.append(f"{name}  [{kind}]  ({rel}:{caller_line}) calls at {call_sites}")
 	return "\n".join(lines)

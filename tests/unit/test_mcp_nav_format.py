@@ -15,15 +15,24 @@ if str(_MCP_ROOT) not in sys.path:
 
 from _shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error  # noqa: E402
 from _shared.format import (  # noqa: E402
+	format_callers,
+	format_diagnostic,
+	format_diagnostics,
 	format_location,
+	format_outline,
+	format_references_grouped,
 	format_workspace_symbol,
 	format_workspace_symbols,
+	is_hierarchical_document_symbols,
 	rank_workspace_symbols,
+	to_symbol_tree,
 	uri_to_relative,
 	workspace_symbol_position,
 )
 from _shared.lsp_client import LanguageServerExitedError, LspClient, LspRequestError  # noqa: E402
+from _shared.resolve import SymbolResolutionError, resolve_symbol  # noqa: E402
 from _shared.workspace import resolve_workspace_root  # noqa: E402
+from codenav_mcp.server import _check_python_file  # noqa: E402
 
 
 def test_given_location_when_format_then_header_includes_line_and_column(tmp_path):
@@ -432,3 +441,406 @@ def test_given_never_started_when_is_alive_then_false(tmp_path):
 	client = LspClient(workspace_root=tmp_path, command=["true"], language_id="python")
 	# when / then
 	assert client.is_alive is False
+
+
+def _diagnostic(line: int, message: str, severity: int = 1) -> dict:
+	return {
+		"range": {"start": {"line": line, "character": 0}, "end": {"line": line, "character": 1}},
+		"severity": severity,
+		"message": message,
+	}
+
+
+def test_given_no_items_when_format_diagnostics_then_no_diagnostics_message():
+	# given / when
+	text = format_diagnostics([])
+	# then
+	assert text == "No diagnostics."
+
+
+def test_given_few_items_when_format_diagnostics_then_one_line_per_item_no_truncation():
+	# given
+	items = [_diagnostic(0, "bad thing", severity=1), _diagnostic(4, "a hint", severity=4)]
+	# when
+	text = format_diagnostics(items)
+	# then
+	lines = text.splitlines()
+	assert lines == ["1:1 [error] bad thing", "5:1 [hint] a hint"]
+
+
+def test_given_many_items_when_format_diagnostics_then_caps_with_note():
+	# given — mirrors test_given_many_symbols_when_format_workspace_symbols_then_caps_with_note
+	items = [_diagnostic(i, f"error {i}") for i in range(5)]
+	# when
+	text = format_diagnostics(items, limit=2)
+	# then
+	lines = text.splitlines()
+	assert lines == ["1:1 [error] error 0", "2:1 [error] error 1", "… and 3 more (showing first 2)"]
+
+
+def test_given_multiline_message_when_format_diagnostic_then_continuation_indented():
+	# given — ty's "Code is unreachable" carries a second, unprefixed line;
+	# without indenting it, it reads as its own diagnostic
+	item = _diagnostic(719, "Code is unreachable\nThis may depend on your current environment and settings")
+	# when
+	text = format_diagnostic(item)
+	# then
+	assert text.splitlines() == [
+		"720:1 [error] Code is unreachable",
+		"    This may depend on your current environment and settings",
+	]
+
+
+def test_given_code_when_format_diagnostic_then_appended_to_severity_tag():
+	# given
+	item = _diagnostic(0, "bad call", severity=2)
+	item["code"] = "invalid-argument-type"
+	# when
+	text = format_diagnostic(item)
+	# then
+	assert text == "1:1 [warning invalid-argument-type] bad call"
+
+
+def test_given_no_code_when_format_diagnostic_then_tag_is_severity_only():
+	# given — the plain messages already covered above must not grow a
+	# trailing space or "None" once `code` is read
+	item = _diagnostic(0, "bad thing", severity=1)
+	# when
+	text = format_diagnostic(item)
+	# then
+	assert text == "1:1 [error] bad thing"
+
+
+def test_given_multiline_message_when_format_diagnostics_then_still_one_entry_in_cap_count():
+	# given — a multi-line message must count as one item against the cap,
+	# not one per physical line
+	items = [
+		_diagnostic(0, "first\nsecond line"),
+		_diagnostic(1, "another"),
+	]
+	# when
+	text = format_diagnostics(items, limit=5)
+	# then
+	assert text.splitlines() == [
+		"1:1 [error] first",
+		"    second line",
+		"2:1 [error] another",
+	]
+
+
+def test_given_python_file_when_check_python_file_then_no_error():
+	# given / when / then — .py and .pyi are both accepted, no exception raised
+	_check_python_file("src/spacemaker/bootstrap/services.py")
+	_check_python_file("src/spacemaker/stubs/foo.pyi")
+
+
+def test_given_non_python_file_when_check_python_file_then_tool_input_error():
+	# given — a non-Python file must be rejected before it ever reaches ty,
+	# which would otherwise mis-parse it as Python (e.g. diagnostics on a
+	# README producing a wall of bogus syntax errors)
+	# when
+	with pytest.raises(ToolInputError) as caught:
+		_check_python_file("README.md")
+	# then
+	text = format_tool_error(caught.value)
+	assert text == "codenav only supports Python files (.py/.pyi), got 'README.md'"
+
+
+# -- Phase B: to_symbol_tree / outline / callers / references_grouped / resolve_symbol ----
+
+
+def _flat_class_and_method() -> list[dict]:
+	# given — ty's flat SymbolInformation for a class containing one method
+	return [
+		{
+			"name": "Foo",
+			"kind": 5,
+			"location": {"range": {"start": {"line": 0, "character": 0}, "end": {"line": 3, "character": 0}}},
+		},
+		{
+			"name": "bar",
+			"kind": 6,
+			"location": {"range": {"start": {"line": 1, "character": 1}, "end": {"line": 2, "character": 0}}},
+		},
+	]
+
+
+def _hierarchical_class_and_method() -> list[dict]:
+	# given — the same shape, but as nested DocumentSymbol (hierarchicalDocumentSymbolSupport)
+	return [
+		{
+			"name": "Foo",
+			"kind": 5,
+			"range": {"start": {"line": 0, "character": 0}, "end": {"line": 3, "character": 0}},
+			"children": [
+				{
+					"name": "bar",
+					"kind": 6,
+					"range": {"start": {"line": 1, "character": 1}, "end": {"line": 2, "character": 0}},
+					"children": [],
+				}
+			],
+		}
+	]
+
+
+def test_given_location_field_when_is_hierarchical_document_symbols_then_false():
+	assert is_hierarchical_document_symbols(_flat_class_and_method()) is False
+
+
+def test_given_range_field_when_is_hierarchical_document_symbols_then_true():
+	assert is_hierarchical_document_symbols(_hierarchical_class_and_method()) is True
+
+
+def test_given_empty_list_when_is_hierarchical_document_symbols_then_false():
+	assert is_hierarchical_document_symbols([]) is False
+
+
+def test_given_flat_symbol_information_when_to_symbol_tree_then_nests_by_containment():
+	# when
+	tree = to_symbol_tree(_flat_class_and_method())
+	# then
+	assert len(tree) == 1
+	assert tree[0]["name"] == "Foo"
+	assert [c["name"] for c in tree[0]["children"]] == ["bar"]
+
+
+def test_given_hierarchical_document_symbols_when_to_symbol_tree_then_keeps_nesting():
+	# when
+	tree = to_symbol_tree(_hierarchical_class_and_method())
+	# then
+	assert tree[0]["name"] == "Foo"
+	assert tree[0]["children"][0]["name"] == "bar"
+
+
+def test_given_no_symbols_when_format_outline_then_message():
+	assert format_outline([]) == "No symbols found."
+
+
+def test_given_hierarchical_symbols_when_format_outline_then_indents_children():
+	# when
+	text = format_outline(_hierarchical_class_and_method())
+	# then
+	assert text.splitlines() == [
+		"Foo  [Class]  :1",
+		"  bar  [Method]  :2",
+	]
+
+
+def test_given_flat_symbols_when_format_outline_then_nests_and_indents():
+	# when
+	text = format_outline(_flat_class_and_method())
+	# then
+	assert text.splitlines() == [
+		"Foo  [Class]  :1",
+		"  bar  [Method]  :2",
+	]
+
+
+def test_given_no_calls_when_format_callers_then_message(tmp_path):
+	assert format_callers([], tmp_path) == "No callers found."
+
+
+def test_given_incoming_calls_when_format_callers_then_lists_call_sites(tmp_path):
+	# given
+	call = {
+		"from": {
+			"name": "caller_fn",
+			"kind": 12,
+			"uri": (tmp_path / "a.py").as_uri(),
+			"selectionRange": {"start": {"line": 4, "character": 0}},
+		},
+		"fromRanges": [
+			{"start": {"line": 9, "character": 0}},
+			{"start": {"line": 12, "character": 0}},
+		],
+	}
+	# when
+	text = format_callers([call], tmp_path)
+	# then
+	assert text == "caller_fn  [Function]  (a.py:5) calls at L10, L13"
+
+
+def test_given_no_locations_when_format_references_grouped_then_message(tmp_path):
+	assert format_references_grouped([], tmp_path) == "No references found."
+
+
+def test_given_locations_when_format_references_grouped_then_groups_by_file_with_count(tmp_path):
+	# given
+	locs = [
+		{"uri": (tmp_path / "a.py").as_uri(), "range": {"start": {"line": 0, "character": 0}}},
+		{"uri": (tmp_path / "a.py").as_uri(), "range": {"start": {"line": 5, "character": 0}}},
+		{"uri": (tmp_path / "b.py").as_uri(), "range": {"start": {"line": 2, "character": 0}}},
+	]
+	# when
+	text = format_references_grouped(locs, tmp_path)
+	# then
+	assert text.splitlines() == [
+		"3 reference(s) in 2 file(s):",
+		"a.py: L1, L6",
+		"b.py: L3",
+	]
+
+
+def test_given_more_files_than_limit_when_format_references_grouped_then_notes_omitted(tmp_path):
+	# given
+	locs = [
+		{"uri": (tmp_path / f"f{i}.py").as_uri(), "range": {"start": {"line": 0, "character": 0}}} for i in range(3)
+	]
+	# when
+	text = format_references_grouped(locs, tmp_path, file_limit=2)
+	lines = text.splitlines()
+	# then
+	assert lines[0] == "3 reference(s) in 3 file(s):"
+	assert lines[-1] == "… and 1 more file(s)"
+
+
+class _FakeResolveClient:
+	"""Duck-typed stand-in for LspClient: resolve_symbol only calls
+	`workspace_symbol`/`document_symbol`, both trivial to fake for these tests."""
+
+	def __init__(self, workspace_symbols: list[dict], document_symbols: list[dict] | None = None) -> None:
+		self._workspace_symbols = workspace_symbols
+		self._document_symbols = document_symbols or []
+
+	async def workspace_symbol(self, query: str) -> list[dict]:
+		return self._workspace_symbols
+
+	async def document_symbol(self, file_path: str) -> list[dict]:
+		return self._document_symbols
+
+
+def test_given_single_exact_match_when_resolve_symbol_then_resolves_position(tmp_path):
+	# given
+	uri = (tmp_path / "pkg" / "mod.py").as_uri()
+	sym = {
+		"name": "target_fn",
+		"kind": 12,
+		"location": {"uri": uri, "range": {"start": {"line": 3, "character": 0}, "end": {"line": 3, "character": 9}}},
+		"selectionRange": {"start": {"line": 3, "character": 4}, "end": {"line": 3, "character": 13}},
+	}
+	client = _FakeResolveClient([sym])
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "target_fn"))
+	# then
+	assert resolved.name == "target_fn"
+	assert resolved.uri == uri
+	assert (resolved.line, resolved.column) == (3, 4)
+
+
+def test_given_no_match_when_resolve_symbol_then_raises(tmp_path):
+	# given
+	client = _FakeResolveClient([])
+	# when / then
+	with pytest.raises(SymbolResolutionError, match="No symbol found"):
+		asyncio.run(resolve_symbol(client, tmp_path, "missing"))
+
+
+def test_given_two_exact_matches_when_resolve_symbol_then_ambiguous_lists_candidates(tmp_path):
+	# given
+	uri_a = (tmp_path / "a.py").as_uri()
+	uri_b = (tmp_path / "b.py").as_uri()
+	sym_a = {
+		"name": "run",
+		"kind": 12,
+		"location": {"uri": uri_a, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}},
+	}
+	sym_b = {
+		"name": "run",
+		"kind": 12,
+		"location": {"uri": uri_b, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}},
+	}
+	client = _FakeResolveClient([sym_a, sym_b])
+	# when / then
+	with pytest.raises(SymbolResolutionError) as caught:
+		asyncio.run(resolve_symbol(client, tmp_path, "run"))
+	text = str(caught.value)
+	assert "2 symbols match 'run'" in text
+	assert "a.py" in text
+	assert "b.py" in text
+
+
+def test_given_file_path_when_two_exact_matches_then_narrows_to_match(tmp_path):
+	# given
+	uri_a = (tmp_path / "a.py").as_uri()
+	uri_b = (tmp_path / "b.py").as_uri()
+	range_ = {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}
+	sym_a = {"name": "run", "kind": 12, "location": {"uri": uri_a, "range": range_}, "selectionRange": range_}
+	sym_b = {"name": "run", "kind": 12, "location": {"uri": uri_b, "range": range_}, "selectionRange": range_}
+	client = _FakeResolveClient([sym_a, sym_b])
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "run", file_path="b.py"))
+	# then
+	assert resolved.uri == uri_b
+
+
+def test_given_dotted_query_when_hierarchical_members_then_finds_child_node(tmp_path):
+	# given
+	uri = (tmp_path / "svc.py").as_uri()
+	container_sym = {
+		"name": "AppServices",
+		"kind": 5,
+		"location": {"uri": uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}}},
+		"selectionRange": {"start": {"line": 0, "character": 6}, "end": {"line": 0, "character": 17}},
+	}
+	members = [
+		{
+			"name": "AppServices",
+			"kind": 5,
+			"range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}},
+			"selectionRange": {"start": {"line": 0, "character": 6}, "end": {"line": 0, "character": 17}},
+			"children": [
+				{
+					"name": "enter_module",
+					"kind": 6,
+					"range": {"start": {"line": 5, "character": 1}, "end": {"line": 7, "character": 0}},
+					"selectionRange": {"start": {"line": 5, "character": 5}, "end": {"line": 5, "character": 17}},
+					"children": [],
+				}
+			],
+		}
+	]
+	client = _FakeResolveClient([container_sym], members)
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "AppServices.enter_module"))
+	# then
+	assert resolved.name == "enter_module"
+	assert (resolved.line, resolved.column) == (5, 5)
+
+
+def test_given_dotted_query_when_flat_members_then_matches_within_container_range(tmp_path):
+	# given — no hierarchicalDocumentSymbolSupport: fall back to range containment
+	uri = (tmp_path / "svc.py").as_uri()
+	container_sym = {
+		"name": "AppServices",
+		"kind": 5,
+		"location": {"uri": uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}}},
+		"selectionRange": {"start": {"line": 0, "character": 6}, "end": {"line": 0, "character": 17}},
+	}
+	member_sym = {
+		"name": "enter_module",
+		"kind": 6,
+		"location": {"uri": uri, "range": {"start": {"line": 5, "character": 1}, "end": {"line": 7, "character": 0}}},
+		"selectionRange": {"start": {"line": 5, "character": 5}, "end": {"line": 5, "character": 17}},
+	}
+	client = _FakeResolveClient([container_sym], [container_sym, member_sym])
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "AppServices.enter_module"))
+	# then
+	assert resolved.name == "enter_module"
+	assert (resolved.line, resolved.column) == (5, 5)
+
+
+def test_given_dotted_query_when_member_missing_then_raises(tmp_path):
+	# given
+	uri = (tmp_path / "svc.py").as_uri()
+	container_sym = {
+		"name": "AppServices",
+		"kind": 5,
+		"location": {"uri": uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}}},
+		"selectionRange": {"start": {"line": 0, "character": 6}, "end": {"line": 0, "character": 17}},
+	}
+	client = _FakeResolveClient([container_sym], [])
+	# when / then
+	with pytest.raises(SymbolResolutionError):
+		asyncio.run(resolve_symbol(client, tmp_path, "AppServices.missing_method"))

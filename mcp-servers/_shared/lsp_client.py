@@ -91,6 +91,8 @@ class LspClient:
 					"textDocument": {
 						"synchronization": {"didSave": True},
 						"publishDiagnostics": {},
+						"documentSymbol": {"hierarchicalDocumentSymbolSupport": True},
+						"callHierarchy": {},
 					},
 					"workspace": {"workspaceFolders": True},
 				},
@@ -303,3 +305,53 @@ class LspClient:
 		if not items and cached:
 			return cached
 		return items
+
+	async def document_symbol(self, file_path: str) -> list[dict[str, Any]]:
+		uri = await self.ensure_open(file_path)
+		resp = await self._request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
+		return resp.get("result") or []
+
+	async def prepare_call_hierarchy(self, file_path: str, line: int, column: int) -> list[dict[str, Any]]:
+		uri = await self.ensure_open(file_path)
+		resp = await self._request(
+			"textDocument/prepareCallHierarchy",
+			{"textDocument": {"uri": uri}, "position": {"line": line - 1, "character": column - 1}},
+		)
+		return resp.get("result") or []
+
+	async def incoming_calls(self, item: dict[str, Any]) -> list[dict[str, Any]]:
+		resp = await self._request("callHierarchy/incomingCalls", {"item": item})
+		return resp.get("result") or []
+
+	# -- scratch (in-memory-only) documents -----------------------------------
+	#
+	# For codenav's Protocol-conformance probe: a document that is never
+	# written to disk, so it can't use `ensure_open`'s stat/read-based sync.
+
+	async def open_scratch_document(self, uri: str, text: str) -> None:
+		self._notify(
+			"textDocument/didOpen",
+			{"textDocument": {"uri": uri, "languageId": self.language_id, "version": 1, "text": text}},
+		)
+		self._open_files[uri] = OpenFile(uri=uri, version=1, mtime_ns=-1, size=len(text))
+
+	async def change_scratch_document(self, uri: str, text: str) -> None:
+		version = self._open_files[uri].version + 1
+		self._notify(
+			"textDocument/didChange",
+			{"textDocument": {"uri": uri, "version": version}, "contentChanges": [{"text": text}]},
+		)
+		self._open_files[uri] = OpenFile(uri=uri, version=version, mtime_ns=-1, size=len(text))
+
+	async def close_scratch_document(self, uri: str) -> None:
+		self._notify("textDocument/didClose", {"textDocument": {"uri": uri}})
+		self._open_files.pop(uri, None)
+		self._diagnostics.pop(uri, None)
+
+	async def pull_diagnostics(self, uri: str) -> list[dict[str, Any]]:
+		"""Pull diagnostics for an already-open `uri` directly, with no cache
+		fallback — used for the scratch-document probe above, where there is no
+		prior `publishDiagnostics` push to fall back to."""
+		resp = await self._request("textDocument/diagnostic", {"textDocument": {"uri": uri}})
+		result = resp.get("result") or {}
+		return result.get("items") or []

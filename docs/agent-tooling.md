@@ -30,13 +30,98 @@ Workspace root inside the Python servers is resolved by
 inferred from that module's path (so a wrong spawn cwd cannot break
 indexing).
 
+## Why no MCP prompts/resources
+
+Neither server exposes MCP prompts or resources, and this is deliberate, not
+an oversight. Prompts are **user-invoked** (they surface as
+`/mcp__codenav__…` slash commands): the agent never calls them, so they
+can't make tool calls better. Resources are static data the model has to
+explicitly fetch, which adds a lookup step for no benefit over just
+returning richer text from a tool. What actually shapes agent behavior is
+the server `instructions` string and each tool's docstring, since both
+already load into context — leverage comes from better-composed tools (see
+`symbol_info`/`outline`/`callers`/`implementations` and `css_var`/`selector`
+below), not from templates the agent has to know to ask for.
+
 ## `codenav` MCP server
 
 `mcp-servers/codenav_mcp/` wraps `ty server` (Astral's type checker running
-as a language server) as MCP tools: `search_symbol`, `definition`,
-`references`, `hover`, `diagnostics`. It's named `codenav`, not `ty`, since
+as a language server) as MCP tools. It's named `codenav`, not `ty`, since
 `ty` is Astral's name for the underlying tool it wraps, not this project's
 server.
+
+**Start with the intent-level tools, drop to position tools for specifics.**
+The LSP mirrors position-based lookups 1:1, which forces an agent to
+`search_symbol`, work out a tab-aware column, then call `hover`/`definition`/
+`references` separately just to answer "what does this do" or "who calls
+this". Four composite tools answer those questions in one call, all
+name-based (no column arithmetic) via the shared `resolve_symbol()` helper
+in `mcp-servers/_shared/resolve.py`:
+
+- **`symbol_info(name, file_path=None, include_references=True)`** — the
+  default first call for "what is this": header, hover text (signature +
+  docstring), definition snippet, and references grouped by file with a
+  total count.
+- **`outline(file_path)`** — an indented tree of classes/methods/functions
+  with line numbers, so an agent can navigate a large file (e.g.
+  `services.py`) without reading it end to end.
+- **`callers(name, file_path=None)`** — `prepareCallHierarchy` +
+  `incomingCalls`: who actually calls this function, with call-site lines.
+  Answers "who calls this?" more precisely than `references`, which also
+  matches imports and type annotations.
+- **`implementations(port_name)`** — see **Protocol conformance** below.
+
+`resolve_symbol()` accepts a dotted `Class.method` query, narrows by
+`file_path` when a name is ambiguous, and raises a `SymbolResolutionError`
+(a `ToolInputError`) listing candidates rather than guessing when several
+symbols share a name.
+
+`hover`/`definition`/`references`/`search_symbol`/`diagnostics` (the
+original position-based tools) are unchanged and still useful once a
+composite tool has narrowed things down to a specific position.
+
+### `documentSymbol` shape: hierarchical vs flat
+
+`outline` and `resolve_symbol`'s dotted-member lookup both consume
+`textDocument/documentSymbol`, whose response shape is capability-negotiated
+and not guaranteed: ty may return hierarchical `DocumentSymbol` nodes
+(`range`/`selectionRange`/`children`) or flat `SymbolInformation` entries
+(`location` only, no nesting), depending on what the client advertised at
+`initialize`. `mcp-servers/_shared/lsp_client.py` advertises
+`hierarchicalDocumentSymbolSupport: true`, but code that consumes the result
+still branches on `is_hierarchical_document_symbols()` (`_shared/format.py`)
+rather than assuming one shape — `to_symbol_tree()` normalizes either shape
+into one common tree for `outline`, while `_shared/resolve.py`'s dotted
+lookup branches directly (it needs the raw `selectionRange`/`range`
+precision the normalized tree discards).
+
+### Protocol conformance (`implementations`)
+
+ty's own `implementation`/`typeHierarchy.subtypes` return nothing for this
+codebase's hexagonal ports: ports are `Protocol`s and adapters never
+explicitly subclass them (`LocalFileSystem` vs `FileSystemPort`), so
+structural typing means there's no nominal edge for the language server to
+walk. `implementations(port_name)` answers this "which adapters implement
+this port?" question — the most common lookup in a hexagonal codebase — in
+two stages:
+
+1. **Candidates**: classes under `src/` (excluding `ports/`) whose method
+   names, from `documentSymbol`, are a superset of the Protocol's own
+   method names.
+2. **Verification**: for each candidate, `didOpen` an in-memory probe
+   document at `<root>/.codenav_probe.py` (an `LspClient` scratch document —
+   `open_scratch_document`/`change_scratch_document`/`close_scratch_document`
+   — never written to disk) that imports the candidate and the port and adds
+   `def _p(x: Candidate) -> Port: return x`. Pull that document's
+   diagnostics via `pull_diagnostics`; no `invalid-return-type` means ty's
+   real type checker accepts the candidate as structurally conforming.
+   Results are labeled `(type-verified)`.
+
+Firing many `documentSymbol` requests concurrently (`asyncio.gather`) while
+building candidates made ty respond with a `"content modified"` LSP error
+under load (~86 concurrent requests for this codebase's size); the fix is to
+await them sequentially in a loop instead — still well under a second for
+this codebase, and it avoids the error entirely.
 
 It's a purpose-built client, not a generic LSP bridge: `mcp-language-
 server`'s name-based `definition`/`references` tools were tried first and
@@ -85,6 +170,13 @@ requests fail immediately and the next tool call starts a fresh one.
 `references` include test usages).
 `diagnostics` falls back to the push `publishDiagnostics` cache when pull
 diagnostics are unsupported or empty (common for HTML/CSS servers).
+All four positional tools reject non-Python files (`.py`/`.pyi` only) up
+front with a `ToolInputError` — ty otherwise mis-parses e.g. a `.md` file as
+Python and `diagnostics` returns a wall of bogus syntax errors for it.
+`diagnostics` (both servers) is capped the same way as `search_symbol`
+(`format_diagnostics`, `DEFAULT_DIAGNOSTICS_LIMIT = 200` in
+`_shared/format.py`), with a trailing "… and N more" line, so a badly
+broken file can't flood the caller either.
 
 ## `webnav` MCP server
 
@@ -106,16 +198,63 @@ resolver.
 
 `search_symbol` only covers JS: the HTML/CSS language servers don't
 implement a useful `workspace/symbol`, and webnav does **not** reimplement
-HTML/CSS symbol search (document/id/class lookups stay out of scope). CSS
-custom-property hover and `var(--name)` usage lookup are also limited by
-the CSS language server — not something webnav reimplements. `jsconfig.json`
-has `checkJs: false`
+general HTML/CSS symbol search. `jsconfig.json` has `checkJs: false`
 by default (the existing `app.js` is large and untyped; flip it per-file
 with a `// @ts-check` comment to opt a file into stricter `diagnostics`).
 Run it standalone for manual testing with `uv run python
 mcp-servers/webnav_mcp/server.py`; point it at a different workspace via
 the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above). See
 **Positioning** under codenav above — the same column rules apply.
+
+### Workspace-wide CSS var / selector index
+
+The CSS/HTML language servers each see one document at a time, so `var(--x)`
+custom-property usages and `#id`/`.class` selectors can't be cross-referenced
+across files that way — the most common question for this project's
+`--custom-properties` (defined once in `theme.css`, used across every CSS
+file, inline `<style>` block and wireframe). `mcp-servers/webnav_mcp/
+web_index.py` answers this with a **pure-Python scanner, not a language
+server**: no `@import` resolution, no real CSS parser, regex/brace-stack
+grade. It rescans on every call rather than caching — about 20 files total
+across both roots, a few ms — so there's no cache-invalidation story to get
+wrong.
+
+Two roots are indexed and reported **separately**:
+`src/spacemaker/adapters/inbound/web/static/` (production, `vendor/`
+skipped) and `wireframes/` (UX layout truth) — they define their own
+values/markup, so mixing them into one answer would be misleading.
+
+- **`css_var(name)`**: definitions (value + enclosing context, e.g.
+  `@media (prefers-color-scheme: dark) › :root`) and usages, grouped by file
+  with line numbers, per root.
+- **`selector(name)`** (`#id` or `.class`): CSS rule definitions, HTML
+  `id=`/`class=` attributes, and JS usages (`getElementById`,
+  `classList.add/remove/toggle/contains`, `querySelector`/
+  `querySelectorAll`, `className` assignment), grouped by file with line
+  numbers, per root.
+- **`references`/`definition` fallback**: when the token under the cursor
+  in a `.css`/`.html` file is `--name`, `#id` or `.class`, both tools answer
+  from this index instead of the single-file language server — this is what
+  actually fixes the CSS-var cross-file limitation (confirmed before this
+  existed: `--bg` in `theme.css` didn't resolve from a `var(--bg)` usage in
+  `shell-gallery.css`, even though both are served together).
+- **`diagnostics` enrichment**: for `.css`/`.html` files, index-derived
+  warnings are appended to the language server's own diagnostics —
+  `var(--x) is never defined in <root>` for usages with no fallback and no
+  matching declaration anywhere in that root, and `#id`/`.class is never
+  referenced in <root>'s HTML/JS` for a CSS rule with no matching markup or
+  script use.
+
+**Known limitations** (accepted, not bugs): a JS selector built from string
+concatenation (e.g. `getElementById("view-" + resolved)`, one real case at
+`app.js`) is recorded against only its static string prefix and tagged
+"dynamic partial match" rather than silently dropped or guessed at the full
+value — and a dynamic hit never counts as a reference for the unreferenced-
+selector diagnostic, to avoid false negatives. Selectors built from multiple
+concatenated variables, or referenced only via inline event-handler
+attributes (none exist in this codebase), aren't resolved at all. The
+brace-stack CSS parser doesn't account for `{`/`}` appearing inside a CSS
+string value (none occur in this codebase either).
 
 ## Rules — Cursor vs Claude Code
 
