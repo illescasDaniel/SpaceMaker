@@ -21,7 +21,7 @@ Commit any pending work on this worktree branch first, then merge that branch in
 1. **Confirm context**
    - Run `git rev-parse --show-toplevel`, `git status -sb`, `git worktree list`.
    - If the current repo is not a linked worktree (only one entry in `git worktree list`), stop and say there is nothing to apply.
-   - Main checkout = the worktree list entry that is **not** under `~/.cursor/worktrees/` (normally the first / primary path).
+   - Main checkout = the worktree list entry that is **not** under `~/.cursor/worktrees/` (Cursor) or `.claude/worktrees/` (Claude Code's `EnterWorktree`/`/new-worktree`) — normally the first / primary path.
    - Note the worktree’s current branch and the main checkout’s current branch (the parent branch to land on).
 
 2. **Commit worktree changes first (required if dirty)**
@@ -42,7 +42,8 @@ Commit any pending work on this worktree branch first, then merge that branch in
      - Only abort the merge and ask the user if a conflict is truly ambiguous after inspection (e.g. contradictory edits to the same logic with no safe composition).
 
 4. **Switch to the main checkout**
-   - Call `move_agent_to_root` (cursor-app-control MCP) on the main checkout path before gate/commit so commands run there.
+   - **Claude Code**: if this session entered the worktree via `EnterWorktree`, call `ExitWorktree({action: "keep"})` to return to the main checkout before the gate/commit steps (this leaves the worktree and its branch on disk, untouched). If the session is instead just operating on a worktree path directly (no `EnterWorktree` in this session), target the main checkout path explicitly per command instead (e.g. `git -C <main> ...`, or `cd` in Bash).
+   - **Cursor**: call `move_agent_to_root` (cursor-app-control MCP) on the main checkout path before gate/commit so commands run there.
 
 5. **Quality gate (required)**
    - Run from the main checkout until clean:
