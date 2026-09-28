@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 
-def _apply_native_style(app) -> None:
+def _apply_native_style(app: Any) -> None:
 	from qtpy.QtWidgets import QStyleFactory
 
 	if sys.platform == "win32":

@@ -659,6 +659,8 @@
 			border-top-color: var(--muted);
 		}
 
+		/* Grid tiles are square; CSS cover crops the cached JPEG. The JPEG itself
+		   keeps the source aspect (fit-within max edge) — see gallery wf-notes. */
 		.thumb img,
 		.thumb .thumb-fill {
 			width: 100%;
@@ -866,10 +868,11 @@
 		.gallery-item-media.slide-in-prev-start { transform: translateX(-18px); }
 
 		/* Instant thumbnail placeholder: same aspect-fit as the full preview (letterbox/pillarbox
-		   inside the reserved stage). No extra CSS blur — low-res softness from the thumb itself is fine.
-		   Scale with a smooth (bilinear-like) filter — never nearest-neighbor / pixelated.
-		   Stacked under the full preview: the full fades in on top; the thumb does not fade out
-		   at the same time (that dual-fade left a blank gap when the full was not painted yet). */
+		   inside the reserved stage). Uses the *aspect-preserving* cache JPEG (not a square crop),
+		   so landscape/portrait framing matches the eventual full preview. No extra CSS blur —
+		   low-res softness from the thumb itself is fine. Smooth (bilinear-like) scale — never
+		   nearest-neighbor. Stacked under the full preview: the full fades in on top; the thumb
+		   does not fade out at the same time (that dual-fade left a blank gap). */
 		.gallery-item-thumb {
 			position: absolute;
 			inset: 0;
@@ -2509,6 +2512,14 @@
 		<div class="wf-demo">
 			<button type="button" id="btn-demo-remove-thumb">Remove a thumbnail (delete animation)</button>
 		</div>
+		<aside class="wf-note" data-for="agent">
+			<span class="wf-note-badge">Agent note</span>
+			<strong>Thumbnail cache aspect:</strong> <code>.thumbnails/</code> JPEGs are fit-within a max edge (e.g. 320), <em>preserving source aspect</em> — never Magick <code>WxH^</code> + <code>-extent</code> square crop. Grid tiles stay square with <code>object-fit: cover</code> (CSS crops). Item page reuses the same URL with <code>object-fit: contain</code> so the progressive placeholder matches full framing. Video poster frames follow the same fit-within rule. Stale square caches need a refresh (source newer, or wipe <code>.thumbnails/</code>).
+		</aside>
+		<aside class="wf-note" data-for="reviewer">
+			<span class="wf-note-badge">Review only</span>
+			Grid tiles below use landscape / portrait / wide demo images inside square cells — they look center-cropped in the grid. Open an item: the loading thumb should keep that photo’s real shape (letterbox/pillarbox), not a pre-squared crop. Approve if that split (cache keeps aspect; grid crops in CSS) is what you want.
+		</aside>
 
 		<div class="gallery-layout">
 			<div class="gallery-main">
@@ -2517,22 +2528,22 @@
 						<h3 class="year-title">2025</h3>
 						<p class="month-label">September</p>
 						<div class="thumb-grid">
-							<button type="button" class="thumb thumb-link" data-item-demo="image"><span class="thumb-fill" aria-hidden="true"></span></button>
-							<button type="button" class="thumb thumb-link" data-item-demo="image"><span class="thumb-fill" aria-hidden="true"></span></button>
-							<button type="button" class="thumb thumb-link" data-item-demo="video"><span class="thumb-fill" aria-hidden="true"></span><span class="thumb-badge">Video</span></button>
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<button type="button" class="thumb thumb-link" data-item-demo="image" aria-label="Landscape photo"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='240'%3E%3Crect fill='%232a3440' width='320' height='240'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='18' text-anchor='middle' dominant-baseline='middle'%3E4%3A3 landscape%3C/text%3E%3C/svg%3E" alt="" /></button>
+							<button type="button" class="thumb thumb-link" data-item-demo="image" aria-label="Portrait photo"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='320'%3E%3Crect fill='%23405a35' width='240' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E3%3A4 portrait%3C/text%3E%3C/svg%3E" alt="" /></button>
+							<button type="button" class="thumb thumb-link" data-item-demo="video" aria-label="Video clip"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect fill='%235a3540' width='320' height='180'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E16%3A9 video%3C/text%3E%3C/svg%3E" alt="" /><span class="thumb-badge">Video</span></button>
+							<div class="thumb" aria-hidden="true"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Crect fill='%2335405a' width='320' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='18' text-anchor='middle' dominant-baseline='middle'%3E1%3A1 square%3C/text%3E%3C/svg%3E" alt="" /></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-fill"></span></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-fill"></span></div>
 						</div>
 					</div>
 					<div class="year-block">
 						<h3 class="year-title">2024</h3>
 						<p class="month-label">December</p>
 						<div class="thumb-grid">
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
-							<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+							<div class="thumb" aria-hidden="true"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='200'%3E%3Crect fill='%232a4050' width='320' height='200'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E16%3A10%3C/text%3E%3C/svg%3E" alt="" /></div>
+							<div class="thumb" aria-hidden="true"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='320'%3E%3Crect fill='%2350402a' width='200' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E5%3A8%3C/text%3E%3C/svg%3E" alt="" /></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-fill"></span></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-fill"></span></div>
 						</div>
 					</div>
 					<!-- Infinite scroll: shown while the next page of items is being fetched, at the bottom of the loaded grid. Large libraries load in pages rather than all at once. -->
@@ -2599,6 +2610,14 @@
 					</div>
 				</div>
 			</div>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Item progressive placeholder uses the same <code>GET /thumbs/…</code> file as the grid. Because that file keeps source aspect, <code>object-fit: contain</code> here shows landscape/portrait framing (not a letterboxed square). Demo items already vary <code>w</code>/<code>h</code> (4:3, 3:4, 16:9).
+			</aside>
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				Click a timeline tile or use Previous/Next: while <strong>• Loading…</strong> shows, the soft thumb should match the final photo’s shape. Portrait items pillarbox; landscape letterbox — not a pre-cropped square.
+			</aside>
 		</div>
 	</section>
 

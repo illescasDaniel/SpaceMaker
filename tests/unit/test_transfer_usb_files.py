@@ -175,8 +175,10 @@ def test_given_presets_and_extra_file_when_transfer_then_union(tmp_path: Path) -
 	assert result.completed == 2
 	pulled = {item[1] for item in devices.pulled}
 	assert pulled == {"/sdcard/Download/a.pdf", "/sdcard/notes.txt"}
-	assert any(path.endswith("Download/a.pdf") for path in fs.files)
-	assert any(path.endswith("notes.txt") and "sdcard" not in path for path in fs.files)
+	assert any(Path(path).as_posix().endswith("Download/a.pdf") for path in fs.files)
+	assert any(
+		Path(path).as_posix().endswith("notes.txt") and "sdcard" not in Path(path).as_posix() for path in fs.files
+	)
 
 
 def test_given_stop_when_after_file_then_ends_queue(tmp_path: Path) -> None:

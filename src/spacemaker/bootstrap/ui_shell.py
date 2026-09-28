@@ -1,7 +1,7 @@
 """Desktop / phone web UI shell version (bump when static assets change materially).
 
 Single source of truth: bump ``UI_SHELL_VERSION`` here only. Served HTML is stamped
-at request time so ``app.js`` never hardcodes a parallel expected version.
+at request time so ``/static/js/main.js`` never hardcodes a parallel expected version.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 
-UI_SHELL_VERSION = "2026.09.processed-settings-uft"
+UI_SHELL_VERSION = "2026.09.cleaner-code"
 
 _CSP_COMMON = (
 	"default-src 'self'; "
@@ -37,7 +37,7 @@ _SHELL_SCRIPT_RE = re.compile(
 	r"(?:\s*window\.SPACEMAKER_UI_SHELL_VERSION\s*=\s*\"[^\"]*\";)?\s*</script>",
 	re.IGNORECASE,
 )
-_APP_JS_SRC_RE = re.compile(r"/static/app\.js(?:\?[^\"']*)?")
+_APP_JS_SRC_RE = re.compile(r"/static/(?:app\.js|js/[^\"'?]+)(?:\?[^\"']*)?")
 _META_SHELL_RE = re.compile(
 	r'<meta\s+name=["\']ui-shell-version["\']\s+content=["\'][^"\']*["\']\s*/?>',
 	re.IGNORECASE,
@@ -51,8 +51,8 @@ def webengine_profile_slug() -> str:
 def stamp_shell_html(html: str, *, version: str = UI_SHELL_VERSION) -> str:
 	"""Embed ``version`` into shell HTML so the page matches ``/api/settings``.
 
-	Rewrites the ``SPACEMAKER_SHELL`` bootstrap script, ``app.js?v=``, and a
-	``ui-shell-version`` meta tag from the same constant used by the API.
+	Rewrites the ``SPACEMAKER_SHELL`` bootstrap script, static JS ``?v=`` cache
+	busters, and a ``ui-shell-version`` meta tag from the same constant used by the API.
 	"""
 	meta = f'<meta name="ui-shell-version" content="{version}">'
 	if _META_SHELL_RE.search(html):
@@ -71,5 +71,10 @@ def stamp_shell_html(html: str, *, version: str = UI_SHELL_VERSION) -> str:
 		html,
 		count=1,
 	)
-	html = _APP_JS_SRC_RE.sub(f"/static/app.js?v={version}", html, count=1)
+
+	def _stamp_js(match: re.Match[str]) -> str:
+		path = match.group(0).split("?", 1)[0]
+		return f"{path}?v={version}"
+
+	html = _APP_JS_SRC_RE.sub(_stamp_js, html)
 	return html

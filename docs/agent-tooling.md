@@ -12,7 +12,7 @@ aimed at standalone consumers; SpaceMaker-specific wiring stays here.
 | Server | Language surface | Backend | Start here | This repo's roots |
 |--------|------------------|---------|------------|-------------------|
 | [`codenav`](../mcp-servers/codenav_mcp/README.md) | Python (`.py`/`.pyi`) | `ty` language server | `symbol_info`, `outline`, `callers`, `implementations` | `CODENAV_MCP_SOURCE_ROOT=src` |
-| [`webnav`](../mcp-servers/webnav_mcp/README.md) | JS / HTML / CSS | `typescript-language-server` + vscode HTML/CSS servers | `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `static/` + `wireframes/` |
+| [`webnav`](../mcp-servers/webnav_mcp/README.md) | JS / TS / HTML / CSS | `typescript-language-server` + vscode HTML/CSS servers | `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
 
 Shared helpers: [`mcp-nav-shared`](../mcp-servers/mcp-nav-shared/README.md).
 
@@ -51,7 +51,7 @@ override-with-sane-default shape as `CODENAV_MCP_WORKSPACE`/
 | Env var | Server | Default (generic) | This repo's value |
 |---|---|---|---|
 | `CODENAV_MCP_SOURCE_ROOT` | codenav | the whole workspace | `src` (scopes/speeds up `implementations`' class scan and import-path derivation) |
-| `WEBNAV_MCP_ROOTS` | webnav | one unnamed root spanning the whole workspace | `static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes` (keeps production assets and UX wireframes reported separately) |
+| `WEBNAV_MCP_ROOTS` | webnav | one unnamed root spanning the whole workspace | `web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes` (TS sources, production assets, UX wireframes) |
 
 A project that unsets these gets a working, if less scoped/labeled, default
 rather than an error or a SpaceMaker-shaped assumption.
@@ -279,12 +279,13 @@ broken file can't flood the caller either.
 ## `webnav` MCP server
 
 `mcp-servers/webnav_mcp/` gives the same kind of navigation for the
-project's JS/HTML/CSS (`search_symbol`, `definition`, `references`, `hover`,
+project's JS/TS/HTML/CSS (`search_symbol`, `definition`, `references`, `hover`,
 `diagnostics`), multiplexing three Node-based language servers behind one
 MCP tool set, routed by file extension:
 
-- `.js`/`.mjs`/`.cjs` → `typescript-language-server` (via `allowJs`/
-  `jsconfig.json` at the repo root — no TypeScript conversion needed)
+- `.ts`/`.js`/`.mjs`/`.cjs` → `typescript-language-server` (shell sources in
+  `web/src/` via strict `web/tsconfig.json`; emitted `static/js/*.js` still
+  indexed for runtime debugging; `jsconfig.json` includes both)
 - `.html` → `vscode-html-language-server`
 - `.css` → `vscode-css-language-server`
 
@@ -296,11 +297,11 @@ resolver. On Windows it prefers the `.cmd` launcher under `.bin/` (the
 extensionless npm shim is a POSIX script that `CreateProcess` rejects with
 WinError 193); `npx` is resolved via `shutil.which` for the same reason.
 
-`search_symbol` only covers JS: the HTML/CSS language servers don't
+`search_symbol` only covers JS/TS: the HTML/CSS language servers don't
 implement a useful `workspace/symbol`, and webnav does **not** reimplement
-general HTML/CSS symbol search. `jsconfig.json` has `checkJs: false`
-by default (the existing `app.js` is large and untyped; flip it per-file
-with a `// @ts-check` comment to opt a file into stricter `diagnostics`).
+general HTML/CSS symbol search. Prefer editing `web/src/*.ts` (strict check
+via `npm run check`); emitted `static/js/*.js` is build output. Feature
+modules may still carry `// @ts-nocheck` until fully migrated.
 Run it standalone for manual testing with `uv run python
 -m webnav_mcp.server`; point it at a different workspace via
 the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above). See

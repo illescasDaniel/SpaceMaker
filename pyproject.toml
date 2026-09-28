@@ -8,6 +8,7 @@ license = "MIT"
 authors = [{ name = "Daniel Illescas Romero", email = "contact@daniel-ir.eu" }]
 dependencies = [
 	"adbutils>=2.12.0",
+	"aiosqlite>=0.21.0",
 	"fastapi>=0.141.1",
 	"python-multipart>=0.0.20",
 	"httpx>=0.28",
@@ -32,6 +33,7 @@ dev = [
 	"mkdocs-material>=9.7.7",
 	"pyinstaller>=6.19",
 	"pytest>=9.1",
+	"pytest-asyncio>=0.26",
 	"pytest-cov>=7.1",
 	"pytest-timeout>=2.4",
 	"pytest-xdist>=3.6",
@@ -64,6 +66,7 @@ filterwarnings = [
 pythonpath = ["."]
 timeout = 60
 timeout_method = "thread"
+asyncio_mode = "auto"
 markers = [
 	"unit: fast isolated tests",
 	"integration: adapter tests with mocked subprocess",
@@ -78,20 +81,22 @@ src = ["src", "tests"]
 indent-style = "tab"
 
 [tool.ruff.lint]
-select = ["F", "I", "E", "S", "B"]
+select = ["F", "I", "E", "S", "B", "ANN"]
 fixable = ["ALL"]
-ignore = ["E501"]
+# ANN401: typed Any is still needed for Qt duck-typing (qtpy not always installed) and
+# a few JSON/PyPI payloads; prefer TypedDict/dataclasses elsewhere in src/spacemaker.
+ignore = ["E501", "ANN401"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
 lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
-"scripts/**" = ["S603", "S607"]
-"tests/**" = ["S101", "S603"]
+"scripts/**" = ["S603", "S607", "ANN"]
+"tests/**" = ["S101", "S603", "ANN"]
 "src/spacemaker/adapters/outbound/**" = ["S603", "S607"]
 "src/spacemaker/desktop.py" = ["S104"]
-"src/spacemaker/bootstrap/services.py" = ["S104"]
+"src/spacemaker/bootstrap/services/**" = ["S104"]
 "src/spacemaker/bootstrap/firewall.py" = ["S603", "S607", "S104"]
 "scripts/firewall/**" = ["S603", "S607"]
 

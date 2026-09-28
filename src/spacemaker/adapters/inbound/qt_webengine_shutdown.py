@@ -4,6 +4,7 @@ import contextlib
 import logging
 import sys
 import time
+from typing import Any
 
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ def install_benign_shutdown_warning_filter() -> None:
 
 	previous_handler = QtCore.qInstallMessageHandler(None)
 
-	def handler(msg_type, context, message) -> None:
+	def handler(msg_type: Any, context: Any, message: str) -> None:
 		if _is_benign_shutdown_warning(message):
 			return
 		if previous_handler is not None:
@@ -52,7 +53,7 @@ def install_benign_shutdown_warning_filter() -> None:
 	QtCore.qInstallMessageHandler(handler)
 
 
-def _drain_qt_events(app, *, rounds: int | None = None) -> None:
+def _drain_qt_events(app: Any, *, rounds: int | None = None) -> None:
 	from qtpy import QtCore
 
 	count = _shutdown_event_rounds() if rounds is None else rounds
@@ -60,7 +61,7 @@ def _drain_qt_events(app, *, rounds: int | None = None) -> None:
 		app.processEvents(QtCore.QEventLoop.ProcessEventsFlag.AllEvents, 50)
 
 
-def _disconnect_signal(source, signal_name: str, slot) -> None:
+def _disconnect_signal(source: Any, signal_name: str, slot: Any) -> None:
 	signal = getattr(source, signal_name, None)
 	if signal is None:
 		return
@@ -68,7 +69,7 @@ def _disconnect_signal(source, signal_name: str, slot) -> None:
 		signal.disconnect(slot)
 
 
-def _disconnect_webengine_bindings(view, webview_widget, page, profile) -> None:
+def _disconnect_webengine_bindings(view: Any, webview_widget: Any, page: Any, profile: Any) -> None:
 	if page is not None:
 		_disconnect_signal(page, "loadFinished", view.on_load_finished)
 		if hasattr(page, "featurePermissionRequested"):
@@ -82,7 +83,7 @@ def _disconnect_webengine_bindings(view, webview_widget, page, profile) -> None:
 			profile.downloadRequested.disconnect(view.on_download_requested)
 
 
-def _delete_top_level_widgets(app) -> None:
+def _delete_top_level_widgets(app: Any) -> None:
 	from qtpy.QtWidgets import QApplication, QWidget
 
 	for widget in list(QApplication.topLevelWidgets()):
@@ -95,7 +96,7 @@ def _delete_top_level_widgets(app) -> None:
 	_drain_qt_events(app)
 
 
-def _tear_down_webview(view, app=None) -> None:
+def _tear_down_webview(view: Any, app: Any = None) -> None:
 	if getattr(view, "_spacemaker_webengine_torn_down", False):
 		return
 	view._spacemaker_webengine_torn_down = True
@@ -187,7 +188,7 @@ def install_qt_webengine_shutdown_fix() -> None:
 
 	install_benign_shutdown_warning_filter()
 
-	def close_event(self, event) -> None:
+	def close_event(self: Any, event: Any) -> None:
 		should_cancel = self.pywebview_window.events.closing.set()
 		if should_cancel:
 			event.ignore()

@@ -84,7 +84,7 @@ Move from `originals/` to `processed/` with **same relative path and filename** 
 ## Image encode
 
 - **Output path:** `{stem}.avif` beside source relative layout under `processed/` (see RAW+JPEG collision below).
-- **Progressive AVIF (preferred when `avifenc` is resolvable):** encode a **layered progressive** AVIF so compatible browsers can paint a base layer while higher layers stream in (plain `<img src>` / gallery `/media/` — no special viewer). Flags: `avifenc --progressive -d 10 -q 80 -y 444`. Then ExifTool `-TagsFromFile source -all:all` onto output; strip Orientation when pixels are already oriented.
+- **Progressive AVIF (preferred when `avifenc` is resolvable):** encode a **layered progressive** AVIF so compatible browsers can paint a base layer while higher layers stream in (plain `<img src>` / gallery `/media/` — no special viewer). Flags: `avifenc --progressive -d 10 -q 80 -y 444 --ignore-xmp`. XMP from the input is dropped at this step because the subsequent ExifTool pass copies metadata from the original anyway, and some RAW embedded previews carry duplicate XMP segments that `avifenc` refuses to decode (see RAW fallback). Then ExifTool `-TagsFromFile source -all:all` onto output; strip Orientation when pixels are already oriented.
 - **Input routing when `avifenc` is available** (prefer fewer steps — no Magick pre-pass when unnecessary):
 	1. **JPEG / PNG** — call `avifenc` on the source directly (`avifenc` applies JPEG EXIF orientation).
 	2. **RAW** — ExifTool extract `PreviewImage` / `JpgFromRaw` to a temp JPEG, then `avifenc` on that temp (no Magick). If no preview → `invalid/`.
@@ -108,6 +108,10 @@ Both RAW and JPEG siblings must each produce a validated AVIF when both exist.
 When `avifenc` is available: extract `PreviewImage`, else `JpgFromRaw` via ExifTool to temp JPEG, then `avifenc` on the temp. If no preview → move source to `invalid/`.
 
 When `avifenc` is missing: if ImageMagick cannot read RAW, same ExifTool preview extract then Magick AVIF encode. If no preview → `invalid/`.
+
+## Staging (atomic output)
+
+Encoded output is written to a **staging file** under `{library_root}/.convert-staging/` (same relative path as the eventual `processed/` output; same volume as `processed/` so the final move is a rename, not a copy), **never directly into `processed/`**. ExifTool metadata copy, output validation, and the size-rollback check (below) all run against the staging file. Only once the staging file is a validated, fully-written output does it get **moved** into `processed/` at its final path — replacing any existing file there — followed by deleting the source from `originals/`. This means `processed/` never contains a partial or in-progress output that a concurrent gallery index sync or thumbnail request could observe mid-write. `.convert-staging/` is excluded from convert/extract scans (like `.thumbnails/` and `.exports/`) and is cleared of stale files when a convert run starts (e.g. left over from a prior crash).
 
 ## Video encode
 
@@ -245,6 +249,20 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 - **When** convert runs
 - **Then** encode is skipped
 - **And** source is removed from `originals/`
+
+### Scenario: RAW preview with duplicate XMP still converts
+
+- **Given** a RAW file (e.g. iPhone ProRAW `.dng`) whose embedded `PreviewImage` JPEG contains multiple standard XMP segments
+- **When** convert encodes the image via `avifenc`
+- **Then** encode succeeds (XMP from the preview is ignored per the progressive AVIF flags)
+- **And** `{stem}.avif` exists in `processed/` with metadata copied from the original RAW
+
+### Scenario: In-progress encode is never visible in processed/
+
+- **Given** convert is encoding a file
+- **When** a gallery index sync or thumbnail request reads `processed/` concurrently
+- **Then** it sees either no file at that output path, or the complete, previously-valid file — never a partial or currently-being-rewritten one
+- **And** the in-progress output lives under `.convert-staging/` until it is validated and atomically moved into `processed/`
 
 ### Scenario: Progress events
 

@@ -2,6 +2,18 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-28 — Code modernization: split hubs, aiosqlite, no HTTP/3
+
+- **Context:** Production hubs exceeded 600 lines (`app.js`, `index.html` CSS, `services.py`, `app.py`). User asked for file separation, async HTTP honesty, strict typing, TypeScript, and HTTP/3 QUIC — then dropped HTTP/3 because TLS/certs are a poor fit for loopback desktop + LAN QR phones.
+- **Decision:** (1) FastAPI `APIRouter` modules under `adapters/inbound/web/routes/`; `AppServices` mixins package under `bootstrap/services/`; shell CSS extracted to `static/shell-*.css`; shell UI authored in `web/src/*.ts` and emitted to `static/js/` (`main.js` ES module entry). (2) Gallery index uses **aiosqlite** with async `GalleryIndexPort` / use cases / gallery routes; sync workers bridge via `AppServices.run_coro` (helper-thread `asyncio.run` when already on the ASGI loop). Per-operation DB connections avoid cross-loop cache bugs. (3) **No HTTP/3 / TLS** — stay on uvicorn plain HTTP. (4) Strict TypeScript (`web/tsconfig.json`: `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`; core modules fully typed, feature modules migrate behind `@ts-nocheck`). (5) Production Python: ruff ANN on `src/spacemaker/`, ty-clean mixins via `self: AppServices`, TypedDict gallery serializers.
+- **Rationale:** Keeps hexagonal boundaries while making files reviewable; async SQLite matches FastAPI without rewriting subprocess adapters; HTTP/3 would force cert UX on phones and pywebview for little localhost gain.
+
+## 2026-09-28 — Gallery thumbs preserve source aspect (adapter-only)
+
+- **Context:** Image thumbs used Magick `320x320^` + `-extent` (center square crop). Grid CSS already square-covers tiles, but the item progressive placeholder reuses the same JPEG with `object-fit: contain`, so users saw a letterboxed square crop instead of landscape/portrait framing.
+- **Decision:** No new domain types or ports. Change `SubprocessThumbnailGenerator` only: Magick `-thumbnail 320x320` (fit-within, keep aspect); ffmpeg video posters `scale=320:320:force_original_aspect_ratio=decrease`. Grid keeps CSS cover; item keeps contain. Stale square caches refresh when source is newer or `.thumbnails/` is wiped.
+- **Rationale:** Matches approved gallery wireframe/SPEC; cropping belongs in presentation for tiles, not in the shared cache file used for progressive preview.
+
 ## 2026-09-28 — Easy Wi‑Fi convert: per-file start + live progress totals
 
 - **Context:** The 2026-09-25 batch-once trigger waited until the whole multipart `/api/upload` finished before starting Easy convert, so folder uploads delayed conversion. Waiting was chosen so the initial `0/N` total was correct; starting on the first file previously baked in `total=1`. Spec already required convert to start when the first file lands.

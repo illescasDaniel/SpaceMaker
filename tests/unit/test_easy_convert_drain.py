@@ -25,9 +25,7 @@ def _easy_services(tmp_path: Path, monkeypatch) -> AppServices:
 	return services
 
 
-def test_given_easy_idle_and_originals_when_maybe_start_convert_drain_then_starts(
-	tmp_path: Path, monkeypatch
-):
+def test_given_easy_idle_and_originals_when_maybe_start_convert_drain_then_starts(tmp_path: Path, monkeypatch):
 	# given
 	services = _easy_services(tmp_path, monkeypatch)
 	library = services.session.library_root
@@ -64,9 +62,7 @@ def test_given_convert_running_when_maybe_start_convert_drain_then_bumps_total_w
 	services.shutdown()
 
 
-def test_given_wifi_upload_saved_when_handle_wifi_upload_then_calls_convert_drain(
-	tmp_path: Path, monkeypatch
-):
+def test_given_wifi_upload_saved_when_handle_wifi_upload_then_calls_convert_drain(tmp_path: Path, monkeypatch):
 	# given
 	services = _easy_services(tmp_path, monkeypatch)
 	services._extract_control = MagicMock()

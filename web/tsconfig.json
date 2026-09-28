@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ES2022",
+		"moduleResolution": "bundler",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"strict": true,
+		"noImplicitAny": true,
+		"exactOptionalPropertyTypes": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"useUnknownInCatchVariables": true,
+		"rootDir": "src",
+		"outDir": "../src/spacemaker/adapters/inbound/web/static/js",
+		"declaration": false,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"newLine": "lf"
+	},
+	"include": ["src/**/*.ts"]
+}

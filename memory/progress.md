@@ -4,7 +4,8 @@ Open items only. Finished work: `memory/archive.md`.
 
 ## SpaceMaker app
 
-- [ ] **Aspect-preserving gallery thumbnails** — Image thumbs are Magick center-cropped to 320² (`WxH^` + `-extent`); should fit-within preserving aspect so item-detail progressive placeholder matches framing. Grid keeps CSS `object-fit: cover` on square tiles. Discovered 2026-09-28; save-changes first, then wireframe + SPEC.
+- [x] **Code modernization (cleaner_code)** — Split FastAPI routers + AppServices mixins; shell CSS sheets; strict TypeScript (`web/src` → `static/js/main.js`); aiosqlite async gallery + `run_coro`; Python ANN/ty mixin typing + TypedDict serializers; HTTP/3 explicitly declined. Docs: ARCHITECTURE, decisions, webnav roots.
+- [x] **Aspect-preserving gallery thumbnails** — Magick fit-within `320x320` (no `^`/`-extent`); ffmpeg video posters same intent; grid CSS cover unchanged. Wireframe + SPEC + arch approved 2026-09-28; unit tests + adapter done. Wipe `.thumbnails/` (or reset gallery) to refresh stale square caches.
 - [x] **Early Photo Backup convert + live totals** — Per-file Easy convert start (not end-of-multipart); `live_job_progress(completed, originals_remaining)`; drain refresh while RUNNING. Spec + arch approved 2026-09-28; Phases 3–4 done. Awaiting manual multi-file upload smoke.
 - [x] **Gallery item progressive transition** — Fade full over still thumb (no blank flash); corner `• Loading…`; prev/next beside stage with media inset; disabled arrows stay visible. Wireframe + SPEC + architecture approved 2026-09-28; production CSS/JS updated. Awaiting manual smoke.
 - [x] **Gallery item progressive preview polish** — Thumb placeholder aspect-fits like full preview (`object-fit: contain`); no extra CSS blur; smooth (bilinear-like) scaling. Folded into the transition work above.

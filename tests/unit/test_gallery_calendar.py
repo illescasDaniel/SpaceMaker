@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 from tests.unit.fakes import FakeGalleryIndex
 
 from spacemaker.application.generate_gallery import GenerateGallery
@@ -8,7 +9,8 @@ from spacemaker.domain.gallery_index import GalleryIndexRow
 from spacemaker.domain.media import MediaKind
 
 
-def test_given_items_on_two_days_when_days_in_month_then_lists_both():
+@pytest.mark.asyncio
+async def test_given_items_on_two_days_when_days_in_month_then_lists_both():
 	# given
 	items = [
 		gallery_item("a.avif", datetime(2025, 9, 2)),
@@ -20,7 +22,8 @@ def test_given_items_on_two_days_when_days_in_month_then_lists_both():
 	assert days == frozenset({2, 4})
 
 
-def test_given_day_filter_when_items_for_day_then_only_that_day():
+@pytest.mark.asyncio
+async def test_given_day_filter_when_items_for_day_then_only_that_day():
 	# given
 	items = [
 		gallery_item("a.avif", datetime(2025, 9, 4, 10, 0)),
@@ -33,7 +36,8 @@ def test_given_day_filter_when_items_for_day_then_only_that_day():
 	assert day_items[0].relative_path == "a.avif"
 
 
-def test_given_video_filename_when_gallery_item_then_kind_video():
+@pytest.mark.asyncio
+async def test_given_video_filename_when_gallery_item_then_kind_video():
 	# given
 	# when
 	item = gallery_item("clip.av1.mp4", datetime(2025, 1, 1))
@@ -41,7 +45,8 @@ def test_given_video_filename_when_gallery_item_then_kind_video():
 	assert item.kind is MediaKind.VIDEO
 
 
-def test_given_indexed_items_when_calendar_days_then_matches_index():
+@pytest.mark.asyncio
+async def test_given_indexed_items_when_calendar_days_then_matches_index():
 	# given
 	library = "/lib"
 	index = FakeGalleryIndex()
@@ -53,14 +58,15 @@ def test_given_indexed_items_when_calendar_days_then_matches_index():
 			relative_path="b.avif", captured_at=datetime(2025, 4, 1), kind=MediaKind.IMAGE, mtime=1, size=1
 		),
 	]
-	index.apply_sync(library, upserts=rows, removed=[])
+	await index.apply_sync(library, upserts=rows, removed=[])
 	# when
-	days = GenerateGallery(index).calendar_days(library, 2025, 3)
+	days = await GenerateGallery(index).calendar_days(library, 2025, 3)
 	# then
 	assert days == [7]
 
 
-def test_given_indexed_items_when_list_day_then_matches_index():
+@pytest.mark.asyncio
+async def test_given_indexed_items_when_list_day_then_matches_index():
 	# given
 	library = "/lib"
 	index = FakeGalleryIndex()
@@ -72,8 +78,8 @@ def test_given_indexed_items_when_list_day_then_matches_index():
 			relative_path="b.avif", captured_at=datetime(2025, 3, 8, 9), kind=MediaKind.IMAGE, mtime=1, size=1
 		),
 	]
-	index.apply_sync(library, upserts=rows, removed=[])
+	await index.apply_sync(library, upserts=rows, removed=[])
 	# when
-	items = GenerateGallery(index).list_day(library, 2025, 3, 7)
+	items = await GenerateGallery(index).list_day(library, 2025, 3, 7)
 	# then
 	assert [item.relative_path for item in items] == ["a.avif"]

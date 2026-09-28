@@ -27,7 +27,7 @@
 			],
 			"env": {
 				"WEBNAV_MCP_WORKSPACE": "${CLAUDE_PROJECT_DIR:-.}",
-				"WEBNAV_MCP_ROOTS": "static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes"
+				"WEBNAV_MCP_ROOTS": "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes"
 			}
 		}
 	}

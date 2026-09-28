@@ -19,7 +19,7 @@ def test_given_fresh_app_when_get_index_then_returns_html() -> None:
 	assert "SpaceMaker" in response.text
 	assert response.headers.get("cache-control") == "no-store, must-revalidate"
 	assert f'window.SPACEMAKER_UI_SHELL_VERSION = "{UI_SHELL_VERSION}"' in response.text
-	assert f"/static/app.js?v={UI_SHELL_VERSION}" in response.text
+	assert f"/static/js/main.js?v={UI_SHELL_VERSION}" in response.text
 	csp = response.headers.get("content-security-policy", "")
 	assert "unsafe-eval" in csp
 
@@ -35,9 +35,9 @@ def test_given_fresh_app_when_get_index_and_settings_then_shell_versions_match()
 	assert f'window.SPACEMAKER_UI_SHELL_VERSION = "{version}"' in index.text
 
 
-def test_given_static_app_js_when_get_then_no_store_cache() -> None:
+def test_given_static_shell_js_when_get_then_no_store_cache() -> None:
 	client = TestClient(create_app())
-	response = client.get("/static/app.js")
+	response = client.get("/static/js/main.js")
 	assert response.status_code == 200
 	assert response.headers.get("cache-control") == "no-store, must-revalidate"
 
@@ -48,22 +48,34 @@ def test_given_fresh_app_when_get_index_then_home_layout_matches_spec() -> None:
 
 	# when
 	response = client.get("/")
+	css_names = (
+		"shell-home.css",
+		"shell-layout.css",
+		"shell-components.css",
+		"shell-forms.css",
+		"shell-misc.css",
+		"shell-gallery.css",
+	)
+	css_blob = "\n".join(
+		client.get(f"/static/{name}").text for name in css_names if client.get(f"/static/{name}").status_code == 200
+	)
 
 	# then
 	assert response.status_code == 200
 	html = response.text
 	assert "Choose what you want to do on this PC and your phone." not in html
 	assert "home-hub-lead" not in html
-	assert "grid-template-columns: repeat(3, minmax(0, 8.75rem))" in html
-	assert "aspect-ratio: 4 / 3" in html
-	assert "#view-home.screen.active" in html
-	assert "justify-content: center" in html
+	assert "grid-template-columns: repeat(3, minmax(0, 8.75rem))" in css_blob
+	assert "aspect-ratio: 4 / 3" in css_blob or "aspect-ratio: 4 / 3" in html
+	assert "#view-home.screen.active" in css_blob or "#view-home.screen.active" in html
+	assert "justify-content: center" in css_blob or "justify-content: center" in html
 	assert 'data-view="settings"' in html
 	assert "app-main" in html
 	assert 'class="app-footer"' not in html
 	assert 'id="transfer-save-tip"' in html
 	assert 'id="btn-transfer-open-documents"' in html
 	assert html.count('class="module-tile"') == 6
+	assert 'href="/static/shell-layout.css"' in html or 'href="/static/shell-home.css"' in html
 
 
 def test_given_default_window_geometry_when_inspect_then_1152x864() -> None:
@@ -274,7 +286,7 @@ def test_given_converted_file_when_open_on_host_then_ok(tmp_path, monkeypatch) -
 	(converted / "photo.avif").write_bytes(b"x")
 	opened: list[str] = []
 	monkeypatch.setattr(
-		"spacemaker.adapters.inbound.web.app.open_file_with_default_app",
+		"spacemaker.adapters.inbound.web.routes.gallery.open_file_with_default_app",
 		lambda path: opened.append(path),
 	)
 
