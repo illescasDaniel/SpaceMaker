@@ -288,11 +288,13 @@ MCP tool set, routed by file extension:
 - `.html` → `vscode-html-language-server`
 - `.css` → `vscode-css-language-server`
 
-Both come from the `vscode-langservers-extracted` npm package. `npm install`
+Both come from the `vscode-langservers-extracted` npm package. `npm ci`
 (already required for Biome) pulls all three binaries into `node_modules/
 .bin/`; `mcp-servers/webnav_mcp/src/webnav_mcp/lang_command.py` resolves them there first,
 falling back to `PATH` and then `npx` — same fallback chain as codenav's ty
-resolver.
+resolver. On Windows it prefers the `.cmd` launcher under `.bin/` (the
+extensionless npm shim is a POSIX script that `CreateProcess` rejects with
+WinError 193); `npx` is resolved via `shutil.which` for the same reason.
 
 `search_symbol` only covers JS: the HTML/CSS language servers don't
 implement a useful `workspace/symbol`, and webnav does **not** reimplement
@@ -432,3 +434,7 @@ correctly on any clone). To recreate manually on Windows, use
   with `docs/ARCHITECTURE.md` on this Windows filesystem and briefly
   overwrote it — recovered from git history and merged. Watch for this with
   any new doc filename differing only by case.
+- webnav needs a full `npm ci` so `typescript-language-server` /
+  `vscode-*-language-server` exist under `node_modules/.bin/`. A partial
+  install (Biome only) forces the `npx` fallback, which also fails under
+  bare `CreateProcess` unless `npx` is resolved to `npx.cmd`.

@@ -6,15 +6,13 @@ _Last updated: 2026-09-28_
 
 ## Current focus
 
-None — MCP docs coverage (README/docs/AGENTS + package READMEs/LICENSEs) done.
+None — webnav Windows bin fix saved; MCP live re-verify green.
 
 ## Next steps
 
-- Reload codenav/webnav MCP in the host if an old editable install still imports `_shared`.
-- Open app items remain: ADB browse slowness; Easy mode import issues; native pywebview on Win/macOS.
+- Open app items: ADB browse slowness; Easy mode import issues; native pywebview on Win/macOS.
 
 ## Just changed
 
-- Front doors name both `codenav` and `webnav`; AGENTS Orient lists intent-level / CSS-index tools.
-- `docs/agent-tooling.md` At a glance + package README links.
-- Per-package `README.md` + MIT `LICENSE` + `license`/`readme`/`authors` in `mcp-servers/*/pyproject.toml`.
+- Prefer npm `*.cmd` shims for webnav language servers on Windows; clearer spawn errors; docs + tests.
+- Live MCP re-verify after host reload (codenav + webnav) green. No srxy MCP wiring for now.

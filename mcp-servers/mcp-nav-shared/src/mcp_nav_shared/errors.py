@@ -30,9 +30,14 @@ def format_tool_error(exc: Exception) -> str:
 	if isinstance(exc, TimeoutError):
 		return "Language server timed out (it may still be indexing the workspace); retry shortly."
 	if isinstance(exc, FileNotFoundError):
-		return f"File not found: {exc.filename} (relative paths resolve against the workspace root)."
+		if exc.filename:
+			return f"File not found: {exc.filename} (relative paths resolve against the workspace root)."
+		return f"Cannot start language server (file not found): {exc.strerror or exc}."
 	if isinstance(exc, UnicodeDecodeError):
 		return f"Cannot read file as UTF-8 text: {exc.reason}."
 	if isinstance(exc, OSError):
-		return f"Cannot read {exc.filename}: {exc.strerror or exc}."
+		if exc.filename:
+			return f"Cannot read {exc.filename}: {exc.strerror or exc}."
+		# Spawn failures (e.g. WinError 193 on an npm POSIX shim) often have no filename.
+		return f"Cannot start language server: {exc.strerror or exc}."
 	return str(exc)

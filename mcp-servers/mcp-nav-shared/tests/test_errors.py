@@ -54,3 +54,14 @@ def test_given_unsupported_input_when_format_tool_error_then_passes_message_thro
 	text = format_tool_error(ToolInputError("webnav has no language server for 'a.md'"))
 	# then
 	assert text == "webnav has no language server for 'a.md'"
+
+
+def test_given_spawn_oserror_without_filename_when_format_then_mentions_language_server():
+	# given — CreateProcess failures often set filename=None (WinError 193, missing npx, …)
+	exc = OSError(193, "%1 is not a valid Win32 application")
+	exc.filename = None
+	# when
+	text = format_tool_error(exc)
+	# then
+	assert text.startswith("Cannot start language server:")
+	assert "Win32" in text or "valid" in text
