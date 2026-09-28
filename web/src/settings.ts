@@ -183,6 +183,15 @@ function bindSettingsDesktop() {
 				R.showFormBanner(err.message || "Could not reset the library.");
 			});
 	});
+	R.onClick("btn-settings-clear-cache", function () {
+		R.api("POST", "/api/browser-cache/clear")
+			.then(function () {
+				showSettingsFeedback("Browser cache cleared.");
+			})
+			.catch(function (err) {
+				R.showFormBanner(err.message || "Could not clear the browser cache.");
+			});
+	});
 	R.onClick("btn-settings-tools", function () {
 		if (S.state?.managed_tools) {
 			renderComponentsList(S.state.managed_tools);

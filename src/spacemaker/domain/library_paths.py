@@ -4,10 +4,11 @@ from pathlib import PurePosixPath
 
 
 # Directory names under library buckets that must not be converted or counted.
-SKIPPED_LIBRARY_DIR_NAMES: frozenset[str] = frozenset({".thumbnails", ".exports"})
+SKIPPED_LIBRARY_DIR_NAMES: frozenset[str] = frozenset({".thumbnails", ".exports", ".convert-staging"})
 
 THUMBNAILS_DIR_NAME = ".thumbnails"
 EXPORTS_DIR_NAME = ".exports"
+CONVERT_STAGING_DIR_NAME = ".convert-staging"
 
 
 def skip_library_relative_path(relative: str) -> bool:

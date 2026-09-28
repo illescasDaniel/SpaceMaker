@@ -23,6 +23,7 @@ from spacemaker.adapters.inbound.qt_webengine_shutdown import (
 	install_qt_webengine_shutdown_fix,
 )
 from spacemaker.bootstrap.event_loop import uvicorn_loop_for_platform
+from spacemaker.bootstrap.logging_setup import configure_logging
 from spacemaker.bootstrap.paths import app_icon_path, webengine_storage_path
 from spacemaker.bootstrap.services import AppServices, create_app
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
@@ -82,6 +83,7 @@ def _shutdown_services(services_holder: list[AppServices | None]) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+	configure_logging()
 	parser = argparse.ArgumentParser(prog="spacemaker")
 	parser.add_argument("--port", type=int, default=8765)
 	parser.add_argument("--host", default="0.0.0.0", help="Bind host (0.0.0.0 enables LAN gallery)")

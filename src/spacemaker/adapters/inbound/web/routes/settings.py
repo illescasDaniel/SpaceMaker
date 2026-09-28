@@ -20,6 +20,7 @@ from spacemaker.bootstrap.paths import (
 	is_absolute_library_path,
 	normalize_library_root,
 	pictures_directory,
+	webengine_storage_path,
 )
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.domain.app_module import AppModule
@@ -152,6 +153,12 @@ def build_settings_router(services: AppServices) -> APIRouter:
 		services.maybe_start_convert_drain()
 		services.push_state()
 		return services.enriched_snapshot()
+
+	@router.post("/api/browser-cache/clear")
+	def clear_browser_cache(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		services.clear_browser_cache.run(webengine_storage_path())
+		return {"cleared": True}
 
 	@router.post("/api/library/reset")
 	async def reset_library(request: Request) -> dict[str, object]:

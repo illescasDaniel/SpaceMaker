@@ -20,6 +20,7 @@ from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.adapters.outbound.preferences.json_store import JsonUserPreferences
 from spacemaker.adapters.outbound.tools.catalog_installer import CatalogToolInstaller
 from spacemaker.adapters.outbound.tools.compression_capability import ManagedCompressionTools
+from spacemaker.application.clear_browser_cache import ClearBrowserCache
 from spacemaker.application.clear_user_preferences import ClearUserPreferences
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.delete_gallery_item import DeleteGalleryItem
@@ -93,6 +94,7 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self.error_recovery = ErrorRecovery(self.filesystem)
 		self.promote_originals = PromoteOriginalsToProcessed(self.filesystem)
 		self.clear_user_preferences = ClearUserPreferences(self.user_preferences)
+		self.clear_browser_cache = ClearBrowserCache(self.filesystem)
 		self.gallery_index = SqliteGalleryIndex()
 		self.reset_library = ResetLibrary(self.filesystem, self.gallery_index)
 		self.sync_gallery_index = SyncGalleryIndex(self.filesystem, self.probe, self.gallery_index)

@@ -2652,11 +2652,11 @@
 			<h2>Settings</h2>
 			<aside class="wf-note" data-for="agent">
 				<span class="wf-note-badge">Agent note</span>
-				Settings is a top tab (Home | Gallery | Settings). Sticky header; no floating footer. Menu order: Clear preferences, Reset gallery, Downloaded components, About &amp; Legal (last). Clear prefs and Reset gallery require inline confirm. Clear preferences deletes <code>preferences.json</code> (e.g. Compress media). Reset gallery wipes the whole library (originals, processed, error, invalid, thumbs, exports). With Compress media off, uploads promote as-is into <code>processed/</code> so Gallery can index them.
+				Settings is a top tab (Home | Gallery | Settings). Sticky header; no floating footer. Menu order: Clear preferences, Reset gallery, Clear browser cache, Downloaded components, About &amp; Legal (last). Clear prefs and Reset gallery require inline confirm; Clear browser cache does not (it only discards a local, self-regenerating HTTP cache — no user data is lost). Clear preferences deletes <code>preferences.json</code> (e.g. Compress media). Reset gallery wipes the whole library (originals, processed, error, invalid, thumbs, exports). Clear browser cache clears the desktop webview's on-disk HTTP cache, so any `/thumbs/` or `/media/` bytes it had cached are dropped and re-fetched from the server on next view — useful after a reset/re-import reuses a filename the webview already cached, or after a thumbnail-generation fix like this one. With Compress media off, uploads promote as-is into <code>processed/</code> so Gallery can index them.
 			</aside>
 			<aside class="wf-note" data-for="reviewer">
 				<span class="wf-note-badge">Review only</span>
-				Order: Clear preferences → Reset gallery → Downloaded components → About &amp; Legal (last). Clear prefs and Reset gallery each show an inline confirm. Nested screens use ← Settings.
+				Order: Clear preferences → Reset gallery → Clear browser cache → Downloaded components → About &amp; Legal (last). Clear prefs and Reset gallery each show an inline confirm; Clear browser cache runs immediately (low-risk, self-regenerating). Nested screens use ← Settings.
 			</aside>
 			<ul class="settings-menu">
 				<li class="settings-menu-item">
@@ -2680,6 +2680,10 @@
 							<button type="button" class="btn btn-ghost" id="btn-settings-reset-cancel">Cancel</button>
 						</div>
 					</fieldset>
+				</li>
+				<li class="settings-menu-item">
+					<button type="button" class="settings-action" id="btn-settings-clear-cache">Clear browser cache</button>
+					<p class="settings-action-desc">Discard cached thumbnails and photos so the window fetches fresh copies. Nothing is deleted from your library.</p>
 				</li>
 				<li class="settings-menu-item">
 					<button type="button" class="settings-action" id="btn-settings-tools">Downloaded components</button>
@@ -2798,7 +2802,7 @@
 				}
 				if (outgoing) {
 					window.setTimeout(function () {
-						if (outgoing && outgoing.parentNode) outgoing.remove();
+						if (outgoing?.parentNode) outgoing.remove();
 					}, 300);
 				}
 			}
@@ -3058,6 +3062,11 @@
 			document.getElementById('settings-reset-confirm').classList.add('panel-hidden');
 			var feedback = document.getElementById('settings-feedback');
 			feedback.textContent = 'Library reset (wireframe).';
+			feedback.classList.remove('panel-hidden');
+		});
+		document.getElementById('btn-settings-clear-cache').addEventListener('click', function () {
+			var feedback = document.getElementById('settings-feedback');
+			feedback.textContent = 'Browser cache cleared (wireframe).';
 			feedback.classList.remove('panel-hidden');
 		});
 		document.getElementById('btn-settings-legal').addEventListener('click', function () {

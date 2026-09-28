@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-
-if TYPE_CHECKING:
-	from spacemaker.bootstrap.services.core import AppServices
-
 import contextlib
+import logging
 import time
 import uuid
+from typing import TYPE_CHECKING
 
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
@@ -25,6 +21,13 @@ from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase, can_start_convert
 from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode, live_job_progress
 from spacemaker.domain.source_folders import SourceFolder, parse_source_folders
+
+
+if TYPE_CHECKING:
+	from spacemaker.bootstrap.services.core import AppServices
+
+
+logger = logging.getLogger(__name__)
 
 
 class JobsMixin:
@@ -92,6 +95,7 @@ class JobsMixin:
 				job.error = ""
 			self.push_gallery_export(self._export_jobs[job_id])
 		except Exception as exc:
+			logger.exception("Gallery export job crashed")
 			with self._export_lock:
 				job = self._export_jobs.get(job_id)
 				if job is None:
@@ -239,6 +243,7 @@ class JobsMixin:
 				else:
 					self.session.extract_phase = JobPhase.DONE
 		except Exception as exc:
+			logger.exception("Extract job crashed")
 			with self.session._lock:
 				self.session.extract_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)
@@ -400,6 +405,7 @@ class JobsMixin:
 					else:
 						self.session.last_error = ""
 		except Exception as exc:
+			logger.exception("Convert job crashed")
 			with self.session._lock:
 				self.session.convert_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)

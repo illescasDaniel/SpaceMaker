@@ -27,11 +27,12 @@
 - **Home grid:** **3-column** grid of tiles. Tile order: Photo backup, USB photo backup, **USB file transfer**, Receive files, Send files, **Transfer files**.
 - **Tile shape:** each tile is **4:3** (`aspect-ratio: 4 / 3`), compact width (~8.75rem columns in the wireframe). Icons stay **3rem**; titles stay **~0.92rem** bold — shrinking the tile does **not** shrink icon or title type.
 - **No floating footer:** Settings and About & Legal are **not** footer links. Branding footer chrome is removed.
-- **Settings screen** (`#view-settings`): friendly list of four actions, in this order:
+- **Settings screen** (`#view-settings`): friendly list of five actions, in this order:
   1. **Clear preferences** — inline confirm, then wipe all disk-backed user preferences (e.g. Compress media) so defaults apply again.
   2. **Reset gallery** — inline confirm, then delete the entire library under the session library root: `originals/`, `processed/`, `error/`, `invalid/`, `.thumbnails/`, `.exports/`, and the gallery index (`.index.sqlite`). Recreate empty library folders afterward.
-  3. **Downloaded components** — opens nested `#view-settings-tools` (managed tools folder, delete/retry — same behavior as [packaging](../packaging/SPEC.md) / prior Settings tools body). **← Settings** returns to the menu.
-  4. **About & Legal** (last) — opens `#view-legal` ([legal](../legal/SPEC.md)). **← Settings** returns to the menu.
+  3. **Clear browser cache** — no confirm (low-risk, self-regenerating: deletes nothing from the library, the gallery index, or disk-backed preferences — only a local HTTP cache). Deletes the desktop webview's on-disk cache directory (`webengine_storage_path()`, see `docs/ARCHITECTURE.md`) so any previously cached `/thumbs/` or `/media/` bytes, cookies, or local storage are dropped; the webview recreates an empty profile on next request. Manual escape hatch for a webview that cached a thumbnail or photo before a reset/re-import reused the same relative path, or before a thumbnail-generation change — see [gallery](../gallery/SPEC.md) Performance. Shows a brief confirmation message (reuses `#settings-feedback`) once done.
+  4. **Downloaded components** — opens nested `#view-settings-tools` (managed tools folder, delete/retry — same behavior as [packaging](../packaging/SPEC.md) / prior Settings tools body). **← Settings** returns to the menu.
+  5. **About & Legal** (last) — opens `#view-legal` ([legal](../legal/SPEC.md)). **← Settings** returns to the menu.
 - Each module screen shows breadcrumbs **`Home / {module title}`** — **Home** is tappable (same as **Back to Home** / `POST /api/module/home`); the module name is larger and bold. No separate back button.
 - **Theme:** all modules and Gallery use **system light/dark** (`theme.css` + `prefers-color-scheme`); layout differs per module, not palette.
 
@@ -71,7 +72,7 @@
 
 - **Given** the user opens the **Settings** tab
 - **When** `#view-settings` is shown
-- **Then** the actions appear in order: Clear preferences, Reset gallery, Downloaded components, About & Legal
+- **Then** the actions appear in order: Clear preferences, Reset gallery, Clear browser cache, Downloaded components, About & Legal
 
 ### Scenario: Clear preferences requires confirm
 
@@ -91,6 +92,14 @@
 - **Then** library buckets `originals/`, `processed/`, `error/`, `invalid/` are emptied (or removed and recreated)
 - **And** `.thumbnails/`, `.exports/`, and `.index.sqlite` under the library root are removed
 - **And** the Gallery shows empty
+
+### Scenario: Clear browser cache runs without a confirm step
+
+- **Given** the Settings menu is shown
+- **When** the user taps **Clear browser cache**
+- **Then** the webview's on-disk HTTP cache directory is deleted immediately, with no inline confirmation
+- **And** a brief status message confirms it happened
+- **And** no library file, gallery index entry, or disk-backed preference is touched
 
 ### Scenario: Downloaded components nested screen
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from spacemaker.domain.gallery_export import ExportFormat
-from spacemaker.domain.library_paths import EXPORTS_DIR_NAME, THUMBNAILS_DIR_NAME
+from spacemaker.domain.library_paths import CONVERT_STAGING_DIR_NAME, EXPORTS_DIR_NAME, THUMBNAILS_DIR_NAME
 
 
 def _normalize_relative(relative_path: str) -> str:
@@ -21,6 +21,27 @@ def thumbnail_path(library_root: str, relative_path: str) -> str:
 	"""Absolute path for a gallery thumbnail cache file (append .jpg to relative path)."""
 	rel = _append_cache_extension(relative_path, ".jpg")
 	return str(Path(library_root) / THUMBNAILS_DIR_NAME / Path(rel))
+
+
+def thumbnail_format_version_marker_path(library_root: str) -> str:
+	"""Absolute path for the marker recording which thumbnail-generation format cache files were built with.
+
+	A mismatch (missing file, or a different version than the running generator's) means an
+	on-disk thumbnail cannot be trusted by mtime alone and must regenerate on next request,
+	even though its source file has not changed — e.g. after a thumbnail-framing fix.
+	"""
+	return str(Path(library_root) / THUMBNAILS_DIR_NAME / ".format-version")
+
+
+def convert_staging_root(library_root: str) -> str:
+	"""Absolute path for the convert-staging directory (holds in-progress encode output)."""
+	return str(Path(library_root) / CONVERT_STAGING_DIR_NAME)
+
+
+def convert_staging_path(library_root: str, relative_path: str) -> str:
+	"""Absolute path for an in-progress convert output, mirroring its eventual processed/ path."""
+	rel = _normalize_relative(relative_path)
+	return str(Path(library_root) / CONVERT_STAGING_DIR_NAME / Path(rel))
 
 
 def export_cache_path(library_root: str, relative_path: str, export_format: ExportFormat) -> str:

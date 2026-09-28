@@ -4,6 +4,7 @@ from tests.unit.fakes import FakeMediaProbe
 
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
 from spacemaker.application.convert_media import ConvertMedia
+from spacemaker.domain.gallery_cache_paths import convert_staging_path
 from spacemaker.domain.library import LibraryFolder
 
 
@@ -33,13 +34,16 @@ def test_given_nested_original_when_convert_then_creates_converted_parent(tmp_pa
 
 	fs = LocalFileSystem()
 	src = fs.library_path(str(library), LibraryFolder.ORIGINALS, rel)
-	dest = fs.library_path(str(library), LibraryFolder.PROCESSED, "sdcard/Pictures/photo.avif")
+	out_rel = "sdcard/Pictures/photo.avif"
+	dest = fs.library_path(str(library), LibraryFolder.PROCESSED, out_rel)
+	staging = convert_staging_path(str(library), out_rel)
 	converter = RecordingConverter()
 	probe = FakeMediaProbe()
 	probe.readable_images.add(src)
-	probe.valid_images.add(dest)
+	probe.valid_images.add(staging)
 	use_case = ConvertMedia(fs, converter, probe)
 	use_case.run(str(library))
 
 	assert Path(dest).is_file()
-	assert dest in converter.destinations
+	assert not Path(staging).exists()
+	assert staging in converter.destinations

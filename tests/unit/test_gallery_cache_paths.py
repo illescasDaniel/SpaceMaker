@@ -11,26 +11,26 @@ from spacemaker.domain.gallery_export import ExportFormat
 
 def test_given_distinct_stems_when_thumbnail_path_then_injective() -> None:
 	# given
-	library = "/lib"
+	library = str(Path("/lib"))
 	# when
 	avif_thumb = thumbnail_path(library, "2025/vacation.avif")
 	mp4_thumb = thumbnail_path(library, "2025/vacation.mp4")
 	# then
 	assert avif_thumb != mp4_thumb
-	assert Path(avif_thumb).as_posix().endswith("/.thumbnails/2025/vacation.avif.jpg")
-	assert Path(mp4_thumb).as_posix().endswith("/.thumbnails/2025/vacation.mp4.jpg")
+	assert Path(avif_thumb) == Path(library) / ".thumbnails" / "2025" / "vacation.avif.jpg"
+	assert Path(mp4_thumb) == Path(library) / ".thumbnails" / "2025" / "vacation.mp4.jpg"
 
 
 def test_given_relative_path_when_export_cache_path_then_appends_format_ext() -> None:
 	# given
-	library = "/lib"
+	library = str(Path("/lib"))
 	rel = "2025/photo.avif"
 	# when
 	jpeg = export_cache_path(library, rel, ExportFormat.JPEG)
 	mp4 = export_cache_path(library, rel, ExportFormat.H264_AAC)
 	# then
-	assert Path(jpeg).as_posix().endswith("/.exports/2025/photo.avif.jpg")
-	assert Path(mp4).as_posix().endswith("/.exports/2025/photo.avif.mp4")
+	assert Path(jpeg) == Path(library) / ".exports" / "2025" / "photo.avif.jpg"
+	assert Path(mp4) == Path(library) / ".exports" / "2025" / "photo.avif.mp4"
 	assert set(export_cache_paths_for_relative(library, rel)) == {jpeg, mp4}
 
 

@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-
-if TYPE_CHECKING:
-	from spacemaker.bootstrap.services.core import AppServices
-
 import contextlib
+import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from spacemaker.application.usb_transfer_browse import (
 	device_relative_paths_from_host_picks,
@@ -19,6 +15,13 @@ from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import JobProgress, TransferMode
 from spacemaker.domain.transfer_folders import TransferFolder, merge_extra_paths, parse_transfer_folders
+
+
+if TYPE_CHECKING:
+	from spacemaker.bootstrap.services.core import AppServices
+
+
+logger = logging.getLogger(__name__)
 
 
 class UsbBrowseMixin:
@@ -271,6 +274,7 @@ class UsbBrowseMixin:
 				else:
 					self.session.usb_transfer_phase = JobPhase.DONE
 		except Exception as exc:
+			logger.exception("USB transfer job crashed")
 			with self.session._lock:
 				self.session.usb_transfer_phase = JobPhase.ERROR
 				self.session.last_error = str(exc)
