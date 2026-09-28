@@ -28,8 +28,10 @@ _BENIGN_SHUTDOWN_WARNING_PREFIXES = (
 )
 
 
-def _is_benign_shutdown_warning(message: str) -> bool:
+def _is_benign_shutdown_warning(message: str | None) -> bool:
 	"""Match known-benign async WebEngine/Qt teardown log noise (see memory/decisions.md)."""
+	if message is None:
+		return False
 	return message.startswith(_BENIGN_SHUTDOWN_WARNING_PREFIXES)
 
 
@@ -42,7 +44,7 @@ def install_benign_shutdown_warning_filter() -> None:
 
 	previous_handler = QtCore.qInstallMessageHandler(None)
 
-	def handler(msg_type: Any, context: Any, message: str) -> None:
+	def handler(msg_type: Any, context: Any, message: str | None) -> None:
 		if _is_benign_shutdown_warning(message):
 			return
 		if previous_handler is not None:
