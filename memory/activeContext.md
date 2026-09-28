@@ -6,18 +6,16 @@ _Last updated: 2026-09-28_
 
 ## Current focus
 
-**codenav/webnav live-test fixes** — ranked search, text errors, dead-server restart, ty root for `mcp-servers` (uncommitted).
+**Quality gates fully green** (ruff/ty/pytest/biome). Photo-backup branch ready for manual smoke + PR when satisfied.
 
 ## Next steps
 
 - Reload MCP servers so live tools pick up ranking/error handling (verified offline via direct tool-function calls).
-- Fix pre-existing ruff/ty gate failures from `42a68fd` (see progress.md).
 - Manual app checks still open: Clear prefs list width; Compress-off upload → Gallery; sticky header.
 - Mark photo-backup branch ready for review / merge when satisfied.
 
 ## Just changed
 
-- `mcp-servers/_shared/errors.py` (new), `format.py` (`rank_workspace_symbols`), `lsp_client.py` (`LanguageServerExitedError`, `is_alive`, `_fail_pending`)
-- Both servers: `TOOL_ERRORS` handling, restart dead clients, pass `query` to formatter
-- `pyproject.toml` ty root += `./mcp-servers`; integration smoke imports `codenav_mcp.ty_command`
-- 7 new unit tests; `docs/agent-tooling.md` updated
+- Cleared 6 Biome warnings: drop unused `lastMainView`; Settings confirm panels → `fieldset`
+- Gate fixes: ruff import order / unused `Path`; keep FastAPI `app` ref for ty in web integration tests
+- `uv run task checks` — all green (303 pytest, biome clean)

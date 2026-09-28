@@ -99,9 +99,10 @@ def test_given_fresh_app_when_get_settings_then_defaults() -> None:
 
 def test_given_tools_available_when_put_compress_media_off_then_persists(monkeypatch) -> None:
 	# given
-	client = TestClient(create_app())
+	app = create_app()
+	client = TestClient(app)
 	monkeypatch.setattr(
-		client.app.state.services.compression_tools,
+		app.state.services.compression_tools,
 		"available",
 		lambda: True,
 	)
@@ -119,9 +120,10 @@ def test_given_tools_available_when_put_compress_media_off_then_persists(monkeyp
 
 def test_given_tools_unavailable_when_put_compress_media_on_then_stays_off(monkeypatch) -> None:
 	# given
-	client = TestClient(create_app())
+	app = create_app()
+	client = TestClient(app)
 	monkeypatch.setattr(
-		client.app.state.services.compression_tools,
+		app.state.services.compression_tools,
 		"available",
 		lambda: False,
 	)

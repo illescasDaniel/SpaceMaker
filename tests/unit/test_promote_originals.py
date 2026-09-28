@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from tests.unit.fakes import FakeFileSystem
 
 from spacemaker.application.promote_originals import PromoteOriginalsToProcessed

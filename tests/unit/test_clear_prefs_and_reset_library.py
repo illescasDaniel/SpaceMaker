@@ -1,9 +1,9 @@
 from pathlib import Path
 
+from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
 from spacemaker.adapters.outbound.preferences.json_store import JsonUserPreferences
 from spacemaker.application.clear_user_preferences import ClearUserPreferences
 from spacemaker.application.reset_library import ResetLibrary
-from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
 from spacemaker.domain.library import LibraryFolder, gallery_index_path
 
 

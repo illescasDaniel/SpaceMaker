@@ -1066,12 +1066,13 @@
 		}
 
 		.settings-confirm {
-			margin-top: 1rem;
+			margin: 1rem 0 0;
 			padding: 1rem 1.1rem;
 			background: var(--warn-bg);
 			border: 1px solid var(--border);
 			border-radius: var(--radius);
 			min-width: 0;
+			min-inline-size: 0;
 			max-width: 100%;
 			overflow-wrap: anywhere;
 		}
@@ -2328,24 +2329,24 @@
 				<li class="settings-menu-item">
 					<button type="button" class="settings-action" id="btn-settings-clear-prefs">Clear preferences</button>
 					<p class="settings-action-desc">Reset saved choices such as Compress media back to defaults.</p>
-					<div class="settings-confirm panel-hidden" id="settings-clear-prefs-confirm" role="group" aria-label="Confirm clear preferences">
+					<fieldset class="settings-confirm panel-hidden" id="settings-clear-prefs-confirm" aria-label="Confirm clear preferences">
 						<p><strong>Clear all saved preferences?</strong> Compress media and other choices return to defaults.</p>
 						<div class="settings-confirm-actions">
 							<button type="button" class="btn btn-primary" id="btn-settings-clear-prefs-confirm">Clear preferences</button>
 							<button type="button" class="btn btn-ghost" id="btn-settings-clear-prefs-cancel">Cancel</button>
 						</div>
-					</div>
+					</fieldset>
 				</li>
 				<li class="settings-menu-item">
 					<button type="button" class="settings-action" id="btn-settings-reset-gallery">Reset gallery</button>
 					<p class="settings-action-desc">Delete all library media (originals, processed, error, invalid) and caches.</p>
-					<div class="settings-confirm panel-hidden" id="settings-reset-confirm" role="group" aria-label="Confirm reset gallery">
+					<fieldset class="settings-confirm panel-hidden" id="settings-reset-confirm" aria-label="Confirm reset gallery">
 						<p><strong>Delete all library media?</strong> This cannot be undone.</p>
 						<div class="settings-confirm-actions">
 							<button type="button" class="btn btn-primary" id="btn-settings-reset-confirm">Delete everything</button>
 							<button type="button" class="btn btn-ghost" id="btn-settings-reset-cancel">Cancel</button>
 						</div>
-					</div>
+					</fieldset>
 				</li>
 				<li class="settings-menu-item">
 					<button type="button" class="settings-action" id="btn-settings-tools">Downloaded components</button>

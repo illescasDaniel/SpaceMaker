@@ -1,6 +1,5 @@
 (function () {
 	var clientShell = window.SPACEMAKER_SHELL || "desktop";
-	var lastMainView = "home";
 	var uiMode = "easy";
 	var state = null;
 
@@ -482,7 +481,6 @@
 				);
 			});
 			if (isMainHubView(resolved) || resolved === "gallery") {
-				lastMainView = resolved === "gallery" ? "gallery" : "home";
 				if (resolved === "gallery") {
 					loadGallery();
 				}
