@@ -219,8 +219,7 @@ class SqliteGalleryIndex:
 			conn = self._connect(library_root)
 			if cursor is None:
 				records = conn.execute(
-					_SELECT_ITEMS + " "
-					"ORDER BY captured_at DESC, relative_path DESC LIMIT ?",
+					_SELECT_ITEMS + " ORDER BY captured_at DESC, relative_path DESC LIMIT ?",
 					(limit + 1,),
 				).fetchall()
 			else:
