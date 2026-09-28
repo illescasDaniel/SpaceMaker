@@ -23,6 +23,16 @@ def thumbnail_path(library_root: str, relative_path: str) -> str:
 	return str(Path(library_root) / THUMBNAILS_DIR_NAME / Path(rel))
 
 
+def thumbnail_format_version_marker_path(library_root: str) -> str:
+	"""Absolute path for the marker recording which thumbnail-generation format cache files were built with.
+
+	A mismatch (missing file, or a different version than the running generator's) means an
+	on-disk thumbnail cannot be trusted by mtime alone and must regenerate on next request,
+	even though its source file has not changed — e.g. after a thumbnail-framing fix.
+	"""
+	return str(Path(library_root) / THUMBNAILS_DIR_NAME / ".format-version")
+
+
 def convert_staging_root(library_root: str) -> str:
 	"""Absolute path for the convert-staging directory (holds in-progress encode output)."""
 	return str(Path(library_root) / CONVERT_STAGING_DIR_NAME)

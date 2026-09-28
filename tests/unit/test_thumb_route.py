@@ -10,7 +10,7 @@ from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessT
 from spacemaker.adapters.outbound.media.tool_runner import ToolExecutionError, ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
 from spacemaker.bootstrap.services import AppServices
-from spacemaker.bootstrap.ui_shell import MEDIA_CACHE_HEADERS
+from spacemaker.bootstrap.ui_shell import THUMB_CACHE_HEADERS
 from spacemaker.domain.library import LibraryFolder
 
 
@@ -63,7 +63,7 @@ def test_given_thumbnail_generation_fails_when_get_thumb_then_returns_503_withou
 	response = client.get(f"/thumbs/{rel}")
 	# then
 	assert response.status_code == 503
-	for key in MEDIA_CACHE_HEADERS:
+	for key in THUMB_CACHE_HEADERS:
 		assert key not in response.headers
 
 
@@ -79,8 +79,42 @@ def test_given_thumbnail_generation_succeeds_when_get_thumb_then_returns_cached_
 	response = client.get(f"/thumbs/{rel}")
 	# then
 	assert response.status_code == 200
-	for key, value in MEDIA_CACHE_HEADERS.items():
+	for key, value in THUMB_CACHE_HEADERS.items():
 		assert response.headers[key] == value
+	assert response.headers["etag"]
+
+
+def test_given_matching_if_none_match_when_get_thumb_then_returns_304_without_body(tmp_path: Path) -> None:
+	# given
+	library = tmp_path / "lib"
+	rel = "photo.avif"
+	_install_processed_file(library, rel)
+	thumbnails = SubprocessThumbnailGenerator(_StubToolRunner())
+	services = _StubServices(str(library), thumbnails)
+	client = TestClient(create_fastapi_app(services))
+	first = client.get(f"/thumbs/{rel}")
+	etag = first.headers["etag"]
+	# when
+	response = client.get(f"/thumbs/{rel}", headers={"If-None-Match": etag})
+	# then
+	assert response.status_code == 304
+	assert response.content == b""
+	assert response.headers["etag"] == etag
+
+
+def test_given_stale_if_none_match_when_get_thumb_then_returns_200_with_body(tmp_path: Path) -> None:
+	# given
+	library = tmp_path / "lib"
+	rel = "photo.avif"
+	_install_processed_file(library, rel)
+	thumbnails = SubprocessThumbnailGenerator(_StubToolRunner())
+	services = _StubServices(str(library), thumbnails)
+	client = TestClient(create_fastapi_app(services))
+	# when
+	response = client.get(f"/thumbs/{rel}", headers={"If-None-Match": '"not-the-real-etag"'})
+	# then
+	assert response.status_code == 200
+	assert response.content == b"thumb"
 
 
 def test_given_no_processed_file_when_get_thumb_then_returns_404(tmp_path: Path) -> None:

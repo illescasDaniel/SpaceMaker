@@ -6,6 +6,8 @@ at request time so ``app.js`` never hardcodes a parallel expected version.
 
 from __future__ import annotations
 
+import hashlib
+import os
 import re
 
 
@@ -31,6 +33,23 @@ CONTENT_SECURITY_POLICY_DESKTOP = f"{_CSP_COMMON}script-src 'self' 'unsafe-inlin
 NO_CACHE_HEADERS = {"Cache-Control": "no-store, must-revalidate"}
 # Long-lived browser cache for gallery thumbs and inline media (paths are content-stable until replaced).
 MEDIA_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
+
+# Thumbnails are cheap to re-fetch from the loopback server (the expensive step, on-disk
+# generation, is already cached separately) but must never be trusted stale: a webview that
+# cached a pre-fix or pre-reset thumbnail under `max-age=86400` would keep serving it for a day.
+# `no-cache` still lets the client keep a copy, but it must revalidate via ETag first.
+THUMB_CACHE_HEADERS = {"Cache-Control": "no-cache"}
+
+
+def file_etag(stat_result: os.stat_result) -> str:
+	"""Same weak-freshness ETag Starlette's FileResponse computes from mtime + size.
+
+	Computed up front so a route can answer 304 on a client's ``If-None-Match`` without
+	reading or serving the file body.
+	"""
+	basis = f"{stat_result.st_mtime}-{stat_result.st_size}"
+	return f'"{hashlib.md5(basis.encode(), usedforsecurity=False).hexdigest()}"'
+
 
 _SHELL_SCRIPT_RE = re.compile(
 	r"<script>\s*window\.SPACEMAKER_SHELL\s*=\s*(\"(?:desktop|mobile_gallery)\");"

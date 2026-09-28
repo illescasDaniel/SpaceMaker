@@ -1,9 +1,12 @@
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
 from spacemaker.adapters.outbound.gallery.sqlite_index import SqliteGalleryIndex
 from spacemaker.adapters.outbound.preferences.json_store import JsonUserPreferences
+from spacemaker.application.clear_browser_cache import ClearBrowserCache
 from spacemaker.application.clear_user_preferences import ClearUserPreferences
 from spacemaker.application.reset_library import ResetLibrary
 from spacemaker.domain.gallery_index import GalleryIndexRow
@@ -78,3 +81,32 @@ def test_given_open_sqlite_index_when_reset_then_index_file_removed(tmp_path: Pa
 	assert not (library / ".index.sqlite-wal").exists()
 	assert not (library / ".index.sqlite-shm").exists()
 	assert index.count(str(library)) == 0
+
+
+def test_given_populated_storage_dir_when_clear_browser_cache_then_directory_emptied(tmp_path: Path):
+	# given
+	storage = tmp_path / "webengine" / "some-profile"
+	(storage / "EBWebView" / "Default" / "Cache" / "Cache_Data").mkdir(parents=True)
+	(storage / "EBWebView" / "Default" / "Cache" / "Cache_Data" / "data_1").write_bytes(b"cached-bytes")
+	(storage / "EBWebView" / "Default" / "Local Storage").mkdir(parents=True)
+	fs = LocalFileSystem()
+	# when
+	ClearBrowserCache(fs).run(str(storage))
+	# then
+	assert not storage.exists()
+
+
+def test_given_missing_storage_dir_when_clear_browser_cache_then_no_error(tmp_path: Path):
+	# given — first launch, or already cleared: nothing to delete yet
+	storage = tmp_path / "webengine" / "never-created"
+	fs = LocalFileSystem()
+	# when / then
+	ClearBrowserCache(fs).run(str(storage))
+
+
+def test_given_no_storage_path_when_clear_browser_cache_then_raises_value_error():
+	# given
+	fs = LocalFileSystem()
+	# when / then
+	with pytest.raises(ValueError):
+		ClearBrowserCache(fs).run("")

@@ -3236,6 +3236,15 @@
 					showFormBanner(err.message || "Could not reset the library.");
 				});
 		});
+		onClick("btn-settings-clear-cache", function () {
+			api("POST", "/api/browser-cache/clear")
+				.then(function () {
+					showSettingsFeedback("Browser cache cleared.");
+				})
+				.catch(function (err) {
+					showFormBanner(err.message || "Could not clear the browser cache.");
+				});
+		});
 		onClick("btn-settings-tools", function () {
 			if (state?.managed_tools) {
 				renderComponentsList(state.managed_tools);

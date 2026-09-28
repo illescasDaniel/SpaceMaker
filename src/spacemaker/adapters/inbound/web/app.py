@@ -45,6 +45,7 @@ from spacemaker.bootstrap.paths import (
 	is_absolute_library_path,
 	normalize_library_root,
 	pictures_directory,
+	webengine_storage_path,
 )
 from spacemaker.bootstrap.services import AppServices, repo_root
 from spacemaker.bootstrap.ui_shell import (
@@ -52,6 +53,8 @@ from spacemaker.bootstrap.ui_shell import (
 	CONTENT_SECURITY_POLICY_DESKTOP,
 	MEDIA_CACHE_HEADERS,
 	NO_CACHE_HEADERS,
+	THUMB_CACHE_HEADERS,
+	file_etag,
 	stamp_shell_html,
 )
 from spacemaker.domain.app_module import AppModule
@@ -99,6 +102,14 @@ def _path_is_under_base(base: Path, target: Path) -> bool:
 	except ValueError:
 		return False
 	return True
+
+
+def _if_none_match_etags(request: Request) -> set[str]:
+	"""Parse a comma-separated ``If-None-Match`` request header into its quoted ETag values."""
+	header = request.headers.get("if-none-match")
+	if not header:
+		return set()
+	return {token.strip() for token in header.split(",")}
 
 
 def _resolve_processed_file(services: AppServices, relative_path: str) -> Path:
@@ -404,6 +415,12 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		services.maybe_start_convert_drain()
 		services.push_state()
 		return services.enriched_snapshot()
+
+	@app.post("/api/browser-cache/clear")
+	def clear_browser_cache(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		services.clear_browser_cache.run(webengine_storage_path())
+		return {"cleared": True}
 
 	@app.post("/api/library/reset")
 	def reset_library(request: Request) -> dict[str, object]:
@@ -1092,7 +1109,7 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		return {"relative_path": found.relative_path if found is not None else None}
 
 	@app.get("/thumbs/{relative_path:path}")
-	def thumb_file(relative_path: str) -> FileResponse:
+	def thumb_file(relative_path: str, request: Request) -> Response:
 		root = services.session.library_root
 		if not root:
 			raise HTTPException(status_code=404)
@@ -1109,7 +1126,11 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 		except (OSError, RuntimeError) as exc:
 			logger.warning("GET /thumbs/%s failed: %s", relative_path, exc)
 			raise HTTPException(status_code=503, detail="thumbnail generation failed") from exc
-		return FileResponse(thumb_path, media_type="image/jpeg", headers=dict(MEDIA_CACHE_HEADERS))
+		etag = file_etag(Path(thumb_path).stat())
+		if etag in _if_none_match_etags(request):
+			return Response(status_code=304, headers={**THUMB_CACHE_HEADERS, "ETag": etag})
+		headers = {**THUMB_CACHE_HEADERS, "ETag": etag}
+		return FileResponse(thumb_path, media_type="image/jpeg", headers=headers)
 
 	@app.get("/favicon.ico")
 	def favicon() -> FileResponse:

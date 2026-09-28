@@ -4,10 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
+from spacemaker.adapters.outbound.media.subprocess_thumbnails import (
+	THUMBNAIL_FORMAT_VERSION,
+	SubprocessThumbnailGenerator,
+)
 from spacemaker.adapters.outbound.media.tool_runner import ToolExecutionError, ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
-from spacemaker.domain.gallery_cache_paths import thumbnail_path
+from spacemaker.domain.gallery_cache_paths import thumbnail_format_version_marker_path, thumbnail_path
 from spacemaker.domain.library import LibraryFolder
 
 
@@ -112,6 +115,65 @@ def test_given_processed_image_when_ensure_thumb_then_magick_fits_within_bounds_
 	assert geometry == "320x320>"
 	assert "-extent" not in args
 	assert "-gravity" not in args
+
+
+def test_given_fresh_thumb_but_no_format_version_marker_when_ensure_thumb_then_regenerates(tmp_path: Path) -> None:
+	# given: a thumbnail newer than its source (would pass the old mtime-only freshness check)
+	# but predating the format-version marker, as if left over from before this fix.
+	library = tmp_path / "lib"
+	rel = "photo.avif"
+	_install_processed_file(library, rel)
+	dest = Path(thumbnail_path(str(library), rel))
+	dest.parent.mkdir(parents=True, exist_ok=True)
+	dest.write_bytes(b"stale-square-thumb")
+	runner = FakeToolRunner()
+	generator = SubprocessThumbnailGenerator(runner)
+	# when
+	generator.ensure_thumb(str(library), rel)
+	# then
+	assert runner.calls, "generator must have regenerated the thumbnail despite a fresh mtime"
+	assert dest.read_bytes() == b"thumb"
+
+
+def test_given_format_version_mismatch_when_ensure_thumb_then_regenerates_and_updates_marker(tmp_path: Path) -> None:
+	# given
+	library = tmp_path / "lib"
+	rel = "photo.avif"
+	_install_processed_file(library, rel)
+	dest = Path(thumbnail_path(str(library), rel))
+	dest.parent.mkdir(parents=True, exist_ok=True)
+	dest.write_bytes(b"stale-square-thumb")
+	version_path = Path(thumbnail_format_version_marker_path(str(library)))
+	version_path.write_text("0", encoding="utf-8")
+	runner = FakeToolRunner()
+	generator = SubprocessThumbnailGenerator(runner)
+	# when
+	generator.ensure_thumb(str(library), rel)
+	# then
+	assert runner.calls
+	assert version_path.read_text(encoding="utf-8") == THUMBNAIL_FORMAT_VERSION
+
+
+def test_given_matching_format_version_and_fresh_mtime_when_ensure_thumb_then_reuses_cached_file(
+	tmp_path: Path,
+) -> None:
+	# given
+	library = tmp_path / "lib"
+	rel = "photo.avif"
+	_install_processed_file(library, rel)
+	dest = Path(thumbnail_path(str(library), rel))
+	dest.parent.mkdir(parents=True, exist_ok=True)
+	dest.write_bytes(b"already-correct-thumb")
+	version_path = Path(thumbnail_format_version_marker_path(str(library)))
+	version_path.write_text(THUMBNAIL_FORMAT_VERSION, encoding="utf-8")
+	runner = FakeToolRunner()
+	generator = SubprocessThumbnailGenerator(runner)
+	# when
+	result = generator.ensure_thumb(str(library), rel)
+	# then
+	assert not runner.calls, "a fresh, correctly versioned thumbnail must not be regenerated"
+	assert result == str(dest)
+	assert dest.read_bytes() == b"already-correct-thumb"
 
 
 def test_given_processed_video_when_ensure_thumb_then_ffmpeg_scales_preserving_aspect(tmp_path: Path) -> None:
