@@ -31,7 +31,7 @@ fi
 (
 	cd "${LIB_REPO_ROOT}" || exit 1
 	if [[ "${FIX}" == true ]]; then
-		npm run fix
+		npm run format
 	else
 		npm run check
 	fi

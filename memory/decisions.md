@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-28 — `uv run task checks` runs natively (no bash required)
+
+- **Context:** On Windows, `checks.py` invoked `shutil.which("bash")`, which often resolves to the WindowsApps WSL stub (`…\WindowsApps\bash.exe`). With no WSL distro installed that stub exits immediately (“no installed distributions”), so `uv run task checks` never ran the gate even when Git Bash was installed under `Program Files\Git`.
+- **Decision:** Implement the quality gate steps (ruff, ty, pytest, npm check/format) directly in `scripts/quality/checks.py` via `uv`/`npm` subprocesses. Keep `checks.sh` as a bash-friendly mirror for CI/shell users; `web.sh --fix` now calls `npm run format` (there is no `fix` script).
+- **Rationale:** The gate only needs Python tooling + optional Node — not a POSIX shell. Avoids PATH ordering traps between WSL stubs and Git Bash.
+
 ## 2026-09-28 — Code modernization: split hubs, aiosqlite, no HTTP/3
 
 - **Context:** Production hubs exceeded 600 lines (`app.js`, `index.html` CSS, `services.py`, `app.py`). User asked for file separation, async HTTP honesty, strict typing, TypeScript, and HTTP/3 QUIC — then dropped HTTP/3 because TLS/certs are a poor fit for loopback desktop + LAN QR phones.
