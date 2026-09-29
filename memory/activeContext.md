@@ -2,21 +2,18 @@ _Last updated: 2026-09-29_
 
 ## Branch
 
-`claude/typescript-python-type-hints-0b69dc`
+`claude/typescript-python-type-hints-0b69dc` (merged with latest `main` 2026-09-29)
 
 ## Current focus
 
-`web/src/*.ts` typing refactor is done and fully verified: `npm run check` / `uv run task checks` green, guard-rail test passing, docs/memory updated, and a browser-pane smoke test (2026-09-29, `spacemaker-server` on :8765) confirmed Home/Gallery (timeline + calendar + item nav)/Settings/USB file transfer all boot and route with zero console/server errors. Task is complete pending user review.
+`web/src/*.ts` typing refactor is done and verified; latest `main` (smooth scrolling, 304 thumb fix, `-version` fix, quality-gate fixes) merged in. Ready to apply to `main`.
 
 ## Next steps
 
-1. Ready for review/PR — not yet requested by the user.
+Open items in `progress.md` (ADB Browse slowness; Easy mode import; native pywebview hardware smoke).
 
 ## Just changed
 
-- All 18 `web/src/*.ts` modules: removed `@ts-nocheck`, fully typed, dropped the `R` registry, `./x.js` → `./x.ts` imports.
-- `biome.json`: `noExplicitAny`/`noTsIgnore`/`noVar` errors scoped to `web/src/**/*.ts` via `overrides`.
-- New `tests/unit/test_web_typing.py` guard-rail test (passing).
-- `scripts/quality/checks.py` / `ruff.sh` / `pyproject.toml`: ruff now covers `mcp-servers`; fixed a pre-existing pytest `test_server.py` collision (`--import-mode=importlib`).
-- Docs: `docs/ARCHITECTURE.md`, `docs/agent-tooling.md` describe the new import/typing conventions.
-- See `memory/decisions.md` 2026-09-29 for full rationale.
+- All 18 `web/src/*.ts` modules typed, `R` registry dropped, `./x.ts` imports; Biome strict rules scoped to `web/src/**/*.ts`; guard-rail test `tests/unit/test_web_typing.py`.
+- ruff covers `mcp-servers`. `main` also renamed the colliding `test_server.py` files; `--import-mode=importlib` remains as a belt-and-braces setting.
+- See `memory/decisions.md` 2026-09-29 for rationale.

@@ -59,11 +59,12 @@ NO_CACHE_HEADERS = {"Cache-Control": "no-store, must-revalidate"}
 # Long-lived browser cache for inline /media/ previews (paths are content-stable until replaced).
 MEDIA_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
 
-# Thumbnails are cheap to re-fetch from the loopback server (the expensive step, on-disk
-# generation, is already cached separately) but must never be trusted stale: a webview that
-# cached a pre-fix or pre-reset thumbnail under `max-age=86400` would keep serving it for a day.
-# `no-cache` still lets the client keep a copy, but it must revalidate via ETag first.
-THUMB_CACHE_HEADERS = {"Cache-Control": "no-cache"}
+# Thumbnails: short-lived browser cache (5 min) so the gallery doesn't re-validate every
+# thumbnail on each navigation (loadGallery clears and re-creates img elements, causing a
+# 304-per-thumbnail flood with `no-cache`). After max-age the browser validates via ETag;
+# must-revalidate prevents serving stale content past expiry. Thumbnails that change (reset,
+# re-import, format-version bump) self-heal within 5 minutes or via Settings → Clear browser cache.
+THUMB_CACHE_HEADERS = {"Cache-Control": "max-age=300, must-revalidate"}
 
 
 def file_etag(stat_result: os.stat_result) -> str:

@@ -54,7 +54,11 @@ def test_given_dng_when_magick_cannot_read_then_converts_embedded_preview(tmp_pa
 	original.parent.mkdir(parents=True)
 	original.write_bytes(b"fake-dng")
 	fs = LocalFileSystem()
-	runner = ToolRunner(bundle_root_path=tools, platform_is_windows=False)
+	runner = ToolRunner(
+		bundle_root_path=tools,
+		platform_is_windows=False,
+		path_fallback_allowed=lambda _tool: False,
+	)
 	probe = SubprocessMediaProbe(runner)
 	converter = SubprocessMediaConverter(runner)
 	use_case = ConvertMedia(fs, converter, probe)
