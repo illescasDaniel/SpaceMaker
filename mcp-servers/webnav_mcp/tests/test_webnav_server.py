@@ -132,3 +132,34 @@ def test_given_symbols_in_generated_and_source_when_search_symbol_then_only_sour
 	# then
 	assert "dom.ts" in result
 	assert "dom.js" not in result
+
+
+def test_given_query_alias_when_selector_called_then_behaves_like_name(monkeypatch):
+	# given
+	seen: list[str] = []
+	monkeypatch.setattr(server.web_index, "build_workspace_index", lambda *_: [])
+	monkeypatch.setattr(server.web_index, "format_selector", lambda _idx, name, **_kw: seen.append(name) or "ok")
+	# when
+	result = asyncio.run(server.selector(query=".thumb-removing"))
+	# then
+	assert result == "ok"
+	assert seen == [".thumb-removing"]
+
+
+def test_given_query_alias_when_css_var_called_then_behaves_like_name(monkeypatch):
+	# given
+	seen: list[str] = []
+	monkeypatch.setattr(server.web_index, "build_workspace_index", lambda *_: [])
+	monkeypatch.setattr(server.web_index, "format_css_var", lambda _idx, name, **_kw: seen.append(name) or "ok")
+	# when
+	result = asyncio.run(server.css_var(query="--bg"))
+	# then
+	assert result == "ok"
+	assert seen == ["--bg"]
+
+
+def test_given_neither_name_nor_query_when_selector_called_then_returns_actionable_error():
+	# when
+	result = asyncio.run(server.selector())
+	# then
+	assert "name" in result

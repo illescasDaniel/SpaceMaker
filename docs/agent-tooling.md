@@ -503,6 +503,15 @@ It is a hand-maintained pair like the rules, with **identical bodies and host-sp
 
 The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-prechecks -- --spec specs/<f>/SPEC.md`): hexagonal import guard (hard-fails only for files touched on the branch; legacy violations warn), naming of test functions added on the branch, and SPEC structure (wireframe link resolves, four design decisions answered, every scenario has Given/When/Then). Scenario→test **name matching was tried and dropped**: test names are freeform, and it flagged ~60% of the gallery spec's scenarios as uncovered. The grader maps them by reading instead.
 
+## Browser-pane gotchas
+
+- A hidden Browser pane (`document.visibilityState === "hidden"`) doesn't
+  render, so CSS transitions/animations never advance and `transitionend`
+  fires late — computed values look frozen and the animation seems broken.
+  For animation checks, log `document.visibilityState` in the same script;
+  if hidden, `tabs_select` the tab and take a `computer` screenshot (which
+  makes it visible), then re-run.
+
 ## Windows / tooling gotchas
 
 - An earlier `docs/architecture.md` (lowercase) collided case-insensitively

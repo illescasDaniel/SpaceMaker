@@ -350,9 +350,17 @@ async def diagnostics(file_path: str) -> str:
 	return "\n".join(combined) if combined else "No diagnostics."
 
 
+def _name_or_query(name: str | None, query: str | None) -> str:
+	"""Accept `query` as an alias for `name` (agents often guess it)."""
+	value = name if name is not None else query
+	if not value:
+		raise ToolInputError("Pass `name` (e.g. name='.my-class'); `query` is accepted as an alias.")
+	return value
+
+
 @mcp.tool()
-async def css_var(name: str) -> str:
-	"""Look up a `--custom-property` across the whole workspace.
+async def css_var(name: str | None = None, query: str | None = None) -> str:
+	"""Where is this `--custom-property` defined and used? Example: `css_var(name="--bg")`.
 
 	The CSS/HTML language servers only see one file at a time, so `var(--x)`
 	usages can't be cross-referenced across files that way — this scans
@@ -361,15 +369,21 @@ async def css_var(name: str) -> str:
 	+ enclosing context, e.g. `@media (prefers-color-scheme: dark) › :root`)
 	and usages (grouped by file with line numbers) are reported separately per
 	configured root (see `WEBNAV_MCP_ROOTS`; a single unnamed root by default),
-	since each may define its own values.
+	since each may define its own values. `query` is accepted as an alias for `name`.
 	"""
+	try:
+		name = _name_or_query(name, query)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
 	return web_index.format_css_var(indexes, name, generated=_GENERATED_RELATIVE)
 
 
 @mcp.tool()
-async def selector(name: str) -> str:
-	"""Look up a `#id` or `.class` selector across the whole workspace.
+async def selector(name: str | None = None, query: str | None = None) -> str:
+	"""Who uses this `#id` or `.class`? Example: `selector(name=".gallery-item-media")`.
+
+	Looks up the selector across the whole workspace.
 
 	Cross-references CSS rule definitions, HTML `id=`/`class=` attributes,
 	and JS usages (`getElementById`, `classList.add/remove/toggle/contains`,
@@ -385,8 +399,13 @@ async def selector(name: str) -> str:
 	only its static prefix and labeled "dynamic partial match"; a query whose
 	name starts with such a prefix (e.g. `#view-components` against a stored
 	`#view-`) also surfaces that hit, labeled "dynamic partial match via
-	'<prefix>'", instead of being silently dropped or guessed.
+	'<prefix>'", instead of being silently dropped or guessed. `query` is
+	accepted as an alias for `name`.
 	"""
+	try:
+		name = _name_or_query(name, query)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
 	return web_index.format_selector(indexes, name, generated=_GENERATED_RELATIVE)
 

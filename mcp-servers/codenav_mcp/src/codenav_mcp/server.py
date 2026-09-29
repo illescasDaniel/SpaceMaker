@@ -201,9 +201,10 @@ async def diagnostics(file_path: str) -> str:
 
 @mcp.tool()
 async def symbol_info(name: str, file_path: str | None = None, include_references: bool = True) -> str:
-	"""One-call summary for a name: header, hover text, definition, and
-	references grouped by file — the usual first lookup ("what is X",
-	"where is X used") instead of chaining search_symbol → hover →
+	"""What is X and where is it used? Example: `symbol_info(name="JobsMixin.start_convert")`.
+
+	One-call summary for a name: header, hover text, definition, and
+	references grouped by file — the usual first lookup instead of chaining search_symbol → hover →
 	definition → references by hand.
 
 	`name` is a symbol name, or a dotted `Class.method` to resolve a specific
@@ -237,7 +238,9 @@ async def symbol_info(name: str, file_path: str | None = None, include_reference
 
 @mcp.tool()
 async def outline(file_path: str) -> str:
-	"""Indented outline (classes, methods, functions, with line numbers) of a
+	"""What's in this file? Example: `outline(file_path="src/spacemaker/application/convert_media.py")`.
+
+	Indented outline (classes, methods, functions, with line numbers) of a
 	Python file, so you can navigate a large file without reading it in full.
 	Follow up with hover/definition/references at a listed line, or
 	symbol_info by name.
@@ -253,7 +256,9 @@ async def outline(file_path: str) -> str:
 
 @mcp.tool()
 async def callers(name: str, file_path: str | None = None) -> str:
-	"""Who calls this function/method — narrower than references, since it
+	"""Who calls this function? Example: `callers(name="start_convert")`.
+
+	Narrower than references, since it
 	leaves out imports and type-only usages and only lists actual call sites.
 
 	`name` resolves the same way as symbol_info (dotted Class.method accepted;
