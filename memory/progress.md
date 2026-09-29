@@ -4,6 +4,7 @@ Open items only. Finished work: `memory/archive.md`.
 
 ## SpaceMaker app
 
+- [x] **Stray `-version` file in repo root** (2026-09-29) — Progressive AVIF magick/avifenc stubs treated last argv as output; `ToolRunner._resolve_magick_path` probed with `-version` even when PATH fallback was disallowed, writing `avif` to cwd/`-version`. Fix: stubs handle `-version`; gate system magick fallback on `path_fallback_allowed`; regression tests in `test_tool_runner.py`.
 - [x] **Stop 304 flood on /thumbs/** (2026-09-29) — `loadGallery()` clears and re-creates img elements on each navigation; `no-cache` forced conditional GET revalidation for every visible thumbnail. Fix: `THUMB_CACHE_HEADERS` → `max-age=300, must-revalidate`; ETag/304 route logic preserved for post-expiry revalidation. Self-heals within 5 min after thumbnail changes, or instantly via Clear browser cache.
 - [x] **Quality gate on main** (2026-09-29) — ruff format in `ui_shell.py`; renamed colliding `mcp-servers/*/tests/test_server.py` → unique basenames; media convert unit tests disable PATH fallback so system `avifenc` cannot beat stubbed tool roots. `uv run task checks` green (481 passed).
 - [x] **Desktop smooth wheel scrolling** (2026-09-29) — Qt WebEngine gets `--enable-smooth-scrolling` (user A/B-tested on Linux; felt closest to Brave). `qt_webengine_gpu_flags.py` → `qt_webengine_chromium_flags.py`, merging defaults with user-set `QTWEBENGINE_CHROMIUM_FLAGS` (opt-out via `--disable-smooth-scrolling`). Tests updated.

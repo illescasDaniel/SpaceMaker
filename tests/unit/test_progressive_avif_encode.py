@@ -26,7 +26,11 @@ def test_given_avifenc_and_jpeg_when_encode_then_avifenc_progressive_without_mag
 	log = tools / "calls.log"
 	_write_exe(
 		tools / "avifenc",
-		f'#!/bin/sh\necho "avifenc $*" >> "{log}"\ndest=; for a; do dest=$a; done\nprintf "avif" > "$dest"\n',
+		"#!/bin/sh\n"
+		f'echo "avifenc $*" >> "{log}"\n'
+		'if [ "$1" = "-version" ]; then exit 0; fi\n'
+		"dest=; for a; do dest=$a; done\n"
+		'printf "avif" > "$dest"\n',
 	)
 	_write_exe(
 		tools / "magick",
@@ -65,7 +69,11 @@ def test_given_no_avifenc_when_encode_jpeg_then_magick_fallback(tmp_path: Path) 
 	log = tools / "calls.log"
 	_write_exe(
 		tools / "magick",
-		f'#!/bin/sh\necho "magick $*" >> "{log}"\ndest=; for a; do dest=$a; done\nprintf "avif" > "$dest"\n',
+		"#!/bin/sh\n"
+		f'echo "magick $*" >> "{log}"\n'
+		'if [ "$1" = "-version" ]; then exit 0; fi\n'
+		"dest=; for a; do dest=$a; done\n"
+		'printf "avif" > "$dest"\n',
 	)
 	_write_exe(tools / "exiftool", "#!/bin/sh\nexit 0\n")
 	src = tmp_path / "photo.jpg"

@@ -113,7 +113,10 @@ class ToolRunner:
 			platform_is_windows=self._windows,
 			allow_path_fallback=allow_path,
 		)
-		if managed.is_file() and not self._tool_version_ok(managed):
+		# Only probe/replace when PATH fallback is allowed. Version probes pass "-version" as
+		# argv[1]; stubs that treat the last arg as an output path must not run that probe
+		# (and must not silently swap in a system binary) when tests pin the tool root.
+		if allow_path and managed.is_file() and not self._tool_version_ok(managed):
 			for name in ("magick", "convert"):
 				system = shutil.which(name)
 				if system:
