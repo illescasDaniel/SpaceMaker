@@ -1,23 +1,24 @@
-_Last updated: 2026-09-29 (applied `claude/mcp-tools-cache-441056` to `main`)_
+_Last updated: 2026-09-29 (friction backlog cleared + worktree dependency sync, branch `claude/friction-fixes`)_
 
 ## Branch
 
-`main` (merged `claude/mcp-tools-cache-441056`, on top of `claude/code-grading-sdd-feature-14ecc1`).
+`claude/friction-fixes` (off `main`@`7bfea9e`), applied to `main` via `/apply-worktree`; not pushed.
 
 ## Current focus
 
-Two threads landed together: SDD Phase 5 (`code-grader` + `grade_prechecks.py`) and the MCP/gallery work below. Gate green after merge.
+Agent-tooling hygiene: every `memory/friction/` entry is now `fixed`; `copy-venv.sh` keeps worktree `.venv`/`node_modules` in sync with the lockfiles.
 
 ## Next steps
 
 - Trial `code-grader` on the next real SDD feature (confirm the Cursor agent loads).
-- Triage `memory/friction/` entries with `status: open` (concrete codenav/webnav example calls in AGENTS.md; maybe a `query` alias on `selector`/`css_var`).
+- Exercise the `npm ci` fallback in `copy-venv.sh` next time a branch changes `package-lock.json` (untested: lockfiles were identical when written).
 - Real-app check of the gallery delete animation on the user's library.
 - Older open items in `progress.md` (ADB Browse slowness; Easy mode import; native pywebview hardware smoke).
+- If app-made worktrees keep forking from an old commit, check the `worktree.baseRef` setting (`head` vs `fresh`).
 
 ## Just changed
 
-- MCP fixes: `querySelector` indexed; `selector` reports exact-name string literals and labels `[generated]`; inherited `Class.method` via typeHierarchy; `search_symbol` ranks properties last; webnav serves TS; stat-keyed caches.
-- Gallery delete: `removeGalleryItem` fades the tile after the screen fade-in, then removes it in place (no reload/flash). Spec `ui-motion` + wireframe updated.
-- New `memory/friction/` log + AGENTS.md rule.
-- SDD Phase 5 `code-grader`, `managed_tools.py` moved to `bootstrap/services/`, `web/src/*.ts` typing pass (see `decisions.md`).
+- AGENTS.md: copy-paste MCP example calls (`selector(name=…)`), subagent-prompt rule, "Worktree dependencies" section.
+- codenav/webnav tool docstrings lead with the question they answer; `selector`/`css_var` accept `query` as an alias for `name`.
+- `docs/agent-tooling.md`: hidden Browser pane never advances CSS transitions.
+- `new-worktree/scripts/copy-venv.sh`: kept `.venv` is re-`uv sync`ed; `node_modules` is lock-stamped, copied only when lockfiles match, else `npm ci`. Gate errors point at the script.
