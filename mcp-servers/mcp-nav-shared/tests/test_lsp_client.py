@@ -330,3 +330,136 @@ def test_given_other_error_when_request_then_not_retried(tmp_path, _no_backoff):
 	with pytest.raises(LspRequestError) as caught:
 		_run_request(client, replies)
 	assert caught.value.code == -32601
+
+
+def _recording_client(tmp_path: Path, monkeypatch, **kwargs) -> tuple[LspClient, list[tuple[str, dict]]]:
+	client = LspClient(workspace_root=tmp_path, command=["true"], language_id="python", **kwargs)
+	client._started = True
+	client._proc = _FakeProc()  # type: ignore[assignment]
+	sent: list[tuple[str, dict]] = []
+	monkeypatch.setattr(client, "_notify", lambda method, params: sent.append((method, params)))
+	return client, sent
+
+
+def _watch_changes(sent: list[tuple[str, dict]]) -> list[tuple[str, int]]:
+	return [
+		(Path(c["uri"]).name, c["type"])
+		for method, params in sent
+		if method == "workspace/didChangeWatchedFiles"
+		for c in params["changes"]
+	]
+
+
+def test_given_first_refresh_when_files_exist_then_reports_no_changes(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}))
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert sent == []
+
+
+def test_given_created_edited_deleted_files_when_refresh_then_reports_each_change(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "keep.py").write_text("x = 1\n", encoding="utf-8")
+	(tmp_path / "gone.py").write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}))
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / "new.py").write_text("y = 2\n", encoding="utf-8")
+	(tmp_path / "keep.py").write_text("x = 100\n", encoding="utf-8")
+	(tmp_path / "gone.py").unlink()
+	(tmp_path / "notes.txt").write_text("ignored\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert sorted(_watch_changes(sent)) == [("gone.py", 3), ("keep.py", 2), ("new.py", 1)]
+
+
+def test_given_unchanged_tree_when_refresh_twice_then_second_reports_nothing(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}))
+	asyncio.run(client.refresh())
+	asyncio.run(client.refresh())
+	# then
+	assert sent == []
+
+
+def test_given_excluded_dirs_and_ignored_paths_when_refresh_then_not_reported(tmp_path, monkeypatch):
+	# given
+	(tmp_path / ".venv").mkdir()
+	(tmp_path / "gen").mkdir()
+	client, sent = _recording_client(
+		tmp_path,
+		monkeypatch,
+		watch_suffixes=frozenset({".py"}),
+		watch_ignore=lambda p: "gen" in p.parts,
+	)
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / ".venv" / "lib.py").write_text("x = 1\n", encoding="utf-8")
+	(tmp_path / "gen" / "out.py").write_text("x = 1\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert sent == []
+
+
+def test_given_open_file_edited_on_disk_when_refresh_then_resynced_with_did_change(tmp_path, monkeypatch):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch)
+	asyncio.run(client.ensure_open(str(src)))
+	src.write_text("x = 12345\n", encoding="utf-8")
+	sent.clear()
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert [m for m, _ in sent] == ["textDocument/didChange"]
+	assert sent[0][1]["contentChanges"] == [{"text": "x = 12345\n"}]
+
+
+def test_given_open_file_deleted_when_refresh_then_closed_and_caches_dropped(tmp_path, monkeypatch):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch)
+	uri = asyncio.run(client.ensure_open(str(src)))
+	client._diagnostics[uri] = [{"message": "old"}]
+	client._symbol_cache[uri] = (1, [])
+	src.unlink()
+	sent.clear()
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert [m for m, _ in sent] == ["textDocument/didClose"]
+	assert uri not in client._open_files
+	assert uri not in client._diagnostics
+	assert uri not in client._symbol_cache
+
+
+def test_given_scratch_document_when_refresh_then_left_alone(tmp_path, monkeypatch):
+	# given
+	client, sent = _recording_client(tmp_path, monkeypatch)
+	uri = (tmp_path / ".probe.py").as_uri()
+	asyncio.run(client.open_scratch_document(uri, "x = 1\n"))
+	sent.clear()
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert sent == []
+	assert uri in client._open_files
+
+
+def test_given_open_watched_changes_when_file_created_then_did_open(tmp_path, monkeypatch):
+	# given
+	client, sent = _recording_client(
+		tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}), open_watched_changes=True
+	)
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / "new.py").write_text("y = 2\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert [m for m, _ in sent] == ["workspace/didChangeWatchedFiles", "textDocument/didOpen"]

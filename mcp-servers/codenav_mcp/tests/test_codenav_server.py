@@ -316,6 +316,9 @@ def test_given_dead_client_when_get_client_then_stale_one_is_stopped(monkeypatch
 		async def start(self) -> None:
 			pass
 
+		async def refresh(self) -> None:
+			pass
+
 	stale = _Stale()
 	monkeypatch.setattr(codenav_server, "_client", stale)
 	monkeypatch.setattr(codenav_server, "LspClient", _Fresh)

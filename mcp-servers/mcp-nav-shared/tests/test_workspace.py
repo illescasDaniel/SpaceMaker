@@ -11,6 +11,7 @@ import pytest
 from mcp_nav_shared.workspace import (
 	Selection,
 	WorkspaceSelector,
+	resolve_extra_source_roots,
 	resolve_source_root,
 	resolve_workspace_root,
 	same_repository,
@@ -73,6 +74,24 @@ def test_given_no_source_root_env_when_resolve_source_root_then_defaults_to_work
 	root = resolve_source_root("SOME_OTHER_SOURCE_ROOT", tmp_path)
 	# then
 	assert root == tmp_path
+
+
+def test_given_extra_roots_env_when_resolve_then_existing_dirs_only_deduped(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "tests").mkdir()
+	(tmp_path / "other").mkdir()
+	monkeypatch.setenv("SOME_EXTRA_ROOTS", f"tests, missing ,other,tests,{tmp_path / 'other'},")
+	# when
+	roots = resolve_extra_source_roots("SOME_EXTRA_ROOTS", tmp_path)
+	# then
+	assert roots == [(tmp_path / "tests").resolve(), (tmp_path / "other").resolve()]
+
+
+def test_given_no_extra_roots_env_when_resolve_then_empty(tmp_path, monkeypatch):
+	# given
+	monkeypatch.delenv("SOME_EXTRA_ROOTS", raising=False)
+	# when / then
+	assert resolve_extra_source_roots("SOME_EXTRA_ROOTS", tmp_path) == []
 
 
 # --- WorkspaceSelector -------------------------------------------------------

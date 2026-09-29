@@ -28,12 +28,15 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
 from mcp_nav_shared.exclude import is_excluded
 from mcp_nav_shared.format import (
+	LOCALS_HOLDER_KINDS,
+	filter_symbols_by_kind_and_path,
 	format_diagnostics,
 	format_location,
 	format_outline,
 	format_references,
 	format_references_grouped,
 	format_workspace_symbols,
+	parse_kind_filter,
 	symbol_kind_label,
 	uri_to_relative,
 )
@@ -193,6 +196,8 @@ async def _get_client(
 			_clients[key] = client
 			if after_start is not None:
 				await after_start(client)
+		# Tell the server about anything created/edited/deleted on disk since the last call.
+		await client.refresh()
 		return client
 
 
@@ -260,6 +265,9 @@ async def _get_ts_client() -> LspClient:
 			command=resolve_ts_command(WORKSPACE_ROOT),
 			language_id="javascript",
 			language_ids=_SCRIPT_LANGUAGE_IDS,
+			watch_suffixes=frozenset(_SCRIPT_EXTENSIONS),
+			watch_ignore=_is_generated,
+			open_watched_changes=True,
 		),
 		_open_project_files,
 	)
@@ -326,11 +334,30 @@ def _index_token_at(file_path: str, line: int, column: int) -> str | None:
 	return token if web_index.knows_selector(_indexes(), token) else None
 
 
-def _index_answer(token: str) -> str:
+def _index_answer(token: str, file_path: str | None = None, *, definitions_only: bool = False) -> str:
+	"""Answer from the cross-file index. With `file_path` (a position query), only
+	the root that file lives in is reported — each root defines its own values and
+	markup, so mixing in the other roots (wireframes vs. production) answers a
+	different question — unless that root has nothing for the token."""
 	indexes = _indexes()
+	scoped = ""
+	if file_path is not None:
+		own = web_index.root_index_for_file(indexes, _resolve_path(file_path))
+		if own is not None:
+			own_index = own[0]
+			answer = _format_index([own_index], token, definitions_only=definitions_only)
+			if "was not found" not in answer and "not defined or used" not in answer:
+				return answer
+			scoped = f"(nothing in {own_index.name}; showing all roots)\n"
+	return scoped + _format_index(indexes, token, definitions_only=definitions_only)
+
+
+def _format_index(indexes: list[web_index.RootIndex], token: str, *, definitions_only: bool) -> str:
 	if token.startswith("--"):
-		return web_index.format_css_var(indexes, token, generated=_GENERATED_RELATIVE)
-	return web_index.format_selector(indexes, token, generated=_GENERATED_RELATIVE)
+		return web_index.format_css_var(
+			indexes, token, generated=_GENERATED_RELATIVE, definitions_only=definitions_only
+		)
+	return web_index.format_selector(indexes, token, generated=_GENERATED_RELATIVE, definitions_only=definitions_only)
 
 
 def _format_hover_contents(contents: object) -> str:
@@ -389,13 +416,15 @@ async def definition(file_path: str, line: int, column: int, ctx: Context | None
 	on the line (not a visual/display column): a leading tab counts as one
 	character. On a `--custom-property`/`#id`/`.class` token in a `.css`/
 	`.html` file, answers from the cross-file index (see css_var/selector)
-	instead of the single-file language server.
+	instead of the single-file language server: for `definition`, just the
+	definition(s) in the file's own root (production vs. wireframes are
+	separate roots); for `references`, that root's definitions and usages.
 	"""
 	await _use_workspace(ctx)
 	try:
 		token = _index_token_at(file_path, line, column)
 		if token is not None:
-			return _index_answer(token)
+			return _index_answer(token, file_path, definitions_only=True)
 		client = await _client_for(file_path)
 		locations = await client.definition(file_path, line, column)
 	except TOOL_ERRORS as exc:
@@ -415,13 +444,14 @@ async def references(
 	on the line (not a visual/display column): a leading tab counts as one
 	character. On a `--custom-property`/`#id`/`.class` token in a `.css`/
 	`.html` file, answers from the cross-file index (see css_var/selector)
-	instead of the single-file language server.
+	instead of the single-file language server, limited to the file's own root
+	(production vs. wireframes are separate roots) unless it has no hits there.
 	"""
 	await _use_workspace(ctx)
 	try:
 		token = _index_token_at(file_path, line, column)
 		if token is not None:
-			return _index_answer(token)
+			return _index_answer(token, file_path)
 		client = await _client_for(file_path)
 		locations = await client.references(file_path, line, column, include_declaration=include_declaration)
 	except TOOL_ERRORS as exc:
@@ -430,7 +460,13 @@ async def references(
 
 
 @mcp.tool()
-async def search_symbol(query: str | None = None, name: str | None = None, ctx: Context | None = None) -> str:
+async def search_symbol(
+	query: str | None = None,
+	name: str | None = None,
+	kind: str | None = None,
+	path: str | None = None,
+	ctx: Context | None = None,
+) -> str:
 	"""Search JS/TS files for a symbol by name (function, class, const, etc.).
 
 	JS/TS-only: the HTML/CSS language servers don't implement useful
@@ -438,10 +474,14 @@ async def search_symbol(query: str | None = None, name: str | None = None, ctx: 
 	`symbol_info` for a one-call summary. Returned positions point at the
 	identifier name and use the same character-offset column convention as
 	the other tools. Results include a SymbolKind label and are capped.
-	`name` is accepted as an alias for `query`.
+	`name` is accepted as an alias for `query`. Narrow broad queries with
+	`kind` (SymbolKind labels, comma-separated: `class`, `function,method`,
+	`interface`, ...) and `path` (workspace-relative prefix such as `src/`,
+	or a glob such as `src/**/*.py`). Production code ranks before tests.
 	"""
 	await _use_workspace(ctx)
 	try:
+		kinds = parse_kind_filter(kind)
 		query = resolve_name_query(preferred="query", example="renderGalleryItemStage", query=query, name=name)
 		client = await _get_ts_client()
 		symbols = await client.workspace_symbol(query)
@@ -454,7 +494,11 @@ async def search_symbol(query: str | None = None, name: str | None = None, ctx: 
 	]
 	if not symbols:
 		return f"No symbols matching {query!r}."
-	return format_workspace_symbols(symbols, WORKSPACE_ROOT, query=query)
+	matching = filter_symbols_by_kind_and_path(symbols, WORKSPACE_ROOT, kinds=kinds, path=path)
+	if not matching:
+		filters = ", ".join(f"{k}={v!r}" for k, v in (("kind", kind), ("path", path)) if v)
+		return f"No symbols matching {query!r} with {filters} ({len(symbols)} without the filters)."
+	return format_workspace_symbols(matching, WORKSPACE_ROOT, query=query)
 
 
 @mcp.tool()
@@ -503,12 +547,14 @@ async def symbol_info(
 
 
 @mcp.tool()
-async def outline(file_path: str, ctx: Context | None = None) -> str:
+async def outline(file_path: str, detailed: bool = False, ctx: Context | None = None) -> str:
 	"""What's in this file? Example: `outline(file_path="web/src/gallery-item.ts")`.
 
-	Indented outline (functions, classes, etc., with line numbers) of a JS/TS
-	file, so you can navigate without reading it in full. Follow up with
-	hover/definition/references at a listed line, or symbol_info by name.
+	Indented outline (functions, classes, interfaces, with `:start-end` line
+	spans) of a JS/TS file in source order, so you can navigate without reading
+	it in full. Locals, callbacks and object-literal keys inside functions and
+	variables are left out; pass `detailed=true` to include them. Follow up
+	with hover/definition/references at a listed line, or symbol_info by name.
 	"""
 	await _use_workspace(ctx)
 	try:
@@ -517,7 +563,7 @@ async def outline(file_path: str, ctx: Context | None = None) -> str:
 		symbols = await client.document_symbol(file_path)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
-	return format_outline(symbols)
+	return format_outline(symbols, collapse_kinds=frozenset() if detailed else LOCALS_HOLDER_KINDS)
 
 
 @mcp.tool()

@@ -11,7 +11,8 @@
 				"codenav_mcp.server"
 			],
 			"env": {
-				"CODENAV_MCP_SOURCE_ROOT": "src"
+				"CODENAV_MCP_SOURCE_ROOT": "src",
+				"CODENAV_MCP_EXTRA_SOURCE_ROOTS": "tests"
 			}
 		},
 		"webnav": {

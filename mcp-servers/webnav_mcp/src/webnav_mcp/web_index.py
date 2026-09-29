@@ -55,7 +55,12 @@ _JS_GET_ELEMENT_BY_ID_RE = re.compile(r"getElementById\(\s*[\"'`]([^\"'`]*)[\"'`
 _JS_CLASSLIST_RE = re.compile(r"classList\.(add|remove|toggle|contains)\(([^)]*)\)")
 # `querySelector(?:All)?`, not `querySelectorAll?` — the latter only makes the
 # final `l` optional, so plain `querySelector(...)` would never match.
-_JS_QUERY_RE = re.compile(r"\b(?:querySelector(?:All)?|closest|matches)\(\s*[\"'`]([^\"'`]*)[\"'`]")
+# An optional TypeScript type argument (`querySelector<HTMLElement>(...)`, one
+# nesting level: `closest<HTMLElement | null>(...)`) may sit before the `(`.
+_TS_TYPE_ARGS = r"(?:<[^()<>]*(?:<[^()<>]*>[^()<>]*)*>)?"
+_JS_QUERY_RE = re.compile(
+	r"\b(?:querySelector(?:All)?|closest|matches)" + _TS_TYPE_ARGS + r"\(\s*[\"'`]([^\"'`]*)[\"'`]"
+)
 _JS_CLASSNAME_ASSIGN_RE = re.compile(r"className\s*\+?=\s*[\"'`]([^\"'`]*)[\"'`]\s*(\+)?")
 _TEMPLATE_EXPR_RE = re.compile(r"\$\{[^}]*\}")
 # A local variable conventionally named like a class list (e.g. `mediaClass`,
@@ -557,13 +562,19 @@ def _group_hits_by_file(hits: list[SelectorHit]) -> list[tuple[str, list[Selecto
 	return sorted(groups.items())
 
 
-def format_css_var(indexes: list[RootIndex], name: str, *, generated: tuple[str, ...] = ()) -> str:
+def format_css_var(
+	indexes: list[RootIndex],
+	name: str,
+	*,
+	generated: tuple[str, ...] = (),
+	definitions_only: bool = False,
+) -> str:
 	var_name = _normalize_var_name(name)
 	sections: list[str] = []
 	found = False
 	for idx in indexes:
 		decls = idx.var_declarations.get(var_name, [])
-		uses = idx.var_usages.get(var_name, [])
+		uses = [] if definitions_only else idx.var_usages.get(var_name, [])
 		if not decls and not uses:
 			continue
 		found = True
@@ -577,7 +588,7 @@ def format_css_var(indexes: list[RootIndex], name: str, *, generated: tuple[str,
 			by_file = _group_usages_by_file(uses)
 			lines.append(f"Usages ({len(uses)} in {len(by_file)} file(s)):")
 			lines += [f"  {_file_label(f, generated)}: " + ", ".join(f"L{n}" for n in ns) for f, ns in by_file]
-		else:
+		elif not definitions_only:
 			lines.append("Usages: (none)")
 		sections.append("\n".join(lines))
 	if not found:
@@ -615,7 +626,13 @@ def _string_literal_hits(idx: RootIndex, token: str) -> list[SelectorHit]:
 	]
 
 
-def format_selector(indexes: list[RootIndex], token: str, *, generated: tuple[str, ...] = ()) -> str:
+def format_selector(
+	indexes: list[RootIndex],
+	token: str,
+	*,
+	generated: tuple[str, ...] = (),
+	definitions_only: bool = False,
+) -> str:
 	kind = token_kind(token)
 	if kind is None:
 		return f"{token!r} must start with '#' (id) or '.' (class)."
@@ -626,6 +643,10 @@ def format_selector(indexes: list[RootIndex], token: str, *, generated: tuple[st
 		prefix_hits = _dynamic_prefix_hits(idx, token)
 		all_hits = list(exact_hits) + prefix_hits
 		all_hits += _string_literal_hits(idx, token)
+		if definitions_only:
+			# A class is defined by its CSS rule(s), an id by its markup attribute.
+			wanted = "css" if token.startswith(".") else "html"
+			all_hits = [h for h in exact_hits if h.kind == wanted] or [h for h in exact_hits if h.kind == "css"]
 		if not all_hits:
 			continue
 		found = True

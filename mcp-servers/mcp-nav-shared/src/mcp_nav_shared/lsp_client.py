@@ -13,9 +13,14 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
+
+from mcp_nav_shared.exclude import EXCLUDED_DIR_NAMES
 
 
 logger = logging.getLogger(__name__)
@@ -57,6 +62,11 @@ class LanguageServerExitedError(RuntimeError):
 	"""The language server process ended while a request was pending."""
 
 
+def _uri_to_path(uri: str) -> str:
+	path = urlparse(uri).path
+	return unquote(path.lstrip("/") if os.name == "nt" else path)
+
+
 @dataclass
 class OpenFile:
 	uri: str
@@ -65,11 +75,24 @@ class OpenFile:
 	size: int
 
 
+# LSP `FileChangeType`.
+_FILE_CREATED, _FILE_CHANGED, _FILE_DELETED = 1, 2, 3
+
+
 @dataclass
 class LspClient:
 	workspace_root: Path
 	command: list[str]
 	language_id: str
+	# File suffixes whose on-disk changes `refresh()` reports to the server via
+	# `workspace/didChangeWatchedFiles` (empty: only already-open files are re-synced).
+	watch_suffixes: frozenset[str] = frozenset()
+	# Paths `refresh()` must not report (e.g. generated output); directory names in
+	# `EXCLUDED_DIR_NAMES` are always skipped.
+	watch_ignore: Callable[[Path], bool] | None = None
+	# Also `didOpen` watched files that appeared/changed, for servers (tsserver) that
+	# only treat opened documents as part of the project deterministically.
+	open_watched_changes: bool = False
 	# Per-suffix override of `language_id` for servers that handle several
 	# languages (e.g. typescript-language-server: `.ts` -> "typescript").
 	language_ids: dict[str, str] = field(default_factory=dict)
@@ -86,6 +109,9 @@ class LspClient:
 	# only on the one file's text, and `ensure_open` bumps the version exactly
 	# when that text changes (stat mtime/size), so a version match means fresh.
 	_symbol_cache: dict[str, tuple[int, list[dict[str, Any]]]] = field(default_factory=dict, init=False)
+	# path -> (mtime_ns, size) of every watched file at the last `refresh()`.
+	_watch_snapshot: dict[Path, tuple[int, int]] | None = field(default=None, init=False)
+	_refresh_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
 	_reader_task: asyncio.Task | None = field(default=None, init=False)
 	_stderr_task: asyncio.Task | None = field(default=None, init=False)
 	_started: bool = field(default=False, init=False)
@@ -125,7 +151,7 @@ class LspClient:
 						"callHierarchy": {},
 						"typeHierarchy": {},
 					},
-					"workspace": {"workspaceFolders": True},
+					"workspace": {"workspaceFolders": True, "didChangeWatchedFiles": {"dynamicRegistration": True}},
 				},
 				"workspaceFolders": [{"uri": self.workspace_root.as_uri(), "name": self.workspace_root.name}],
 			},
@@ -327,6 +353,74 @@ class LspClient:
 			self._open_files[uri] = OpenFile(uri=uri, version=new_version, mtime_ns=stat.st_mtime_ns, size=stat.st_size)
 		return uri
 
+	async def close_document(self, uri: str) -> None:
+		"""Tell the server a document is gone from disk / no longer ours, and drop its caches."""
+		self._notify("textDocument/didClose", {"textDocument": {"uri": uri}})
+		self._open_files.pop(uri, None)
+		self._diagnostics.pop(uri, None)
+		self._diag_events.pop(uri, None)
+		# Reopening restarts versions at 1, which could falsely match an old entry.
+		self._symbol_cache.pop(uri, None)
+
+	def _scan_watched(self) -> dict[Path, tuple[int, int]]:
+		found: dict[Path, tuple[int, int]] = {}
+		if not self.watch_suffixes:
+			return found
+		for dirpath, dirnames, filenames in os.walk(self.workspace_root):
+			dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIR_NAMES]
+			for name in filenames:
+				path = Path(dirpath, name)
+				if path.suffix.lower() not in self.watch_suffixes:
+					continue
+				if self.watch_ignore is not None and self.watch_ignore(path):
+					continue
+				try:
+					st = path.stat()
+				except OSError:
+					continue
+				found[path.resolve()] = (st.st_mtime_ns, st.st_size)
+		return found
+
+	async def refresh(self) -> None:
+		"""Bring the language server's view of the disk up to date.
+
+		Servers only see what a client tells them: a document opened with `didOpen`
+		is frozen at that text, and files created/edited/deleted behind the
+		server's back (by the agent's own Edit tool, git, a formatter) are
+		invisible to workspace-wide answers. Call this before every tool call;
+		it costs one stat walk. Open documents are re-synced (or closed when
+		deleted), and watched-suffix files that appeared/changed/vanished since
+		the last call are reported via `workspace/didChangeWatchedFiles`.
+		"""
+		async with self._refresh_lock:
+			current = await asyncio.to_thread(self._scan_watched)
+			changes: list[dict[str, Any]] = []
+			previous = self._watch_snapshot
+			if previous is not None:
+				for path, stamp in current.items():
+					if path not in previous:
+						changes.append({"uri": path.as_uri(), "type": _FILE_CREATED})
+					elif previous[path] != stamp:
+						changes.append({"uri": path.as_uri(), "type": _FILE_CHANGED})
+				changes.extend(
+					{"uri": path.as_uri(), "type": _FILE_DELETED} for path in previous if path not in current
+				)
+			self._watch_snapshot = current
+			if changes:
+				self._notify("workspace/didChangeWatchedFiles", {"changes": changes})
+			if self.open_watched_changes:
+				for change in changes:
+					if change["type"] != _FILE_DELETED:
+						await self.ensure_open(_uri_to_path(change["uri"]))
+			for uri, known in list(self._open_files.items()):
+				if known.mtime_ns == -1:
+					continue  # scratch document: never on disk
+				path = Path(_uri_to_path(uri))
+				if not path.exists():
+					await self.close_document(uri)
+				else:
+					await self.ensure_open(str(path))
+
 	# -- LSP calls used by the MCP tools --------------------------------------
 
 	async def hover(self, file_path: str, line: int, column: int) -> dict[str, Any]:
@@ -446,11 +540,7 @@ class LspClient:
 		self._open_files[uri] = OpenFile(uri=uri, version=version, mtime_ns=-1, size=len(text))
 
 	async def close_scratch_document(self, uri: str) -> None:
-		self._notify("textDocument/didClose", {"textDocument": {"uri": uri}})
-		self._open_files.pop(uri, None)
-		self._diagnostics.pop(uri, None)
-		# Reopening restarts versions at 1, which could falsely match an old entry.
-		self._symbol_cache.pop(uri, None)
+		await self.close_document(uri)
 
 	async def pull_diagnostics(self, uri: str) -> list[dict[str, Any]]:
 		"""Pull diagnostics for an already-open `uri` directly, with no cache
