@@ -12,6 +12,7 @@ trampoline .exe files when they reference the old venv python.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -80,10 +81,12 @@ def _has_unrewritten_old(text: str, pairs: list[tuple[str, str]]) -> bool:
 
 
 def _apply_replacements(text: str, pairs: list[tuple[str, str]]) -> str:
-	for old, new in pairs:
-		if old in text:
-			text = text.replace(old, new)
-	return text
+	# Single pass (longest old first, via alternation order) so a replacement is
+	# never re-scanned: when the worktree lives inside the source checkout, ``new``
+	# contains ``old`` and sequential str.replace would nest the path repeatedly.
+	mapping = dict(pairs)
+	pattern = re.compile("|".join(re.escape(old) for old, _ in pairs))
+	return pattern.sub(lambda m: mapping[m.group(0)], text)
 
 
 def _is_text_candidate(path: Path, data: bytes) -> bool:

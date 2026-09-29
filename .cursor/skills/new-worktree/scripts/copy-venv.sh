@@ -18,7 +18,12 @@
 #
 # Usage:
 #   ./copy-venv.sh           # from the worktree root (or via the /new-worktree skill)
-#   ./copy-venv.sh --force   # overwrite an existing destination .venv/node_modules
+#   ./copy-venv.sh --force   # always replace .venv/node_modules
+#
+# Without --force an existing .venv is kept only if spacemaker imports from this
+# worktree's src/ and pytest runs; a valid one is skipped, a broken one is
+# replaced. An existing node_modules is kept if @biomejs/biome is present.
+# Works from inside any worktree (e.g. one the Claude desktop app created).
 
 set -euo pipefail
 
@@ -69,19 +74,13 @@ if ! worktree_list="$(git worktree list 2>&1)"; then
 	exit 1
 fi
 
-cursor_worktrees="${HOME}/.cursor/worktrees"
+# `git worktree list` always prints the main (primary) working tree first,
+# regardless of where the other worktrees live (~/.cursor/worktrees/,
+# <primary>/.claude/worktrees/, sibling dirs, ...).
 primary_root=""
 while IFS= read -r line; do
 	[[ -z "${line}" ]] && continue
-	candidate="${line%%[[:space:]]*}"
-	[[ -z "${candidate}" ]] && continue
-	# The primary checkout is never under ~/.cursor/worktrees/ (Cursor) or
-	# <repo>/.claude/worktrees/ (Claude Code's EnterWorktree).
-	case "${candidate}/" in
-	"${cursor_worktrees}"/*) continue ;;
-	*/.claude/worktrees/*) continue ;;
-	esac
-	primary_root="${candidate}"
+	primary_root="${line%%[[:space:]]*}"
 	break
 done <<<"${worktree_list}"
 
@@ -100,8 +99,10 @@ fi
 
 if [[ "${IS_WINDOWS}" == true ]]; then
 	dst_python="${dest_root}/.venv/Scripts/python.exe"
+	dst_pytest="${dest_root}/.venv/Scripts/pytest.exe"
 else
 	dst_python="${dest_root}/.venv/bin/python"
+	dst_pytest="${dest_root}/.venv/bin/pytest"
 fi
 
 # ---------------------------------------------------------------------------
@@ -110,17 +111,35 @@ fi
 src_venv="${primary_root}/.venv"
 dst_venv="${dest_root}/.venv"
 
-if [[ -e "${dst_venv}" && "${FORCE}" != true ]]; then
-	echo "warning: Destination .venv already exists at: ${dst_venv}" >&2
-	echo "Pass --force to overwrite it, or delete it manually and re-run." >&2
-	exit 1
-fi
-if [[ -e "${dst_venv}" && "${FORCE}" == true ]]; then
-	echo "copy-venv: removing existing destination .venv (--force)..."
-	rm -rf "${dst_venv}"
+# An existing .venv (e.g. created by the Claude desktop app when it made this
+# worktree) is only reused if it really works for *this* worktree.
+venv_is_valid() {
+	local file
+	[[ -x "${dst_python}" ]] || return 1
+	file="$("${dst_python}" -c "import spacemaker; print(spacemaker.__file__)" 2>/dev/null)" || return 1
+	file="${file//\\//}"
+	[[ "${file}" == "${dest_root}/src/"* ]] || return 1
+	# Run the console script itself: it carries the shebang that must be rewritten.
+	"${dst_pytest}" --version >/dev/null 2>&1
+}
+
+skip_venv=false
+if [[ -e "${dst_venv}" || -L "${dst_venv}" ]]; then
+	if [[ "${FORCE}" == true ]]; then
+		echo "copy-venv: removing existing destination .venv (--force)..."
+		rm -rf "${dst_venv}"
+	elif venv_is_valid; then
+		echo "copy-venv: existing .venv is valid for this worktree; skipping (use --force to replace)."
+		skip_venv=true
+	else
+		echo "copy-venv: existing .venv is broken or points at another checkout; replacing it..."
+		rm -rf "${dst_venv}"
+	fi
 fi
 
-if [[ -d "${src_venv}" ]]; then
+if [[ "${skip_venv}" == true ]]; then
+	:
+elif [[ -d "${src_venv}" ]]; then
 	echo ""
 	echo "copy-venv: copying .venv"
 	echo "  from : ${src_venv}"
@@ -176,17 +195,23 @@ fi
 src_node_modules="${primary_root}/node_modules"
 dst_node_modules="${dest_root}/node_modules"
 
-if [[ -e "${dst_node_modules}" && "${FORCE}" != true ]]; then
-	echo "warning: Destination node_modules already exists at: ${dst_node_modules}" >&2
-	echo "Pass --force to overwrite it, or delete it manually and re-run." >&2
-	exit 1
-fi
-if [[ -e "${dst_node_modules}" && "${FORCE}" == true ]]; then
-	echo "copy-venv: removing existing destination node_modules (--force)..."
-	rm -rf "${dst_node_modules}"
+skip_node_modules=false
+if [[ -e "${dst_node_modules}" || -L "${dst_node_modules}" ]]; then
+	if [[ "${FORCE}" == true ]]; then
+		echo "copy-venv: removing existing destination node_modules (--force)..."
+		rm -rf "${dst_node_modules}"
+	elif [[ -d "${dst_node_modules}/@biomejs/biome" ]]; then
+		echo "copy-venv: existing node_modules looks complete; skipping (use --force to replace)."
+		skip_node_modules=true
+	else
+		echo "copy-venv: existing node_modules is incomplete; replacing it..."
+		rm -rf "${dst_node_modules}"
+	fi
 fi
 
-if [[ -d "${src_node_modules}" ]]; then
+if [[ "${skip_node_modules}" == true ]]; then
+	:
+elif [[ -d "${src_node_modules}" ]]; then
 	echo ""
 	echo "copy-venv: copying node_modules"
 	echo "  from : ${src_node_modules}"
@@ -240,18 +265,11 @@ case "${spacemaker_file_unix}" in
 	;;
 esac
 
-if [[ "${IS_WINDOWS}" == true ]]; then
-	dst_pytest="${dest_root}/.venv/Scripts/pytest.exe"
-else
-	dst_pytest="${dest_root}/.venv/bin/pytest"
-fi
-if [[ -e "${dst_pytest}" ]]; then
-	pytest_probe="$("${dst_pytest}" --version 2>&1)" || {
-		echo "error: pytest from destination venv failed: ${pytest_probe}" >&2
-		exit 1
-	}
-	echo "  pytest: ${pytest_probe}"
-fi
+pytest_probe="$("${dst_pytest}" --version 2>&1)" || {
+	echo "error: pytest from destination venv failed: ${pytest_probe}" >&2
+	exit 1
+}
+echo "  pytest: ${pytest_probe}"
 echo "  node_modules/@biomejs/biome: present"
 
 echo ""
