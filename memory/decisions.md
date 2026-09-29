@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-29 — webnav `selector`: treat exact-name JS string literals as references
+
+- **Context:** Tool review found `selector("#btn-gallery-item-back")` reported no JS usage although `gallery.ts` binds it via the project helper `onClick("btn-gallery-item-back", …)`; the same helper pattern covers 44 call sites (plus `bindDisclosure`, `setQrUrlField`, …). A Cursor agent had used `selector` to confirm "nothing left behind" after removing a class — false completeness is the worst failure mode for that tool.
+- **Decision:** Record every JS/TS string literal that is a bare identifier-like name (not concatenated); `format_selector` reports those equal to the query's bare name as `string literal` hits, except on lines a recognized DOM API already covers (so `getElementById("x")` doesn't also show as a `.x` class hit). They also count as references for the unreferenced-selector diagnostic.
+- **Rationale:** Generic (no per-project helper list to configure, keeps the servers reusable); exact-name literals are a strong signal and clearly labeled as lower-confidence. Rejected: a `WEBNAV_MCP_ID_HELPERS` env var — every new helper would silently regress until someone updated config.
+
 ## 2026-09-29 — MCP caching: key everything on file stat/version, never on time; add TypeScript to webnav
 
 - **Context:** User asked whether an in-memory cache with automatic invalidation would speed up the codenav/webnav tools. Measured first: most tools were already ≤ a few ms warm (ty/tsserver keep their own indexes; `ensure_open` already syncs by mtime/size). The real warm costs were `implementations` (~140 ms: per-file `ast.parse`+`ast.walk` in `_protocol_class_names` was ~70%, not the type-check probes), and webnav `css_var`/`selector`/HTML+CSS `diagnostics` (~60–115 ms: full re-scan of the roots per call, contradicting the old "a few ms" docstring). Separately found webnav rejected `.ts` although `web/src/*.ts` is now the authoritative source, and that tsserver-backed `diagnostics` silently returned nothing on the first call (no pull support; push not awaited). User ranked TS support first, then index cache, then `implementations` probes, then diagnostics timing.

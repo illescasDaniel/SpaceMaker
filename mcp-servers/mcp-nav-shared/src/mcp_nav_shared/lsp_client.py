@@ -107,6 +107,7 @@ class LspClient:
 						"publishDiagnostics": {},
 						"documentSymbol": {"hierarchicalDocumentSymbolSupport": True},
 						"callHierarchy": {},
+						"typeHierarchy": {},
 					},
 					"workspace": {"workspaceFolders": True},
 				},
@@ -355,6 +356,18 @@ class LspClient:
 
 	async def incoming_calls(self, item: dict[str, Any]) -> list[dict[str, Any]]:
 		resp = await self._request("callHierarchy/incomingCalls", {"item": item})
+		return resp.get("result") or []
+
+	async def prepare_type_hierarchy(self, file_path: str, line: int, column: int) -> list[dict[str, Any]]:
+		uri = await self.ensure_open(file_path)
+		resp = await self._request(
+			"textDocument/prepareTypeHierarchy",
+			{"textDocument": {"uri": uri}, "position": {"line": line - 1, "character": column - 1}},
+		)
+		return resp.get("result") or []
+
+	async def supertypes(self, item: dict[str, Any]) -> list[dict[str, Any]]:
+		resp = await self._request("typeHierarchy/supertypes", {"item": item})
 		return resp.get("result") or []
 
 	# -- scratch (in-memory-only) documents -----------------------------------

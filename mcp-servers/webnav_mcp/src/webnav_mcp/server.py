@@ -57,6 +57,12 @@ WEB_ROOTS = web_index.parse_roots_env(_raw_web_roots, WORKSPACE_ROOT) if _raw_we
 # emitted JS is where a root's runtime class/id usages live.
 _raw_exclude = os.environ.get("WEBNAV_MCP_EXCLUDE", "")
 GENERATED_PATHS = [(WORKSPACE_ROOT / part.strip()).resolve() for part in _raw_exclude.split(",") if part.strip()]
+# The same paths, workspace-relative, for labeling index hits as generated.
+_GENERATED_RELATIVE = tuple(
+	str(path.relative_to(WORKSPACE_ROOT.resolve())).replace("\\", "/")
+	for path in GENERATED_PATHS
+	if path.is_relative_to(WORKSPACE_ROOT.resolve())
+)
 
 _POSITION_NOTE = (
 	"Positions are 1-indexed. `column` is a UTF-16 character offset on the "
@@ -219,8 +225,8 @@ def _index_token_at(file_path: str, line: int, column: int) -> str | None:
 def _index_answer(token: str) -> str:
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
 	if token.startswith("--"):
-		return web_index.format_css_var(indexes, token)
-	return web_index.format_selector(indexes, token)
+		return web_index.format_css_var(indexes, token, generated=_GENERATED_RELATIVE)
+	return web_index.format_selector(indexes, token, generated=_GENERATED_RELATIVE)
 
 
 @mcp.tool()
@@ -358,7 +364,7 @@ async def css_var(name: str) -> str:
 	since each may define its own values.
 	"""
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
-	return web_index.format_css_var(indexes, name)
+	return web_index.format_css_var(indexes, name, generated=_GENERATED_RELATIVE)
 
 
 @mcp.tool()
@@ -367,7 +373,11 @@ async def selector(name: str) -> str:
 
 	Cross-references CSS rule definitions, HTML `id=`/`class=` attributes,
 	and JS usages (`getElementById`, `classList.add/remove/toggle/contains`,
-	`querySelector`/`querySelectorAll`, `className` assignment) — something
+	`querySelector`/`querySelectorAll`, `className` assignment, and any JS
+	string literal exactly equal to the bare name — e.g. an id passed to a
+	project's own helper like `onClick("btn-save", …)`, labeled "string
+	literal"). Hits in generated output (`WEBNAV_MCP_EXCLUDE`) are labeled
+	`[generated]`; edit their source instead. This is something
 	the single-file CSS/HTML language servers can't do. `name` must include
 	the leading `#` or `.`. Grouped by file with line numbers, separately per
 	configured root (see `WEBNAV_MCP_ROOTS`). A JS hit built from string
@@ -378,7 +388,7 @@ async def selector(name: str) -> str:
 	'<prefix>'", instead of being silently dropped or guessed.
 	"""
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
-	return web_index.format_selector(indexes, name)
+	return web_index.format_selector(indexes, name, generated=_GENERATED_RELATIVE)
 
 
 if __name__ == "__main__":

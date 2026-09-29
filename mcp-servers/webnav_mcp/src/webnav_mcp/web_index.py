@@ -50,7 +50,9 @@ _JS_SETPROPERTY_RE = re.compile(r"\.setProperty\(\s*[\"'](--[a-zA-Z0-9_-]+)[\"']
 _JS_GETPROPERTYVALUE_RE = re.compile(r"\.getPropertyValue\(\s*[\"'](--[a-zA-Z0-9_-]+)[\"']")
 _JS_GET_ELEMENT_BY_ID_RE = re.compile(r"getElementById\(\s*[\"']([^\"']*)[\"']\s*(\+)?")
 _JS_CLASSLIST_RE = re.compile(r"classList\.(add|remove|toggle|contains)\(([^)]*)\)")
-_JS_QUERY_RE = re.compile(r"querySelectorAll?\(\s*[\"']([^\"']*)[\"']")
+# `querySelector(?:All)?`, not `querySelectorAll?` — the latter only makes the
+# final `l` optional, so plain `querySelector(...)` would never match.
+_JS_QUERY_RE = re.compile(r"\b(?:querySelector(?:All)?|closest|matches)\(\s*[\"']([^\"']*)[\"']")
 _JS_CLASSNAME_ASSIGN_RE = re.compile(r"className\s*\+?=\s*[\"']([^\"']*)[\"']\s*(\+)?")
 # A local variable conventionally named like a class list (e.g. `mediaClass`,
 # `rowClasses`) being built up with `+=` (`mediaClass += ' slide-in-next-start'`)
@@ -62,6 +64,12 @@ _JS_CLASS_VAR_CONCAT_RE = re.compile(r"\b(?!className\b)\w*[Cc]lass\w*\s*\+=\s*[
 # A string literal, optionally followed by `+` (string concatenation) — used to
 # find dynamic prefixes inside `classList.add(...)` call arguments.
 _STRING_LITERAL_RE = re.compile(r"[\"']([^\"']*)[\"']\s*(\+)?")
+# A whole string literal that is itself a bare identifier-like name (`"btn-save"`),
+# not followed by `+`. Projects wrap DOM lookups in their own helpers
+# (`onClick("btn-save", …)`, `bindDisclosure("btn-x", "panel-x")`) that no fixed
+# list of DOM APIs can know about; an exact-name literal is a strong enough
+# signal to report as a (lower-confidence) reference — see `_string_literal_hits`.
+_BARE_NAME_LITERAL_RE = re.compile(r"""(["'`])([A-Za-z_][A-Za-z0-9_-]*)\1(?!\s*\+)""")
 
 
 def _line_at(text: str, index: int) -> int:
@@ -116,6 +124,8 @@ class RootIndex:
 	var_declarations: dict[str, list[VarDeclaration]] = field(default_factory=dict)
 	var_usages: dict[str, list[VarUsage]] = field(default_factory=dict)
 	selector_hits: dict[str, list[SelectorHit]] = field(default_factory=dict)
+	# bare name (no `#`/`.`) -> (file, line) of each JS/TS string literal equal to it
+	string_literals: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
 
 	def add_declaration(self, decl: VarDeclaration) -> None:
 		self.var_declarations.setdefault(decl.name, []).append(decl)
@@ -339,6 +349,10 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex, *, line_offse
 				)
 			)
 
+	for match in _BARE_NAME_LITERAL_RE.finditer(text):
+		line = _line_at(text, match.start()) + line_offset
+		root_index.string_literals.setdefault(match.group(2), []).append((file_rel, line))
+
 	_scan_markup_attrs(
 		text,
 		file_rel,
@@ -463,6 +477,17 @@ def _group_usages_by_file(usages: list[VarUsage]) -> list[tuple[str, list[int]]]
 	return sorted((f, sorted(set(lines))) for f, lines in groups.items())
 
 
+def _is_generated(file_rel: str, generated: tuple[str, ...]) -> bool:
+	return any(file_rel == g or file_rel.startswith(g.rstrip("/") + "/") for g in generated)
+
+
+def _file_label(file_rel: str, generated: tuple[str, ...]) -> str:
+	"""Tag generated output (`WEBNAV_MCP_EXCLUDE`, e.g. `tsc`-emitted JS) so an
+	agent edits the source instead — those hits stay in the index because a
+	root's runtime usages may only exist there, but they are never the file to change."""
+	return f"{file_rel} [generated]" if _is_generated(file_rel, generated) else file_rel
+
+
 def _group_hits_by_file(hits: list[SelectorHit]) -> list[tuple[str, list[SelectorHit]]]:
 	groups: dict[str, list[SelectorHit]] = {}
 	for h in hits:
@@ -470,7 +495,7 @@ def _group_hits_by_file(hits: list[SelectorHit]) -> list[tuple[str, list[Selecto
 	return sorted(groups.items())
 
 
-def format_css_var(indexes: list[RootIndex], name: str) -> str:
+def format_css_var(indexes: list[RootIndex], name: str, *, generated: tuple[str, ...] = ()) -> str:
 	var_name = _normalize_var_name(name)
 	sections: list[str] = []
 	found = False
@@ -489,7 +514,7 @@ def format_css_var(indexes: list[RootIndex], name: str) -> str:
 		if uses:
 			by_file = _group_usages_by_file(uses)
 			lines.append(f"Usages ({len(uses)} in {len(by_file)} file(s)):")
-			lines += [f"  {f}: " + ", ".join(f"L{n}" for n in ns) for f, ns in by_file]
+			lines += [f"  {_file_label(f, generated)}: " + ", ".join(f"L{n}" for n in ns) for f, ns in by_file]
 		else:
 			lines.append("Usages: (none)")
 		sections.append("\n".join(lines))
@@ -515,7 +540,20 @@ def _dynamic_prefix_hits(idx: RootIndex, token: str) -> list[SelectorHit]:
 	return hits
 
 
-def format_selector(indexes: list[RootIndex], token: str) -> str:
+def _string_literal_hits(idx: RootIndex, token: str) -> list[SelectorHit]:
+	"""JS/TS string literals exactly equal to `token`'s bare name, on lines no
+	recognized DOM-API hit already covers (for any token: `getElementById("x")`
+	must not also surface as a `.x` class reference) — typically an id/class passed to a
+	project's own helper (`onClick("btn-save", …)`)."""
+	covered = {(h.file, h.line) for hits in idx.selector_hits.values() for h in hits if h.kind == "js"}
+	return [
+		SelectorHit(token=token, kind="js", file=f, line=line, detail="string literal")
+		for f, line in idx.string_literals.get(token[1:], [])
+		if (f, line) not in covered
+	]
+
+
+def format_selector(indexes: list[RootIndex], token: str, *, generated: tuple[str, ...] = ()) -> str:
 	kind = token_kind(token)
 	if kind is None:
 		return f"{token!r} must start with '#' (id) or '.' (class)."
@@ -525,12 +563,15 @@ def format_selector(indexes: list[RootIndex], token: str) -> str:
 		exact_hits = idx.selector_hits.get(token, [])
 		prefix_hits = _dynamic_prefix_hits(idx, token)
 		all_hits = list(exact_hits) + prefix_hits
+		all_hits += _string_literal_hits(idx, token)
 		if not all_hits:
 			continue
 		found = True
 		lines = [f"== {idx.name} =="]
 		for kind_label in ("html", "css", "js"):
-			kind_hits = [h for h in all_hits if h.kind == kind_label]
+			# dict.fromkeys dedupes identical hits, e.g. `.a.x, .a .y {` records
+			# `.a` twice for one rule line.
+			kind_hits = list(dict.fromkeys(h for h in all_hits if h.kind == kind_label))
 			if not kind_hits:
 				continue
 			by_file = _group_hits_by_file(kind_hits)
@@ -552,7 +593,7 @@ def format_selector(indexes: list[RootIndex], token: str) -> str:
 					if detail:
 						tag += f" ({detail})"
 					parts.append(tag)
-				lines.append(f"  {f}: " + ", ".join(parts))
+				lines.append(f"  {_file_label(f, generated)}: " + ", ".join(parts))
 		sections.append("\n".join(lines))
 	if not found:
 		return f"{token} was not found under {_root_names(indexes)}."
@@ -596,11 +637,13 @@ def unreferenced_selectors(idx: RootIndex) -> list[str]:
 	"""CSS-defined tokens with no HTML/JS reference. A dynamically-built JS hit
 	elsewhere in the root (e.g. `getElementById("view-" + x)`, stored under
 	`#view-`) counts as a reference for any token it's a prefix of, since the
-	runtime value could plausibly be this one — see `_dynamic_prefix_hits`."""
+	runtime value could plausibly be this one — see `_dynamic_prefix_hits`.
+	So does a JS/TS string literal equal to the bare name (see
+	`_BARE_NAME_LITERAL_RE`), e.g. an id passed to a project's own helper."""
 	unreferenced = []
 	for token, hits in idx.selector_hits.items():
 		has_definition = any(h.kind == "css" for h in hits)
-		has_reference = any(h.kind in ("html", "js") and not h.dynamic for h in hits)
+		has_reference = any(h.kind in ("html", "js") and not h.dynamic for h in hits) or token[1:] in idx.string_literals
 		has_dynamic_prefix_reference = bool(_dynamic_prefix_hits(idx, token))
 		if has_definition and not has_reference and not has_dynamic_prefix_reference:
 			unreferenced.append(token)

@@ -10,17 +10,37 @@ from mcp_nav_shared.resolve import SymbolResolutionError, resolve_symbol
 
 class _FakeResolveClient:
 	"""Duck-typed stand-in for LspClient: resolve_symbol only calls
-	`workspace_symbol`/`document_symbol`, both trivial to fake for these tests."""
+	`workspace_symbol`/`document_symbol` (plus the type-hierarchy pair for
+	inherited `Class.member` lookups), all trivial to fake for these tests.
+	`document_symbols` is either one list for every file or a per-file dict;
+	`supertypes` maps a class name to its direct supertype items."""
 
-	def __init__(self, workspace_symbols: list[dict], document_symbols: list[dict] | None = None) -> None:
+	def __init__(
+		self,
+		workspace_symbols: list[dict],
+		document_symbols: list[dict] | dict[str, list[dict]] | None = None,
+		supertypes: dict[str, list[dict]] | None = None,
+	) -> None:
 		self._workspace_symbols = workspace_symbols
 		self._document_symbols = document_symbols or []
+		self._supertypes = supertypes or {}
 
 	async def workspace_symbol(self, query: str) -> list[dict]:
 		return self._workspace_symbols
 
 	async def document_symbol(self, file_path: str) -> list[dict]:
+		if isinstance(self._document_symbols, dict):
+			return self._document_symbols.get(file_path, [])
 		return self._document_symbols
+
+	async def prepare_type_hierarchy(self, file_path: str, line: int, column: int) -> list[dict]:
+		for sym in self._workspace_symbols:
+			if sym["location"]["uri"].endswith(file_path):
+				return [{"name": sym["name"], "uri": sym["location"]["uri"]}]
+		return []
+
+	async def supertypes(self, item: dict) -> list[dict]:
+		return self._supertypes.get(item["name"], [])
 
 
 def test_given_single_exact_match_when_resolve_symbol_then_resolves_position(tmp_path):
@@ -237,3 +257,69 @@ def test_given_dotted_query_when_member_missing_then_raises(tmp_path):
 	# when / then
 	with pytest.raises(SymbolResolutionError):
 		asyncio.run(resolve_symbol(client, tmp_path, "AppServices.missing_method"))
+
+
+def _class_node(name: str, children: list[dict]) -> dict:
+	return {
+		"name": name,
+		"kind": 5,
+		"range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}},
+		"selectionRange": {"start": {"line": 0, "character": 6}, "end": {"line": 0, "character": 6 + len(name)}},
+		"children": children,
+	}
+
+
+def test_given_member_defined_on_grandparent_mixin_when_dotted_query_then_resolves_through_supertypes(tmp_path):
+	# given — `AppServices(JobsMixin)`, `JobsMixin(BaseMixin)`; the method lives on
+	# BaseMixin, so it's only reachable via the type hierarchy, two levels up.
+	svc_uri = (tmp_path / "svc.py").as_uri()
+	jobs_uri = (tmp_path / "jobs.py").as_uri()
+	base_uri = (tmp_path / "base.py").as_uri()
+	container_sym = {
+		"name": "AppServices",
+		"kind": 5,
+		"location": {"uri": svc_uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}}},
+	}
+	method = {
+		"name": "start_convert",
+		"kind": 6,
+		"range": {"start": {"line": 9, "character": 1}, "end": {"line": 12, "character": 0}},
+		"selectionRange": {"start": {"line": 9, "character": 5}, "end": {"line": 9, "character": 18}},
+		"children": [],
+	}
+	client = _FakeResolveClient(
+		[container_sym],
+		{
+			"svc.py": [_class_node("AppServices", [])],
+			"jobs.py": [_class_node("JobsMixin", [])],
+			"base.py": [_class_node("BaseMixin", [method])],
+		},
+		supertypes={
+			"AppServices": [{"name": "JobsMixin", "uri": jobs_uri}],
+			"JobsMixin": [{"name": "BaseMixin", "uri": base_uri}],
+		},
+	)
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "AppServices.start_convert"))
+	# then
+	assert resolved.uri == base_uri
+	assert (resolved.line, resolved.column) == (9, 5)
+
+
+def test_given_member_on_no_supertype_when_dotted_query_then_raises_not_found(tmp_path):
+	# given
+	svc_uri = (tmp_path / "svc.py").as_uri()
+	jobs_uri = (tmp_path / "jobs.py").as_uri()
+	container_sym = {
+		"name": "AppServices",
+		"kind": 5,
+		"location": {"uri": svc_uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}}},
+	}
+	client = _FakeResolveClient(
+		[container_sym],
+		{"svc.py": [_class_node("AppServices", [])], "jobs.py": [_class_node("JobsMixin", [])]},
+		supertypes={"AppServices": [{"name": "JobsMixin", "uri": jobs_uri}]},
+	)
+	# when / then
+	with pytest.raises(SymbolResolutionError, match="No symbol found"):
+		asyncio.run(resolve_symbol(client, tmp_path, "AppServices.nope"))

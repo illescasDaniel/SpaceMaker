@@ -465,3 +465,88 @@ def test_given_changed_files_when_build_root_index_then_cache_invalidated(tmp_pa
 	second = web_index.build_root_index(tmp_path, "static")
 	# then
 	assert second is not first
+
+
+def test_given_id_passed_to_project_helper_when_format_selector_then_reported_as_string_literal(tmp_path):
+	# given — no DOM API in sight: the id only reaches the DOM through a helper
+	_write(tmp_path / "bind.ts", 'onClick("btn-save", () => save());\n')
+	idx = web_index.build_root_index(tmp_path, "web")
+	# when
+	text = web_index.format_selector([idx], "#btn-save")
+	# then
+	assert "bind.ts: L1 (string literal)" in text
+
+
+def test_given_literal_already_seen_by_dom_api_when_format_selector_then_not_double_reported(tmp_path):
+	# given
+	_write(tmp_path / "a.js", 'document.getElementById("panel");\n')
+	idx = web_index.build_root_index(tmp_path, "web")
+	# when
+	text = web_index.format_selector([idx], "#panel")
+	# then
+	assert "L1 (getElementById)" in text
+	assert "string literal" not in text
+
+
+def test_given_concatenated_literal_when_scan_then_not_recorded_as_bare_name(tmp_path):
+	# given — `"view-" + x` is a dynamic prefix, not a reference to `.view-`
+	_write(tmp_path / "a.js", 'show("view-" + name);\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert "view-" not in idx.string_literals
+
+
+def test_given_css_class_only_used_via_helper_literal_when_diagnostics_then_not_unreferenced(tmp_path):
+	# given
+	_write(tmp_path / "a.css", ".is-busy { opacity: 0.5; }\n")
+	_write(tmp_path / "a.ts", 'toggleState(el, "is-busy");\n')
+	idx = web_index.build_root_index(tmp_path, "web")
+	# when
+	warnings = web_index.diagnostics_for_file(idx, "a.css")
+	# then
+	assert warnings == []
+
+
+def test_given_hit_in_generated_output_when_format_selector_then_file_labeled_generated(tmp_path):
+	# given
+	_write(tmp_path / "static" / "js" / "app.js", 'el.classList.add("busy");\n')
+	_write(tmp_path / "static" / "app.css", ".busy { cursor: wait; }\n")
+	idx = web_index.build_root_index(tmp_path, "static")
+	# when
+	text = web_index.format_selector([idx], ".busy", generated=("static/js",))
+	# then
+	assert "static/js/app.js [generated]: L1 (classList.add)" in text
+	assert "static/app.css: L1 (CSS rule)" in text
+
+
+def test_given_class_twice_in_one_rule_line_when_format_selector_then_line_listed_once(tmp_path):
+	# given
+	_write(tmp_path / "a.css", ".thumb.a, .thumb .b { color: red; }\n")
+	idx = web_index.build_root_index(tmp_path, "web")
+	# when
+	text = web_index.format_selector([idx], ".thumb")
+	# then
+	assert "a.css: L1 (CSS rule)\n" in text + "\n"
+	assert "L1 (CSS rule), L1 (CSS rule)" not in text
+
+
+@pytest.mark.parametrize("call", ['el.querySelector(".card")', 'el.closest(".card")', 'el.matches(".card")'])
+def test_given_single_element_selector_api_when_scan_js_then_class_recorded(tmp_path, call):
+	# given — `querySelectorAll?` once only matched `querySelectorAl(l)`, silently dropping `querySelector`
+	_write(tmp_path / "app.js", call + ";\n")
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert [h.detail for h in idx.selector_hits[".card"]] == ["querySelector"]
+
+
+def test_given_id_lookup_literal_when_format_class_selector_then_not_reported_as_string_literal(tmp_path):
+	# given — the same name used as an id on this line isn't a class reference
+	_write(tmp_path / "a.ts", 'document.getElementById("media");\n')
+	_write(tmp_path / "a.css", ".media { color: red; }\n")
+	idx = web_index.build_root_index(tmp_path, "web")
+	# when
+	text = web_index.format_selector([idx], ".media")
+	# then
+	assert "a.ts" not in text

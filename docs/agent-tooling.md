@@ -133,7 +133,10 @@ in `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/resolve.py`:
 `resolve_symbol()` accepts a dotted `Class.method` query, narrows by
 `file_path` when a name is ambiguous, and raises a `SymbolResolutionError`
 (a `ToolInputError`) listing candidates rather than guessing when several
-symbols share a name.
+symbols share a name. When `Class` doesn't declare `method` itself, the
+lookup walks `typeHierarchy/supertypes` breadth-first and resolves the first
+base that does — so `AppServices.start_convert` finds `JobsMixin.start_convert`
+(`AppServices` is composed from mixins, and it's the type call sites see).
 
 `hover`/`definition`/`references`/`search_symbol`/`diagnostics` (the
 original position-based tools) are unchanged and still useful once a
@@ -267,7 +270,9 @@ decorator line): when the LSP range starts on `@…`, formatting walks the
 range and a short lookahead to the `class`/`def` line. Those positions are
 safe to feed into `hover` / `definition` / `references`. ty's symbol search
 is fuzzy (subsequence) and unordered, so results are ranked before capping:
-exact name → case-insensitive exact → prefix → substring → other fuzzy hits.
+exact name → case-insensitive exact → prefix → substring → other fuzzy hits,
+with Property/Field symbols after other kinds within a tier (tsserver reports
+every `S.foo = x` assignment as a Property, which otherwise fills the cap).
 Results are capped (default 50) with a trailing “and N more” note when
 truncated.
 `definition` / `references` headers use the same `path:line:col` form so
@@ -388,8 +393,13 @@ misleading.
 - **`selector(name)`** (`#id` or `.class`): CSS rule definitions, HTML
   `id=`/`class=` attributes, and JS usages (`getElementById`,
   `classList.add/remove/toggle/contains`, `querySelector`/
-  `querySelectorAll`, `className` assignment), grouped by file with line
-  numbers, per root.
+  `querySelectorAll`/`closest`/`matches`, `className` assignment), grouped
+  by file with line numbers, per root. A JS/TS string literal exactly equal
+  to the bare name, on a line no DOM API above already covers, is reported
+  as a `string literal` hit — this is how ids passed to project helpers
+  (`onClick("btn-save", …)`, `bindDisclosure(…)`) show up; it also counts
+  as a reference for the unreferenced-selector diagnostic. Hits in
+  `WEBNAV_MCP_EXCLUDE` output are labeled `[generated]`.
 - **`references`/`definition` fallback**: when the token under the cursor
   in a `.css`/`.html` file is `--name`, `#id` or `.class`, both tools answer
   from this index instead of the single-file language server — this is what

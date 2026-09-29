@@ -236,6 +236,19 @@ def test_given_fuzzy_hits_before_exact_when_rank_then_exact_prefix_substring_ord
 	]
 
 
+def test_given_property_assignments_before_function_in_same_tier_when_rank_then_function_first():
+	# given — tsserver reports each `state.galleryX = …` assignment as a Property
+	symbols = [
+		{**_symbol("galleryHasMore", "file:///a.ts"), "kind": 7},
+		{**_symbol("galleryHasMore", "file:///b.ts"), "kind": 7},
+		{**_symbol("galleryDateParts", "file:///c.ts"), "kind": 12},
+	]
+	# when
+	ranked = [(sym["name"], sym["kind"]) for sym in rank_workspace_symbols(symbols, "gallery")]
+	# then
+	assert ranked == [("galleryDateParts", 12), ("galleryHasMore", 7), ("galleryHasMore", 7)]
+
+
 def test_given_exact_match_past_cap_when_format_workspace_symbols_then_shown_first(tmp_path):
 	# given
 	src = tmp_path / "m.py"
