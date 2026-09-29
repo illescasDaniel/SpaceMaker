@@ -547,7 +547,11 @@ def _effective_members(
 	return members
 
 
-_PROBE_RELATIVE_PATH = Path("mcp-servers") / ".codenav_probe.py"
+# In-memory only (never written to disk). Its imports are absolute, so its
+# directory doesn't affect resolution; the workspace root keeps it clear of
+# path-scoped ty overrides (e.g. rules relaxed for `tests/**`) and of any
+# project-specific layout.
+_PROBE_RELATIVE_PATH = Path(".codenav_probe.py")
 
 
 def _probe_source(port_module: str, port_name: str, candidate_module: str, candidate_name: str) -> str:

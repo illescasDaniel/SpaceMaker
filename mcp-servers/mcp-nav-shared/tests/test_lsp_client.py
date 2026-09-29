@@ -405,6 +405,37 @@ def test_given_excluded_dirs_and_ignored_paths_when_refresh_then_not_reported(tm
 	assert sent == []
 
 
+def test_given_nested_checkout_when_refresh_then_its_files_not_reported(tmp_path, monkeypatch):
+	# given: a linked worktree nested inside the checkout (e.g. `.claude/worktrees/x`)
+	nested = tmp_path / ".claude" / "worktrees" / "x"
+	nested.mkdir(parents=True)
+	(nested / ".git").write_text("gitdir: /elsewhere\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}))
+	asyncio.run(client.refresh())
+	# when
+	(nested / "other.py").write_text("x = 1\n", encoding="utf-8")
+	(tmp_path / "own.py").write_text("x = 1\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert _watch_changes(sent) == [("own.py", 1)]
+
+
+def test_given_symlinked_workspace_root_when_file_created_then_uri_matches_ensure_open(tmp_path, monkeypatch):
+	# given
+	real = tmp_path / "real"
+	real.mkdir()
+	link = tmp_path / "link"
+	link.symlink_to(real, target_is_directory=True)
+	client, sent = _recording_client(link, monkeypatch, watch_suffixes=frozenset({".py"}))
+	asyncio.run(client.refresh())
+	# when
+	(real / "new.py").write_text("x = 1\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	reported = [c["uri"] for m, p in sent if m == "workspace/didChangeWatchedFiles" for c in p["changes"]]
+	assert reported == [client._to_uri("new.py").as_uri()]
+
+
 def test_given_open_file_edited_on_disk_when_refresh_then_resynced_with_did_change(tmp_path, monkeypatch):
 	# given
 	src = tmp_path / "a.py"

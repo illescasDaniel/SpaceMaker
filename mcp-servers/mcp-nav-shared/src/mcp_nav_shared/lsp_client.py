@@ -363,22 +363,42 @@ class LspClient:
 		self._symbol_cache.pop(uri, None)
 
 	def _scan_watched(self) -> dict[Path, tuple[int, int]]:
+		"""(mtime_ns, size) of every watched file, keyed by resolved path (as
+		`ensure_open` keys its URIs). Runs on every tool call, so it resolves
+		the root once instead of every file (only symlinked files need their
+		own `resolve()`), and it skips nested checkouts: a directory holding a
+		`.git` entry below the root is another repository or linked worktree
+		(this repo creates worktrees under `.claude/worktrees/`), whose files
+		are neither this workspace's nor cheap to stat."""
 		found: dict[Path, tuple[int, int]] = {}
 		if not self.watch_suffixes:
 			return found
-		for dirpath, dirnames, filenames in os.walk(self.workspace_root):
-			dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIR_NAMES]
-			for name in filenames:
-				path = Path(dirpath, name)
-				if path.suffix.lower() not in self.watch_suffixes:
-					continue
-				if self.watch_ignore is not None and self.watch_ignore(path):
-					continue
+		root = self.workspace_root.resolve()
+		pending = [root]
+		while pending:
+			directory = pending.pop()
+			try:
+				with os.scandir(directory) as it:
+					entries = list(it)
+			except OSError:
+				continue
+			if directory != root and any(e.name == ".git" for e in entries):
+				continue
+			for entry in entries:
 				try:
-					st = path.stat()
+					if entry.is_dir(follow_symlinks=False):
+						if entry.name not in EXCLUDED_DIR_NAMES:
+							pending.append(Path(entry.path))
+						continue
+					if os.path.splitext(entry.name)[1].lower() not in self.watch_suffixes:
+						continue
+					path = Path(entry.path)
+					if self.watch_ignore is not None and self.watch_ignore(path):
+						continue
+					st = entry.stat()
 				except OSError:
 					continue
-				found[path.resolve()] = (st.st_mtime_ns, st.st_size)
+				found[path.resolve() if entry.is_symlink() else path] = (st.st_mtime_ns, st.st_size)
 		return found
 
 	async def refresh(self) -> None:
@@ -388,7 +408,7 @@ class LspClient:
 		is frozen at that text, and files created/edited/deleted behind the
 		server's back (by the agent's own Edit tool, git, a formatter) are
 		invisible to workspace-wide answers. Call this before every tool call;
-		it costs one stat walk. Open documents are re-synced (or closed when
+		it costs one stat walk (a few ms on this repo; see `_scan_watched`). Open documents are re-synced (or closed when
 		deleted), and watched-suffix files that appeared/changed/vanished since
 		the last call are reported via `workspace/didChangeWatchedFiles`.
 		"""
