@@ -2,20 +2,19 @@ _Last updated: 2026-09-29_
 
 ## Branch
 
-`cursor/cleaner-code-with-main-2bd1` (draft PR #6 into `main`)
+`main` (up to date with `origin/main` before this commit)
 
 ## Current focus
 
-Scrollbar layout-jump fix ready to smoke; gallery shell-cache fix still awaiting restart smoke.
+Quality-gate fixes just landed; smoke items from earlier gallery/shell work still pending.
 
 ## Next steps
 
 1. Hard-reload the desktop shell — confirm no horizontal jump on load.
 2. Restart SpaceMaker (full quit) and smoke gallery — leave "Loading more", tiles show, console clean.
-3. Review / merge draft PR #6 when ready.
 
 ## Just changed
 
-- `theme.css`: `html { scrollbar-gutter: stable }`
-- `.app-main` gutter in `shell-layout.css` + `wireframes/app.html`
-- Inline critical CSS in `index.html` head (hide screens / body overflow before linked CSS)
+- `ui_shell.py`: ruff format
+- MCP tests: unique `test_codenav_server.py` / `test_webnav_server.py` basenames
+- Media convert unit tests: `path_fallback_allowed=False` against system `avifenc`
