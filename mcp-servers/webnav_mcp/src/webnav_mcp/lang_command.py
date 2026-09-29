@@ -7,9 +7,13 @@ package-manager-mediated run as a last resort.
 
 from __future__ import annotations
 
+import logging
 import shutil
 import sys
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 def _local_bin_candidates(workspace_root: Path, bin_name: str) -> list[Path]:
@@ -31,13 +35,32 @@ def _resolve_bin(workspace_root: Path, bin_name: str, npx_args: list[str]) -> li
 	on_path = shutil.which(bin_name)
 	if on_path:
 		return [on_path, "--stdio"]
+	logger.warning(
+		"%s not found locally (node_modules/.bin) or on PATH; falling back to "
+		"'npx --yes %s', which downloads it on first use.",
+		bin_name,
+		" ".join(npx_args),
+	)
 	# Bare "npx" fails under CreateProcess on Windows (npx is npx.cmd / npx.ps1).
 	npx = shutil.which("npx") or "npx"
 	return [npx, "--yes", *npx_args, "--stdio"]
 
 
 def resolve_ts_command(workspace_root: Path) -> list[str]:
-	return _resolve_bin(workspace_root, "typescript-language-server", ["typescript-language-server"])
+	# typescript-language-server requires "typescript" as a peer dependency
+	# it does NOT bundle: `npx --yes typescript-language-server` alone
+	# resolves and starts the binary but then fails at LSP `initialize` with
+	# "Could not find a valid TypeScript installation" unless the workspace
+	# happens to have its own node_modules/typescript. Pulling in "typescript"
+	# alongside via `-p` makes the npx fallback self-sufficient. Pinned to the
+	# 5.x line: an unpinned `-p typescript` can resolve the 7.x native-compiler
+	# preview, which has no lib/tsserverlibrary.js and breaks resolution the
+	# same way.
+	return _resolve_bin(
+		workspace_root,
+		"typescript-language-server",
+		["-p", "typescript@5", "-p", "typescript-language-server", "typescript-language-server"],
+	)
 
 
 def resolve_html_command(workspace_root: Path) -> list[str]:

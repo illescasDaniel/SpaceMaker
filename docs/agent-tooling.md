@@ -187,6 +187,11 @@ Answering then happens in two stages:
    real type checker accepts the candidate as structurally conforming.
    Results are labeled `(type-verified)`.
 
+The candidate scan and webnav's JS-fallback file scan (below) both skip
+`.venv`/`node_modules`/`.git`/etc. via the shared `mcp_nav_shared/exclude.py`
+— without it, `implementations` used to abort entirely on the first
+unreadable or non-UTF-8 file under a `.venv` it walked into.
+
 Firing many `documentSymbol` requests concurrently (`asyncio.gather`) while
 building candidates made ty respond with a `"content modified"` LSP error
 under load (~86 concurrent requests for this codebase's size); the fix is to
@@ -295,6 +300,18 @@ falling back to `PATH` and then `npx` — same fallback chain as codenav's ty
 resolver. On Windows it prefers the `.cmd` launcher under `.bin/` (the
 extensionless npm shim is a POSIX script that `CreateProcess` rejects with
 WinError 193); `npx` is resolved via `shutil.which` for the same reason.
+
+**Gotcha:** `typescript-language-server` needs `typescript` as a peer
+dependency it does not bundle — it resolves TS from the workspace's own
+`node_modules`, not from wherever the server binary itself came from. In a
+workspace with no local `typescript` install, `npx --yes
+typescript-language-server` alone starts the process but then fails at LSP
+`initialize` with "Could not find a valid TypeScript installation". The
+`npx` fallback therefore pulls in `-p typescript@5` alongside the server
+binary itself — pinned to the 5.x line, since an unpinned `-p typescript`
+can resolve the 7.x native-compiler preview, which ships a different
+package layout (no `lib/tsserverlibrary.js`) and breaks resolution the same
+way.
 
 `search_symbol` only covers JS: the HTML/CSS language servers don't
 implement a useful `workspace/symbol`, and webnav does **not** reimplement

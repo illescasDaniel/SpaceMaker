@@ -2,7 +2,11 @@
 
 Hosts may spawn stdio MCP processes with a cwd that is not the repo
 (e.g. Cursor using $HOME). Prefer an explicit override, then Claude Code's
-injected project dir, then the repo root inferred from this package path.
+injected project dir, then the process's current working directory — never
+a path baked into this package's own install location, since that would
+silently point every un-configured host at wherever these servers happen to
+be installed from (e.g. this repo) instead of the project actually being
+worked on.
 """
 
 from __future__ import annotations
@@ -11,16 +15,12 @@ import os
 from pathlib import Path
 
 
-# mcp-servers/mcp-nav-shared/src/mcp_nav_shared/workspace.py → repo root is five parents up.
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-
-
 def resolve_workspace_root(explicit_env: str) -> Path:
 	for key in (explicit_env, "CLAUDE_PROJECT_DIR"):
 		raw = os.environ.get(key)
 		if raw:
 			return Path(raw).expanduser().resolve()
-	return _REPO_ROOT
+	return Path.cwd().resolve()
 
 
 def resolve_source_root(explicit_env: str, workspace_root: Path) -> Path:

@@ -73,6 +73,64 @@ def test_given_two_exact_matches_when_resolve_symbol_then_ambiguous_lists_candid
 	assert "b.py" in text
 
 
+def test_given_ambiguous_methods_when_resolve_symbol_then_qualifies_with_class_name(tmp_path):
+	# given — two classes in the same file each define a `run` method; the
+	# bare name alone can't tell them apart, so the ambiguity listing should
+	# show `ClassName.run` for each rather than two identical `run` lines.
+	uri = (tmp_path / "svc.py").as_uri()
+	range_a = {"start": {"line": 0, "character": 0}, "end": {"line": 5, "character": 0}}
+	range_b = {"start": {"line": 10, "character": 0}, "end": {"line": 15, "character": 0}}
+	method_a = {
+		"name": "run",
+		"kind": 6,
+		"location": {"uri": uri, "range": {"start": {"line": 1, "character": 1}, "end": {"line": 1, "character": 4}}},
+	}
+	method_b = {
+		"name": "run",
+		"kind": 6,
+		"location": {"uri": uri, "range": {"start": {"line": 11, "character": 1}, "end": {"line": 11, "character": 4}}},
+	}
+	class_a = {
+		"name": "Alpha",
+		"kind": 5,
+		"range": range_a,
+		"selectionRange": range_a,
+		"children": [
+			{
+				"name": "run",
+				"kind": 6,
+				"range": method_a["location"]["range"],
+				"selectionRange": method_a["location"]["range"],
+				"children": [],
+			}
+		],
+	}
+	class_b = {
+		"name": "Beta",
+		"kind": 5,
+		"range": range_b,
+		"selectionRange": range_b,
+		"children": [
+			{
+				"name": "run",
+				"kind": 6,
+				"range": method_b["location"]["range"],
+				"selectionRange": method_b["location"]["range"],
+				"children": [],
+			}
+		],
+	}
+	client = _FakeResolveClient([method_a, method_b], [class_a, class_b])
+	# when / then
+	with pytest.raises(SymbolResolutionError) as caught:
+		asyncio.run(resolve_symbol(client, tmp_path, "run"))
+	text = str(caught.value)
+	assert "Alpha.run" in text
+	assert "Beta.run" in text
+	assert "same file" in text
+	assert "search_symbol" in text
+
+
 def test_given_file_path_when_two_exact_matches_then_narrows_to_match(tmp_path):
 	# given
 	uri_a = (tmp_path / "a.py").as_uri()

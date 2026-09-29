@@ -40,7 +40,9 @@ tab counts as one character).
 - [`mcp-nav-shared`](../mcp-nav-shared/README.md)
 - Node packages providing the language servers (e.g.
   `vscode-langservers-extracted`, `typescript-language-server`) on `PATH` or
-  under `node_modules/.bin/`
+  under `node_modules/.bin/` — otherwise falls back to `npx` on first use
+  (`typescript-language-server`'s npx fallback also pulls in `typescript@5`,
+  since it needs TypeScript as a peer dependency it doesn't bundle)
 
 ## Run
 

@@ -374,8 +374,10 @@ def to_symbol_tree(symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def format_outline(symbols: list[dict[str, Any]], *, indent: str = "  ") -> str:
-	"""Indented `name  [Kind]  :line` tree, from either shape `documentSymbol`
-	can return (see `is_hierarchical_document_symbols`)."""
+	"""Indented `name  [Kind]  :start-end` tree, from either shape
+	`documentSymbol` can return (see `is_hierarchical_document_symbols`).
+	The end line lets an agent judge a member's size (e.g. "is this method
+	worth reading in full?") without a separate call."""
 	if not symbols:
 		return "No symbols found."
 	roots = to_symbol_tree(symbols)
@@ -383,7 +385,9 @@ def format_outline(symbols: list[dict[str, Any]], *, indent: str = "  ") -> str:
 	def walk(nodes: list[dict[str, Any]], depth: int) -> None:
 		for node in nodes:
 			kind = symbol_kind_label(node["kind"])
-			lines.append(f"{indent * depth}{node['name']}  [{kind}]  :{node['start_line'] + 1}")
+			start, end = node["start_line"] + 1, node["end_line"] + 1
+			span = f":{start}" if start == end else f":{start}-{end}"
+			lines.append(f"{indent * depth}{node['name']}  [{kind}]  {span}")
 			walk(node["children"], depth + 1)
 
 	lines: list[str] = []

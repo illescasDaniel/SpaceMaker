@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from mcp_nav_shared.errors import ToolInputError, format_tool_error
 from codenav_mcp import server as codenav_server
 from codenav_mcp.server import _check_python_file, _protocol_class_names
+from mcp_nav_shared.errors import ToolInputError, format_tool_error
 
 
 def test_given_python_file_when_check_python_file_then_no_error():

@@ -102,6 +102,20 @@ def test_given_explicit_roots_list_when_build_workspace_index_then_kept_separate
 	assert wireframe_idx.var_declarations["--bg"][0].value == "#eee"
 
 
+def test_given_named_subdir_root_when_build_workspace_index_then_file_paths_are_workspace_relative(tmp_path):
+	# given — a named root that's a subdirectory of the workspace; reported
+	# `file` paths should be relative to the *workspace*, consistent with
+	# every other webnav tool, not relative to the named root itself (which
+	# would silently drop the "static/" prefix and look wrong/ambiguous).
+	_write(tmp_path / "static" / "theme.css", ":root {\n\t--bg: #fff;\n}\n")
+	roots = [("static", tmp_path / "static")]
+	# when
+	indexes = web_index.build_workspace_index(tmp_path, roots)
+	# then
+	decl = indexes[0].var_declarations["--bg"][0]
+	assert decl.file == "static/theme.css"
+
+
 def test_given_roots_env_string_when_parse_roots_env_then_labels_map_to_absolute_paths(tmp_path):
 	# given
 	raw = "static=src/static,wireframes=wireframes"

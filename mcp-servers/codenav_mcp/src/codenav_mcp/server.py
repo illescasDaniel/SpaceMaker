@@ -22,7 +22,9 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from mcp.server.mcpserver import MCPServer
 from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
+from mcp_nav_shared.exclude import is_excluded
 from mcp_nav_shared.format import (
 	format_callers,
 	format_diagnostics,
@@ -38,8 +40,8 @@ from mcp_nav_shared.format import (
 from mcp_nav_shared.lsp_client import LspClient
 from mcp_nav_shared.resolve import resolve_symbol
 from mcp_nav_shared.workspace import resolve_source_root, resolve_workspace_root
+
 from codenav_mcp.ty_command import resolve_ty_command
-from mcp.server.mcpserver import MCPServer
 
 
 WORKSPACE_ROOT = resolve_workspace_root("CODENAV_MCP_WORKSPACE")
@@ -378,20 +380,39 @@ async def implementations(port_name: str) -> str:
 
 	try:
 		port_module = _module_path(WORKSPACE_ROOT / port_rel_path)
-		candidate_files = sorted(SOURCE_ROOT.rglob("*.py"))
-		# Sequential, not `asyncio.gather`: firing ~90 concurrent documentSymbol
-		# requests at ty made it respond with a "content modified" LSP error;
-		# sequential stays fast (under a second for this codebase's size).
-		symbol_lists = [await client.document_symbol(str(p)) for p in candidate_files]
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 
+	# Vendored/generated/virtualenv trees are never this project's own source
+	# and can be enormous (a `.venv` alone can dwarf the real codebase) — skip
+	# them outright rather than walking (and failing to decode) thousands of
+	# irrelevant files.
+	all_candidate_files = sorted(p for p in SOURCE_ROOT.rglob("*.py") if not is_excluded(p, SOURCE_ROOT))
 	port_abs_path = (WORKSPACE_ROOT / port_rel_path).resolve()
+	# Sequential, not `asyncio.gather`: firing ~90 concurrent documentSymbol
+	# requests at ty made it respond with a "content modified" LSP error;
+	# sequential stays fast (under a second for this codebase's size). Each
+	# file is fetched independently (not one list comprehension) so a single
+	# unreadable/undecodable candidate (binary file mis-suffixed `.py`,
+	# permission error, …) is skipped rather than aborting the whole scan.
+	candidate_files: list[Path] = []
+	symbol_lists: list[list[dict[str, Any]]] = []
+	unreadable: list[Path] = []
+	for path in all_candidate_files:
+		try:
+			symbols = await client.document_symbol(str(path))
+		except TOOL_ERRORS:
+			unreadable.append(path)
+			continue
+		candidate_files.append(path)
+		symbol_lists.append(symbols)
+
 	name_matches: list[tuple[Path, str, str]] = []  # (path, class name, module path)
 	for path, symbols in zip(candidate_files, symbol_lists, strict=True):
 		try:
 			candidate_source = path.read_text(encoding="utf-8")
-		except OSError:
+		except (OSError, UnicodeDecodeError):
+			unreadable.append(path)
 			continue
 		other_protocols = _protocol_class_names(candidate_source)
 		for cls_node in (n for n in to_symbol_tree(symbols) if n["kind"] == 5):
@@ -399,11 +420,19 @@ async def implementations(port_name: str) -> str:
 				continue  # the port never "implements" itself
 			if cls_node["name"] in other_protocols:
 				continue  # another Protocol, not a concrete implementer
+			try:
+				candidate_module = _module_path(path)
+			except ToolInputError:
+				continue  # outside SOURCE_ROOT's import-path derivation; can't probe it
 			if port_method_names <= _method_names(cls_node):
-				name_matches.append((path, cls_node["name"], _module_path(path)))
+				name_matches.append((path, cls_node["name"], candidate_module))
 
+	skipped_note = f" ({len(unreadable)} file(s) under {SOURCE_ROOT} skipped: unreadable)" if unreadable else ""
 	if not name_matches:
-		return f"No classes under {SOURCE_ROOT} cover {port.name}'s methods: {', '.join(sorted(port_method_names))}."
+		return (
+			f"No classes under {SOURCE_ROOT} cover {port.name}'s methods: "
+			f"{', '.join(sorted(port_method_names))}.{skipped_note}"
+		)
 
 	probe_uri = (WORKSPACE_ROOT / _PROBE_RELATIVE_PATH).as_uri()
 	verified: list[str] = []
@@ -419,17 +448,28 @@ async def implementations(port_name: str) -> str:
 				await client.change_scratch_document(probe_uri, code)
 			items = await client.pull_diagnostics(probe_uri)
 			rel = uri_to_relative(path.as_uri(), WORKSPACE_ROOT)
-			if any(item.get("code") == "invalid-return-type" for item in items):
+			# Verified means the probe document has *no* diagnostics at all —
+			# not just none tagged `invalid-return-type`. A candidate module
+			# that fails to import (e.g. it lives outside where its own
+			# import path resolves, a common miss when SOURCE_ROOT doesn't
+			# match the project's real package layout) produces an
+			# `unresolved-import` diagnostic instead, and with only the
+			# narrower check that case was silently counted as verified even
+			# though ty never actually checked the assignment.
+			if not items:
+				verified.append(f"{cls_name}  ({rel})")
+			elif any(item.get("code") == "invalid-return-type" for item in items):
 				unverified.append(f"{cls_name}  ({rel})  — method names match but ty rejects the assignment")
 			else:
-				verified.append(f"{cls_name}  ({rel})")
+				reasons = "; ".join(str(item.get("message", "")).splitlines()[0] for item in items[:3])
+				unverified.append(f"{cls_name}  ({rel})  — could not verify: {reasons}")
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 	finally:
 		if opened:
 			await client.close_scratch_document(probe_uri)
 
-	lines = [f"{len(verified)} class(es) implement {port.name} (type-verified):"]
+	lines = [f"{len(verified)} class(es) implement {port.name} (type-verified):{skipped_note}"]
 	lines += verified or ["(none)"]
 	if unverified:
 		lines += ["", "Method-name matches that don't type-check as the port:"]

@@ -31,14 +31,18 @@ def test_given_claude_project_dir_when_no_explicit_env_then_uses_claude(tmp_path
 	assert root == claude.resolve()
 
 
-def test_given_no_env_when_resolve_workspace_root_then_repo_from_package(monkeypatch):
-	# given
+def test_given_no_env_when_resolve_workspace_root_then_uses_cwd(tmp_path, monkeypatch):
+	# given — no explicit override and no host-injected project dir: the
+	# server must fall back to wherever it was actually launched (its own
+	# install location, e.g. a repo it ships from, is never the right guess
+	# for a different project's checkout).
 	monkeypatch.delenv("CODENAV_MCP_WORKSPACE", raising=False)
 	monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+	monkeypatch.chdir(tmp_path)
 	# when
 	root = resolve_workspace_root("CODENAV_MCP_WORKSPACE")
-	# then — mcp-servers/mcp-nav-shared/src/mcp_nav_shared/workspace.py → five parents = repo root
-	assert (root / "mcp-servers" / "mcp-nav-shared" / "src" / "mcp_nav_shared" / "workspace.py").is_file()
+	# then
+	assert root == tmp_path.resolve()
 
 
 def test_given_explicit_source_root_env_when_resolve_source_root_then_used(tmp_path, monkeypatch):

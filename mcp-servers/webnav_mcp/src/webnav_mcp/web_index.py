@@ -20,10 +20,10 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from mcp_nav_shared.exclude import EXCLUDED_DIR_NAMES
+
 
 DEFAULT_ROOT_LABEL = "web"
-# Directories skipped everywhere (vendored/generated code, not this project's own).
-EXCLUDED_DIR_NAMES = {"node_modules", ".git", "vendor", "dist", "build", "__pycache__"}
 
 _VAR_NAME_RE = re.compile(r"--[a-zA-Z0-9_-]+")
 _VAR_DECL_RE = re.compile(r"(--[a-zA-Z0-9_-]+)\s*:\s*([^;{}]+);")
@@ -360,10 +360,16 @@ def _relevant_files(root: Path) -> list[Path]:
 	return sorted(files)
 
 
-def build_root_index(root: Path, name: str) -> RootIndex:
+def build_root_index(root: Path, name: str, workspace_root: Path | None = None) -> RootIndex:
+	"""Scan `root` for CSS/HTML/JS files. Recorded `file` paths are relative to
+	`workspace_root` (defaulting to `root` itself) so multi-root setups
+	(`WEBNAV_MCP_ROOTS`) report paths consistently with every other webnav
+	tool — root-relative paths would otherwise look wrong/ambiguous whenever
+	a named root isn't the workspace root."""
+	base = workspace_root if workspace_root is not None else root
 	root_index = RootIndex(name=name, root=root)
 	for path in _relevant_files(root):
-		file_rel = str(path.relative_to(root)).replace("\\", "/")
+		file_rel = str(path.relative_to(base)).replace("\\", "/")
 		try:
 			text = path.read_text(encoding="utf-8")
 		except OSError:
@@ -386,7 +392,7 @@ def build_workspace_index(workspace_root: Path, roots: list[tuple[str, Path]] | 
 	this list — server.py resolves it once at startup)."""
 	if roots is None:
 		roots = [(DEFAULT_ROOT_LABEL, workspace_root)]
-	return [build_root_index(root, name) for name, root in roots]
+	return [build_root_index(root, name, workspace_root) for name, root in roots]
 
 
 def parse_roots_env(raw: str, workspace_root: Path) -> list[tuple[str, Path]]:

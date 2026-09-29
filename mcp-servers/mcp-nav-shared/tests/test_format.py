@@ -405,9 +405,24 @@ def test_given_hierarchical_symbols_when_format_outline_then_indents_children():
 	text = format_outline(_hierarchical_class_and_method())
 	# then
 	assert text.splitlines() == [
-		"Foo  [Class]  :1",
-		"  bar  [Method]  :2",
+		"Foo  [Class]  :1-4",
+		"  bar  [Method]  :2-3",
 	]
+
+
+def test_given_single_line_symbol_when_format_outline_then_span_omits_range():
+	# given — a one-line symbol (start == end) should print `:N`, not `:N-N`
+	symbols = [
+		{
+			"name": "X",
+			"kind": 13,
+			"location": {"range": {"start": {"line": 4, "character": 0}, "end": {"line": 4, "character": 5}}},
+		}
+	]
+	# when
+	text = format_outline(symbols)
+	# then
+	assert text.splitlines() == ["X  [Variable]  :5"]
 
 
 def test_given_flat_symbols_when_format_outline_then_nests_and_indents():
@@ -415,8 +430,8 @@ def test_given_flat_symbols_when_format_outline_then_nests_and_indents():
 	text = format_outline(_flat_class_and_method())
 	# then
 	assert text.splitlines() == [
-		"Foo  [Class]  :1",
-		"  bar  [Method]  :2",
+		"Foo  [Class]  :1-4",
+		"  bar  [Method]  :2-3",
 	]
 
 
