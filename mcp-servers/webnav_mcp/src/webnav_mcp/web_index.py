@@ -643,7 +643,9 @@ def unreferenced_selectors(idx: RootIndex) -> list[str]:
 	unreferenced = []
 	for token, hits in idx.selector_hits.items():
 		has_definition = any(h.kind == "css" for h in hits)
-		has_reference = any(h.kind in ("html", "js") and not h.dynamic for h in hits) or token[1:] in idx.string_literals
+		has_reference = (
+			any(h.kind in ("html", "js") and not h.dynamic for h in hits) or token[1:] in idx.string_literals
+		)
 		has_dynamic_prefix_reference = bool(_dynamic_prefix_hits(idx, token))
 		if has_definition and not has_reference and not has_dynamic_prefix_reference:
 			unreferenced.append(token)

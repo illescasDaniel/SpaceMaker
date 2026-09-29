@@ -278,7 +278,10 @@ def test_given_member_defined_on_grandparent_mixin_when_dotted_query_then_resolv
 	container_sym = {
 		"name": "AppServices",
 		"kind": 5,
-		"location": {"uri": svc_uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}}},
+		"location": {
+			"uri": svc_uri,
+			"range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}},
+		},
 	}
 	method = {
 		"name": "start_convert",
@@ -313,7 +316,10 @@ def test_given_member_on_no_supertype_when_dotted_query_then_raises_not_found(tm
 	container_sym = {
 		"name": "AppServices",
 		"kind": 5,
-		"location": {"uri": svc_uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}}},
+		"location": {
+			"uri": svc_uri,
+			"range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}},
+		},
 	}
 	client = _FakeResolveClient(
 		[container_sym],
