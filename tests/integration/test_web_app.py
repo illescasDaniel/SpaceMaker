@@ -20,6 +20,8 @@ def test_given_fresh_app_when_get_index_then_returns_html() -> None:
 	assert response.headers.get("cache-control") == "no-store, must-revalidate"
 	assert f'window.SPACEMAKER_UI_SHELL_VERSION = "{UI_SHELL_VERSION}"' in response.text
 	assert f"/static/js/main.js?v={UI_SHELL_VERSION}" in response.text
+	assert 'type="importmap"' in response.text
+	assert f'"/static/js/api.js":"/static/js/api.js?v={UI_SHELL_VERSION}"' in response.text
 	csp = response.headers.get("content-security-policy", "")
 	assert "unsafe-eval" in csp
 
@@ -75,7 +77,7 @@ def test_given_fresh_app_when_get_index_then_home_layout_matches_spec() -> None:
 	assert 'id="transfer-save-tip"' in html
 	assert 'id="btn-transfer-open-documents"' in html
 	assert html.count('class="module-tile"') == 6
-	assert 'href="/static/shell-layout.css"' in html or 'href="/static/shell-home.css"' in html
+	assert 'href="/static/shell-layout.css' in html or 'href="/static/shell-home.css' in html
 
 
 def test_given_default_window_geometry_when_inspect_then_1152x864() -> None:

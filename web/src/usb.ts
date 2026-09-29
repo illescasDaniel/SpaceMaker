@@ -435,7 +435,7 @@ function bindUsbDesktop() {
 			.then(function () {
 				return R.api("POST", "/api/usb-transfer/start");
 			})
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Transfer could not start.", "uft-form-banner");
 				if (S.state) {
@@ -445,21 +445,21 @@ function bindUsbDesktop() {
 	});
 	R.onClick("btn-uft-pause", function () {
 		R.api("POST", "/api/usb-transfer/pause")
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Pause failed.", "uft-form-banner");
 			});
 	});
 	R.onClick("btn-uft-resume", function () {
 		R.api("POST", "/api/usb-transfer/resume")
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Resume failed.", "uft-form-banner");
 			});
 	});
 	R.onClick("btn-uft-stop", function () {
 		R.api("POST", "/api/usb-transfer/stop")
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Stop failed.", "uft-form-banner");
 			});

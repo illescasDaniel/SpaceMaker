@@ -78,6 +78,22 @@ def webengine_storage_path() -> str:
 	return str(base)
 
 
+def clear_webengine_http_cache(storage_path: str | None = None) -> None:
+	"""Drop Chromium HTTP/code caches under the profile so shell modules cannot stick.
+
+	Shell pages already send ``Cache-Control: no-store``, but Qt WebEngine has been
+	observed to reuse on-disk ES module bytes for unversioned relative imports.
+	Prefs/local storage outside these cache dirs are left alone.
+	"""
+	import shutil
+
+	root = Path(storage_path) if storage_path else Path(webengine_storage_path())
+	for name in ("Cache", "Code Cache", "GPUCache", "Service Worker"):
+		target = root / name
+		if target.exists():
+			shutil.rmtree(target, ignore_errors=True)
+
+
 def bundle_resource_root() -> Path | None:
 	"""Linux AppImage / AppDir share tree (legal, tool catalog, icon)."""
 	override = os.environ.get("SPACEMAKER_BUNDLE_ROOT", "").strip()

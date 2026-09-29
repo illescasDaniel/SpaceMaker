@@ -37,6 +37,8 @@ export function formatApiError(item: unknown): string {
 	return JSON.stringify(item);
 }
 
+/** Callers use method-first `R.api(method, path, body)` (same as `apiSend`). */
+R.api = apiSend;
 R.apiSend = (url, method, body) => apiSend(method || "GET", url, body);
 R.apiGet = apiGet;
 R.formatApiError = formatApiError;

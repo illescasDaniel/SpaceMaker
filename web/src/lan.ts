@@ -216,7 +216,7 @@ function bindLanDesktop() {
 	}
 	function refreshShareSelection(paths) {
 		return R.api("POST", "/api/share/selection", { paths: paths })
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				if (paths?.length) {
 					window.alert(err.message || "Could not update the share list.");
@@ -281,7 +281,7 @@ function bindLanDesktop() {
 			return Promise.resolve(null);
 		}
 		return R.api("POST", "/api/transfer/add", { paths: paths })
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				window.alert(err.message || "Could not add to the transfer session.");
 				throw err;

@@ -6,14 +6,15 @@ _Last updated: 2026-09-29_
 
 ## Current focus
 
-Merged latest `main` (including codenav/webnav dogfooding fixes) into this branch.
+Gallery / shell-cache fix committed: auto JS fingerprint + import map, `R.*` registry aliases, bare-ref fixes, WebEngine HTTP cache clear on launch.
 
 ## Next steps
 
-1. Manual smoke: desktop shell + mobile gallery; Settings → Clear browser cache.
-2. Optionally strip `@ts-nocheck` from feature modules over time.
-3. Review / merge draft PR #6 when ready.
+1. Restart SpaceMaker (full quit) and smoke gallery — should leave "Loading more" and show tiles; console clean.
+2. Review / merge draft PR #6 when ready.
 
 ## Just changed
 
-- Merged `main` → this branch: workspace-root cwd fallback, `implementations` harden, webnav JS fallback / typescript@5 npx pin, shared `exclude.py`, outline spans, workspace-relative web index paths (plus prior Windows `.cmd` shim resolution already on main).
+- Shell `R.api` / `bindInfoPanelToggle` / `setQrImageSrc` aliases; qualify bare `applyState`/`pushSettings`/`loadServerInfo`
+- Auto `UI_SHELL_VERSION` fingerprint + import map; fixed webengine profile `default`; clear HTTP caches on launch
+- Gallery timeline defensive fetch so spinner cannot stick

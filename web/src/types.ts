@@ -47,6 +47,7 @@ export interface GalleryMonthBlock {
  * define; feature modules remain progressively typed (@ts-nocheck until migrated).
  */
 export interface RuntimeRegistry {
+	api?: (method: string, path: string, body?: unknown) => Promise<unknown>;
 	apiSend?: (url: string, method?: string, body?: unknown) => Promise<unknown>;
 	apiGet?: (path: string) => Promise<unknown>;
 	formatApiError?: (item: unknown) => string;
@@ -58,8 +59,10 @@ export interface RuntimeRegistry {
 	clearFormBanner?: (bannerId?: string) => void;
 	setStatusLine?: (el: HTMLElement | null, detailText: string) => void;
 	bindDisclosure?: (btnId: string, panelId: string) => void;
+	bindInfoPanelToggle?: (btnId: string, panelId: string) => void;
 	setQrUrlField?: (inputId: string, url: string) => void;
 	setQrImage?: (img: HTMLImageElement | null, qrUrl: string, cacheKey?: string) => void;
+	setQrImageSrc?: (img: HTMLImageElement | null, qrUrl: string, cacheKey?: string) => void;
 	bootstrapMobileGalleryShell?: () => void;
 	bootstrapDesktopShell?: () => void;
 	[key: string]: ((...args: never[]) => unknown) | undefined;

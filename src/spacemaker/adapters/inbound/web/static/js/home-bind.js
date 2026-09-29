@@ -111,7 +111,7 @@ function bindHomeDesktop() {
 		}
 	});
 	document.querySelectorAll("#folder-picker input").forEach(function (box) {
-		box.addEventListener("change", pushSettings);
+		box.addEventListener("change", R.pushSettings);
 	});
 	document.getElementById("btn-start-extract").addEventListener("click", function () {
 		if (!R.validateStep1Form(true).ok) {
@@ -127,7 +127,7 @@ function bindHomeDesktop() {
 			.then(function () {
 				return R.api("POST", "/api/extract/start");
 			})
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Extract could not start.");
 				if (S.state) {
@@ -140,7 +140,7 @@ function bindHomeDesktop() {
 			return;
 		}
 		R.api("POST", "/api/extract/pause")
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Pause failed.");
 			});
@@ -150,7 +150,7 @@ function bindHomeDesktop() {
 			return;
 		}
 		R.api("POST", "/api/extract/resume")
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Resume failed.");
 			});
@@ -160,7 +160,7 @@ function bindHomeDesktop() {
 			return;
 		}
 		R.api("POST", "/api/extract/stop")
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Stop failed.");
 			});
@@ -170,7 +170,7 @@ function bindHomeDesktop() {
 			return;
 		}
 		R.api("POST", "/api/convert/stop")
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Stop convert failed.");
 			});
@@ -185,7 +185,7 @@ function bindHomeDesktop() {
 			.then(function () {
 				return R.api("POST", "/api/convert/start");
 			})
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Convert could not start.");
 			});
@@ -195,7 +195,7 @@ function bindHomeDesktop() {
 			.then(function () {
 				return R.api("GET", "/api/settings");
 			})
-			.then(applyState);
+			.then(R.applyState);
 	});
 	R.onClick("btn-open-gallery", function () {
 		R.showView("gallery");

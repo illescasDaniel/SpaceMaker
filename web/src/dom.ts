@@ -91,5 +91,8 @@ R.showFormBanner = showFormBanner;
 R.clearFormBanner = clearFormBanner;
 R.setStatusLine = setStatusLine;
 R.bindDisclosure = bindDisclosure;
+/** Feature modules still call the pre-rename names. */
+R.bindInfoPanelToggle = bindDisclosure;
 R.setQrUrlField = setQrUrlField;
 R.setQrImage = setQrImage;
+R.setQrImageSrc = setQrImage;

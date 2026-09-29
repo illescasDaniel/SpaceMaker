@@ -153,7 +153,7 @@ function bindSettingsDesktop() {
 	});
 	R.onClick("btn-settings-clear-prefs-confirm", function () {
 		R.api("POST", "/api/preferences/clear")
-			.then(applyState)
+			.then(R.applyState)
 			.then(function () {
 				hideSettingsConfirms();
 				showSettingsFeedback("Preferences cleared.");
@@ -171,7 +171,7 @@ function bindSettingsDesktop() {
 	});
 	R.onClick("btn-settings-reset-confirm", function () {
 		R.api("POST", "/api/library/reset")
-			.then(applyState)
+			.then(R.applyState)
 			.then(function () {
 				hideSettingsConfirms();
 				showSettingsFeedback("Library reset.");
@@ -214,7 +214,7 @@ function bindSettingsDesktop() {
 				renderComponentsList(payload);
 				return R.api("GET", "/api/settings");
 			})
-			.then(applyState)
+			.then(R.applyState)
 			.then(function () {
 				R.showView("home");
 				return null;
@@ -238,13 +238,13 @@ function bindSettingsDesktop() {
 				renderComponentsList(payload);
 				return R.api("GET", "/api/settings");
 			})
-			.then(applyState)
+			.then(R.applyState)
 			.then(function () {
 				if (S.state && toolsBlockMainApp(S.state)) {
 					R.showView("components", { skipHistory: true });
 				}
 			})
-			.then(applyState)
+			.then(R.applyState)
 			.catch(function (err) {
 				R.showFormBanner(err.message || "Could not delete downloaded components.");
 			});

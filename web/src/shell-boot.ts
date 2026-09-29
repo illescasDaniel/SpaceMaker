@@ -26,7 +26,7 @@ function bootDesktopSession() {
 			}
 			return settings;
 		})
-		.then(applyState)
+		.then(R.applyState)
 		.then(function () {
 			R.healIfStaleShell(S.state);
 			if (S.state && R.toolsBlockMainApp(S.state)) {
@@ -35,7 +35,7 @@ function bootDesktopSession() {
 					.then(function () {
 						return R.api("GET", "/api/settings");
 					})
-					.then(applyState);
+					.then(R.applyState);
 			}
 			return null;
 		})
@@ -67,7 +67,7 @@ function bootDesktopSession() {
 				R.updateExtractButtons(S.state);
 			}
 		})
-		.then(loadServerInfo)
+		.then(R.loadServerInfo)
 		.catch(function (err) {
 			R.showFormBanner(err.message || "Failed to load settings.");
 		});

@@ -1,17 +1,42 @@
-"""Desktop / phone web UI shell version (bump when static assets change materially).
+"""Desktop / phone web UI shell asset token (auto, not hand-bumped).
 
-Single source of truth: bump ``UI_SHELL_VERSION`` here only. Served HTML is stamped
-at request time so ``/static/js/main.js`` never hardcodes a parallel expected version.
+Token is a short hash of ``static/js/*.js`` so HTML, ``/api/settings``, and an
+import map stay in sync whenever the process starts. Shell HTML/CSS/JS are served
+with ``Cache-Control: no-store`` — we do not rely on long-lived browser cache for
+these lightweight pages. Qt WebEngine has still been observed to keep stale ES
+module bytes for relative imports (``import "./api.js"``) that lack a ``?v=``;
+``stamp_shell_html`` therefore emits an import map remapping every ``/static/js/*``
+URL to the fingerprinted form.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
+from pathlib import Path
 
 
-UI_SHELL_VERSION = "2026.09.cleaner-code.main-merge"
+def _static_js_dir() -> Path:
+	return Path(__file__).resolve().parents[1] / "adapters" / "inbound" / "web" / "static" / "js"
+
+
+def compute_ui_shell_version(*, js_dir: Path | None = None) -> str:
+	"""Content fingerprint of shell ES modules (stable until those files change)."""
+	root = js_dir if js_dir is not None else _static_js_dir()
+	digest = hashlib.sha256()
+	if root.is_dir():
+		for path in sorted(root.glob("*.js")):
+			digest.update(path.name.encode())
+			digest.update(b"\0")
+			digest.update(path.read_bytes())
+			digest.update(b"\0")
+	return digest.hexdigest()[:12]
+
+
+# Computed once at import / process start — restart the app after rebuilding static/js.
+UI_SHELL_VERSION = compute_ui_shell_version()
 
 _CSP_COMMON = (
 	"default-src 'self'; "
@@ -57,21 +82,47 @@ _SHELL_SCRIPT_RE = re.compile(
 	re.IGNORECASE,
 )
 _APP_JS_SRC_RE = re.compile(r"/static/(?:app\.js|js/[^\"'?]+)(?:\?[^\"']*)?")
+_SHELL_CSS_HREF_RE = re.compile(
+	r'((?:href)=["\'])(/static/(?:theme\.css|shell-[^\"\'?]+\.css))(?:\?[^\"\']*)?(["\'])',
+	re.IGNORECASE,
+)
 _META_SHELL_RE = re.compile(
 	r'<meta\s+name=["\']ui-shell-version["\']\s+content=["\'][^"\']*["\']\s*/?>',
 	re.IGNORECASE,
 )
+_IMPORT_MAP_RE = re.compile(
+	r'<script\s+type=["\']importmap["\']\s*>.*?</script>\s*',
+	re.IGNORECASE | re.DOTALL,
+)
 
 
 def webengine_profile_slug() -> str:
-	return UI_SHELL_VERSION.replace(".", "-")
+	"""Fixed profile dir — shell assets are no-store + fingerprinted; no versioned cache escapes."""
+	return "default"
 
 
-def stamp_shell_html(html: str, *, version: str = UI_SHELL_VERSION) -> str:
+def shell_js_import_map(*, version: str, js_dir: Path | None = None) -> str:
+	"""Map absolute ``/static/js/*.js`` URLs to ``?v=`` forms so relative ES imports bust cache."""
+	root = js_dir if js_dir is not None else _static_js_dir()
+	imports: dict[str, str] = {}
+	if root.is_dir():
+		for path in sorted(root.glob("*.js")):
+			url = f"/static/js/{path.name}"
+			imports[url] = f"{url}?v={version}"
+	return json.dumps({"imports": imports}, separators=(",", ":"))
+
+
+def stamp_shell_html(
+	html: str,
+	*,
+	version: str = UI_SHELL_VERSION,
+	js_dir: Path | None = None,
+) -> str:
 	"""Embed ``version`` into shell HTML so the page matches ``/api/settings``.
 
-	Rewrites the ``SPACEMAKER_SHELL`` bootstrap script, static JS ``?v=`` cache
-	busters, and a ``ui-shell-version`` meta tag from the same constant used by the API.
+	Rewrites the ``SPACEMAKER_SHELL`` bootstrap script, static JS/CSS ``?v=`` cache
+	busters, a ``ui-shell-version`` meta tag, and an import map so every shell module
+	URL (including relative imports) resolves to the fingerprinted form.
 	"""
 	meta = f'<meta name="ui-shell-version" content="{version}">'
 	if _META_SHELL_RE.search(html):
@@ -96,4 +147,23 @@ def stamp_shell_html(html: str, *, version: str = UI_SHELL_VERSION) -> str:
 		return f"{path}?v={version}"
 
 	html = _APP_JS_SRC_RE.sub(_stamp_js, html)
+	html = _SHELL_CSS_HREF_RE.sub(rf"\1\2?v={version}\3", html)
+
+	import_map = (
+		f'<script type="importmap">{shell_js_import_map(version=version, js_dir=js_dir)}</script>\n'
+	)
+	html = _IMPORT_MAP_RE.sub("", html)
+	# Import map must precede the module entry script.
+	module_script = re.search(
+		r'<script\s[^>]*type=["\']module["\'][^>]*>|<script\s[^>]*src="/static/js/main\.js',
+		html,
+		flags=re.IGNORECASE,
+	)
+	if module_script:
+		html = html[: module_script.start()] + import_map + html[module_script.start() :]
+	elif "</head>" in html.lower():
+		idx = html.lower().rfind("</head>")
+		html = html[:idx] + import_map + html[idx:]
+	else:
+		html = import_map + html
 	return html

@@ -196,33 +196,42 @@ function fetchGalleryTimelinePage() {
 	}
 	S.galleryLoadingMore = true;
 	setGalleryLoadingMoreVisible(true);
-	R.api("GET", url)
-		.then(function (payload) {
-			var items = payload.items || [];
-			S.galleryLoadingMore = false;
-			setGalleryLoadingMoreVisible(false);
-			S.galleryNextCursor = payload.next_cursor || null;
-			S.galleryHasMore = Boolean(S.galleryNextCursor);
-			if (isFirstPage && !items.length) {
-				showGalleryTimelineMessage("No saved media yet");
-				S.galleryHasMore = false;
-				return;
-			}
-			appendGalleryTimelineItems(items);
-			if (!S.galleryHasMore) {
-				hideGallerySentinel();
-			}
-			scheduleGalleryWindowCheck();
-		})
-		.catch(function () {
-			S.galleryLoadingMore = false;
-			setGalleryLoadingMoreVisible(false);
-			S.galleryHasMore = false;
-			hideGallerySentinel();
-			if (isFirstPage) {
-				showGalleryTimelineMessage("Could not load gallery.");
-			}
-		});
+	function failLoad() {
+		S.galleryLoadingMore = false;
+		setGalleryLoadingMoreVisible(false);
+		S.galleryHasMore = false;
+		hideGallerySentinel();
+		if (isFirstPage) {
+			showGalleryTimelineMessage("Could not load gallery.");
+		}
+	}
+	if (typeof R.api !== "function") {
+		failLoad();
+		return;
+	}
+	try {
+		R.api("GET", url)
+			.then(function (payload) {
+				var items = payload.items || [];
+				S.galleryLoadingMore = false;
+				setGalleryLoadingMoreVisible(false);
+				S.galleryNextCursor = payload.next_cursor || null;
+				S.galleryHasMore = Boolean(S.galleryNextCursor);
+				if (isFirstPage && !items.length) {
+					showGalleryTimelineMessage("No saved media yet");
+					S.galleryHasMore = false;
+					return;
+				}
+				appendGalleryTimelineItems(items);
+				if (!S.galleryHasMore) {
+					hideGallerySentinel();
+				}
+				scheduleGalleryWindowCheck();
+			})
+			.catch(failLoad);
+	} catch (_err) {
+		failLoad();
+	}
 }
 function loadGallery() {
 	var host = document.getElementById("timeline-view");

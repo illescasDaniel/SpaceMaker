@@ -24,7 +24,11 @@ from spacemaker.adapters.inbound.qt_webengine_shutdown import (
 )
 from spacemaker.bootstrap.event_loop import uvicorn_loop_for_platform
 from spacemaker.bootstrap.logging_setup import configure_logging
-from spacemaker.bootstrap.paths import app_icon_path, webengine_storage_path
+from spacemaker.bootstrap.paths import (
+	app_icon_path,
+	clear_webengine_http_cache,
+	webengine_storage_path,
+)
 from spacemaker.bootstrap.services import AppServices, create_app
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
 from spacemaker.bootstrap.window_geometry import (
@@ -135,6 +139,10 @@ def main(argv: list[str] | None = None) -> None:
 		install_qt_native_style()
 		_apply_qt_window_icon()
 
+	storage = webengine_storage_path()
+	# Always start from fresh HTTP cache for lightweight shell assets (no manual version bump).
+	clear_webengine_http_cache(storage)
+
 	def on_closing() -> bool:
 		_shutdown_services(services_holder)
 		return True
@@ -155,7 +163,7 @@ def main(argv: list[str] | None = None) -> None:
 		webview.start(
 			gui=None if gui == "auto" else cast(GUIType, gui),
 			private_mode=False,
-			storage_path=webengine_storage_path(),
+			storage_path=storage,
 		)
 	except WebViewException as exc:
 		print(f"Desktop window unavailable ({exc}). Opening {url} in your browser.")
