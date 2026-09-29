@@ -1,8 +1,8 @@
-_Last updated: 2026-09-29_
+_Last updated: 2026-09-29 (session mcp-tools-cache)_
 
 ## Branch
 
-`claude/typescript-python-type-hints-0b69dc` (merged with latest `main` 2026-09-29)
+`claude/mcp-tools-cache-441056` (forked from `claude/typescript-python-type-hints-0b69dc`) — MCP caching + webnav TS support + `/new-worktree` fix; see `progress.md`/`decisions.md` 2026-09-29. Not yet applied to `main`.
 
 ## Current focus
 

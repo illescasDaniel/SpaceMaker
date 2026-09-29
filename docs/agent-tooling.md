@@ -187,6 +187,16 @@ Answering then happens in two stages:
    real type checker accepts the candidate as structurally conforming.
    Results are labeled `(type-verified)`.
 
+`implementations` is cached at three levels, each keyed so a hit is always
+correct: `LspClient.document_symbol` per document version (bumped by
+`ensure_open` exactly when mtime/size change); `_protocol_class_names` per
+`(path, mtime_ns, size)` (parsing every file's AST was ~70% of the warm cost);
+and the per-candidate `ty` probe verdicts, which can depend on transitive
+imports and are therefore dropped wholesale whenever *any* file under
+`CODENAV_MCP_SOURCE_ROOT` changes. Warm calls on this repo: ~140 ms → ~15-27 ms.
+Third-party packages changing on disk (`uv sync`) is not detected — restart the
+server after that.
+
 The candidate scan and webnav's JS-fallback file scan (below) both skip
 `.venv`/`node_modules`/`.git`/etc. via the shared `mcp_nav_shared/exclude.py`
 — without it, `implementations` used to abort entirely on the first
@@ -272,7 +282,13 @@ requests fail immediately and the next tool call starts a fresh one.
 tests importing `mcp_nav_shared` / `codenav_mcp` / `webnav_mcp` resolve (clean `ty
 check`, and codenav `references` include test usages).
 `diagnostics` falls back to the push `publishDiagnostics` cache when pull
-diagnostics are unsupported or empty (common for HTML/CSS servers).
+diagnostics are unsupported or empty (common for HTML/CSS servers, and always
+the case for `typescript-language-server`, which has no pull support). In that
+push-only case `LspClient.diagnostics` awaits the first `publishDiagnostics`
+after the document was last synced (up to `PUSH_DIAGNOSTICS_TIMEOUT`, 5 s)
+rather than answering from a stale or empty cache — before this, the first
+`diagnostics` call on a freshly edited `.ts`/`.js` file reported "No
+diagnostics." even for an obvious type error.
 All four positional tools reject non-Python files (`.py`/`.pyi` only) up
 front with a `ToolInputError` — ty otherwise mis-parses e.g. a `.md` file as
 Python and `diagnostics` returns a wall of bogus syntax errors for it.
@@ -342,9 +358,13 @@ across files that way — the most common question for this project's
 file, inline `<style>` block and wireframe). `mcp-servers/webnav_mcp/src/
 webnav_mcp/web_index.py` answers this with a **pure-Python scanner, not a language
 server**: no `@import` resolution, no real CSS parser, regex/brace-stack
-grade. It rescans on every call rather than caching — about 20 files total
-across both roots, a few ms — so there's no cache-invalidation story to get
-wrong.
+grade. It re-walks the roots on every call but reuses each root's parsed index
+while its files are unchanged: the cache key is the `(path, mtime_ns, size)`
+of every relevant file (`.css`/`.html`/`.js`/`.ts`/`.mts`/`.cts`), re-stat'd on
+every call, so an edit, add, or delete always invalidates it — there is no
+stale-answer window. Measured on this repo: `css_var` ~94 ms → ~2 ms,
+`selector` ~58 ms → ~1 ms, HTML `diagnostics` ~115 ms → ~11 ms (the rescan,
+not the language server, was the cost).
 
 Which roots get indexed, and under what labels, is generic and
 project-configurable via `WEBNAV_MCP_ROOTS` (a comma-separated list of
