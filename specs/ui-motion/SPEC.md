@@ -97,7 +97,7 @@ Only state changes the user directly causes. No page-load intro animations, no d
 
 - **Given** the user opened an item from a mounted timeline thumbnail
 - **When** they confirm **Delete** and the delete succeeds
-- **Then** the Gallery grid is shown first (no reload flash), and that item's thumbnail fades and shrinks out over `--dur-base`
+- **Then** the Gallery grid is shown first (no reload flash), and once its own fade-in has finished, that item's thumbnail fades and shrinks out over `--dur-base` (started sooner, the two fades overlap and the removal is barely visible)
 - **And** the thumbnail is removed even if `transitionend` never fires (fallback shortly after `--dur-base`)
 - **And** with reduced motion (`--dur-base` ≈ 0) it is removed immediately
 - **And** afterwards the timeline reloads from the server so counts and month groupings stay correct

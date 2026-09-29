@@ -3033,13 +3033,14 @@
 				removed = true;
 				thumb.remove();
 			}
-			// Let the grid paint first so the transition has a start state.
-			requestAnimationFrame(function () {
+			// Wait out the screen's own fade-in (also --dur-base); started together, the tile's fade
+			// would finish while the screen is still nearly transparent and go unseen.
+			var base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dur-base')) || 0;
+			setTimeout(function () {
 				thumb.classList.add('thumb-removing');
 				thumb.addEventListener('transitionend', removeThumb, { once: true });
-				var base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dur-base')) || 0;
 				setTimeout(removeThumb, base + 100); // fallback if transitionend never fires
-			});
+			}, base);
 		});
 
 		document.getElementById('btn-wireframe-show-components').addEventListener('click', function () {

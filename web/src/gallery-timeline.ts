@@ -250,8 +250,9 @@ function cssTimeToMs(value: string): number {
 /**
  * Fade/shrink out the still-mounted thumbnail of a just-deleted item, remove it, then call
  * `onDone` exactly once. Returns false (nothing scheduled, `onDone` not called) when the tile
- * is not mounted, so the caller can fall back to a plain reload. Removal does not depend on
- * `transitionend`: a timeout slightly past `--dur-base` guarantees it (also covers reduced
+ * is not mounted, so the caller can fall back to a plain reload. The fade starts after the
+ * screen's fade-in (`--dur-base`). Removal does not depend on `transitionend`: a timeout
+ * slightly past the fade's `--dur-base` guarantees it (also covers reduced
  * motion, where `--dur-base` is ~0).
  */
 function removeGalleryThumb(relativePath: string, onDone: () => void): boolean {
@@ -271,12 +272,13 @@ function removeGalleryThumb(relativePath: string, onDone: () => void): boolean {
 		onDone();
 	};
 	const base = cssTimeToMs(getComputedStyle(document.documentElement).getPropertyValue("--dur-base"));
-	// Next frame so the tile has painted its start state and the transition actually runs.
-	requestAnimationFrame(() => {
+	// Wait out the screen's own fade-in (`.screen.active`, also `--dur-base`): started together,
+	// the tile's fade would finish while the screen is still nearly transparent and go unseen.
+	window.setTimeout(() => {
 		tile.classList.add("thumb-removing");
 		tile.addEventListener("transitionend", finish, { once: true });
 		window.setTimeout(finish, base + 100);
-	});
+	}, base);
 	return true;
 }
 function loadGallery(): void {
