@@ -1,6 +1,6 @@
 # webnav-mcp
 
-MCP server for JS/HTML/CSS navigation — the counterpart to
+MCP server for JS/TS/HTML/CSS navigation — the counterpart to
 [`codenav-mcp`](../codenav_mcp/README.md) for front-end and markup assets.
 
 ## What it does
@@ -10,7 +10,7 @@ extension:
 
 | Extension | Backend |
 |-----------|---------|
-| `.js` / `.mjs` / `.cjs` | `typescript-language-server` (via `allowJs` / `jsconfig.json`) |
+| `.js` / `.mjs` / `.cjs` / `.ts` / `.mts` / `.cts` | `typescript-language-server` (JS via `allowJs` / `jsconfig.json`; TS sent with the `typescript` languageId) |
 | `.html` | `vscode-html-language-server` |
 | `.css` | `vscode-css-language-server` |
 
@@ -27,7 +27,7 @@ Binaries come from `vscode-langservers-extracted` (typically under
 `references` / `definition` / `diagnostics` also enrich from this index when
 the token under the cursor is a custom property or selector.
 
-`search_symbol` is **JS-only** — the HTML/CSS servers do not implement useful
+`search_symbol` is **JS/TS-only** — the HTML/CSS servers do not implement useful
 workspace symbol search.
 
 Positions are **1-indexed**. `column` is a UTF-16 character offset (a leading

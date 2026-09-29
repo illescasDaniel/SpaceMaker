@@ -426,3 +426,42 @@ def test_given_valid_selector_token_when_token_kind_then_matches_prefix(token):
 def test_given_non_selector_string_when_token_kind_then_none():
 	# when / then
 	assert web_index.token_kind("--bg") is None
+
+
+def test_given_ts_source_when_scan_then_var_usage_recorded(tmp_path):
+	# given
+	_write(
+		tmp_path / "theme.ts",
+		'el.style.setProperty("--accent", "red");\nconst x: string = el.style.getPropertyValue("--accent");\n',
+	)
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert "--accent" in idx.var_usages
+
+
+def test_given_unchanged_files_when_build_root_index_twice_then_reuses_index(tmp_path):
+	# given
+	_write(tmp_path / "a.css", ":root { --a: 1; }\n")
+	# when
+	first = web_index.build_root_index(tmp_path, "static")
+	second = web_index.build_root_index(tmp_path, "static")
+	# then
+	assert first is second
+
+
+@pytest.mark.parametrize("mutate", ["edit", "add", "delete"])
+def test_given_changed_files_when_build_root_index_then_cache_invalidated(tmp_path, mutate):
+	# given
+	css = _write(tmp_path / "a.css", ":root { --a: 1; }\n")
+	first = web_index.build_root_index(tmp_path, "static")
+	# when
+	if mutate == "edit":
+		css.write_text(":root { --a: 1; --bb: 2; }\n", encoding="utf-8")
+	elif mutate == "add":
+		_write(tmp_path / "b.css", ":root { --b: 2; }\n")
+	else:
+		css.unlink()
+	second = web_index.build_root_index(tmp_path, "static")
+	# then
+	assert second is not first

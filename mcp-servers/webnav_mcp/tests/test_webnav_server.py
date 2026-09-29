@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
+import pytest
 from webnav_mcp import server
 
 
@@ -48,3 +50,34 @@ def test_given_configured_web_roots_when_js_files_fallback_then_scans_only_those
 	files = server._js_files_fallback(tmp_path)
 	# then
 	assert {p.name for p in files} == {"app.js"}
+
+
+@pytest.mark.parametrize("name", ["a.ts", "a.mts", "a.cts", "a.js"])
+def test_given_script_file_when_client_for_then_routes_to_ts_server(monkeypatch, name):
+	# given
+	sentinel = object()
+
+	async def _fake_ts_client() -> object:
+		return sentinel
+
+	monkeypatch.setattr(server, "_get_ts_client", _fake_ts_client)
+	# when
+	client = asyncio.run(server._client_for(name))
+	# then
+	assert client is sentinel
+
+
+def test_given_ts_and_js_when_language_ids_then_ts_is_typescript():
+	# then
+	assert server._SCRIPT_LANGUAGE_IDS[".ts"] == "typescript"
+	assert server._SCRIPT_LANGUAGE_IDS[".js"] == "javascript"
+
+
+def test_given_ts_file_when_js_files_fallback_then_includes_ts(tmp_path, monkeypatch):
+	# given
+	_write(tmp_path / "app.ts")
+	monkeypatch.setattr(server, "WEB_ROOTS", [])
+	# when
+	files = server._js_files_fallback(tmp_path)
+	# then
+	assert {p.name for p in files} == {"app.ts"}

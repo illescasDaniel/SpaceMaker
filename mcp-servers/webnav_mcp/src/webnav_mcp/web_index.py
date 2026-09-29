@@ -4,8 +4,11 @@ The CSS/HTML language servers each see one document at a time, so `var(--x)`
 usages and `#id`/`.class` selectors can't be cross-referenced across files.
 This is a pure-Python scanner, not a language server: no `@import`
 resolution, no CSS parser, regex/brace-stack grade. It rescans on every call
-rather than caching — a few ms for a typical web-assets tree — so there is no
-cache-invalidation story to get wrong.
+on every call, but reuses each root's parsed index while that root's files are
+unchanged: the cache key is the `(path, mtime_ns, size)` of every relevant
+file, re-stat'd on each call, so an edit, add, or delete always invalidates
+it. Only the parse is skipped, not the directory walk, which keeps the
+invalidation story trivially correct.
 
 One or more named roots are indexed separately, since each may define its
 own values/markup and mixing them into one answer would be misleading (see
@@ -347,6 +350,13 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex, *, line_offse
 	)
 
 
+_SCRIPT_SUFFIXES = (".js", ".ts", ".mts", ".cts")
+_INDEXED_SUFFIXES = (".css", ".html", *_SCRIPT_SUFFIXES)
+
+# (root, name, base) -> (signature, index); see the module docstring.
+_ROOT_CACHE: dict[tuple[Path, str, Path], tuple[tuple[tuple[str, int, int], ...], RootIndex]] = {}
+
+
 def _relevant_files(root: Path) -> list[Path]:
 	if not root.is_dir():
 		return []
@@ -354,21 +364,37 @@ def _relevant_files(root: Path) -> list[Path]:
 		p
 		for p in root.rglob("*")
 		if p.is_file()
-		and p.suffix.lower() in (".css", ".html", ".js")
+		and p.suffix.lower() in _INDEXED_SUFFIXES
 		and EXCLUDED_DIR_NAMES.isdisjoint(p.relative_to(root).parts)
 	]
 	return sorted(files)
 
 
+def _signature(files: list[Path]) -> tuple[tuple[str, int, int], ...]:
+	entries: list[tuple[str, int, int]] = []
+	for path in files:
+		try:
+			stat = path.stat()
+		except OSError:
+			continue
+		entries.append((str(path), stat.st_mtime_ns, stat.st_size))
+	return tuple(entries)
+
+
 def build_root_index(root: Path, name: str, workspace_root: Path | None = None) -> RootIndex:
-	"""Scan `root` for CSS/HTML/JS files. Recorded `file` paths are relative to
+	"""Scan `root` for CSS/HTML/JS/TS files. Recorded `file` paths are relative to
 	`workspace_root` (defaulting to `root` itself) so multi-root setups
 	(`WEBNAV_MCP_ROOTS`) report paths consistently with every other webnav
 	tool — root-relative paths would otherwise look wrong/ambiguous whenever
 	a named root isn't the workspace root."""
 	base = workspace_root if workspace_root is not None else root
+	files = _relevant_files(root)
+	signature = _signature(files)
+	cached = _ROOT_CACHE.get((root, name, base))
+	if cached is not None and cached[0] == signature:
+		return cached[1]
 	root_index = RootIndex(name=name, root=root)
-	for path in _relevant_files(root):
+	for path in files:
 		file_rel = str(path.relative_to(base)).replace("\\", "/")
 		try:
 			text = path.read_text(encoding="utf-8")
@@ -379,8 +405,9 @@ def build_root_index(root: Path, name: str, workspace_root: Path | None = None) 
 			_scan_css_text(text, file_rel, root_index)
 		elif suffix == ".html":
 			_scan_html_text(text, file_rel, root_index)
-		elif suffix == ".js":
+		elif suffix in _SCRIPT_SUFFIXES:
 			_scan_js_text(text, file_rel, root_index)
+	_ROOT_CACHE[(root, name, base)] = (signature, root_index)
 	return root_index
 
 

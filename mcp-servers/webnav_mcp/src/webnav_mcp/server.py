@@ -1,11 +1,12 @@
-"""webnav: MCP server exposing JS/HTML/CSS language-server features (hover,
+"""webnav: MCP server exposing JS/TS/HTML/CSS language-server features (hover,
 definition, references, workspace symbol search, diagnostics) plus a
 workspace-wide CSS custom-property/selector index (css_var, selector) as
 MCP tools.
 
 Multiplexes three Node-based language servers behind one MCP tool set,
 routed by file extension: `typescript-language-server` for `.js`/`.mjs`/
-`.cjs` (via `allowJs`, no TypeScript required), and `vscode-html-language-
+`.cjs` (via `allowJs`) and `.ts`/`.mts`/`.cts` (sent with the `typescript`
+languageId), and `vscode-html-language-
 server`/`vscode-css-language-server` (from `vscode-langservers-extracted`)
 for `.html`/`.css`. Mirrors codenav_mcp's shape and its shared
 `mcp_nav_shared.lsp_client.LspClient`; see docs/agent-tooling.md for details.
@@ -55,10 +56,10 @@ _POSITION_NOTE = (
 mcp = MCPServer(
 	name="webnav",
 	instructions=(
-		"Code navigation for this project's JS/HTML/CSS, backed by "
-		"typescript-language-server (JS) and vscode-langservers-extracted "
+		"Code navigation for this project's JS/TS/HTML/CSS, backed by "
+		"typescript-language-server (JS/TS) and vscode-langservers-extracted "
 		"(HTML/CSS). Prefer this over grepping for symbol definitions/usages. "
-		"search_symbol only covers JS (the HTML/CSS servers don't implement "
+		"search_symbol only covers JS/TS (the HTML/CSS servers don't implement "
 		"useful workspace-wide symbol search). The language servers only see "
 		"one file at a time, so `--custom-properties` and `#id`/`.class` "
 		"selectors can't be cross-referenced across files that way; use "
@@ -70,6 +71,10 @@ mcp = MCPServer(
 )
 
 _JS_EXTENSIONS = {".js", ".mjs", ".cjs"}
+_TS_EXTENSIONS = {".ts", ".mts", ".cts"}
+# Everything the one typescript-language-server instance serves.
+_SCRIPT_EXTENSIONS = _JS_EXTENSIONS | _TS_EXTENSIONS
+_SCRIPT_LANGUAGE_IDS = {**dict.fromkeys(_JS_EXTENSIONS, "javascript"), **dict.fromkeys(_TS_EXTENSIONS, "typescript")}
 
 _ts_client: LspClient | None = None
 _html_client: LspClient | None = None
@@ -101,7 +106,7 @@ def _js_files_fallback(workspace_root: Path) -> list[Path]:
 		files.extend(
 			p
 			for p in root.rglob("*")
-			if p.is_file() and p.suffix.lower() in _JS_EXTENSIONS and not is_excluded(p, root)
+			if p.is_file() and p.suffix.lower() in _SCRIPT_EXTENSIONS and not is_excluded(p, root)
 		)
 	return files
 
@@ -114,6 +119,7 @@ async def _get_ts_client() -> LspClient:
 				workspace_root=WORKSPACE_ROOT,
 				command=resolve_ts_command(WORKSPACE_ROOT),
 				language_id="javascript",
+				language_ids=_SCRIPT_LANGUAGE_IDS,
 			)
 			await _ts_client.start()
 			# tsserver's workspace/symbol only searches files it has opened, so
@@ -160,13 +166,15 @@ async def _get_css_client() -> LspClient:
 
 async def _client_for(file_path: str) -> LspClient:
 	suffix = Path(file_path).suffix.lower()
-	if suffix in _JS_EXTENSIONS:
+	if suffix in _SCRIPT_EXTENSIONS:
 		return await _get_ts_client()
 	if suffix == ".html":
 		return await _get_html_client()
 	if suffix == ".css":
 		return await _get_css_client()
-	raise ToolInputError(f"webnav has no language server for {file_path!r} (supported: .js/.mjs/.cjs/.html/.css)")
+	raise ToolInputError(
+		f"webnav has no language server for {file_path!r} (supported: .js/.mjs/.cjs/.ts/.mts/.cts/.html/.css)"
+	)
 
 
 def _resolve_path(file_path: str) -> Path:
@@ -263,9 +271,9 @@ async def references(file_path: str, line: int, column: int, include_declaration
 
 @mcp.tool()
 async def search_symbol(query: str) -> str:
-	"""Search JS files for a symbol by name (function, class, const, etc.).
+	"""Search JS/TS files for a symbol by name (function, class, const, etc.).
 
-	JS-only: the HTML/CSS language servers don't implement useful
+	JS/TS-only: the HTML/CSS language servers don't implement useful
 	workspace-wide symbol search (webnav does not reimplement it). Use this
 	to find a symbol's file/position first, then pass that position to
 	definition/references/hover. Returned positions point at the identifier

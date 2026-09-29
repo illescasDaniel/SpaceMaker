@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from mcp_nav_shared import lsp_client
 from mcp_nav_shared.lsp_client import LanguageServerExitedError, LspClient, LspRequestError
 
 
@@ -77,6 +78,7 @@ def test_given_pull_unsupported_when_diagnostics_then_returns_push_cache(tmp_pat
 		raise LspRequestError("textDocument/diagnostic", -32601, "Method not found")
 
 	monkeypatch.setattr(client, "_request", _boom)
+	monkeypatch.setattr(lsp_client, "PUSH_DIAGNOSTICS_TIMEOUT", 0.01)
 	# when
 	items = asyncio.run(client.diagnostics(str(src)))
 	# then
@@ -96,6 +98,7 @@ def test_given_empty_pull_and_push_cache_when_diagnostics_then_prefers_cache(tmp
 		return {"result": {"kind": "full", "items": []}}
 
 	monkeypatch.setattr(client, "_request", _empty)
+	monkeypatch.setattr(lsp_client, "PUSH_DIAGNOSTICS_TIMEOUT", 0.01)
 	# when
 	items = asyncio.run(client.diagnostics(str(src)))
 	# then
@@ -179,3 +182,50 @@ def test_given_closed_scratch_document_when_reopened_then_symbols_are_not_stale(
 	asyncio.run(client.close_scratch_document(uri))
 	# then
 	assert uri not in client._symbol_cache
+
+
+def test_given_ts_suffix_when_ensure_open_then_did_open_uses_mapped_language_id(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "a.ts").write_text("export const x = 1;\n", encoding="utf-8")
+	(tmp_path / "b.js").write_text("export const y = 1;\n", encoding="utf-8")
+	client = _started_client(tmp_path, language_id="javascript")
+	client.language_ids = {".ts": "typescript"}
+	sent: list[dict] = []
+	monkeypatch.setattr(client, "_notify", lambda _m, params: sent.append(params["textDocument"]))
+	# when
+	asyncio.run(client.ensure_open(str(tmp_path / "a.ts")))
+	asyncio.run(client.ensure_open(str(tmp_path / "b.js")))
+	# then
+	assert [d["languageId"] for d in sent] == ["typescript", "javascript"]
+
+
+def test_given_push_only_server_when_diagnostics_then_waits_for_push_after_sync(tmp_path, monkeypatch):
+	# given
+	src = tmp_path / "a.ts"
+	src.write_text("x\n", encoding="utf-8")
+	client = _started_client(tmp_path, language_id="typescript")
+	monkeypatch.setattr(client, "_notify", lambda *_a, **_k: None)
+	uri = src.resolve().as_uri()
+	pushed = [{"message": "late push"}]
+
+	async def _reject(_method: str, _params: dict, timeout: float = 20) -> dict:
+		raise LspRequestError("textDocument/diagnostic", -32601, "Unhandled method")
+
+	monkeypatch.setattr(client, "_request", _reject)
+
+	async def _run() -> list[dict]:
+		async def _push_later() -> None:
+			await asyncio.sleep(0.05)
+			client._dispatch(
+				{"method": "textDocument/publishDiagnostics", "params": {"uri": uri, "diagnostics": pushed}}
+			)
+
+		task = asyncio.create_task(_push_later())
+		items = await client.diagnostics(str(src))
+		await task
+		return items
+
+	# when
+	items = asyncio.run(_run())
+	# then
+	assert items == pushed
