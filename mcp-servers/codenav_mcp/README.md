@@ -28,7 +28,10 @@ Then position tools when you already have a `path:line:col`:
 
 `name` and `query` are accepted as aliases on the name-based tools
 (`port_name` / `name` / `query` on `implementations`). A missing/wrong
-param yields a soft hint instead of a validation wall.
+param yields a soft hint instead of a validation wall. Dotted names may nest
+(`Outer.Inner.method`); `implementations` also takes `file_path` to pick one
+port when the name exists in several files, and counts inherited members and
+dataclass/`self.x` fields toward a port's required names.
 
 Positions are **1-indexed**. `column` is a UTF-16 character offset (a leading
 tab counts as one character).
@@ -53,7 +56,7 @@ uv run python -m codenav_mcp.server
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CODENAV_MCP_WORKSPACE` | inferred from install / `CLAUDE_PROJECT_DIR` | Project root for the language server |
+| `CODENAV_MCP_WORKSPACE` | unset → follows the client's MCP roots when they name a worktree of the same repo, else `CLAUDE_PROJECT_DIR`/cwd | Pins the project root (never overridden). See the `workspace` tool |
 | `CODENAV_MCP_SOURCE_ROOT` | whole workspace | Directory scanned for `implementations` candidates and dotted-import derivation (SpaceMaker sets `src`) |
 
 ## Example MCP host config

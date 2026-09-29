@@ -20,7 +20,7 @@ def test_given_message_when_lsp_request_error_then_exposes_method():
 
 
 class _FakeStdin:
-	def write(self, _data: bytes) -> None:
+	def write(self, data: bytes) -> None:
 		return None
 
 	async def drain(self) -> None:
@@ -85,14 +85,13 @@ def test_given_pull_unsupported_when_diagnostics_then_returns_push_cache(tmp_pat
 	assert items == cached
 
 
-def test_given_empty_pull_and_push_cache_when_diagnostics_then_prefers_cache(tmp_path, monkeypatch):
+def test_given_empty_full_pull_and_stale_push_cache_when_diagnostics_then_trusts_pull(tmp_path, monkeypatch):
 	# given
 	src = tmp_path / "x.html"
 	src.write_text("<p></p>\n", encoding="utf-8")
 	client = _started_client(tmp_path, language_id="html")
 	uri = src.resolve().as_uri()
-	cached = [{"message": "pushed", "range": {"start": {"line": 0, "character": 0}}}]
-	client._diagnostics[uri] = cached
+	client._diagnostics[uri] = [{"message": "pushed", "range": {"start": {"line": 0, "character": 0}}}]
 
 	async def _empty(_method: str, _params: dict, timeout: float = 20) -> dict:
 		return {"result": {"kind": "full", "items": []}}
@@ -102,7 +101,52 @@ def test_given_empty_pull_and_push_cache_when_diagnostics_then_prefers_cache(tmp
 	# when
 	items = asyncio.run(client.diagnostics(str(src)))
 	# then
-	assert items == cached
+	assert items == []
+
+
+def test_given_fixed_file_when_resynced_then_pushed_diagnostics_are_dropped(tmp_path, monkeypatch):
+	# given
+	src = tmp_path / "x.py"
+	src.write_text("x: int = 'a'\n", encoding="utf-8")
+	client = _started_client(tmp_path)
+	monkeypatch.setattr(client, "_notify", lambda *_a, **_k: None)
+	uri = asyncio.run(client.ensure_open(str(src)))
+	client._diagnostics[uri] = [{"message": "old error"}]
+	# when
+	src.write_text("x: int = 1\n\n", encoding="utf-8")
+	asyncio.run(client.ensure_open(str(src)))
+	# then
+	assert uri not in client._diagnostics
+
+
+class _RecordingStdin(_FakeStdin):
+	def __init__(self) -> None:
+		self.written: list[bytes] = []
+
+	def write(self, data: bytes) -> None:
+		self.written.append(data)
+
+
+def _sent_bodies(stdin: _RecordingStdin) -> list[dict]:
+	import json
+
+	return [json.loads(chunk.split(b"\r\n\r\n", 1)[1]) for chunk in stdin.written]
+
+
+def test_given_server_requests_when_dispatched_then_client_replies(tmp_path):
+	# given
+	client = _started_client(tmp_path)
+	stdin = _RecordingStdin()
+	client._proc.stdin = stdin  # type: ignore[union-attr]
+	# when
+	client._dispatch({"id": 7, "method": "workspace/configuration", "params": {"items": [{}, {}]}})
+	client._dispatch({"id": 8, "method": "client/registerCapability", "params": {}})
+	client._dispatch({"id": 9, "method": "some/unknown", "params": {}})
+	# then
+	replies = {body["id"]: body for body in _sent_bodies(stdin)}
+	assert replies[7]["result"] == [None, None]
+	assert replies[8]["result"] is None and "error" not in replies[8]
+	assert replies[9]["error"]["code"] == -32601
 
 
 def test_given_pending_request_when_server_exits_then_request_fails_fast(tmp_path):

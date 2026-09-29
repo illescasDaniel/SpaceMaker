@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
 from mcp_nav_shared.exclude import is_excluded
 from mcp_nav_shared.format import (
@@ -40,12 +42,19 @@ from mcp_nav_shared.format import (
 from mcp_nav_shared.lsp_client import LspClient
 from mcp_nav_shared.params import resolve_name_query
 from mcp_nav_shared.resolve import resolve_symbol
-from mcp_nav_shared.workspace import resolve_source_root, resolve_workspace_root
+from mcp_nav_shared.workspace import WorkspaceSelector, resolve_source_root
 
 from codenav_mcp.ty_command import resolve_ty_command
 
 
-WORKSPACE_ROOT = resolve_workspace_root("CODENAV_MCP_WORKSPACE")
+logger = logging.getLogger(__name__)
+
+# Which checkout/worktree to navigate is decided per request (see
+# `WorkspaceSelector`): the host starts this process once, usually from the
+# main checkout, even when the session works in a linked worktree.
+_selector = WorkspaceSelector("CODENAV_MCP_WORKSPACE")
+WORKSPACE_ROOT = _selector.base
+_workspace_source = "configured"
 # Root for import-path derivation and implementations' workspace-wide class
 # scan. Defaults to the whole workspace; set CODENAV_MCP_SOURCE_ROOT (e.g. to
 # "src") in a project's MCP config to scope/speed up the scan.
@@ -78,6 +87,38 @@ _client: LspClient | None = None
 _client_lock = asyncio.Lock()
 
 
+_workspace_lock = asyncio.Lock()
+
+
+async def _configure_workspace(root: Path, source: str) -> None:
+	"""Re-target the server at `root`: the language server, probe verdicts and
+	every path derived from the old root belong to the previous tree."""
+	global WORKSPACE_ROOT, SOURCE_ROOT, _client, _workspace_source, _probe_cache_signature
+	if _client is not None:
+		try:
+			await _client.stop()
+		except Exception:
+			logger.debug("failed to stop ty server on workspace switch", exc_info=True)
+		_client = None
+	WORKSPACE_ROOT = root
+	SOURCE_ROOT = resolve_source_root("CODENAV_MCP_SOURCE_ROOT", root)
+	_workspace_source = source
+	_probe_cache.clear()
+	_probe_cache_signature = ()
+	logger.info("workspace: %s (%s)", root, source)
+
+
+async def _use_workspace(ctx: Context | None) -> None:
+	"""Called first by every tool. `ctx` is None only when a tool is invoked
+	directly (tests), in which case the current workspace stays as is."""
+	if ctx is None:
+		return
+	async with _workspace_lock:
+		selection = await _selector.select(ctx.session)
+		if selection.root != WORKSPACE_ROOT:
+			await _configure_workspace(selection.root, selection.source)
+
+
 def _check_python_file(file_path: str) -> None:
 	"""ty only understands Python; without this, asking it to type-check or
 	navigate a non-Python file (e.g. diagnostics on a README) silently
@@ -91,6 +132,11 @@ async def get_client() -> LspClient:
 	global _client
 	async with _client_lock:
 		if _client is None or not _client.is_alive:
+			if _client is not None:
+				try:
+					await _client.stop()  # reap the dead server instead of leaking it
+				except Exception:
+					logger.debug("failed to stop stale ty server", exc_info=True)
 			_client = LspClient(
 				workspace_root=WORKSPACE_ROOT,
 				command=resolve_ty_command(WORKSPACE_ROOT),
@@ -111,13 +157,21 @@ def _format_hover_contents(contents: Any) -> str:
 
 
 @mcp.tool()
-async def hover(file_path: str, line: int, column: int) -> str:
+async def workspace(ctx: Context | None = None) -> str:
+	"""Which directory is codenav navigating, and why? Use when results look like they come from the wrong checkout/worktree."""
+	await _use_workspace(ctx)
+	return f"{WORKSPACE_ROOT}  (source: {_workspace_source}; source root: {SOURCE_ROOT})"
+
+
+@mcp.tool()
+async def hover(file_path: str, line: int, column: int, ctx: Context | None = None) -> str:
 	"""Get type/documentation info for the symbol at a position.
 
 	`line` and `column` are 1-indexed. `column` is a UTF-16 character offset
 	on the line (not a visual/display column): a leading tab counts as one
 	character.
 	"""
+	await _use_workspace(ctx)
 	try:
 		_check_python_file(file_path)
 		client = await get_client()
@@ -128,7 +182,7 @@ async def hover(file_path: str, line: int, column: int) -> str:
 
 
 @mcp.tool()
-async def definition(file_path: str, line: int, column: int) -> str:
+async def definition(file_path: str, line: int, column: int, ctx: Context | None = None) -> str:
 	"""Go to the definition of the symbol at a position.
 
 	`line` and `column` are 1-indexed. `column` is a UTF-16 character offset
@@ -140,6 +194,7 @@ async def definition(file_path: str, line: int, column: int) -> str:
 	where `services: AppServices` is a constructor argument), not just
 	direct references to a name in scope.
 	"""
+	await _use_workspace(ctx)
 	try:
 		_check_python_file(file_path)
 		client = await get_client()
@@ -152,13 +207,16 @@ async def definition(file_path: str, line: int, column: int) -> str:
 
 
 @mcp.tool()
-async def references(file_path: str, line: int, column: int, include_declaration: bool = True) -> str:
+async def references(
+	file_path: str, line: int, column: int, include_declaration: bool = True, ctx: Context | None = None
+) -> str:
 	"""Find all usages of the symbol at a position across the workspace.
 
 	`line` and `column` are 1-indexed. `column` is a UTF-16 character offset
 	on the line (not a visual/display column): a leading tab counts as one
 	character.
 	"""
+	await _use_workspace(ctx)
 	try:
 		_check_python_file(file_path)
 		client = await get_client()
@@ -169,7 +227,7 @@ async def references(file_path: str, line: int, column: int, include_declaration
 
 
 @mcp.tool()
-async def search_symbol(query: str | None = None, name: str | None = None) -> str:
+async def search_symbol(query: str | None = None, name: str | None = None, ctx: Context | None = None) -> str:
 	"""Search the whole workspace for a symbol by name (class, function, method, etc.).
 
 	Use this to find a symbol's file/position first, then pass that position
@@ -179,6 +237,7 @@ async def search_symbol(query: str | None = None, name: str | None = None) -> st
 	other tools. Results include a SymbolKind label and are capped.
 	`name` is accepted as an alias for `query`.
 	"""
+	await _use_workspace(ctx)
 	try:
 		query = resolve_name_query(preferred="query", example="start_convert", query=query, name=name)
 		client = await get_client()
@@ -191,8 +250,9 @@ async def search_symbol(query: str | None = None, name: str | None = None) -> st
 
 
 @mcp.tool()
-async def diagnostics(file_path: str) -> str:
+async def diagnostics(file_path: str, ctx: Context | None = None) -> str:
 	"""Get ty's type-check diagnostics (errors/warnings) for a single file."""
+	await _use_workspace(ctx)
 	try:
 		_check_python_file(file_path)
 		client = await get_client()
@@ -208,6 +268,7 @@ async def symbol_info(
 	query: str | None = None,
 	file_path: str | None = None,
 	include_references: bool = True,
+	ctx: Context | None = None,
 ) -> str:
 	"""What is X and where is it used? Example: `symbol_info(name="JobsMixin.start_convert")`.
 
@@ -222,10 +283,9 @@ async def symbol_info(
 	listed back so you can retry with a narrower name or file_path.
 	`query` is accepted as an alias for `name`.
 	"""
+	await _use_workspace(ctx)
 	try:
-		name = resolve_name_query(
-			preferred="name", example="JobsMixin.start_convert", name=name, query=query
-		)
+		name = resolve_name_query(preferred="name", example="JobsMixin.start_convert", name=name, query=query)
 		client = await get_client()
 		resolved = await resolve_symbol(client, WORKSPACE_ROOT, name, file_path=file_path)
 		rel_path = uri_to_relative(resolved.uri, WORKSPACE_ROOT)
@@ -249,7 +309,7 @@ async def symbol_info(
 
 
 @mcp.tool()
-async def outline(file_path: str) -> str:
+async def outline(file_path: str, ctx: Context | None = None) -> str:
 	"""What's in this file? Example: `outline(file_path="src/spacemaker/bootstrap/services/jobs.py")`.
 
 	Indented outline (classes, methods, functions, with line numbers) of a
@@ -257,6 +317,7 @@ async def outline(file_path: str) -> str:
 	Follow up with hover/definition/references at a listed line, or
 	symbol_info by name.
 	"""
+	await _use_workspace(ctx)
 	try:
 		_check_python_file(file_path)
 		client = await get_client()
@@ -271,6 +332,7 @@ async def callers(
 	name: str | None = None,
 	query: str | None = None,
 	file_path: str | None = None,
+	ctx: Context | None = None,
 ) -> str:
 	"""Who calls this function? Example: `callers(name="start_convert")`.
 
@@ -281,6 +343,7 @@ async def callers(
 	pass file_path to disambiguate a common name). `query` is accepted as an
 	alias for `name`.
 	"""
+	await _use_workspace(ctx)
 	try:
 		name = resolve_name_query(preferred="name", example="start_convert", name=name, query=query)
 		client = await get_client()
@@ -327,48 +390,137 @@ def _is_protocol_base(base: ast.expr) -> bool:
 	return False
 
 
-def _protocol_class_names(source: str) -> set[str]:
-	"""Names of every class in `source` (at any nesting level) that subclasses
-	`Protocol`."""
+@dataclass(frozen=True)
+class _ClassInfo:
+	"""What `implementations` needs from a class's source: `documentSymbol`
+	exposes neither base classes nor `self.x = ...` attributes."""
+
+	name: str
+	bases: tuple[str, ...]  # simple names of the base expressions
+	is_protocol: bool
+	members: frozenset[str]  # methods, properties, class-level and `self.` attributes (no dunders)
+
+
+def _base_simple_name(base: ast.expr) -> str | None:
+	if isinstance(base, ast.Subscript):
+		base = base.value
+	if isinstance(base, ast.Name):
+		return base.id
+	if isinstance(base, ast.Attribute):
+		return base.attr
+	return None
+
+
+def _is_dunder(name: str) -> bool:
+	return name.startswith("__") and name.endswith("__")
+
+
+def _own_members(cls: ast.ClassDef) -> frozenset[str]:
+	names: set[str] = set()
+
+	def add_target(target: ast.expr) -> None:
+		if isinstance(target, ast.Name):
+			names.add(target.id)
+		elif isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
+			names.add(target.attr)
+		elif isinstance(target, (ast.Tuple, ast.List)):
+			for element in target.elts:
+				add_target(element)
+
+	for stmt in cls.body:
+		if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+			names.add(stmt.name)
+			for node in ast.walk(stmt):
+				if isinstance(node, ast.Assign):
+					for target in node.targets:
+						add_target(target)
+				elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+					add_target(node.target)
+		elif isinstance(stmt, ast.AnnAssign):
+			add_target(stmt.target)
+		elif isinstance(stmt, ast.Assign):
+			for target in stmt.targets:
+				add_target(target)
+	return frozenset(n for n in names if not _is_dunder(n))
+
+
+def _class_infos(source: str) -> list[_ClassInfo]:
+	"""Every class in `source` (at any nesting level)."""
 	try:
 		tree = ast.parse(source)
 	except SyntaxError:
-		return set()
-	return {
-		node.name
+		return []
+	return [
+		_ClassInfo(
+			name=node.name,
+			bases=tuple(n for n in map(_base_simple_name, node.bases) if n),
+			is_protocol=any(_is_protocol_base(base) for base in node.bases),
+			members=_own_members(node),
+		)
 		for node in ast.walk(tree)
-		if isinstance(node, ast.ClassDef) and any(_is_protocol_base(base) for base in node.bases)
-	}
+		if isinstance(node, ast.ClassDef)
+	]
 
 
-# path -> ((mtime_ns, size), protocol class names): a pure function of the
-# file's own text, so the stat pair is a sufficient key. Parsing every file's
-# AST dominated `implementations`' warm cost before this.
-_protocol_names_cache: dict[Path, tuple[tuple[int, int], set[str]]] = {}
+def _protocol_class_names(source: str) -> set[str]:
+	"""Names of every class in `source` (at any nesting level) that subclasses
+	`Protocol`."""
+	return {info.name for info in _class_infos(source) if info.is_protocol}
+
+
+# path -> ((mtime_ns, size), class infos): a pure function of the file's own
+# text, so the stat pair is a sufficient key. Parsing every file's AST
+# dominated `implementations`' warm cost before this.
+_class_infos_cache: dict[Path, tuple[tuple[int, int], list[_ClassInfo]]] = {}
+
+
+def _cached_class_infos(path: Path) -> list[_ClassInfo]:
+	stat = path.stat()
+	key = (stat.st_mtime_ns, stat.st_size)
+	hit = _class_infos_cache.get(path)
+	if hit is not None and hit[0] == key:
+		return hit[1]
+	infos = _class_infos(path.read_text(encoding="utf-8"))
+	_class_infos_cache[path] = (key, infos)
+	return infos
 
 
 def _cached_protocol_class_names(path: Path) -> set[str]:
-	stat = path.stat()
-	key = (stat.st_mtime_ns, stat.st_size)
-	hit = _protocol_names_cache.get(path)
-	if hit is not None and hit[0] == key:
-		return hit[1]
-	names = _protocol_class_names(path.read_text(encoding="utf-8"))
-	_protocol_names_cache[path] = (key, names)
-	return names
+	return {info.name for info in _cached_class_infos(path) if info.is_protocol}
 
 
-def _method_names(cls_node: dict[str, Any]) -> set[str]:
-	"""Method/property names (no dunders) directly under a `to_symbol_tree` class node."""
+def _symbol_members(cls_node: dict[str, Any]) -> set[str]:
+	"""Method/property/field names (no dunders) directly under a `to_symbol_tree` class node."""
 	names: set[str] = set()
 	for child in cls_node["children"]:
-		if child["kind"] not in (6, 7):  # Method, Property
+		if child["kind"] not in (6, 7, 8, 13):  # Method, Property, Field, Variable
 			continue
-		name = child["name"]
-		if name.startswith("__") and name.endswith("__"):
-			continue
-		names.add(name)
+		if not _is_dunder(child["name"]):
+			names.add(child["name"])
 	return names
+
+
+def _effective_members(
+	name: str,
+	own: set[str],
+	infos_by_name: dict[str, list[_ClassInfo]],
+) -> set[str]:
+	"""`own` plus everything inherited through same-workspace base classes
+	(matched by simple name; a cycle or an unknown base just stops the walk).
+	A class with the right method via a mixin or parent still satisfies a
+	Protocol, so the name pre-filter has to see inherited members too."""
+	members = set(own)
+	seen = {name}
+	pending = [b for info in infos_by_name.get(name, []) for b in info.bases]
+	while pending:
+		base = pending.pop()
+		if base in seen:
+			continue
+		seen.add(base)
+		for info in infos_by_name.get(base, []):
+			members |= info.members
+			pending.extend(info.bases)
+	return members
 
 
 _PROBE_RELATIVE_PATH = Path("mcp-servers") / ".codenav_probe.py"
@@ -389,6 +541,7 @@ def _probe_source(port_module: str, port_name: str, candidate_module: str, candi
 # (port module, port name, candidate module, class name) -> (verified?, line).
 _probe_cache: dict[tuple[str, str, str, str], tuple[bool, str]] = {}
 _probe_cache_signature: tuple[tuple[str, int, int], ...] = ()
+_probe_lock = asyncio.Lock()
 
 
 def _environment_paths() -> list[Path]:
@@ -418,6 +571,8 @@ async def implementations(
 	port_name: str | None = None,
 	name: str | None = None,
 	query: str | None = None,
+	file_path: str | None = None,
+	ctx: Context | None = None,
 ) -> str:
 	"""Find concrete classes that structurally satisfy a `Protocol` port.
 
@@ -430,8 +585,12 @@ async def implementations(
 	result means "assignable", not just "same method names". `port_name`
 	must itself resolve to a `Protocol` class; other classes' subclasses are
 	better found with `references`/`symbol_info`. `name` and `query` are
-	accepted as aliases for `port_name`.
+	accepted as aliases for `port_name`. `file_path` narrows the port lookup
+	to one file when the name exists in several. Members inherited from
+	same-workspace base classes, and fields/properties declared by the port,
+	count when matching names.
 	"""
+	await _use_workspace(ctx)
 	try:
 		port_name = resolve_name_query(
 			preferred="port_name",
@@ -441,7 +600,7 @@ async def implementations(
 			query=query,
 		)
 		client = await get_client()
-		port = await resolve_symbol(client, WORKSPACE_ROOT, port_name)
+		port = await resolve_symbol(client, WORKSPACE_ROOT, port_name, file_path=file_path)
 		port_rel_path = uri_to_relative(port.uri, WORKSPACE_ROOT)
 		port_symbols = await client.document_symbol(port_rel_path)
 		port_source = (WORKSPACE_ROOT / port_rel_path).read_text(encoding="utf-8")
@@ -458,9 +617,12 @@ async def implementations(
 	)
 	if port_class is None:
 		return f"{port_name!r} did not resolve to a class in {port_rel_path}."
-	port_method_names = _method_names(port_class)
-	if not port_method_names:
-		return f"{port.name} has no methods to match candidates against."
+	port_own = _symbol_members(port_class)
+	for info in _class_infos(port_source):
+		if info.name == port.name:
+			port_own |= info.members
+	if not port_own:
+		return f"{port.name} has no members to match candidates against."
 
 	try:
 		port_module = _module_path(WORKSPACE_ROOT / port_rel_path)
@@ -491,13 +653,24 @@ async def implementations(
 		candidate_files.append(path)
 		symbol_lists.append(symbols)
 
-	name_matches: list[tuple[Path, str, str]] = []  # (path, class name, module path)
-	for path, symbols in zip(candidate_files, symbol_lists, strict=True):
+	infos_by_path: dict[Path, list[_ClassInfo]] = {}
+	infos_by_name: dict[str, list[_ClassInfo]] = {}
+	for path in candidate_files:
 		try:
-			other_protocols = _cached_protocol_class_names(path)
+			infos = _cached_class_infos(path)
 		except (OSError, UnicodeDecodeError):
 			unreadable.append(path)
 			continue
+		infos_by_path[path] = infos
+		for info in infos:
+			infos_by_name.setdefault(info.name, []).append(info)
+	port_required = _effective_members(port.name, port_own, infos_by_name)
+
+	name_matches: list[tuple[Path, str, str]] = []  # (path, class name, module path)
+	for path, symbols in zip(candidate_files, symbol_lists, strict=True):
+		if path not in infos_by_path:
+			continue
+		other_protocols = {info.name for info in infos_by_path[path] if info.is_protocol}
 		for cls_node in (n for n in to_symbol_tree(symbols) if n["kind"] == 5):
 			if path.resolve() == port_abs_path and cls_node["name"] == port.name:
 				continue  # the port never "implements" itself
@@ -507,27 +680,33 @@ async def implementations(
 				candidate_module = _module_path(path)
 			except ToolInputError:
 				continue  # outside SOURCE_ROOT's import-path derivation; can't probe it
-			if port_method_names <= _method_names(cls_node):
+			own = _symbol_members(cls_node)
+			for info in infos_by_path[path]:
+				if info.name == cls_node["name"]:
+					own |= info.members
+			if port_required <= _effective_members(cls_node["name"], own, infos_by_name):
 				name_matches.append((path, cls_node["name"], candidate_module))
 
 	skipped_note = f" ({len(unreadable)} file(s) under {SOURCE_ROOT} skipped: unreadable)" if unreadable else ""
 	if not name_matches:
 		return (
 			f"No classes under {SOURCE_ROOT} cover {port.name}'s methods: "
-			f"{', '.join(sorted(port_method_names))}.{skipped_note}"
+			f"{', '.join(sorted(port_required))}.{skipped_note}"
 		)
 
 	global _probe_cache_signature
-	signature = _source_signature(all_candidate_files)
-	if signature != _probe_cache_signature:
-		_probe_cache.clear()
-		_probe_cache_signature = signature
-
 	probe_uri = (WORKSPACE_ROOT / _PROBE_RELATIVE_PATH).as_uri()
 	verified: list[str] = []
 	unverified: list[str] = []
 	opened = False
+	# All calls share one scratch document, so concurrent runs would overwrite
+	# each other's probe (and close it under one another): serialize them.
+	await _probe_lock.acquire()
 	try:
+		signature = _source_signature(all_candidate_files)
+		if signature != _probe_cache_signature:
+			_probe_cache.clear()
+			_probe_cache_signature = signature
 		for path, cls_name, candidate_module in name_matches:
 			cache_key = (port_module, port.name, candidate_module, cls_name)
 			rel = uri_to_relative(path.as_uri(), WORKSPACE_ROOT)
@@ -564,8 +743,11 @@ async def implementations(
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 	finally:
-		if opened:
-			await client.close_scratch_document(probe_uri)
+		try:
+			if opened:
+				await client.close_scratch_document(probe_uri)
+		finally:
+			_probe_lock.release()
 
 	lines = [f"{len(verified)} class(es) implement {port.name} (type-verified):{skipped_note}"]
 	lines += verified or ["(none)"]

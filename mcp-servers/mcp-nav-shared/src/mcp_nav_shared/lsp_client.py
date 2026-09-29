@@ -23,6 +23,17 @@ logger = logging.getLogger(__name__)
 # Max seconds to wait for a push-only server's publishDiagnostics after a sync.
 PUSH_DIAGNOSTICS_TIMEOUT = 5.0
 
+# Server->client requests that only need an acknowledgement.
+_NULL_REPLY_METHODS = {
+	"client/registerCapability",
+	"client/unregisterCapability",
+	"window/workDoneProgress/create",
+	"workspace/diagnostic/refresh",
+	"workspace/semanticTokens/refresh",
+	"workspace/inlayHint/refresh",
+	"workspace/codeLens/refresh",
+}
+
 
 class NotStartedError(RuntimeError):
 	pass
@@ -181,7 +192,27 @@ class LspClient:
 		async for _line in proc.stderr:
 			pass  # the language server's own stderr logging isn't surfaced; nothing to act on here
 
+	def _reply_to_server_request(self, msg: dict[str, Any]) -> None:
+		"""Answer a server->client request so the server never waits on us
+		(`workspace/configuration`, `client/registerCapability`, progress
+		creation, ...). Unknown methods get MethodNotFound."""
+		method = msg.get("method")
+		if method == "workspace/configuration":
+			items = (msg.get("params") or {}).get("items") or []
+			reply: dict[str, Any] = {"result": [None] * len(items)}
+		elif method in _NULL_REPLY_METHODS:
+			reply = {"result": None}
+		else:
+			reply = {"error": {"code": -32601, "message": f"Method not found: {method}"}}
+		try:
+			self._send({"jsonrpc": "2.0", "id": msg["id"], **reply})
+		except (NotStartedError, OSError, RuntimeError):
+			logger.debug("could not reply to server request %s", method, exc_info=True)
+
 	def _dispatch(self, msg: dict[str, Any]) -> None:
+		if "id" in msg and "method" in msg:
+			self._reply_to_server_request(msg)
+			return
 		if "id" in msg and "method" not in msg:
 			fut = self._pending.pop(msg["id"], None)
 			if fut is not None and not fut.done():
@@ -246,6 +277,10 @@ class LspClient:
 			return uri
 		text = abs_path.read_text(encoding="utf-8")
 		self._diag_events[uri] = asyncio.Event()
+		# The previous version's pushed diagnostics describe text that no longer
+		# exists; keeping them would resurface fixed errors as a "cache fallback".
+		if known is not None:
+			self._diagnostics.pop(uri, None)
 		if known is None:
 			self._notify(
 				"textDocument/didOpen",
@@ -331,8 +366,7 @@ class LspClient:
 		items = result.get("items")
 		if items is None:
 			return cached
-		if not items and cached:
-			return cached
+		# A pull answer for the current version is authoritative, empty included.
 		return items
 
 	async def document_symbol(self, file_path: str) -> list[dict[str, Any]]:

@@ -68,6 +68,31 @@ def _member_start_line(sym: dict[str, Any]) -> int:
 	return int((rng.get("start") or {}).get("line", 0))
 
 
+def _member_span(sym: dict[str, Any]) -> tuple[int, int]:
+	rng = (sym.get("location") or {}).get("range") or {}
+	start = int((rng.get("start") or {}).get("line", 0))
+	return start, int((rng.get("end") or {}).get("line", start))
+
+
+def _find_named_node(symbols: list[dict[str, Any]], name: str, line: int) -> dict[str, Any] | None:
+	"""Hierarchical `DocumentSymbol` named `name` (any depth), preferring the
+	one whose identifier sits on `line` so same-named classes don't get mixed up."""
+	found: list[dict[str, Any]] = []
+
+	def walk(nodes: list[dict[str, Any]]) -> None:
+		for node in nodes:
+			if str(node.get("name")) == name:
+				found.append(node)
+			walk(node.get("children") or [])
+
+	walk(symbols)
+	for node in found:
+		sel = (node.get("selectionRange") or node.get("range") or {}).get("start") or {}
+		if int(sel.get("line", -1)) == line:
+			return node
+	return found[0] if found else None
+
+
 def _find_member_node(symbols: list[dict[str, Any]], container_name: str, member_name: str) -> dict[str, Any] | None:
 	"""Search hierarchical `DocumentSymbol` results for `member_name` directly
 	under a node named `container_name` (searches nested classes too, in case
@@ -205,8 +230,14 @@ async def _exact_candidates(
 		exact = case_exact
 	if file_path is not None:
 		narrowed = [s for s in exact if _matches_file(s, workspace_root, file_path)]
-		if narrowed:
-			exact = narrowed
+		if exact and not narrowed:
+			# Silently answering with a symbol from a different file than the
+			# one the caller named would be a confidently wrong result.
+			raise SymbolResolutionError(
+				f"No symbol {name!r} in {file_path!r}; {len(exact)} match(es) elsewhere:\n"
+				f"{await _format_candidates(client, exact, workspace_root)}"
+			)
+		exact = narrowed
 	return exact
 
 
@@ -224,28 +255,43 @@ async def _resolve_simple(
 async def _resolve_dotted(
 	client: LspClient, workspace_root: Path, query: str, *, file_path: str | None
 ) -> ResolvedSymbol:
-	container_query, _, member_name = query.rpartition(".")
-	container = await _resolve_simple(client, workspace_root, container_query, file_path=file_path)
+	# `Outer.Inner.method`: the first segment is looked up workspace-wide, the
+	# rest are walked down through that symbol's document-symbol tree.
+	first, *path = query.split(".")
+	member_name = path[-1]
+	container = await _resolve_simple(client, workspace_root, first, file_path=file_path)
 	rel_path = uri_to_relative(container.uri, workspace_root)
 	members = await client.document_symbol(rel_path)
 	if is_hierarchical_document_symbols(members):
-		node = _find_member_node(members, container.name, member_name)
-		if node is not None:
-			return _resolved_from_hierarchical_node(member_name, node, container.uri)
+		found = _find_named_node(members, container.name, container.line)
+		for part in path:
+			found = next((c for c in (found or {}).get("children") or [] if str(c.get("name")) == part), None)
+		if found is not None:
+			return _resolved_from_hierarchical_node(member_name, found, container.uri)
 	else:
-		# Flat `SymbolInformation`: no nesting, so match by name within the
-		# container's own range instead.
-		matches = [
-			m
-			for m in members
-			if str(m.get("name") or "") == member_name
-			and container.range_start_line <= _member_start_line(m) <= container.range_end_line
-		]
-		if len(matches) > 1:
-			raise await _ambiguous(client, query, matches, workspace_root)
-		if matches:
-			return _resolved_from_symbol(matches[0])
-	inherited = await _resolve_inherited(client, workspace_root, container, member_name)
+		# Flat `SymbolInformation`: no nesting, so narrow by range containment
+		# one segment at a time.
+		span = (container.range_start_line, container.range_end_line)
+		match: dict[str, Any] | None = None
+		for part in path:
+			candidates = [
+				m
+				for m in members
+				if str(m.get("name") or "") == part
+				and span[0] <= _member_start_line(m) <= span[1]
+				and _member_span(m) != span
+			]
+			if len(candidates) > 1:
+				raise await _ambiguous(client, query, candidates, workspace_root)
+			if not candidates:
+				match = None
+				break
+			match = candidates[0]
+			span = _member_span(match)
+		if match is not None:
+			return _resolved_from_symbol(match)
+	# Inherited members only make sense for a plain `Class.member` query.
+	inherited = await _resolve_inherited(client, workspace_root, container, member_name) if len(path) == 1 else None
 	if inherited is None:
 		raise _not_found(query)
 	return inherited

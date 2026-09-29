@@ -135,10 +135,10 @@ def test_given_unchanged_file_when_cached_protocol_names_twice_then_parses_once(
 	# given
 	src = tmp_path / "port.py"
 	src.write_text("from typing import Protocol\n\nclass P(Protocol):\n\tdef f(self) -> None: ...\n", encoding="utf-8")
-	codenav_server._protocol_names_cache.clear()
+	codenav_server._class_infos_cache.clear()
 	parsed: list[str] = []
-	real = codenav_server._protocol_class_names
-	monkeypatch.setattr(codenav_server, "_protocol_class_names", lambda text: parsed.append(text) or real(text))
+	real = codenav_server._class_infos
+	monkeypatch.setattr(codenav_server, "_class_infos", lambda text: parsed.append(text) or real(text))
 	# when
 	first = codenav_server._cached_protocol_class_names(src)
 	second = codenav_server._cached_protocol_class_names(src)
@@ -151,7 +151,7 @@ def test_given_edited_file_when_cached_protocol_names_then_reparsed(tmp_path):
 	# given
 	src = tmp_path / "port.py"
 	src.write_text("class P:\n\tpass\n", encoding="utf-8")
-	codenav_server._protocol_names_cache.clear()
+	codenav_server._class_infos_cache.clear()
 	assert codenav_server._cached_protocol_class_names(src) == set()
 	# when
 	src.write_text("from typing import Protocol\n\nclass P(Protocol):\n\tpass\n", encoding="utf-8")
@@ -195,3 +195,134 @@ def test_given_lockfile_change_when_source_signature_then_differs(tmp_path, monk
 	lock.write_text("bb\n", encoding="utf-8")
 	# then
 	assert codenav_server._source_signature([]) != before
+
+
+_INHERITANCE_SOURCE = """
+from dataclasses import dataclass
+from typing import Protocol
+
+
+class Port(Protocol):
+	name: str
+
+	def run(self) -> None: ...
+
+
+class Mixin:
+	def run(self) -> None: ...
+
+
+@dataclass
+class Impl(Mixin):
+	name: str
+
+
+class Selfish:
+	def __init__(self) -> None:
+		self.name = "x"
+
+	def run(self) -> None: ...
+"""
+
+
+def _infos_by_name(source: str) -> dict[str, list]:
+	by_name: dict[str, list] = {}
+	for info in codenav_server._class_infos(source):
+		by_name.setdefault(info.name, []).append(info)
+	return by_name
+
+
+def test_given_class_body_and_self_attrs_when_class_infos_then_members_include_them():
+	# when
+	by_name = _infos_by_name(_INHERITANCE_SOURCE)
+	# then
+	assert by_name["Port"][0].members == {"name", "run"}
+	assert by_name["Impl"][0].members == {"name"}
+	assert by_name["Selfish"][0].members == {"name", "run"}
+	assert by_name["Impl"][0].bases == ("Mixin",)
+
+
+def test_given_inherited_method_when_effective_members_then_base_members_included():
+	# given
+	by_name = _infos_by_name(_INHERITANCE_SOURCE)
+	# when
+	members = codenav_server._effective_members("Impl", {"name"}, by_name)
+	# then
+	assert {"name", "run"} <= members
+
+
+def test_given_cyclic_bases_when_effective_members_then_terminates():
+	# given
+	by_name = _infos_by_name("class A(B):\n\tdef a(self): ...\n\nclass B(A):\n\tdef b(self): ...\n")
+	# when
+	members = codenav_server._effective_members("A", {"a"}, by_name)
+	# then
+	assert members == {"a", "b"}
+
+
+def test_given_property_and_field_symbols_when_symbol_members_then_both_counted():
+	# given
+	node = {
+		"children": [
+			{"kind": 7, "name": "prop"},
+			{"kind": 8, "name": "field"},
+			{"kind": 6, "name": "__init__"},
+			{"kind": 6, "name": "meth"},
+		]
+	}
+	# then
+	assert codenav_server._symbol_members(node) == {"prop", "field", "meth"}
+
+
+def test_given_file_path_when_implementations_then_passed_to_resolver(monkeypatch):
+	import asyncio
+
+	# given
+	seen: dict[str, object] = {}
+
+	async def _fake_client():
+		return object()
+
+	async def _fake_resolve(_client, _root, name, **kwargs):
+		seen["name"] = name
+		seen.update(kwargs)
+		raise ToolInputError("stop here")
+
+	monkeypatch.setattr(codenav_server, "get_client", _fake_client)
+	monkeypatch.setattr(codenav_server, "resolve_symbol", _fake_resolve)
+	# when
+	asyncio.run(codenav_server.implementations(port_name="Port", file_path="a/b.py"))
+	# then
+	assert seen == {"name": "Port", "file_path": "a/b.py"}
+
+
+def test_given_dead_client_when_get_client_then_stale_one_is_stopped(monkeypatch):
+	import asyncio
+
+	# given
+	class _Stale:
+		is_alive = False
+		stopped = False
+
+		async def stop(self) -> None:
+			self.stopped = True
+
+	class _Fresh:
+		is_alive = True
+
+		def __init__(self, **_kw) -> None:
+			pass
+
+		async def start(self) -> None:
+			pass
+
+	stale = _Stale()
+	monkeypatch.setattr(codenav_server, "_client", stale)
+	monkeypatch.setattr(codenav_server, "LspClient", _Fresh)
+	monkeypatch.setattr(codenav_server, "resolve_ty_command", lambda _root: ["ty"])
+	# when
+	client = asyncio.run(codenav_server.get_client())
+	# then
+	assert stale.stopped
+	assert isinstance(client, _Fresh)
+	monkeypatch.setattr(codenav_server, "_client", None)

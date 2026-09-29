@@ -34,7 +34,8 @@ _VAR_USE_RE = re.compile(r"var\(\s*(--[a-zA-Z0-9_-]+)\s*(,)?")
 _SELECTOR_TOKEN_RE = re.compile(r"[.#][a-zA-Z_-][a-zA-Z0-9_-]*")
 
 _STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>(.*?)</style>", re.IGNORECASE | re.DOTALL)
-_STYLE_ATTR_RE = re.compile(r'\bstyle\s*=\s*"([^"]*)"', re.IGNORECASE)
+# `(?<![\w-])`, not `\b`: `\b` also matches inside `data-id` / `data-style`.
+_STYLE_ATTR_RE = re.compile(r'(?<![\w-])style\s*=\s*"([^"]*)"', re.IGNORECASE)
 # A `src=` attribute means the tag has no inline body to scan (the capture
 # group would just be empty in that case, so this isn't strictly required —
 # kept for clarity and to skip a wasted regex pass over long external files
@@ -43,27 +44,30 @@ _SCRIPT_BLOCK_RE = re.compile(r"<script\b(?![^>]*\bsrc\s*=)[^>]*>(.*?)</script>"
 # Quote is a backreference (group 1) so `id="x"` and `id='x'` both match; the
 # value is group 2. Used for HTML markup and — since JS string literals may
 # themselves quote HTML (`innerHTML = '<span class="x">'`) — for JS source too.
-_ID_ATTR_RE = re.compile(r"""\bid\s*=\s*(["'])([^"']+)\1""", re.IGNORECASE)
-_CLASS_ATTR_RE = re.compile(r"""\bclass\s*=\s*(["'])([^"']*)\1""", re.IGNORECASE)
+_ID_ATTR_RE = re.compile(r"""(?<![\w-])id\s*=\s*(["'])([^"']+)\1""", re.IGNORECASE)
+_CLASS_ATTR_RE = re.compile(r"""(?<![\w-])class\s*=\s*(["'])([^"']*)\1""", re.IGNORECASE)
 
-_JS_SETPROPERTY_RE = re.compile(r"\.setProperty\(\s*[\"'](--[a-zA-Z0-9_-]+)[\"']")
-_JS_GETPROPERTYVALUE_RE = re.compile(r"\.getPropertyValue\(\s*[\"'](--[a-zA-Z0-9_-]+)[\"']")
-_JS_GET_ELEMENT_BY_ID_RE = re.compile(r"getElementById\(\s*[\"']([^\"']*)[\"']\s*(\+)?")
+# JS string literals below accept backticks too (template literals); a `${…}`
+# inside one ends the static part and is treated like a `+` concatenation.
+_JS_SETPROPERTY_RE = re.compile(r"\.setProperty\(\s*[\"'`](--[a-zA-Z0-9_-]+)[\"'`]")
+_JS_GETPROPERTYVALUE_RE = re.compile(r"\.getPropertyValue\(\s*[\"'`](--[a-zA-Z0-9_-]+)[\"'`]")
+_JS_GET_ELEMENT_BY_ID_RE = re.compile(r"getElementById\(\s*[\"'`]([^\"'`]*)[\"'`]\s*(\+)?")
 _JS_CLASSLIST_RE = re.compile(r"classList\.(add|remove|toggle|contains)\(([^)]*)\)")
 # `querySelector(?:All)?`, not `querySelectorAll?` — the latter only makes the
 # final `l` optional, so plain `querySelector(...)` would never match.
-_JS_QUERY_RE = re.compile(r"\b(?:querySelector(?:All)?|closest|matches)\(\s*[\"']([^\"']*)[\"']")
-_JS_CLASSNAME_ASSIGN_RE = re.compile(r"className\s*\+?=\s*[\"']([^\"']*)[\"']\s*(\+)?")
+_JS_QUERY_RE = re.compile(r"\b(?:querySelector(?:All)?|closest|matches)\(\s*[\"'`]([^\"'`]*)[\"'`]")
+_JS_CLASSNAME_ASSIGN_RE = re.compile(r"className\s*\+?=\s*[\"'`]([^\"'`]*)[\"'`]\s*(\+)?")
+_TEMPLATE_EXPR_RE = re.compile(r"\$\{[^}]*\}")
 # A local variable conventionally named like a class list (e.g. `mediaClass`,
 # `rowClasses`) being built up with `+=` (`mediaClass += ' slide-in-next-start'`)
 # rather than assigned straight to `.className`. Narrower than matching any
 # `identifier += 'literal'`, which would flag unrelated string-building code.
 # The exact identifier `className` is excluded — `_JS_CLASSNAME_ASSIGN_RE`
 # above already covers it — so the two regexes don't double-record a hit.
-_JS_CLASS_VAR_CONCAT_RE = re.compile(r"\b(?!className\b)\w*[Cc]lass\w*\s*\+=\s*[\"']([^\"']*)[\"']\s*(\+)?")
+_JS_CLASS_VAR_CONCAT_RE = re.compile(r"\b(?!className\b)\w*[Cc]lass\w*\s*\+=\s*[\"'`]([^\"'`]*)[\"'`]\s*(\+)?")
 # A string literal, optionally followed by `+` (string concatenation) — used to
 # find dynamic prefixes inside `classList.add(...)` call arguments.
-_STRING_LITERAL_RE = re.compile(r"[\"']([^\"']*)[\"']\s*(\+)?")
+_STRING_LITERAL_RE = re.compile(r"[\"'`]([^\"'`]*)[\"'`]\s*(\+)?")
 # A whole string literal that is itself a bare identifier-like name (`"btn-save"`),
 # not followed by `+`. Projects wrap DOM lookups in their own helpers
 # (`onClick("btn-save", …)`, `bindDisclosure("btn-x", "panel-x")`) that no fixed
@@ -82,8 +86,50 @@ def _strip_css_comments(text: str) -> str:
 
 
 def _strip_js_comments(text: str) -> str:
-	text = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.DOTALL)
-	return re.sub(r"//[^\n]*", "", text)
+	"""Drop `//` and `/* */` comments (keeping newlines so line numbers hold),
+	but not comment-looking text inside string literals (`"http://x"`).
+	' and " strings end at a newline, so a stray quote in a regex literal can't
+	desync the scan past its own line."""
+	if "//" not in text and "/*" not in text:
+		return text
+	out: list[str] = []
+	i, n = 0, len(text)
+	quote = ""
+	while i < n:
+		ch = text[i]
+		if quote:
+			out.append(ch)
+			if ch == "\\" and i + 1 < n:
+				out.append(text[i + 1])
+				i += 2
+				continue
+			if ch == quote or (ch == "\n" and quote != "`"):
+				quote = ""
+			i += 1
+		elif ch in "\"'`":
+			quote = ch
+			out.append(ch)
+			i += 1
+		elif text.startswith("//", i):
+			end = text.find("\n", i)
+			i = n if end < 0 else end
+		elif text.startswith("/*", i):
+			end = text.find("*/", i + 2)
+			end = n if end < 0 else end + 2
+			out.append("\n" * text.count("\n", i, end))
+			i = end
+		else:
+			out.append(ch)
+			i += 1
+	return "".join(out)
+
+
+def _static_prefix(literal: str, concat_follows: bool) -> tuple[str, bool]:
+	"""A template literal's text up to its first `${…}`, flagged dynamic —
+	the same "only a static prefix is known" shape as `"view-" + x`."""
+	if "${" in literal:
+		return literal.split("${", 1)[0], True
+	return literal, concat_follows
 
 
 def _strip_html_comments(text: str) -> str:
@@ -121,6 +167,9 @@ class SelectorHit:
 class RootIndex:
 	name: str
 	root: Path
+	# Directory the recorded `file` paths are relative to (the workspace root in
+	# multi-root setups); defaults to `root` itself.
+	base: Path | None = None
 	var_declarations: dict[str, list[VarDeclaration]] = field(default_factory=dict)
 	var_usages: dict[str, list[VarUsage]] = field(default_factory=dict)
 	selector_hits: dict[str, list[SelectorHit]] = field(default_factory=dict)
@@ -163,6 +212,10 @@ def _parse_blocks(text: str) -> list[_Block]:
 		elif ch == "}":
 			if open_stack:
 				open_stack.pop().end = i
+			buf_start = i + 1
+		elif ch == ";":
+			# A declaration (`color: #abc;`) ends here; without this reset, the
+			# next nested rule's selector text would swallow it.
 			buf_start = i + 1
 	return blocks
 
@@ -250,20 +303,29 @@ def _scan_markup_attrs(
 	builds markup from string literals (`innerHTML = '<span class="x">'`)."""
 	for match in _ID_ATTR_RE.finditer(text):
 		line = _line_at(text, match.start()) + line_offset
-		root_index.add_selector_hit(
-			SelectorHit(token=f"#{match.group(2)}", kind=kind, file=file_rel, line=line, detail=id_detail)
-		)
+		# `id="row-${i}"` (JS template): only the static prefix is known.
+		name, dynamic = _static_prefix(match.group(2), False)
+		if name:
+			root_index.add_selector_hit(
+				SelectorHit(token=f"#{name}", kind=kind, file=file_rel, line=line, detail=id_detail, dynamic=dynamic)
+			)
 
 	for match in _CLASS_ATTR_RE.finditer(text):
 		line = _line_at(text, match.start()) + line_offset
 		for token in match.group(2).split():
+			name, dynamic = _static_prefix(token, False)
+			if not name:
+				continue
 			root_index.add_selector_hit(
-				SelectorHit(token=f".{token}", kind=kind, file=file_rel, line=line, detail=class_detail)
+				SelectorHit(token=f".{name}", kind=kind, file=file_rel, line=line, detail=class_detail, dynamic=dynamic)
 			)
 
 
-def _js_selector_tokens_from_string(value: str) -> list[str]:
-	return _SELECTOR_TOKEN_RE.findall(value)
+def _js_selector_tokens_from_string(value: str) -> list[tuple[str, bool]]:
+	"""`(token, dynamic)` pairs; a token cut short by a template `${…}` is a
+	dynamic prefix (`.item-${n}` -> `.item-`)."""
+	value = _TEMPLATE_EXPR_RE.sub("\x00", value)
+	return [(m.group(0), value[m.end() : m.end() + 1] == "\x00") for m in _SELECTOR_TOKEN_RE.finditer(value)]
 
 
 def _literal_tokens(literal: str, concat_follows: bool) -> list[tuple[str, bool]]:
@@ -292,7 +354,7 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex, *, line_offse
 		root_index.add_usage(VarUsage(name=match.group(1), file=file_rel, line=line, has_fallback=True))
 
 	for match in _JS_GET_ELEMENT_BY_ID_RE.finditer(text):
-		literal, has_concat = match.group(1), bool(match.group(2))
+		literal, has_concat = _static_prefix(match.group(1), bool(match.group(2)))
 		if not literal:
 			continue
 		line = _line_at(text, match.start()) + line_offset
@@ -311,7 +373,7 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex, *, line_offse
 		method, args = match.group(1), match.group(2)
 		line = _line_at(text, match.start()) + line_offset
 		for lit_match in _STRING_LITERAL_RE.finditer(args):
-			literal, concat_follows = lit_match.group(1), bool(lit_match.group(2))
+			literal, concat_follows = _static_prefix(lit_match.group(1), bool(lit_match.group(2)))
 			for token, dynamic in _literal_tokens(literal, concat_follows):
 				root_index.add_selector_hit(
 					SelectorHit(
@@ -326,23 +388,23 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex, *, line_offse
 
 	for match in _JS_QUERY_RE.finditer(text):
 		line = _line_at(text, match.start()) + line_offset
-		for token in _js_selector_tokens_from_string(match.group(1)):
+		for token, dynamic in _js_selector_tokens_from_string(match.group(1)):
 			root_index.add_selector_hit(
-				SelectorHit(token=token, kind="js", file=file_rel, line=line, detail="querySelector")
+				SelectorHit(token=token, kind="js", file=file_rel, line=line, detail="querySelector", dynamic=dynamic)
 			)
 
 	for match in _JS_CLASSNAME_ASSIGN_RE.finditer(text):
 		line = _line_at(text, match.start()) + line_offset
-		concat_follows = bool(match.group(2))
-		for token, dynamic in _literal_tokens(match.group(1), concat_follows):
+		literal, concat_follows = _static_prefix(match.group(1), bool(match.group(2)))
+		for token, dynamic in _literal_tokens(literal, concat_follows):
 			root_index.add_selector_hit(
 				SelectorHit(token=f".{token}", kind="js", file=file_rel, line=line, detail="className", dynamic=dynamic)
 			)
 
 	for match in _JS_CLASS_VAR_CONCAT_RE.finditer(text):
 		line = _line_at(text, match.start()) + line_offset
-		concat_follows = bool(match.group(2))
-		for token, dynamic in _literal_tokens(match.group(1), concat_follows):
+		literal, concat_follows = _static_prefix(match.group(1), bool(match.group(2)))
+		for token, dynamic in _literal_tokens(literal, concat_follows):
 			root_index.add_selector_hit(
 				SelectorHit(
 					token=f".{token}", kind="js", file=file_rel, line=line, detail="class-var +=", dynamic=dynamic
@@ -364,7 +426,7 @@ def _scan_js_text(text: str, file_rel: str, root_index: RootIndex, *, line_offse
 	)
 
 
-_SCRIPT_SUFFIXES = (".js", ".ts", ".mts", ".cts")
+_SCRIPT_SUFFIXES = (".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx")
 _INDEXED_SUFFIXES = (".css", ".html", *_SCRIPT_SUFFIXES)
 
 # (root, name, base) -> (signature, index); see the module docstring.
@@ -407,13 +469,13 @@ def build_root_index(root: Path, name: str, workspace_root: Path | None = None) 
 	cached = _ROOT_CACHE.get((root, name, base))
 	if cached is not None and cached[0] == signature:
 		return cached[1]
-	root_index = RootIndex(name=name, root=root)
+	root_index = RootIndex(name=name, root=root, base=base)
 	for path in files:
 		file_rel = str(path.relative_to(base)).replace("\\", "/")
 		try:
 			text = path.read_text(encoding="utf-8")
-		except OSError:
-			continue
+		except (OSError, UnicodeDecodeError):
+			continue  # unreadable or non-UTF-8: skip the file rather than fail every index call
 		suffix = path.suffix.lower()
 		if suffix == ".css":
 			_scan_css_text(text, file_rel, root_index)
@@ -615,13 +677,24 @@ def token_at_position(line_text: str, column: int) -> str | None:
 
 
 def root_index_for_file(indexes: list[RootIndex], file_path: Path) -> tuple[RootIndex, str] | None:
+	"""The index whose root contains `file_path`, plus the path exactly as that
+	index recorded it (relative to `idx.base`, i.e. the workspace root in
+	multi-root setups — not to the root folder itself)."""
+	resolved = file_path.resolve()
 	for idx in indexes:
 		try:
-			rel = str(file_path.resolve().relative_to(idx.root.resolve())).replace("\\", "/")
+			resolved.relative_to(idx.root.resolve())
+			rel = str(resolved.relative_to((idx.base or idx.root).resolve())).replace("\\", "/")
 		except ValueError:
 			continue
 		return idx, rel
 	return None
+
+
+def knows_selector(indexes: list[RootIndex], token: str) -> bool:
+	"""True when any root's index has hits for `token` (`#id`/`.class`) or, for a bare-name
+	string literal, its name — i.e. the index can answer a lookup for it."""
+	return any(token in idx.selector_hits or token[1:] in idx.string_literals for idx in indexes)
 
 
 def undefined_var_usages(idx: RootIndex) -> list[VarUsage]:

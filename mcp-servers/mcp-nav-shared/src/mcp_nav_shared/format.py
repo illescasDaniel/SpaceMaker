@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -61,11 +63,38 @@ def uri_to_relative(uri: str, workspace_root: Path) -> str:
 		return str(path)
 
 
-def snippet(uri: str, start_line: int, end_line: int, *, context: int = 0) -> str:
-	path = uri_to_path(uri)
+@lru_cache(maxsize=128)
+def _read_lines_cached(path: str, mtime_ns: int, size: int) -> tuple[str, ...]:
+	return tuple(Path(path).read_text(encoding="utf-8").splitlines())
+
+
+def _read_lines(path: Path) -> tuple[str, ...] | None:
+	"""File lines, memoized per (path, mtime, size) so formatting N results from
+	one file reads it once. `None` when unreadable or not UTF-8."""
 	try:
-		lines = path.read_text(encoding="utf-8").splitlines()
-	except OSError:
+		stat = path.stat()
+		return _read_lines_cached(str(path), stat.st_mtime_ns, stat.st_size)
+	except (OSError, UnicodeDecodeError):
+		return None
+
+
+def _utf16_len(text: str) -> int:
+	return len(text.encode("utf-16-le")) // 2
+
+
+def _utf16_to_index(line: str, column: int) -> int:
+	"""Python string index for a UTF-16 code-unit offset (clamped to the line)."""
+	units = 0
+	for i, ch in enumerate(line):
+		if units >= column:
+			return i
+		units += 2 if ord(ch) > 0xFFFF else 1
+	return len(line)
+
+
+def snippet(uri: str, start_line: int, end_line: int, *, context: int = 0) -> str:
+	lines = _read_lines(uri_to_path(uri))
+	if lines is None:
 		return ""
 	lo = max(0, start_line - context)
 	hi = min(len(lines), end_line + 1 + context)
@@ -115,29 +144,27 @@ def _name_position(
 	"""
 	if not name:
 		return start_line, start_col
-	path = uri_to_path(uri)
-	try:
-		lines = path.read_text(encoding="utf-8").splitlines()
-	except OSError:
-		return start_line, start_col
-	if start_line < 0 or start_line >= len(lines):
+	lines = _read_lines(uri_to_path(uri))
+	if lines is None or start_line < 0 or start_line >= len(lines):
 		return start_line, start_col
 
 	range_end = start_line if end_line is None else max(start_line, end_line)
 	hi = max(range_end, start_line + _NAME_LOOKAHEAD_LINES)
 	hi = min(hi, len(lines) - 1)
+	# Whole-identifier match, so `id` doesn't hit `valid`/`uuid`.
+	pattern = re.compile(rf"(?<![\w$]){re.escape(name)}(?![\w$])")
 
 	for line_no in range(start_line, hi + 1):
 		line = lines[line_no]
+		if line.lstrip().startswith("@"):
+			continue  # decorator lines mention names (`@validator("id")`) without declaring them
 		if line_no == start_line:
 			# Skip keywords (class/def/function) that often begin the range.
-			idx = line.find(name, max(0, start_col))
-			if idx < 0:
-				idx = line.find(name)
+			match = pattern.search(line, _utf16_to_index(line, max(0, start_col))) or pattern.search(line)
 		else:
-			idx = line.find(name)
-		if idx >= 0:
-			return line_no, idx
+			match = pattern.search(line)
+		if match:
+			return line_no, _utf16_len(line[: match.start()])
 	return start_line, start_col
 
 
@@ -232,9 +259,7 @@ def filter_workspace_symbols(symbols: list[dict[str, Any]]) -> list[dict[str, An
 	every hit so two `run` methods on different classes in one file stay distinct.
 	"""
 	declaration_keys = {
-		(str(sym.get("name") or ""), _symbol_file_key(sym))
-		for sym in symbols
-		if sym.get("kind") in _DECLARATION_KINDS
+		(str(sym.get("name") or ""), _symbol_file_key(sym)) for sym in symbols if sym.get("kind") in _DECLARATION_KINDS
 	}
 	filtered: list[dict[str, Any]] = []
 	seen_low_priority: set[tuple[str, Any, str]] = set()

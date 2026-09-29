@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-29 — MCP servers pick the workspace per request (worktree support)
+
+- **Context:** Claude Code starts codenav/webnav once with the *main* checkout as `CLAUDE_PROJECT_DIR`/cwd (and reads `.mcp.json` from there), even for sessions in a linked worktree, so a fixed root answered from the wrong tree. Env vars cannot carry the worktree; a per-worktree `.env` would be manual.
+- **Decision:** `mcp_nav_shared.workspace.WorkspaceSelector`: pinned `*_MCP_WORKSPACE` (Cursor keeps `${workspaceFolder}`) > client MCP `roots/list` (only roots of the same repo, compared via the shared common dir) > `CLAUDE_PROJECT_DIR`/cwd. Every tool takes an optional `Context` and calls `_use_workspace(ctx)`; on change the server stops its language server(s), clears caches and re-derives root-relative config. `.mcp.json` no longer pins the workspace env. Each server has a `workspace` tool reporting the active root and why.
+- **Rationale:** roots is the sanctioned client-to-server channel; the same-repo guard stops unrelated roots hijacking the server. Limits: needs a handshake-era client that answers `roots/list` (the 2026-07-28 revision deprecates roots); not yet verified against the real Claude desktop client — check with the `workspace` tool in a worktree session after merge + MCP restart.
+
 ## 2026-09-29 — MCP trial: param aliases, webnav composites, quieter search_symbol
 
 - **Context:** Live trial found happy paths solid, but agents still abandoned MCPs after one wrong param (`query` vs `name` → pydantic wall), webnav lacked `symbol_info`/`outline` (forced Read/grep chains), and `search_symbol("gallery")` still flooded the 50-cap with duplicate Property hits plus export-list Variable twins. After ship, `symbol_info` was still ambiguous on Function + `export { foo }` Variable.

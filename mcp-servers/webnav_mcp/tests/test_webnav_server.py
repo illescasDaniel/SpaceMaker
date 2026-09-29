@@ -53,7 +53,7 @@ def test_given_configured_web_roots_when_js_files_fallback_then_scans_only_those
 	assert {p.name for p in files} == {"app.js"}
 
 
-@pytest.mark.parametrize("name", ["a.ts", "a.mts", "a.cts", "a.js"])
+@pytest.mark.parametrize("name", ["a.ts", "a.mts", "a.cts", "a.js", "a.tsx", "a.jsx"])
 def test_given_script_file_when_client_for_then_routes_to_ts_server(monkeypatch, name):
 	# given
 	sentinel = object()
@@ -284,3 +284,92 @@ def test_given_neither_name_nor_query_when_selector_called_then_returns_actionab
 	result = asyncio.run(server.selector())
 	# then
 	assert "name" in result
+
+
+class _FakeClient:
+	def __init__(self, alive: bool = True, items: list | None = None) -> None:
+		self._alive = alive
+		self.stopped = False
+		self._items = items or []
+
+	@property
+	def is_alive(self) -> bool:
+		return self._alive
+
+	async def start(self) -> None:
+		pass
+
+	async def stop(self) -> None:
+		self.stopped = True
+
+	async def diagnostics(self, _file_path: str) -> list:
+		return self._items
+
+
+def test_given_hex_colour_in_css_when_index_token_at_then_not_treated_as_selector(tmp_path, monkeypatch):
+	# given
+	_write(tmp_path / "a.css", ".box { color: #fff; }\n")
+	monkeypatch.setattr(server, "WORKSPACE_ROOT", tmp_path)
+	monkeypatch.setattr(server, "WEB_ROOTS", None)
+	# when
+	token = server._index_token_at(str(tmp_path / "a.css"), 1, 16)
+	# then
+	assert token is None
+
+
+def test_given_known_class_in_css_when_index_token_at_then_returns_token(tmp_path, monkeypatch):
+	# given
+	_write(tmp_path / "a.css", ".box { color: red; }\n")
+	monkeypatch.setattr(server, "WORKSPACE_ROOT", tmp_path)
+	monkeypatch.setattr(server, "WEB_ROOTS", None)
+	# when
+	found = server._index_token_at(str(tmp_path / "a.css"), 1, 3)
+	# then
+	assert found == ".box"
+
+
+def test_given_non_utf8_file_when_index_token_at_then_none(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "a.css").write_bytes(b".box { content: '\xff\xfe'; }\n")
+	monkeypatch.setattr(server, "WORKSPACE_ROOT", tmp_path)
+	# when
+	token = server._index_token_at(str(tmp_path / "a.css"), 1, 3)
+	# then
+	assert token is None
+
+
+def test_given_malformed_roots_when_selector_called_then_returns_tool_text(monkeypatch):
+	# given
+	monkeypatch.setattr(server, "_WEB_ROOTS_ERROR", "invalid WEBNAV_MCP_ROOTS entry 'x'")
+	# when
+	result = asyncio.run(server.selector(name=".a"))
+	# then
+	assert "WEBNAV_MCP_ROOTS" in result
+
+
+def test_given_multi_root_when_diagnostics_then_index_warnings_appear(tmp_path, monkeypatch):
+	# given
+	_write(tmp_path / "wireframes" / "a.css", ".x { color: var(--nope); }\n")
+	monkeypatch.setattr(server, "WORKSPACE_ROOT", tmp_path)
+	monkeypatch.setattr(server, "WEB_ROOTS", [("wf", tmp_path / "wireframes")])
+
+	async def _fake_client_for(_path: str) -> _FakeClient:
+		return _FakeClient()
+
+	monkeypatch.setattr(server, "_client_for", _fake_client_for)
+	# when
+	result = asyncio.run(server.diagnostics("wireframes/a.css"))
+	# then
+	assert "--nope" in result
+
+
+def test_given_dead_client_when_get_client_then_old_one_stopped_and_replaced(monkeypatch):
+	# given
+	dead = _FakeClient(alive=False)
+	fresh = _FakeClient()
+	monkeypatch.setattr(server, "_clients", {"ts": dead})
+	# when
+	got = asyncio.run(server._get_client("ts", lambda: fresh))  # type: ignore[arg-type,return-value]
+	# then
+	assert got is fresh
+	assert dead.stopped

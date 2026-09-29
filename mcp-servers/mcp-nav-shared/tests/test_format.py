@@ -588,3 +588,57 @@ def test_given_locations_over_limit_when_format_references_then_compact_grouped_
 
 def test_given_no_locations_when_format_references_then_message(tmp_path):
 	assert format_references([], tmp_path) == "No references found at that position."
+
+
+def _flat_symbol(src, name, start_line, start_col=0, end_line=None):
+	return {
+		"name": name,
+		"kind": 12,
+		"location": {
+			"uri": src.as_uri(),
+			"range": {
+				"start": {"line": start_line, "character": start_col},
+				"end": {"line": end_line if end_line is not None else start_line, "character": 40},
+			},
+		},
+	}
+
+
+def test_given_name_inside_longer_identifier_when_workspace_symbol_position_then_matches_whole_word(tmp_path):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("def valid_id(id): ...\n", encoding="utf-8")
+	# when
+	_uri, row, col = workspace_symbol_position(_flat_symbol(src, "id", 0))
+	# then
+	assert (row, col) == (0, 13)
+
+
+def test_given_decorator_mentioning_name_when_workspace_symbol_position_then_skips_decorator(tmp_path):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text('@field_validator("id")\ndef id(self): ...\n', encoding="utf-8")
+	# when
+	_uri, row, col = workspace_symbol_position(_flat_symbol(src, "id", 0, end_line=1))
+	# then
+	assert (row, col) == (1, 4)
+
+
+def test_given_astral_char_before_name_when_workspace_symbol_position_then_column_is_utf16(tmp_path):
+	# given — the emoji is one code point but two UTF-16 code units
+	src = tmp_path / "a.py"
+	src.write_text('x = "😀"; foo = 1\n', encoding="utf-8")
+	# when
+	_uri, _row, col = workspace_symbol_position(_flat_symbol(src, "foo", 0))
+	# then
+	assert col == len('x = "😀"; '.encode("utf-16-le")) // 2
+
+
+def test_given_non_utf8_file_when_workspace_symbol_position_then_falls_back_to_range_start(tmp_path):
+	# given
+	src = tmp_path / "a.py"
+	src.write_bytes(b"\xff\xfe\x00bad\n")
+	# when
+	_uri, row, col = workspace_symbol_position(_flat_symbol(src, "bad", 0, start_col=3))
+	# then
+	assert (row, col) == (0, 3)

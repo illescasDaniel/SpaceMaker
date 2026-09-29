@@ -550,3 +550,84 @@ def test_given_id_lookup_literal_when_format_class_selector_then_not_reported_as
 	text = web_index.format_selector([idx], ".media")
 	# then
 	assert "a.ts" not in text
+
+
+def test_given_multi_root_index_when_root_index_for_file_then_path_matches_recorded_files(tmp_path):
+	# given — the root isn't the workspace root, so recorded paths carry the root's prefix
+	_write(tmp_path / "static" / "a.css", ".unused { color: red; }\n")
+	indexes = web_index.build_workspace_index(tmp_path, [("static", tmp_path / "static")])
+	# when
+	located = web_index.root_index_for_file(indexes, tmp_path / "static" / "a.css")
+	# then
+	assert located is not None
+	idx, file_rel = located
+	assert file_rel == "static/a.css"
+	assert web_index.diagnostics_for_file(idx, file_rel) == [
+		"1:1 [warning] .unused is never referenced in static's HTML/JS"
+	]
+
+
+def test_given_data_prefixed_attributes_when_scan_html_then_not_indexed_as_id_or_class(tmp_path):
+	# given
+	_write(tmp_path / "a.html", '<div data-id="ghost" data-class="phantom" id="real" class="ok"></div>\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert sorted(idx.selector_hits) == ["#real", ".ok"]
+
+
+def test_given_comment_marker_inside_string_when_scan_js_then_rest_of_line_still_indexed(tmp_path):
+	# given
+	_write(tmp_path / "a.ts", 'const u = "http://x"; el.classList.add("lost"); // note: el.classList.add("gone")\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert sorted(idx.selector_hits) == [".lost"]
+
+
+def test_given_template_literals_when_scan_js_then_static_parts_indexed(tmp_path):
+	# given
+	_write(
+		tmp_path / "a.ts",
+		"document.querySelector(`.tpl`);\n"
+		"document.getElementById(`view-${name}`);\n"
+		"el.className = `row ${state}`;\n"
+		'el.innerHTML = `<i id="cell-${n}" class="c-${n} plain"></i>`;\n',
+	)
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert not idx.selector_hits[".tpl"][0].dynamic
+	assert idx.selector_hits["#view-"][0].dynamic
+	assert [h.token for h in idx.selector_hits[".row"]] == [".row"] and ".state" not in idx.selector_hits
+	assert idx.selector_hits["#cell-"][0].dynamic and idx.selector_hits[".c-"][0].dynamic
+	assert not idx.selector_hits[".plain"][0].dynamic
+
+
+def test_given_declaration_before_nested_rule_when_scan_css_then_value_not_read_as_selector(tmp_path):
+	# given
+	_write(tmp_path / "a.css", ".a { color: #abc; .b { color: red; } }\n")
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert sorted(idx.selector_hits) == [".a", ".b"]
+
+
+def test_given_non_utf8_file_when_build_index_then_skipped_not_fatal(tmp_path):
+	# given
+	(tmp_path / "bad.css").write_bytes(b"\xff\xfe.a { }\n")
+	_write(tmp_path / "ok.css", ".ok { color: red; }\n")
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert sorted(idx.selector_hits) == [".ok"]
+
+
+def test_given_module_and_jsx_files_when_build_index_then_indexed(tmp_path):
+	# given
+	_write(tmp_path / "a.mjs", 'document.getElementById("from-mjs");\n')
+	_write(tmp_path / "b.tsx", 'document.getElementById("from-tsx");\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert {"#from-mjs", "#from-tsx"} <= set(idx.selector_hits)

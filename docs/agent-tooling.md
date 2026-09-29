@@ -27,7 +27,7 @@ interpolation):
 | `.mcp.json` | Claude Code | `${CLAUDE_PROJECT_DIR:-.}` |
 | `.cursor/mcp.json` | Cursor | `${workspaceFolder}` |
 
-Both pin `uv run --directory …` and the matching
+Both pin `uv run --directory …`; Cursor also pins the matching
 `CODENAV_MCP_WORKSPACE` / `WEBNAV_MCP_WORKSPACE` env vars. Cursor has been
 observed spawning project MCP stdio with cwd set to `$HOME`, so relative
 script paths alone fail there; Claude expands `${CLAUDE_PROJECT_DIR:-.}`
@@ -35,11 +35,30 @@ and usually uses the project as cwd. When editing launch args or env for
 these servers, update **both** files together (same servers, different
 placeholders).
 
-Workspace root inside the Python servers is resolved by
-`mcp-servers/mcp-nav-shared/src/mcp_nav_shared/workspace.py`: explicit `CODENAV_MCP_WORKSPACE` /
-`WEBNAV_MCP_WORKSPACE`, then `CLAUDE_PROJECT_DIR`, then the repo root
-inferred from that module's path (so a wrong spawn cwd cannot break
-indexing).
+**Worktrees.** Claude Code starts these servers once, from the *main*
+checkout, even when the session works in a linked git worktree
+(`CLAUDE_PROJECT_DIR` and cwd both point at the main checkout), so a fixed
+root would answer from the wrong tree. `mcp_nav_shared.workspace.WorkspaceSelector`
+therefore picks the workspace **per request**, in this order:
+
+1. `CODENAV_MCP_WORKSPACE` / `WEBNAV_MCP_WORKSPACE` set → pinned, never
+   overridden (what Cursor's `${workspaceFolder}` wants; `.mcp.json`
+   deliberately leaves them unset).
+2. The client's MCP roots (`roots/list`): the first one that is the base
+   checkout or another worktree of the **same git repository** (compared via
+   `git rev-parse --git-common-dir`; roots from unrelated projects are
+   ignored).
+3. `CLAUDE_PROJECT_DIR`, else the process cwd.
+
+When the chosen root changes, the server stops its language server(s),
+drops the caches and re-derives everything relative to the root
+(`CODENAV_MCP_SOURCE_ROOT`, `WEBNAV_MCP_ROOTS`, `WEBNAV_MCP_EXCLUDE`). The
+`workspace` tool of each server reports the active root and which rule chose
+it — call it first when results look like they come from the wrong tree.
+Limits: needs a client that answers `roots/list` (handshake-era MCP; the
+2026-07-28 revision deprecates roots and forbids server-initiated requests,
+in which case rule 3 applies); a tool call already running while the
+workspace switches can fail once and succeed on retry.
 
 Both servers are written to be reusable outside this repo (they may ship as
 standalone tools for other projects some day), so every SpaceMaker-specific
@@ -176,9 +195,11 @@ returns an explanation instead of a (meaningless) result, pointing at
 
 Answering then happens in two stages:
 
-1. **Candidates**: classes under `SOURCE_ROOT` (see below) whose method
-   names, from `documentSymbol`, are a superset of the Protocol's own
-   method names — excluding the port itself (same file + name) and any
+1. **Candidates**: classes under `SOURCE_ROOT` (see below) whose members —
+   methods/properties/fields from `documentSymbol`, plus class-body and
+   `self.x` attributes and anything inherited from same-workspace base
+   classes (matched by simple name, via `ast`) — are a superset of the
+   Protocol's own members (`file_path` disambiguates the port) — excluding the port itself (same file + name) and any
    candidate that is itself a Protocol (e.g. a narrower Protocol that
    happens to share method names, which would otherwise "implement" a
    broader one).
@@ -193,7 +214,7 @@ Answering then happens in two stages:
 
 `implementations` is cached at three levels, each keyed so a hit is always
 correct: `LspClient.document_symbol` per document version (bumped by
-`ensure_open` exactly when mtime/size change); `_protocol_class_names` per
+`ensure_open` exactly when mtime/size change); `_cached_class_infos` per
 `(path, mtime_ns, size)` (parsing every file's AST was ~70% of the warm cost);
 and the per-candidate `ty` probe verdicts, which can depend on transitive
 imports and are therefore dropped wholesale whenever *any* file under
@@ -318,7 +339,7 @@ project's JS/TS/HTML/CSS (`symbol_info`, `outline`, `search_symbol`,
 Node-based language servers behind one MCP tool set, routed by file
 extension:
 
-- `.ts`/`.js`/`.mjs`/`.cjs` → `typescript-language-server` (shell sources in
+- `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` → `typescript-language-server` (shell sources in
   `web/src/` via strict `web/tsconfig.json`; the emitted `static/js/*.js` is
   build output and is excluded from navigation via `WEBNAV_MCP_EXCLUDE`)
 - `.html` → `vscode-html-language-server`
@@ -374,7 +395,7 @@ webnav_mcp/web_index.py` answers this with a **pure-Python scanner, not a langua
 server**: no `@import` resolution, no real CSS parser, regex/brace-stack
 grade. It re-walks the roots on every call but reuses each root's parsed index
 while its files are unchanged: the cache key is the `(path, mtime_ns, size)`
-of every relevant file (`.css`/`.html`/`.js`/`.ts`/`.mts`/`.cts`), re-stat'd on
+of every relevant file (`.css`/`.html`/`.js`/`.mjs`/`.cjs`/`.jsx`/`.ts`/`.mts`/`.cts`/`.tsx`), re-stat'd on
 every call, so an edit, add, or delete always invalidates it — there is no
 stale-answer window. Measured on this repo: `css_var` ~94 ms → ~2 ms,
 `selector` ~58 ms → ~1 ms, HTML `diagnostics` ~115 ms → ~11 ms (the rescan,

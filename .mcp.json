@@ -11,7 +11,6 @@
 				"codenav_mcp.server"
 			],
 			"env": {
-				"CODENAV_MCP_WORKSPACE": "${CLAUDE_PROJECT_DIR:-.}",
 				"CODENAV_MCP_SOURCE_ROOT": "src"
 			}
 		},
@@ -26,7 +25,6 @@
 				"webnav_mcp.server"
 			],
 			"env": {
-				"WEBNAV_MCP_WORKSPACE": "${CLAUDE_PROJECT_DIR:-.}",
 				"WEBNAV_MCP_ROOTS": "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes",
 				"WEBNAV_MCP_EXCLUDE": "src/spacemaker/adapters/inbound/web/static/js"
 			}

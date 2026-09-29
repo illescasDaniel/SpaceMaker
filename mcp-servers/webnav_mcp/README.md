@@ -9,7 +9,7 @@ Multiplexes three Node language servers by extension:
 
 | Extension | Backend |
 |-----------|---------|
-| `.js` / `.mjs` / `.cjs` / `.ts` / `.mts` / `.cts` | `typescript-language-server` (JS via `allowJs` / `jsconfig.json`; TS sent with the `typescript` languageId) |
+| `.js` / `.mjs` / `.cjs` / `.jsx` / `.ts` / `.mts` / `.cts` / `.tsx` | `typescript-language-server` (JS via `allowJs` / `jsconfig.json`; TS sent with the `typescript` languageId) |
 | `.html` | `vscode-html-language-server` |
 | `.css` | `vscode-css-language-server` |
 
@@ -74,7 +74,7 @@ uv run python -m webnav_mcp.server
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `WEBNAV_MCP_WORKSPACE` | inferred from install / `CLAUDE_PROJECT_DIR` | Project root |
+| `WEBNAV_MCP_WORKSPACE` | unset → follows the client's MCP roots when they name a worktree of the same repo, else `CLAUDE_PROJECT_DIR`/cwd | Pins the project root (never overridden). See the `workspace` tool |
 | `WEBNAV_MCP_EXCLUDE` | nothing | Comma-separated workspace-relative paths of generated script output (e.g. the JS a TS build emits): not opened, hidden from `search_symbol`, rejected by position tools. Does not affect the CSS/selector index |
 | `WEBNAV_MCP_ROOTS` | one unnamed root = whole workspace | Comma-separated `label=relative/path` pairs to index separately (SpaceMaker sets `web=…,static=…,wireframes=…`) |
 

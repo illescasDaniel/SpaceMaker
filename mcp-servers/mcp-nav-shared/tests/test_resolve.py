@@ -356,3 +356,81 @@ def test_given_member_on_no_supertype_when_dotted_query_then_raises_not_found(tm
 	# when / then
 	with pytest.raises(SymbolResolutionError, match="No symbol found"):
 		asyncio.run(resolve_symbol(client, tmp_path, "AppServices.nope"))
+
+
+def _outer_symbol(uri: str) -> dict:
+	return {
+		"name": "Outer",
+		"kind": 5,
+		"location": {"uri": uri, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 9, "character": 0}}},
+		"selectionRange": {"start": {"line": 0, "character": 6}, "end": {"line": 0, "character": 11}},
+	}
+
+
+def test_given_nested_dotted_query_when_hierarchical_members_then_walks_each_segment(tmp_path):
+	# given
+	uri = (tmp_path / "m.py").as_uri()
+	deep = {
+		"name": "deep",
+		"kind": 6,
+		"range": {"start": {"line": 2, "character": 2}, "end": {"line": 3, "character": 0}},
+		"selectionRange": {"start": {"line": 2, "character": 6}, "end": {"line": 2, "character": 10}},
+		"children": [],
+	}
+	inner = {
+		"name": "Inner",
+		"kind": 5,
+		"range": {"start": {"line": 1, "character": 1}, "end": {"line": 3, "character": 0}},
+		"selectionRange": {"start": {"line": 1, "character": 7}, "end": {"line": 1, "character": 12}},
+		"children": [deep],
+	}
+	outer = _class_node("Outer", [inner])
+	client = _FakeResolveClient([_outer_symbol(uri)], [outer])
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "Outer.Inner.deep"))
+	# then
+	assert resolved.name == "deep"
+	assert (resolved.line, resolved.column) == (2, 6)
+
+
+def test_given_nested_dotted_query_when_flat_members_then_narrows_by_range_per_segment(tmp_path):
+	# given — flat shape; a same-named `deep` outside Inner must not match
+	uri = (tmp_path / "m.py").as_uri()
+
+	def flat(name: str, kind: int, start: int, end: int) -> dict:
+		return {
+			"name": name,
+			"kind": kind,
+			"location": {
+				"uri": uri,
+				"range": {"start": {"line": start, "character": 0}, "end": {"line": end, "character": 0}},
+			},
+			"selectionRange": {"start": {"line": start, "character": 4}, "end": {"line": start, "character": 8}},
+		}
+
+	members = [
+		flat("Outer", 5, 0, 9),
+		flat("Inner", 5, 1, 4),
+		flat("deep", 6, 2, 3),
+		flat("deep", 6, 6, 7),
+	]
+	client = _FakeResolveClient([_outer_symbol(uri)], members)
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "Outer.Inner.deep"))
+	# then
+	assert resolved.line == 2
+
+
+def test_given_file_path_matching_no_candidate_when_resolve_then_errors_instead_of_using_other_file(tmp_path):
+	# given
+	range_ = {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}
+	sym = {
+		"name": "run",
+		"kind": 12,
+		"location": {"uri": (tmp_path / "a.py").as_uri(), "range": range_},
+		"selectionRange": range_,
+	}
+	client = _FakeResolveClient([sym])
+	# when / then
+	with pytest.raises(SymbolResolutionError, match=r"(?s)No symbol 'run' in 'other.py'.*a\.py"):
+		asyncio.run(resolve_symbol(client, tmp_path, "run", file_path="other.py"))
