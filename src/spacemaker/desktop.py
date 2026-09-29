@@ -17,7 +17,7 @@ from webview.guilib import GUIType
 
 from spacemaker.adapters.inbound.desktop_api import DesktopApi
 from spacemaker.adapters.inbound.qt_native_style import install_qt_native_style
-from spacemaker.adapters.inbound.qt_webengine_gpu_flags import install_qt_webengine_gpu_flags
+from spacemaker.adapters.inbound.qt_webengine_chromium_flags import install_qt_webengine_chromium_flags
 from spacemaker.adapters.inbound.qt_webengine_shutdown import (
 	finalize_qt_after_webview,
 	install_qt_webengine_shutdown_fix,
@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> None:
 	use_qt = gui == "qt"
 
 	if use_qt:
-		install_qt_webengine_gpu_flags()
+		install_qt_webengine_chromium_flags()
 
 	if _port_in_use(args.port):
 		print(
