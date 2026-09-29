@@ -125,3 +125,57 @@ def test_given_never_started_when_is_alive_then_false(tmp_path):
 	client = LspClient(workspace_root=tmp_path, command=["true"], language_id="python")
 	# when / then
 	assert client.is_alive is False
+
+
+def _counting_symbol_request(client: LspClient, monkeypatch, calls: list[str]) -> None:
+	async def _fake(method: str, _params: dict, timeout: float = 20) -> dict:
+		calls.append(method)
+		return {"result": [{"name": f"call{len(calls)}"}]}
+
+	monkeypatch.setattr(client, "_request", _fake)
+	monkeypatch.setattr(client, "_notify", lambda *_a, **_k: None)
+
+
+def test_given_unchanged_file_when_document_symbol_twice_then_second_call_is_cached(tmp_path, monkeypatch):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("x = 1\n", encoding="utf-8")
+	client = _started_client(tmp_path)
+	calls: list[str] = []
+	_counting_symbol_request(client, monkeypatch, calls)
+	# when
+	first = asyncio.run(client.document_symbol(str(src)))
+	second = asyncio.run(client.document_symbol(str(src)))
+	# then
+	assert first == second
+	assert len(calls) == 1
+
+
+def test_given_edited_file_when_document_symbol_then_cache_is_invalidated(tmp_path, monkeypatch):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("x = 1\n", encoding="utf-8")
+	client = _started_client(tmp_path)
+	calls: list[str] = []
+	_counting_symbol_request(client, monkeypatch, calls)
+	first = asyncio.run(client.document_symbol(str(src)))
+	# when
+	src.write_text("x = 1\ny = 2\n", encoding="utf-8")
+	second = asyncio.run(client.document_symbol(str(src)))
+	# then
+	assert len(calls) == 2
+	assert first != second
+
+
+def test_given_closed_scratch_document_when_reopened_then_symbols_are_not_stale(tmp_path, monkeypatch):
+	# given
+	client = _started_client(tmp_path)
+	calls: list[str] = []
+	_counting_symbol_request(client, monkeypatch, calls)
+	uri = (tmp_path / "scratch.py").as_uri()
+	asyncio.run(client.open_scratch_document(uri, "a = 1\n"))
+	client._symbol_cache[uri] = (1, [{"name": "stale"}])
+	# when
+	asyncio.run(client.close_scratch_document(uri))
+	# then
+	assert uri not in client._symbol_cache

@@ -56,6 +56,10 @@ class LspClient:
 	_pending: dict[int, asyncio.Future] = field(default_factory=dict, init=False)
 	_diagnostics: dict[str, list[dict[str, Any]]] = field(default_factory=dict, init=False)
 	_open_files: dict[str, OpenFile] = field(default_factory=dict, init=False)
+	# uri -> (document version, documentSymbol result). documentSymbol depends
+	# only on the one file's text, and `ensure_open` bumps the version exactly
+	# when that text changes (stat mtime/size), so a version match means fresh.
+	_symbol_cache: dict[str, tuple[int, list[dict[str, Any]]]] = field(default_factory=dict, init=False)
 	_reader_task: asyncio.Task | None = field(default=None, init=False)
 	_stderr_task: asyncio.Task | None = field(default=None, init=False)
 	_started: bool = field(default=False, init=False)
@@ -308,8 +312,14 @@ class LspClient:
 
 	async def document_symbol(self, file_path: str) -> list[dict[str, Any]]:
 		uri = await self.ensure_open(file_path)
+		version = self._open_files[uri].version
+		hit = self._symbol_cache.get(uri)
+		if hit is not None and hit[0] == version:
+			return hit[1]
 		resp = await self._request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
-		return resp.get("result") or []
+		result = resp.get("result") or []
+		self._symbol_cache[uri] = (version, result)
+		return result
 
 	async def prepare_call_hierarchy(self, file_path: str, line: int, column: int) -> list[dict[str, Any]]:
 		uri = await self.ensure_open(file_path)
@@ -347,6 +357,8 @@ class LspClient:
 		self._notify("textDocument/didClose", {"textDocument": {"uri": uri}})
 		self._open_files.pop(uri, None)
 		self._diagnostics.pop(uri, None)
+		# Reopening restarts versions at 1, which could falsely match an old entry.
+		self._symbol_cache.pop(uri, None)
 
 	async def pull_diagnostics(self, uri: str) -> list[dict[str, Any]]:
 		"""Pull diagnostics for an already-open `uri` directly, with no cache
