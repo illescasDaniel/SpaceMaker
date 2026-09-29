@@ -78,7 +78,11 @@ def step_web(*, fix: bool, quiet: bool) -> int:
 		print("skip web: npm not installed (run npm ci when Node is available)", file=sys.stderr)
 		return 0
 	if not (_REPO / "node_modules" / "@biomejs" / "biome").is_dir():
-		print("Missing node_modules. Run: npm ci", file=sys.stderr)
+		print(
+			"Missing node_modules. In a linked worktree run: bash .cursor/skills/new-worktree/scripts/copy-venv.sh "
+			"(copies/re-syncs .venv + node_modules); otherwise: npm ci",
+			file=sys.stderr,
+		)
 		return 1
 	script = "format" if fix else "check"
 	return _run([npm, "run", script], quiet=quiet)

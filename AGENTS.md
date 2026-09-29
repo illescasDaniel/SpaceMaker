@@ -70,6 +70,10 @@ MCP tools are often deferred: fetch their schema (ToolSearch `select:`) before t
 
 **Priority when docs conflict:** `specs/<feature>/SPEC.md` → `docs/playbooks/SpaceMaker-adaptations.md` → `.claude/rules/` (and `.cursor/rules/`) → playbooks → generic examples in playbooks.
 
+## Worktree dependencies
+
+In a linked worktree (any `git worktree list` entry after the first), `.venv`/`node_modules` may be missing or stale. **Before the first quality-gate run, execute `bash .cursor/skills/new-worktree/scripts/copy-venv.sh`** — it is safe to run directly (only the `/new-worktree` *skill* is user-invoked), is a no-op when everything is current, copies from the primary checkout when lockfiles match, and re-syncs (`uv sync` / `npm ci`) when they don't. To *create* a worktree, follow the `/new-worktree` skill's steps rather than a bare `git worktree add` / `EnterWorktree`.
+
 ## Quality gate
 
 Requires [uv](https://docs.astral.sh/uv/). Python: **ruff**, **ty**, **pytest** via `uv run task checks` ([scripts/quality/checks.py](scripts/quality/checks.py), mirrored by [checks.sh](scripts/quality/checks.sh)). Web JS/HTML/TS: **Biome** + `tsc` via `npm ci && npm run check` (also run by the quality gate).

@@ -21,8 +21,10 @@
 #   ./copy-venv.sh --force   # always replace .venv/node_modules
 #
 # Without --force an existing .venv is kept only if spacemaker imports from this
-# worktree's src/ and pytest runs; a valid one is skipped, a broken one is
-# replaced. An existing node_modules is kept if @biomejs/biome is present.
+# worktree's src/ and pytest runs (a kept one is still `uv sync`ed to this
+# worktree's uv.lock); a broken one is replaced. node_modules is stamped with
+# the hash of package-lock.json: copied from the primary only when the lockfiles
+# match, otherwise (or when a kept copy is stale) reinstalled with `npm ci`.
 # Works from inside any worktree (e.g. one the Claude desktop app created).
 
 set -euo pipefail
@@ -138,7 +140,12 @@ if [[ -e "${dst_venv}" || -L "${dst_venv}" ]]; then
 fi
 
 if [[ "${skip_venv}" == true ]]; then
-	:
+	# A working venv can still lag this branch's uv.lock; sync is a fast no-op when it doesn't.
+	echo "copy-venv: re-syncing kept .venv to this worktree's uv.lock (offline first)..."
+	(
+		cd "${dest_root}"
+		uv sync --group dev --offline || uv sync --group dev
+	)
 elif [[ -d "${src_venv}" ]]; then
 	echo ""
 	echo "copy-venv: copying .venv"
@@ -196,24 +203,46 @@ src_node_modules="${primary_root}/node_modules"
 dst_node_modules="${dest_root}/node_modules"
 
 skip_node_modules=false
+
+# node_modules carries a stamp (blob hash of the package-lock.json it was installed from) so a
+# working-but-stale copy is detected and reinstalled instead of silently kept.
+lock_hash() { git hash-object "$1/package-lock.json" 2>/dev/null || echo "none"; }
+stamp_file="${dst_node_modules}/.spacemaker-lock-hash"
+dest_lock="$(lock_hash "${dest_root}")"
+src_lock="$(lock_hash "${primary_root}")"
+
+npm_ci() {
+	echo "copy-venv: running npm ci (lockfile-exact install)..."
+	(
+		cd "${dest_root}"
+		npm ci --prefer-offline
+	)
+}
+
 if [[ -e "${dst_node_modules}" || -L "${dst_node_modules}" ]]; then
 	if [[ "${FORCE}" == true ]]; then
 		echo "copy-venv: removing existing destination node_modules (--force)..."
 		rm -rf "${dst_node_modules}"
-	elif [[ -d "${dst_node_modules}/@biomejs/biome" ]]; then
-		echo "copy-venv: existing node_modules looks complete; skipping (use --force to replace)."
+	elif [[ ! -d "${dst_node_modules}/@biomejs/biome" ]]; then
+		echo "copy-venv: existing node_modules is incomplete; replacing it..."
+		rm -rf "${dst_node_modules}"
+	elif [[ -f "${stamp_file}" && "$(cat "${stamp_file}")" == "${dest_lock}" ]]; then
+		echo "copy-venv: existing node_modules matches package-lock.json; skipping (use --force to replace)."
+		skip_node_modules=true
+	elif [[ ! -f "${stamp_file}" ]] && (cd "${dest_root}" && npm ls --depth=0 >/dev/null 2>&1); then
+		echo "copy-venv: existing node_modules satisfies package.json/lock (unstamped); keeping it."
 		skip_node_modules=true
 	else
-		echo "copy-venv: existing node_modules is incomplete; replacing it..."
+		echo "copy-venv: existing node_modules is stale vs package-lock.json; reinstalling..."
 		rm -rf "${dst_node_modules}"
 	fi
 fi
 
 if [[ "${skip_node_modules}" == true ]]; then
 	:
-elif [[ -d "${src_node_modules}" ]]; then
+elif [[ -d "${src_node_modules}" && "${src_lock}" == "${dest_lock}" ]]; then
 	echo ""
-	echo "copy-venv: copying node_modules"
+	echo "copy-venv: copying node_modules (primary's package-lock.json is identical)"
 	echo "  from : ${src_node_modules}"
 	echo "  to   : ${dst_node_modules}"
 	echo ""
@@ -231,12 +260,16 @@ elif [[ -d "${src_node_modules}" ]]; then
 		rsync -a "${src_node_modules}/" "${dst_node_modules}/"
 	fi
 	echo "copy-venv: node_modules copy complete (no path rewrite needed -- registry packages only)"
+elif [[ -d "${src_node_modules}" ]]; then
+	echo "copy-venv: primary's package-lock.json differs from this worktree's; a copy would be stale."
+	npm_ci
 else
 	echo "warning: no source node_modules at ${src_node_modules}; regenerating instead of copying." >&2
-	(
-		cd "${dest_root}"
-		npm ci
-	)
+	npm_ci
+fi
+
+if [[ -d "${dst_node_modules}" ]]; then
+	printf '%s' "${dest_lock}" >"${stamp_file}"
 fi
 
 if [[ ! -d "${dest_root}/node_modules/@biomejs/biome" ]]; then

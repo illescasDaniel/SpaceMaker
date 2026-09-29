@@ -24,7 +24,7 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 
 if [[ ! -d "${LIB_REPO_ROOT}/node_modules/@biomejs/biome" ]]; then
-	echo "Missing node_modules. Run: npm ci" >&2
+	echo "Missing node_modules. In a linked worktree run: bash .cursor/skills/new-worktree/scripts/copy-venv.sh (copies/re-syncs .venv + node_modules); otherwise: npm ci" >&2
 	exit 1
 fi
 

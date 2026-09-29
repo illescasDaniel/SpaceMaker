@@ -89,7 +89,9 @@ What it does:
   https://github.com/astral-sh/uv/issues/18196), then runs an offline `uv sync --group dev` to confirm
   the lock is satisfied (retries online if that fails). Falls back straight to `uv sync --group dev` if
   the primary has no `.venv` yet.
-- **`node_modules`**: mirrors it the same way (no rewrite step needed — SpaceMaker's devDependencies
+- **`node_modules`**: mirrors it the same way, but only when the primary's `package-lock.json` is
+  identical to this worktree's (otherwise `npm ci`), and writes a `.spacemaker-lock-hash` stamp so later
+  runs detect staleness (no rewrite step needed — SpaceMaker's devDependencies
   are all registry packages, so the npm-generated `.bin/*.cmd` shims carry no absolute paths). Falls
   back to `npm ci` if the primary has none. Verifies `node_modules/@biomejs/biome` exists afterward
   (the same check `scripts/quality/web.sh` uses).
@@ -105,13 +107,21 @@ what failed).
 | Situation | What happens |
 |-----------|--------------|
 | Invoked from inside a worktree, not the primary checkout | Step 1 is skipped; Step 2 runs in place to (re)sync that worktree's `.venv`/`node_modules`. |
-| Destination already has a valid `.venv`/`node_modules` | `copy-venv.sh` skips them (no work); `--force` replaces them. |
+| Destination already has a valid `.venv` | Kept, but `uv sync --group dev` (offline first) still runs so it matches this branch's `uv.lock`; `--force` replaces it. |
+| Destination `node_modules` is stamped with this worktree's `package-lock.json` hash | Skipped (no work). A stale stamp is reinstalled; an unstamped one is kept only if `npm ls` passes. `--force` replaces it. |
+| Primary's `package-lock.json` differs from this worktree's | A copy would be stale, so `node_modules` is installed with `npm ci --prefer-offline` instead. |
 | Destination has a broken/foreign `.venv` or incomplete `node_modules` | `copy-venv.sh` replaces it with a fresh copy + path rewrite. |
 | Primary checkout has no `.venv` yet | `copy-venv.sh` regenerates with `uv sync --group dev` instead of copying. |
 | Primary checkout has no `node_modules` yet | `copy-venv.sh` regenerates with `npm ci` instead of copying. |
 | `git worktree list` yields no entry | `copy-venv.sh` aborts with a diagnostic message. |
 | `rsync` missing (Linux/macOS) | `copy-venv.sh` aborts and asks to install `rsync`. |
 | Shebang / `spacemaker.__file__` still points at the primary after rewrite | `copy-venv.sh` exits non-zero — do not treat the copy as successful. |
+
+## Running it without the skill
+
+`copy-venv.sh` itself is safe for agents to run directly at any time (AGENTS.md "Worktree dependencies");
+only the skill's *creation* flow is user-invoked. Agents must not create worktrees with a bare
+`git worktree add` / `EnterWorktree` and skip it.
 
 ## Rules
 
