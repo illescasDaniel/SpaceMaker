@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: docs
 severity: confusing
-status: open
+status: fixed (6540add)
 ---
 
 **Source:** Cursor session feedback surveys (3 chats). Two never called codenav/webnav at all and used grep + an explore subagent; one only fetched a tool schema. One tried searching for the *tools* with `gallery|blur|loading` via a dynamic-tools search and concluded they were useless.

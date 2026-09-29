@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: tooling
 severity: confusing
-status: open
+status: fixed (6540add)
 ---
 
 **Call:** `javascript_tool` timing checks of a CSS transition in the Browser pane after `preview_start`.

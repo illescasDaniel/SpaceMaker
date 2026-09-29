@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: docs
 severity: confusing
-status: open
+status: fixed (6540add)
 ---
 
 **Source:** subagent working on `.thumb-removing`.
