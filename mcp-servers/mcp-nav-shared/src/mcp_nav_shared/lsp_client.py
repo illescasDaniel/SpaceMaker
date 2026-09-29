@@ -14,7 +14,8 @@ import contextlib
 import json
 import logging
 import os
-from collections.abc import Callable
+import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,13 @@ class LanguageServerExitedError(RuntimeError):
 	"""The language server process ended while a request was pending."""
 
 
+class InvalidPositionError(ValueError):
+	"""A tool was asked about a line/column that doesn't exist in the file."""
+
+
+_LINE_BREAK_RE = re.compile(r"\r\n|\r|\n")
+
+
 def _uri_to_path(uri: str) -> str:
 	path = urlparse(uri).path
 	return unquote(path.lstrip("/") if os.name == "nt" else path)
@@ -93,6 +101,14 @@ class LspClient:
 	# Also `didOpen` watched files that appeared/changed, for servers (tsserver) that
 	# only treat opened documents as part of the project deterministically.
 	open_watched_changes: bool = False
+	# File names (matched anywhere under the workspace) whose change alters how the
+	# server resolves the project (pyproject.toml, tsconfig.json, ...): servers read
+	# them once at startup, so `refresh()` restarts the server when one changes.
+	config_names: frozenset[str] = frozenset()
+	# Runs after every restart of the server, e.g. to eagerly open project files.
+	on_restart: Callable[[LspClient], Awaitable[None]] | None = None
+	# Told (in words) about anything the agent should know, e.g. a config-triggered restart.
+	on_notice: Callable[[str], None] | None = None
 	# Per-suffix override of `language_id` for servers that handle several
 	# languages (e.g. typescript-language-server: `.ts` -> "typescript").
 	language_ids: dict[str, str] = field(default_factory=dict)
@@ -111,6 +127,8 @@ class LspClient:
 	_symbol_cache: dict[str, tuple[int, list[dict[str, Any]]]] = field(default_factory=dict, init=False)
 	# path -> (mtime_ns, size) of every watched file at the last `refresh()`.
 	_watch_snapshot: dict[Path, tuple[int, int]] | None = field(default=None, init=False)
+	# Same, for `config_names` files.
+	_config_snapshot: dict[Path, tuple[int, int]] | None = field(default=None, init=False)
 	_refresh_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
 	_reader_task: asyncio.Task | None = field(default=None, init=False)
 	_stderr_task: asyncio.Task | None = field(default=None, init=False)
@@ -177,6 +195,18 @@ class LspClient:
 			await asyncio.wait_for(self._proc.wait(), timeout=3)
 		self._started = False
 		self._proc = None
+
+	async def restart(self) -> None:
+		"""Stop the server and start it again with no memory of the old session."""
+		await self.stop()
+		self._pending = {}
+		self._diagnostics = {}
+		self._open_files = {}
+		self._diag_events = {}
+		self._symbol_cache = {}
+		await self.start()
+		if self.on_restart is not None:
+			await self.on_restart(self)
 
 	# -- wire protocol -----------------------------------------------------
 
@@ -362,17 +392,18 @@ class LspClient:
 		# Reopening restarts versions at 1, which could falsely match an old entry.
 		self._symbol_cache.pop(uri, None)
 
-	def _scan_watched(self) -> dict[Path, tuple[int, int]]:
-		"""(mtime_ns, size) of every watched file, keyed by resolved path (as
-		`ensure_open` keys its URIs). Runs on every tool call, so it resolves
-		the root once instead of every file (only symlinked files need their
-		own `resolve()`), and it skips nested checkouts: a directory holding a
-		`.git` entry below the root is another repository or linked worktree
-		(this repo creates worktrees under `.claude/worktrees/`), whose files
-		are neither this workspace's nor cheap to stat."""
-		found: dict[Path, tuple[int, int]] = {}
-		if not self.watch_suffixes:
-			return found
+	def _scan_watched(self) -> tuple[dict[Path, tuple[int, int]], dict[Path, tuple[int, int]]]:
+		"""(mtime_ns, size) of every watched source file and every `config_names`
+		file, each keyed by resolved path (as `ensure_open` keys its URIs). Runs on
+		every tool call, so it resolves the root once instead of every file (only
+		symlinked files need their own `resolve()`), and it skips nested checkouts:
+		a directory holding a `.git` entry below the root is another repository or
+		linked worktree (this repo creates worktrees under `.claude/worktrees/`),
+		whose files are neither this workspace's nor cheap to stat."""
+		sources: dict[Path, tuple[int, int]] = {}
+		configs: dict[Path, tuple[int, int]] = {}
+		if not self.watch_suffixes and not self.config_names:
+			return sources, configs
 		root = self.workspace_root.resolve()
 		pending = [root]
 		while pending:
@@ -390,16 +421,18 @@ class LspClient:
 						if entry.name not in EXCLUDED_DIR_NAMES:
 							pending.append(Path(entry.path))
 						continue
-					if os.path.splitext(entry.name)[1].lower() not in self.watch_suffixes:
+					is_config = entry.name in self.config_names
+					if not is_config and os.path.splitext(entry.name)[1].lower() not in self.watch_suffixes:
 						continue
 					path = Path(entry.path)
-					if self.watch_ignore is not None and self.watch_ignore(path):
+					if not is_config and self.watch_ignore is not None and self.watch_ignore(path):
 						continue
 					st = entry.stat()
 				except OSError:
 					continue
-				found[path.resolve() if entry.is_symlink() else path] = (st.st_mtime_ns, st.st_size)
-		return found
+				key = path.resolve() if entry.is_symlink() else path
+				(configs if is_config else sources)[key] = (st.st_mtime_ns, st.st_size)
+		return sources, configs
 
 	async def refresh(self) -> None:
 		"""Bring the language server's view of the disk up to date.
@@ -408,12 +441,32 @@ class LspClient:
 		is frozen at that text, and files created/edited/deleted behind the
 		server's back (by the agent's own Edit tool, git, a formatter) are
 		invisible to workspace-wide answers. Call this before every tool call;
-		it costs one stat walk (a few ms on this repo; see `_scan_watched`). Open documents are re-synced (or closed when
-		deleted), and watched-suffix files that appeared/changed/vanished since
-		the last call are reported via `workspace/didChangeWatchedFiles`.
+		it costs one stat walk (a few ms on this repo; see `_scan_watched`). Open
+		documents are re-synced (or closed when deleted), and watched-suffix files
+		that appeared/changed/vanished since the last call are reported via
+		`workspace/didChangeWatchedFiles`. A change to a `config_names` file restarts
+		the server instead (it only reads its project config at startup).
 		"""
 		async with self._refresh_lock:
-			current = await asyncio.to_thread(self._scan_watched)
+			current, configs = await asyncio.to_thread(self._scan_watched)
+			previous_configs = self._config_snapshot
+			self._config_snapshot = configs
+			if previous_configs is not None and configs != previous_configs:
+				# The server only reads its project config at startup: start a fresh one,
+				# which also sees the disk as it is now, so nothing else needs reporting.
+				self._watch_snapshot = current
+				await self.restart()
+				if self.on_notice is not None:
+					touched = sorted(
+						{p.name for p in configs.keys() ^ previous_configs.keys()}
+						| {
+							p.name
+							for p in configs.keys() & previous_configs.keys()
+							if configs[p] != previous_configs[p]
+						}
+					)
+					self.on_notice(f"restarted the language server because {', '.join(touched)} changed")
+				return
 			changes: list[dict[str, Any]] = []
 			previous = self._watch_snapshot
 			if previous is not None:
@@ -443,8 +496,26 @@ class LspClient:
 
 	# -- LSP calls used by the MCP tools --------------------------------------
 
+	def _check_position(self, file_path: str, line: int, column: int) -> None:
+		"""Reject a position outside the file, so a typo isn't answered with an
+		empty result indistinguishable from "nothing there"."""
+		abs_path = self._to_uri(file_path)
+		lines = _LINE_BREAK_RE.split(abs_path.read_text(encoding="utf-8"))
+		if not 1 <= line <= len(lines):
+			count = len(lines) - 1 if len(lines) > 1 and lines[-1] == "" else len(lines)  # ignore the final newline
+			raise InvalidPositionError(
+				f"line {line} is out of range: {file_path} has {count} line(s) (lines are 1-indexed)"
+			)
+		width = len(lines[line - 1].encode("utf-16-le")) // 2
+		if not 1 <= column <= width + 1:
+			raise InvalidPositionError(
+				f"column {column} is out of range: line {line} of {file_path} is {width} character(s) long "
+				"(columns are 1-indexed UTF-16 offsets; a tab counts as one)"
+			)
+
 	async def hover(self, file_path: str, line: int, column: int) -> dict[str, Any]:
 		uri = await self.ensure_open(file_path)
+		self._check_position(file_path, line, column)
 		resp = await self._request(
 			"textDocument/hover",
 			{"textDocument": {"uri": uri}, "position": {"line": line - 1, "character": column - 1}},
@@ -453,8 +524,21 @@ class LspClient:
 
 	async def definition(self, file_path: str, line: int, column: int) -> list[dict[str, Any]]:
 		uri = await self.ensure_open(file_path)
+		self._check_position(file_path, line, column)
 		resp = await self._request(
 			"textDocument/definition",
+			{"textDocument": {"uri": uri}, "position": {"line": line - 1, "character": column - 1}},
+		)
+		result = resp.get("result")
+		if result is None:
+			return []
+		return result if isinstance(result, list) else [result]
+
+	async def type_definition(self, file_path: str, line: int, column: int) -> list[dict[str, Any]]:
+		uri = await self.ensure_open(file_path)
+		self._check_position(file_path, line, column)
+		resp = await self._request(
+			"textDocument/typeDefinition",
 			{"textDocument": {"uri": uri}, "position": {"line": line - 1, "character": column - 1}},
 		)
 		result = resp.get("result")
@@ -466,6 +550,7 @@ class LspClient:
 		self, file_path: str, line: int, column: int, *, include_declaration: bool = True
 	) -> list[dict[str, Any]]:
 		uri = await self.ensure_open(file_path)
+		self._check_position(file_path, line, column)
 		resp = await self._request(
 			"textDocument/references",
 			{

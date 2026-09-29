@@ -20,10 +20,12 @@ from __future__ import annotations
 import ast
 import asyncio
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import mcp_nav_shared
 from mcp.server.mcpserver import Context, MCPServer
 from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
 from mcp_nav_shared.exclude import is_excluded
@@ -39,13 +41,16 @@ from mcp_nav_shared.format import (
 	parse_kind_filter,
 	symbol_kind_label,
 	to_symbol_tree,
+	uri_to_path,
 	uri_to_relative,
 )
 from mcp_nav_shared.lsp_client import LspClient
+from mcp_nav_shared.notices import NoticeBoard, package_source_dirs
 from mcp_nav_shared.params import resolve_name_query
 from mcp_nav_shared.resolve import resolve_symbol
 from mcp_nav_shared.workspace import WorkspaceSelector, resolve_extra_source_roots, resolve_source_root
 
+import codenav_mcp
 from codenav_mcp.ty_command import resolve_ty_command
 
 
@@ -87,6 +92,10 @@ mcp = MCPServer(
 )
 
 _PYTHON_EXTENSIONS = {".py", ".pyi"}
+# ty reads these once at startup; a change restarts it (see `LspClient.config_names`).
+_TY_CONFIG_NAMES = frozenset({"pyproject.toml", "ty.toml", ".ty.toml"})
+
+_notices = NoticeBoard("codenav", package_source_dirs(mcp_nav_shared, codenav_mcp))
 
 _client: LspClient | None = None
 _client_lock = asyncio.Lock()
@@ -134,6 +143,13 @@ def _check_python_file(file_path: str) -> None:
 		raise ToolInputError(f"codenav only supports Python files (.py/.pyi), got {file_path!r}")
 
 
+async def _after_ty_restart(_client: LspClient) -> None:
+	"""Probe verdicts were computed under the old project config."""
+	global _probe_cache_signature
+	_probe_cache.clear()
+	_probe_cache_signature = ()
+
+
 async def get_client() -> LspClient:
 	global _client
 	async with _client_lock:
@@ -148,11 +164,51 @@ async def get_client() -> LspClient:
 				command=resolve_ty_command(WORKSPACE_ROOT),
 				language_id="python",
 				watch_suffixes=frozenset(_PYTHON_EXTENSIONS),
+				config_names=_TY_CONFIG_NAMES,
+				on_restart=_after_ty_restart,
+				on_notice=_notices.post,
 			)
 			await _client.start()
 		# Tell ty about anything created/edited/deleted on disk since the last call.
 		await _client.refresh()
 		return _client
+
+
+# ty's hover on a variable/parameter is just its type ("AppServices", "list[str] | None").
+_BARE_TYPE_RE = re.compile(r"[A-Za-z_][\w.\[\], |]*")
+
+
+def _describe_type_definition(loc: dict[str, Any], workspace_root: Path) -> str:
+	"""Where a type is defined, its header line, and the first line of its docstring."""
+	uri = loc.get("uri") or loc.get("targetUri", "")
+	rng = loc.get("range") or loc.get("targetSelectionRange") or {}
+	line0 = rng.get("start", {}).get("line", 0)
+	start_col = rng.get("start", {}).get("character", 0)
+	described = [f"Type defined at {uri_to_relative(uri, workspace_root)}:{line0 + 1}:{start_col + 1}"]
+	try:
+		source = uri_to_path(uri).read_text(encoding="utf-8")
+		header = source.splitlines()[line0].strip()
+		tree = ast.parse(source)
+	except (OSError, UnicodeDecodeError, SyntaxError, IndexError):
+		return "\n".join(described)
+	described.append(f"  {header}")
+	for node in ast.walk(tree):
+		if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.lineno == line0 + 1:
+			doc = ast.get_docstring(node)
+			if doc:
+				described.append(f'  """{doc.splitlines()[0]}"""')
+			break
+	return "\n".join(described)
+
+
+async def _enrich_bare_type(text: str, client: LspClient, file_path: str, line: int, column: int) -> str:
+	"""A bare type name says nothing about where the type lives; add its definition."""
+	if "\n" in text or len(text) > 120 or not _BARE_TYPE_RE.fullmatch(text):
+		return text
+	locations = await client.type_definition(file_path, line, column)
+	if not locations:
+		return text
+	return f"{text}\n{_describe_type_definition(locations[0], WORKSPACE_ROOT)}"
 
 
 def _format_hover_contents(contents: Any) -> str:
@@ -166,6 +222,7 @@ def _format_hover_contents(contents: Any) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def workspace(ctx: Context | None = None) -> str:
 	"""Which directory is codenav navigating, and why? Use when results look like they come from the wrong checkout/worktree."""
 	await _use_workspace(ctx)
@@ -173,6 +230,7 @@ async def workspace(ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def hover(file_path: str, line: int, column: int, ctx: Context | None = None) -> str:
 	"""Get type/documentation info for the symbol at a position.
 
@@ -185,12 +243,16 @@ async def hover(file_path: str, line: int, column: int, ctx: Context | None = No
 		_check_python_file(file_path)
 		client = await get_client()
 		result = await client.hover(file_path, line, column)
+		text = _format_hover_contents(result.get("contents"))
+		if text:
+			text = await _enrich_bare_type(text, client, file_path, line, column)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
-	return _format_hover_contents(result.get("contents")) or "No hover information at that position."
+	return text or "No hover information at that position."
 
 
 @mcp.tool()
+@_notices.tool
 async def definition(file_path: str, line: int, column: int, ctx: Context | None = None) -> str:
 	"""Go to the definition of the symbol at a position.
 
@@ -216,6 +278,7 @@ async def definition(file_path: str, line: int, column: int, ctx: Context | None
 
 
 @mcp.tool()
+@_notices.tool
 async def references(
 	file_path: str, line: int, column: int, include_declaration: bool = True, ctx: Context | None = None
 ) -> str:
@@ -236,6 +299,7 @@ async def references(
 
 
 @mcp.tool()
+@_notices.tool
 async def search_symbol(
 	query: str | None = None,
 	name: str | None = None,
@@ -276,6 +340,7 @@ async def search_symbol(
 
 
 @mcp.tool()
+@_notices.tool
 async def diagnostics(file_path: str, ctx: Context | None = None) -> str:
 	"""Get ty's type-check diagnostics (errors/warnings) for a single file."""
 	await _use_workspace(ctx)
@@ -289,6 +354,7 @@ async def diagnostics(file_path: str, ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def symbol_info(
 	name: str | None = None,
 	query: str | None = None,
@@ -335,6 +401,7 @@ async def symbol_info(
 
 
 @mcp.tool()
+@_notices.tool
 async def outline(file_path: str, ctx: Context | None = None) -> str:
 	"""What's in this file? Example: `outline(file_path="src/spacemaker/bootstrap/services/jobs.py")`.
 
@@ -354,6 +421,7 @@ async def outline(file_path: str, ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def callers(
 	name: str | None = None,
 	query: str | None = None,
@@ -598,6 +666,7 @@ def _source_signature(files: list[Path]) -> tuple[tuple[str, int, int], ...]:
 
 
 @mcp.tool()
+@_notices.tool
 async def implementations(
 	port_name: str | None = None,
 	name: str | None = None,

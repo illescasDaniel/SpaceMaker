@@ -24,6 +24,7 @@ import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+import mcp_nav_shared
 from mcp.server.mcpserver import Context, MCPServer
 from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
 from mcp_nav_shared.exclude import is_excluded
@@ -41,10 +42,12 @@ from mcp_nav_shared.format import (
 	uri_to_relative,
 )
 from mcp_nav_shared.lsp_client import LspClient
+from mcp_nav_shared.notices import NoticeBoard, package_source_dirs
 from mcp_nav_shared.params import resolve_name_query
 from mcp_nav_shared.resolve import resolve_symbol
 from mcp_nav_shared.workspace import WorkspaceSelector
 
+import webnav_mcp
 from webnav_mcp import web_index
 from webnav_mcp.lang_command import resolve_css_command, resolve_html_command, resolve_ts_command
 
@@ -136,6 +139,10 @@ _SCRIPT_LANGUAGE_IDS = {
 	".jsx": "javascriptreact",
 	".tsx": "typescriptreact",
 }
+# typescript-language-server reads these once at startup; a change restarts it.
+_TS_CONFIG_NAMES = frozenset({"tsconfig.json", "jsconfig.json", "package.json"})
+
+_notices = NoticeBoard("webnav", package_source_dirs(mcp_nav_shared, webnav_mcp))
 _SUPPORTED_EXTENSIONS_TEXT = "/".join([*sorted(_SCRIPT_EXTENSIONS), ".html", ".css"])
 
 _clients: dict[str, LspClient] = {}
@@ -268,6 +275,9 @@ async def _get_ts_client() -> LspClient:
 			watch_suffixes=frozenset(_SCRIPT_EXTENSIONS),
 			watch_ignore=_is_generated,
 			open_watched_changes=True,
+			config_names=_TS_CONFIG_NAMES,
+			on_restart=_open_project_files,
+			on_notice=_notices.post,
 		),
 		_open_project_files,
 	)
@@ -385,6 +395,7 @@ def _check_script_file(file_path: str) -> None:
 
 
 @mcp.tool()
+@_notices.tool
 async def hover(file_path: str, line: int, column: int, ctx: Context | None = None) -> str:
 	"""Get type/documentation info for the symbol at a position.
 
@@ -402,6 +413,7 @@ async def hover(file_path: str, line: int, column: int, ctx: Context | None = No
 
 
 @mcp.tool()
+@_notices.tool
 async def workspace(ctx: Context | None = None) -> str:
 	"""Which directory is webnav navigating, and why? Use when results look like they come from the wrong checkout/worktree."""
 	await _use_workspace(ctx)
@@ -409,6 +421,7 @@ async def workspace(ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def definition(file_path: str, line: int, column: int, ctx: Context | None = None) -> str:
 	"""Go to the definition of the symbol at a position.
 
@@ -435,6 +448,7 @@ async def definition(file_path: str, line: int, column: int, ctx: Context | None
 
 
 @mcp.tool()
+@_notices.tool
 async def references(
 	file_path: str, line: int, column: int, include_declaration: bool = True, ctx: Context | None = None
 ) -> str:
@@ -460,6 +474,7 @@ async def references(
 
 
 @mcp.tool()
+@_notices.tool
 async def search_symbol(
 	query: str | None = None,
 	name: str | None = None,
@@ -505,6 +520,7 @@ async def search_symbol(
 
 
 @mcp.tool()
+@_notices.tool
 async def symbol_info(
 	name: str | None = None,
 	query: str | None = None,
@@ -550,6 +566,7 @@ async def symbol_info(
 
 
 @mcp.tool()
+@_notices.tool
 async def outline(file_path: str, detailed: bool = False, ctx: Context | None = None) -> str:
 	"""What's in this file? Example: `outline(file_path="web/src/gallery-item.ts")`.
 
@@ -570,6 +587,7 @@ async def outline(file_path: str, detailed: bool = False, ctx: Context | None = 
 
 
 @mcp.tool()
+@_notices.tool
 async def diagnostics(file_path: str, ctx: Context | None = None) -> str:
 	"""Get the relevant language server's diagnostics (errors/warnings) for a single file.
 
@@ -601,6 +619,7 @@ async def diagnostics(file_path: str, ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def css_var(name: str | None = None, query: str | None = None, ctx: Context | None = None) -> str:
 	"""Where is this `--custom-property` defined and used? Example: `css_var(name="--bg")`.
 
@@ -623,6 +642,7 @@ async def css_var(name: str | None = None, query: str | None = None, ctx: Contex
 
 
 @mcp.tool()
+@_notices.tool
 async def selector(name: str | None = None, query: str | None = None, ctx: Context | None = None) -> str:
 	"""Who uses this `#id` or `.class`? Example: `selector(name=".gallery-item-media")`.
 

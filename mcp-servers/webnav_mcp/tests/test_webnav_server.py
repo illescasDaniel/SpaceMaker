@@ -437,3 +437,29 @@ def test_given_token_absent_from_own_root_when_definition_then_falls_back_to_all
 	text = asyncio.run(server.definition(str(two_roots / "static" / "uses.css"), 1, 5))
 	# then
 	assert "nothing in static; showing all roots" in text and "== wire ==" in text
+
+
+def test_given_tools_when_listed_then_ctx_is_not_a_parameter():
+	# given / when: the notice decorator must not hide the `Context` parameter from the framework
+	tools = asyncio.run(server.mcp.list_tools())
+	# then
+	assert {t.name for t in tools} >= {"hover", "symbol_info", "outline", "selector", "css_var"}
+	for tool in tools:
+		assert "ctx" not in tool.input_schema.get("properties", {}), tool.name
+
+
+def test_given_ts_client_when_built_then_config_change_restarts_and_reopens_project(monkeypatch):
+	# given
+	made: list = []
+
+	async def _capture(_key, make, after_start=None):
+		made.append(make())
+		return made[-1]
+
+	monkeypatch.setattr(server, "_get_client", _capture)
+	# when
+	client = asyncio.run(server._get_ts_client())
+	# then
+	assert client.config_names == frozenset({"tsconfig.json", "jsconfig.json", "package.json"})
+	assert client.on_restart is server._open_project_files
+	assert client.on_notice == server._notices.post

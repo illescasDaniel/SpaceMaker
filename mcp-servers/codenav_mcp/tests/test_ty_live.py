@@ -99,3 +99,29 @@ def test_given_no_extra_root_when_implementations_then_test_double_not_scanned(p
 	# then
 	assert "DiskStore" in text
 	assert "FakeStore" not in text
+
+
+def test_given_config_edited_when_next_call_then_ty_restarted_and_result_says_so(project, loop):
+	match_file = project / "src" / "pkg" / "matcher.py"
+	match_file.write_text(
+		"def f(x: int) -> int:\n\tmatch x:\n\t\tcase 1:\n\t\t\treturn 1\n\treturn 0\n", encoding="utf-8"
+	)
+
+	async def scenario() -> tuple[str, str, str]:
+		before = await codenav_server.diagnostics(file_path="src/pkg/matcher.py")
+		# `match` needs Python 3.10: a version pin is read by ty only when it starts
+		(project / "pyproject.toml").write_text(
+			'[project]\nname = "demo"\nversion = "0"\n[tool.ty.environment]\nroot = ["src", "."]\npython-version = "3.9"\n',
+			encoding="utf-8",
+		)
+		after_edit = await codenav_server.diagnostics(file_path="src/pkg/matcher.py")
+		after_restart = await codenav_server.diagnostics(file_path="src/pkg/matcher.py")
+		return before, after_edit, after_restart
+
+	# when
+	before, after_edit, after_restart = loop.run_until_complete(scenario())
+	# then
+	assert "3.9" not in before
+	assert "3.9" in after_edit
+	assert "restarted the language server because pyproject.toml changed" in after_edit
+	assert "restarted" not in after_restart  # one-shot

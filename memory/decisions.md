@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-29 — MCP: restart on config change, warn on stale code, richer hover, position validation
+
+- **Context:** The re-evaluation left four open items: config that alters resolution (`pyproject.toml`, `tsconfig.json`) needed a manual restart; servers attached to a session keep old code after fixes; codenav `hover` on a variable said only `AppServices`; a wrong line/column returned "No hover information" like a real miss. A fifth (regex-grade `selector`) was reviewed and left alone: no template-literal or multi-variable selector exists in `web/src`.
+- **Decision:** (1) `LspClient.config_names` files are stamped by the existing refresh walk; a change runs `restart()` + `on_restart` and posts a one-shot notice. (2) `NoticeBoard` appends `[server] …` lines to every tool result; a sticky line while the server's own source differs from startup. No self-reload. (3) codenav hover appends `typeDefinition` location/header/docstring when ty returns a bare type. (4) Positions are validated in `LspClient` (`InvalidPositionError`, in `TOOL_ERRORS`).
+- **Rationale:** A fresh server is more reliable than trusting each server to re-read config (tsserver and ty differ). A stdio server can't re-handshake, so importlib reload or `exec` would leave the client inconsistent; a proxy/worker split is too much machinery for a dev tool, and a visible note fixes the actual harm (silent old answers). Not fixed: `selector` stays regex-grade until a real miss appears in `memory/friction/`.
+
 ## 2026-09-29 — MCP refresh walk skips nested checkouts; probe document at the workspace root
 
 - **Context:** The per-call `LspClient.refresh()` walk measured ~20 ms on the user's machine vs ~7 ms on a clean clone. Cause: linked worktrees live inside the primary (`.claude/worktrees/<slug>`), so the primary's walk stat'ed every worktree's files (one worktree: 7 → 17 ms) and reported their edits to ty as if they were this workspace's; a `resolve()` per file was another ~⅔ of the remaining cost. Separately, the `implementations` probe document sat at `mcp-servers/.codenav_probe.py` (SpaceMaker-specific; git history gives no reason) while the docs said `<root>/.codenav_probe.py`.

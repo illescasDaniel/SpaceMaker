@@ -105,3 +105,48 @@ def test_given_ts_files_when_hover_and_references_then_typed_and_cross_file(tmp_
 			await client.stop()
 
 	asyncio.run(_run())
+
+
+@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="typescript-language-server not installed (npm ci)")
+def test_given_tsconfig_edited_when_refresh_then_server_restarts_and_uses_new_options(tmp_path):
+	# given — `null` is assignable to `string` until `strict` is switched on
+	tsconfig = tmp_path / "tsconfig.json"
+	tsconfig.write_text('{"compilerOptions": {"strict": false}, "include": ["*.ts"]}\n', encoding="utf-8")
+	src = tmp_path / "s.ts"
+	src.write_text("export const s: string = null;\n", encoding="utf-8")
+	notices: list[str] = []
+	reopened: list[LspClient] = []
+
+	async def _on_restart(c: LspClient) -> None:
+		reopened.append(c)
+		await c.ensure_open(str(src))
+
+	client = LspClient(
+		workspace_root=tmp_path,
+		command=resolve_ts_command(_REPO_ROOT),
+		language_id="javascript",
+		language_ids=_SCRIPT_LANGUAGE_IDS,
+		watch_suffixes=frozenset({".ts"}),
+		open_watched_changes=True,
+		config_names=frozenset({"tsconfig.json"}),
+		on_restart=_on_restart,
+		on_notice=notices.append,
+	)
+
+	async def _run() -> None:
+		await client.start()
+		try:
+			await client.refresh()
+			assert await client.diagnostics(str(src)) == []
+			# when
+			tsconfig.write_text('{"compilerOptions": {"strict": true}, "include": ["*.ts"]}\n', encoding="utf-8")
+			await client.refresh()
+			items = await client.diagnostics(str(src))
+			# then
+			assert any(item.get("code") == 2322 for item in items), items
+			assert notices == ["restarted the language server because tsconfig.json changed"]
+			assert reopened == [client]
+		finally:
+			await client.stop()
+
+	asyncio.run(_run())

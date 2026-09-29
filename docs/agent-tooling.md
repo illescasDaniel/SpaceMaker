@@ -310,10 +310,41 @@ Cost: one stat walk per call (~2 ms on this repo). The walk resolves the root
 once rather than every file, and skips nested checkouts (any directory below
 the root holding a `.git` entry, e.g. worktrees under `.claude/worktrees/`):
 walking those used to cost ~15 ms per worktree and reported another
-checkout's files to the server. Not covered: changes to
-config that alters resolution (`pyproject.toml`, `tsconfig.json`) — restart
-the server after editing those. `codenav_mcp/tests/test_ty_live.py` exercises
+checkout's files to the server. `codenav_mcp/tests/test_ty_live.py` exercises
 create/edit/delete against a real `ty`.
+
+**Config changes restart the language server.** ty and tsserver read their
+project config once at startup, so the same walk also stamps every
+`LspClient.config_names` file anywhere under the workspace (codenav:
+`pyproject.toml`, `ty.toml`; webnav's TS server: `tsconfig.json`,
+`jsconfig.json`, `package.json`). When one changes, `refresh()` calls
+`LspClient.restart()` (stop, start, forget all documents) and runs
+`on_restart` (webnav re-opens the JS project; codenav drops its probe
+verdicts) instead of reporting file changes, since the fresh server reads the
+disk itself. The next result carries `[codenav] restarted the language server
+because pyproject.toml changed`. Cost: one cold start (~0.4 s ty, ~1.3 s
+tsserver), only right after such an edit.
+
+### Notices on tool results
+
+`mcp_nav_shared/notices.py`: every tool is wrapped in `@_notices.tool` (below
+`@mcp.tool()`) and appends `[server] …` lines to its text result. One-shot
+notices (the restart above) are shown once; a sticky one appears on every call
+while the server's own `*.py` files (its package and `mcp_nav_shared`) differ
+from what it started with: a stdio server can't reload itself (the client
+handshakes once and importlib reloads break shared state), so the fix for
+"my MCP fixes aren't live" is a visible *restart the MCP servers* line rather
+than a silent old-code answer.
+
+### Bad positions and thin hovers
+
+`LspClient.hover/definition/references/type_definition` validate the position
+against the file first and raise `InvalidPositionError` (line out of range,
+column beyond the line's UTF-16 length; the end-of-line column is valid), so a
+typo isn't mistaken for "nothing there". codenav's `hover` also enriches a bare
+type name (ty answers a variable with just `AppServices`): it asks
+`textDocument/typeDefinition` and appends where the type is defined, its
+header line and the first docstring line.
 
 ### Positioning (codenav and webnav)
 

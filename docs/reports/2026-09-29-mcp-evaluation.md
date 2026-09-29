@@ -13,9 +13,11 @@ passes 34/34 checks.
 | `codenav` (Python / ty) | 7.5 / 10 | **8.5 / 10** | After-edit reliability 4 → 9; `implementations` now shows test doubles; `search_symbol` filters |
 | `webnav` (TS/HTML/CSS) | 7 / 10 | **8.5 / 10** | After-edit reliability 6 → 9; `selector` sees `querySelector<T>`; `outline` 3.6× smaller and in order; scoped CSS `definition` |
 
-Not higher because of the remaining weaknesses listed at the end (thin `hover`, regex-grade
-selector scanning, restart needed after config changes). The two follow-ups found during the
-re-evaluation (refresh cost, probe path) were fixed afterwards in f48308b, and all 7 fixes were
+Not higher because of what remains: regex-grade selector scanning and the fact that a running
+server can only tell you, not fix, that its own code is out of date. The follow-ups found during
+the re-evaluation were fixed afterwards: refresh cost and probe path (f48308b), `search_symbol`
+fuzzy filler (dc82e49), and thin `hover`, config-change restarts, stale-code warnings and bad
+positions (branch `claude/mcp-followups`, see "Follow-up round"). All 7 original fixes were
 confirmed live in a new session after an MCP restart (see "Live check after restart").
 
 ## Re-evaluation: what was fixed and how it was verified
@@ -56,11 +58,24 @@ diagnostics from 1.7–2.5 s to 1.1–2.0 s, because `npm ci` meant no `npx` dow
 |---|---|---|
 | ~~mcp-nav-shared~~ | ~~slow~~ | ~~The refresh walk costs ~20 ms per call~~ — fixed in f48308b: the cost came from nested worktrees under `.claude/worktrees/` (walked and reported to the server) plus a `resolve()` per file; now ~2.3 ms with or without a nested worktree ([friction](../../memory/friction/2026-09-29-refresh-adds-20ms-per-call.md)) |
 | ~~codenav~~ | ~~confusing~~ | ~~Probe document path hard-coded `mcp-servers/.codenav_probe.py`~~ — fixed in f48308b: now `<root>/.codenav_probe.py` as documented; `implementations` results unchanged ([friction](../../memory/friction/2026-09-29-probe-path-hardcoded-mcp-servers.md)) |
-| codenav | minor | `search_symbol` on a short query pads the cap with ty's fuzzy subsequence matches after the real substring hits ([friction](../../memory/friction/2026-09-29-search-symbol-fuzzy-filler.md)) |
-| both | limitation | Changes to config that alters resolution (`pyproject.toml`, `tsconfig.json`) aren't picked up until the server restarts |
-| both | limitation | The MCP servers attached to a running Claude session keep the code they started with; restart them (or the session) to get these fixes |
-| codenav | minor | `hover` is still thin (a variable shows only its type name) |
-| webnav | minor | `selector` is regex-grade: template literals and selectors built from several variables aren't resolved (documented) |
+| ~~codenav~~ | ~~minor~~ | ~~`search_symbol` pads the cap with ty's fuzzy subsequence matches~~ — fixed in dc82e49: hidden behind a count unless `fuzzy=true` ([friction](../../memory/friction/2026-09-29-search-symbol-fuzzy-filler.md)) |
+| ~~both~~ | ~~limitation~~ | ~~Config that alters resolution (`pyproject.toml`, `tsconfig.json`) needed a manual restart~~ — fixed on `claude/mcp-followups`: the server restarts itself and says so ([friction](../../memory/friction/2026-09-29-config-change-needs-mcp-restart.md)) |
+| both | limitation | The MCP servers attached to a running Claude session keep the code they started with. A stdio server can't reload itself, so since `claude/mcp-followups` every result carries a `restart the MCP servers` line while the server's code is stale ([friction](../../memory/friction/2026-09-29-mcp-old-code-after-fix-is-silent.md)) |
+| ~~codenav~~ | ~~minor~~ | ~~`hover` is thin (a variable shows only its type name)~~ — fixed on `claude/mcp-followups` ([friction](../../memory/friction/2026-09-29-codenav-hover-bare-type-and-silent-bad-position.md)) |
+| webnav | minor | `selector` is regex-grade: template literals and selectors built from several variables aren't resolved (documented). Deliberately not fixed: no such selector exists in `web/src` today; revisit when a real miss shows up in the friction log |
+
+### Follow-up round (branch `claude/mcp-followups`)
+
+| Issue | Fix | Evidence |
+|---|---|---|
+| `hover` on a variable said only `AppServices` | Bare type names are enriched with `typeDefinition`: where the type lives, its header line and first docstring line | Live: `services` in `routes/convert.py` now reports `Type defined at src/spacemaker/bootstrap/services/core.py:79:7` and the `class AppServices(…)` header; function hovers unchanged |
+| Bad line/column looked like "nothing there" | `InvalidPositionError` on all position tools of both servers, UTF-16 aware, end-of-line column allowed | Live: line 500 of a 58-line file → `line 500 is out of range: … has 58 line(s)`; column 999 → `line 19 … is 30 character(s) long` |
+| Config edits needed a manual server restart | `config_names` stamped by the refresh walk; a change restarts the language server, re-runs `on_restart`, and the next result says why | Real ty: `python-version = "3.9"` in `pyproject.toml` makes `diagnostics` on a `match` statement report 3.9 on the next call, once-only notice. Real tsserver: flipping `strict` in `tsconfig.json` surfaces TS2322 on the next refresh |
+| Old MCP code after a fix was silent | `NoticeBoard` appends a sticky "restart the MCP servers" line while the server's own source differs from startup (no self-reload: a stdio server can't re-handshake) | Unit-tested (edited and added source files); tool schemas still hide `ctx` (checked on both servers) |
+
+Not changed: `selector` stays regex-grade (no template-literal or multi-variable selector exists in
+`web/src`). Gate: ruff, ty, web and pytest (689 tests, none skipped) green, including the 3 TS smoke tests plus a
+new one on real tsserver now that `npm ci` has run.
 
 ### Live check after restart (new session)
 
@@ -84,7 +99,7 @@ edit to an already-open `web/src/lan.ts` all showed up on the next call; after `
 | `diagnostics` | 9 → 9 | 8 → 8 |
 | `definition` | 8 → 8 | 7 → 8 |
 | `references` | 8 → 9 | 7 → 8 |
-| `hover` | 6 → 6 | 8 → 8 |
+| `hover` | 6 → 8 | 8 → 8 |
 | `search_symbol` | 6 → 8 | 8 → 8 |
 | `selector` | — | 7 → 8 |
 | `css_var` | — | 9 → 9 |
