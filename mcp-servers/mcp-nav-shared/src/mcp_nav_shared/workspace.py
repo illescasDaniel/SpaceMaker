@@ -159,3 +159,24 @@ def resolve_source_root(explicit_env: str, workspace_root: Path) -> Path:
 		path = Path(raw)
 		return path if path.is_absolute() else (workspace_root / path).resolve()
 	return workspace_root
+
+
+def resolve_extra_source_roots(explicit_env: str, workspace_root: Path) -> list[Path]:
+	"""Additional directories (comma-separated in `explicit_env`, relative to the
+	workspace root unless absolute) that `implementations` also scans, reporting
+	their matches under a separate heading — typically a project's `tests`
+	directory, so test doubles of a port are listed next to its real adapters.
+	Import paths for these are derived from the workspace root (the usual
+	`pythonpath = ["."]` layout: `tests.unit.fakes`). Missing directories are
+	ignored; unset means none."""
+	roots: list[Path] = []
+	for part in os.environ.get(explicit_env, "").split(","):
+		part = part.strip()
+		if not part:
+			continue
+		path = Path(part)
+		path = path if path.is_absolute() else (workspace_root / path)
+		path = path.resolve()
+		if path.is_dir() and path not in roots:
+			roots.append(path)
+	return roots

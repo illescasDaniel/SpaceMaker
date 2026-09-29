@@ -2,6 +2,24 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-29 — MCP follow-up review fixes
+
+- **Context:** Review of 072fae3 found: hover lost its text if `typeDefinition` failed; the bare-type regex matched prose and enriched every `str`; restart left in-flight requests to time out; probe cache survived a client rebuild; `touch` on a config restarted the server; stale-code check ran every call.
+- **Decision:** Enrichment is best-effort (catches `LspRequestError`), rejects two-word text, skips `builtins.pyi`, lists up to 3 union members. `restart()` fails pending futures first and `stop()` awaits its reader tasks. Config changes are detected by sha256 of content. `NoticeBoard` rechecks source at most every 2 s. Line count in `InvalidPositionError` matches the check.
+- **Rationale:** Optional extras must degrade, not fail; restarts should be cheap and only for real changes.
+
+## 2026-09-29 — MCP: restart on config change, warn on stale code, richer hover, position validation
+
+- **Context:** The re-evaluation left four open items: config that alters resolution (`pyproject.toml`, `tsconfig.json`) needed a manual restart; servers attached to a session keep old code after fixes; codenav `hover` on a variable said only `AppServices`; a wrong line/column returned "No hover information" like a real miss. A fifth (regex-grade `selector`) was reviewed and left alone: no template-literal or multi-variable selector exists in `web/src`.
+- **Decision:** (1) `LspClient.config_names` files are stamped by the existing refresh walk; a change runs `restart()` + `on_restart` and posts a one-shot notice. (2) `NoticeBoard` appends `[server] …` lines to every tool result; a sticky line while the server's own source differs from startup. No self-reload. (3) codenav hover appends `typeDefinition` location/header/docstring when ty returns a bare type. (4) Positions are validated in `LspClient` (`InvalidPositionError`, in `TOOL_ERRORS`).
+- **Rationale:** A fresh server is more reliable than trusting each server to re-read config (tsserver and ty differ). A stdio server can't re-handshake, so importlib reload or `exec` would leave the client inconsistent; a proxy/worker split is too much machinery for a dev tool, and a visible note fixes the actual harm (silent old answers). Not fixed: `selector` stays regex-grade until a real miss appears in `memory/friction/`.
+
+## 2026-09-29 — MCP refresh walk skips nested checkouts; probe document at the workspace root
+
+- **Context:** The per-call `LspClient.refresh()` walk measured ~20 ms on the user's machine vs ~7 ms on a clean clone. Cause: linked worktrees live inside the primary (`.claude/worktrees/<slug>`), so the primary's walk stat'ed every worktree's files (one worktree: 7 → 17 ms) and reported their edits to ty as if they were this workspace's; a `resolve()` per file was another ~⅔ of the remaining cost. Separately, the `implementations` probe document sat at `mcp-servers/.codenav_probe.py` (SpaceMaker-specific; git history gives no reason) while the docs said `<root>/.codenav_probe.py`.
+- **Decision:** `_scan_watched` is a `scandir` walk that resolves the root once (only symlinked files get their own `resolve()`) and prunes any directory below the root that holds a `.git` entry. The probe moves to `<root>/.codenav_probe.py`. Rejected: scoping the walk to source/test roots (would miss edits elsewhere ty still indexes, e.g. `scripts/`), and debouncing (a quick edit between two calls could be missed).
+- **Rationale:** A nested `.git` marks another repository/checkout, never this workspace's source, so pruning is correct as well as cheaper (~2.3 ms regardless of worktrees). The probe's imports are absolute, so its directory never affected resolution; the root is also clear of path-scoped ty overrides (`tests/**`). Verified: live-ty tests and real-repo `implementations` output unchanged.
+
 ## 2026-09-29 — MCP servers pick the workspace per request (worktree support)
 
 - **Context:** Claude Code starts codenav/webnav once with the *main* checkout as `CLAUDE_PROJECT_DIR`/cwd (and reads `.mcp.json` from there), even for sessions in a linked worktree, so a fixed root answered from the wrong tree. Env vars cannot carry the worktree; a per-worktree `.env` would be manual.

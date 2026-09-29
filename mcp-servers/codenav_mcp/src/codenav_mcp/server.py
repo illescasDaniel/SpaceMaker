@@ -20,14 +20,17 @@ from __future__ import annotations
 import ast
 import asyncio
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import mcp_nav_shared
 from mcp.server.mcpserver import Context, MCPServer
 from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
 from mcp_nav_shared.exclude import is_excluded
 from mcp_nav_shared.format import (
+	filter_symbols_by_kind_and_path,
 	format_callers,
 	format_diagnostics,
 	format_location,
@@ -35,15 +38,19 @@ from mcp_nav_shared.format import (
 	format_references,
 	format_references_grouped,
 	format_workspace_symbols,
+	parse_kind_filter,
 	symbol_kind_label,
 	to_symbol_tree,
+	uri_to_path,
 	uri_to_relative,
 )
-from mcp_nav_shared.lsp_client import LspClient
+from mcp_nav_shared.lsp_client import LspClient, LspRequestError
+from mcp_nav_shared.notices import NoticeBoard, package_source_dirs
 from mcp_nav_shared.params import resolve_name_query
 from mcp_nav_shared.resolve import resolve_symbol
-from mcp_nav_shared.workspace import WorkspaceSelector, resolve_source_root
+from mcp_nav_shared.workspace import WorkspaceSelector, resolve_extra_source_roots, resolve_source_root
 
+import codenav_mcp
 from codenav_mcp.ty_command import resolve_ty_command
 
 
@@ -59,6 +66,9 @@ _workspace_source = _selector.base_source
 # scan. Defaults to the whole workspace; set CODENAV_MCP_SOURCE_ROOT (e.g. to
 # "src") in a project's MCP config to scope/speed up the scan.
 SOURCE_ROOT = resolve_source_root("CODENAV_MCP_SOURCE_ROOT", WORKSPACE_ROOT)
+# Extra directories `implementations` also scans (e.g. "tests", for test
+# doubles of a port); their matches are listed under a separate heading.
+EXTRA_SOURCE_ROOTS = resolve_extra_source_roots("CODENAV_MCP_EXTRA_SOURCE_ROOTS", WORKSPACE_ROOT)
 
 _POSITION_NOTE = (
 	"Positions are 1-indexed. `column` is a UTF-16 character offset on the "
@@ -82,6 +92,10 @@ mcp = MCPServer(
 )
 
 _PYTHON_EXTENSIONS = {".py", ".pyi"}
+# ty reads these once at startup; a change restarts it (see `LspClient.config_names`).
+_TY_CONFIG_NAMES = frozenset({"pyproject.toml", "ty.toml", ".ty.toml"})
+
+_notices = NoticeBoard("codenav", package_source_dirs(mcp_nav_shared, codenav_mcp))
 
 _client: LspClient | None = None
 _client_lock = asyncio.Lock()
@@ -93,7 +107,7 @@ _workspace_lock = asyncio.Lock()
 async def _configure_workspace(root: Path, source: str) -> None:
 	"""Re-target the server at `root`: the language server, probe verdicts and
 	every path derived from the old root belong to the previous tree."""
-	global WORKSPACE_ROOT, SOURCE_ROOT, _client, _workspace_source, _probe_cache_signature
+	global WORKSPACE_ROOT, SOURCE_ROOT, EXTRA_SOURCE_ROOTS, _client, _workspace_source, _probe_cache_signature
 	if _client is not None:
 		try:
 			await _client.stop()
@@ -102,6 +116,7 @@ async def _configure_workspace(root: Path, source: str) -> None:
 		_client = None
 	WORKSPACE_ROOT = root
 	SOURCE_ROOT = resolve_source_root("CODENAV_MCP_SOURCE_ROOT", root)
+	EXTRA_SOURCE_ROOTS = resolve_extra_source_roots("CODENAV_MCP_EXTRA_SOURCE_ROOTS", root)
 	_workspace_source = source
 	_probe_cache.clear()
 	_probe_cache_signature = ()
@@ -128,6 +143,13 @@ def _check_python_file(file_path: str) -> None:
 		raise ToolInputError(f"codenav only supports Python files (.py/.pyi), got {file_path!r}")
 
 
+async def _after_ty_restart(_client: LspClient) -> None:
+	"""Probe verdicts were computed under the old project config."""
+	global _probe_cache_signature
+	_probe_cache.clear()
+	_probe_cache_signature = ()
+
+
 async def get_client() -> LspClient:
 	global _client
 	async with _client_lock:
@@ -141,9 +163,68 @@ async def get_client() -> LspClient:
 				workspace_root=WORKSPACE_ROOT,
 				command=resolve_ty_command(WORKSPACE_ROOT),
 				language_id="python",
+				watch_suffixes=frozenset(_PYTHON_EXTENSIONS),
+				config_names=_TY_CONFIG_NAMES,
+				on_restart=_after_ty_restart,
+				on_notice=_notices.post,
 			)
 			await _client.start()
+			await _after_ty_restart(_client)  # verdicts from a previous server are suspect too
+		# Tell ty about anything created/edited/deleted on disk since the last call.
+		await _client.refresh()
 		return _client
+
+
+# ty's hover on a variable/parameter is just its type ("AppServices", "list[str] | None").
+# Two words in a row ("Return the value") is prose, not a type expression.
+_BARE_TYPE_RE = re.compile(r"(?!.*\w\s+\w)[A-Za-z_][\w.\[\], |]*")
+_MAX_TYPE_LOCATIONS = 3
+
+
+def _describe_type_definition(loc: dict[str, Any], workspace_root: Path) -> str:
+	"""Where a type is defined, its header line, and the first line of its docstring."""
+	uri = loc.get("uri") or loc.get("targetUri", "")
+	rng = loc.get("range") or loc.get("targetSelectionRange") or {}
+	line0 = rng.get("start", {}).get("line", 0)
+	start_col = rng.get("start", {}).get("character", 0)
+	described = [f"Type defined at {uri_to_relative(uri, workspace_root)}:{line0 + 1}:{start_col + 1}"]
+	try:
+		source = uri_to_path(uri).read_text(encoding="utf-8")
+		header = source.splitlines()[line0].strip()
+		tree = ast.parse(source)
+	except (OSError, UnicodeDecodeError, SyntaxError, IndexError):
+		return "\n".join(described)
+	described.append(f"  {header}")
+	for node in ast.walk(tree):
+		if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.lineno == line0 + 1:
+			doc = ast.get_docstring(node)
+			if doc:
+				described.append(f'  """{doc.splitlines()[0]}"""')
+			break
+	return "\n".join(described)
+
+
+async def _enrich_bare_type(text: str, client: LspClient, file_path: str, line: int, column: int) -> str:
+	"""A bare type name says nothing about where the type lives; add its definition."""
+	if "\n" in text or len(text) > 120 or not _BARE_TYPE_RE.fullmatch(text):
+		return text
+	try:
+		locations = await client.type_definition(file_path, line, column)
+	except LspRequestError:
+		return text  # the hover itself is still good; the extra is optional
+	described = [
+		_describe_type_definition(loc, WORKSPACE_ROOT)
+		for loc in locations[:_MAX_TYPE_LOCATIONS]
+		if not _is_builtins_stub(loc)
+	]
+	if not described:
+		return text
+	return "\n".join([text, *described])
+
+
+def _is_builtins_stub(loc: dict[str, Any]) -> bool:
+	"""`str`/`int`/`list` point into typeshed; that is noise on every plain variable."""
+	return uri_to_path(loc.get("uri") or loc.get("targetUri", "")).name == "builtins.pyi"
 
 
 def _format_hover_contents(contents: Any) -> str:
@@ -157,6 +238,7 @@ def _format_hover_contents(contents: Any) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def workspace(ctx: Context | None = None) -> str:
 	"""Which directory is codenav navigating, and why? Use when results look like they come from the wrong checkout/worktree."""
 	await _use_workspace(ctx)
@@ -164,6 +246,7 @@ async def workspace(ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def hover(file_path: str, line: int, column: int, ctx: Context | None = None) -> str:
 	"""Get type/documentation info for the symbol at a position.
 
@@ -176,12 +259,16 @@ async def hover(file_path: str, line: int, column: int, ctx: Context | None = No
 		_check_python_file(file_path)
 		client = await get_client()
 		result = await client.hover(file_path, line, column)
+		text = _format_hover_contents(result.get("contents"))
+		if text:
+			text = await _enrich_bare_type(text, client, file_path, line, column)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
-	return _format_hover_contents(result.get("contents")) or "No hover information at that position."
+	return text or "No hover information at that position."
 
 
 @mcp.tool()
+@_notices.tool
 async def definition(file_path: str, line: int, column: int, ctx: Context | None = None) -> str:
 	"""Go to the definition of the symbol at a position.
 
@@ -207,6 +294,7 @@ async def definition(file_path: str, line: int, column: int, ctx: Context | None
 
 
 @mcp.tool()
+@_notices.tool
 async def references(
 	file_path: str, line: int, column: int, include_declaration: bool = True, ctx: Context | None = None
 ) -> str:
@@ -227,7 +315,15 @@ async def references(
 
 
 @mcp.tool()
-async def search_symbol(query: str | None = None, name: str | None = None, ctx: Context | None = None) -> str:
+@_notices.tool
+async def search_symbol(
+	query: str | None = None,
+	name: str | None = None,
+	kind: str | None = None,
+	path: str | None = None,
+	fuzzy: bool = False,
+	ctx: Context | None = None,
+) -> str:
 	"""Search the whole workspace for a symbol by name (class, function, method, etc.).
 
 	Use this to find a symbol's file/position first, then pass that position
@@ -235,10 +331,16 @@ async def search_symbol(query: str | None = None, name: str | None = None, ctx: 
 	Returned positions point at the identifier name (not the `class`/`def`
 	keyword) and use the same character-offset column convention as the
 	other tools. Results include a SymbolKind label and are capped.
-	`name` is accepted as an alias for `query`.
+	`name` is accepted as an alias for `query`. Narrow broad queries with
+	`kind` (SymbolKind labels, comma-separated: `class`, `function,method`,
+	`interface`, ...) and `path` (workspace-relative prefix such as `src/`,
+	or a glob such as `src/**/*.py`). Production code ranks before tests.
+	Loose fuzzy hits whose names don't contain the query are summarised as a
+	count when real matches exist; pass `fuzzy=true` to list them too.
 	"""
 	await _use_workspace(ctx)
 	try:
+		kinds = parse_kind_filter(kind)
 		query = resolve_name_query(preferred="query", example="start_convert", query=query, name=name)
 		client = await get_client()
 		symbols = await client.workspace_symbol(query)
@@ -246,10 +348,15 @@ async def search_symbol(query: str | None = None, name: str | None = None, ctx: 
 		return format_tool_error(exc)
 	if not symbols:
 		return f"No symbols matching {query!r}."
-	return format_workspace_symbols(symbols, WORKSPACE_ROOT, query=query)
+	matching = filter_symbols_by_kind_and_path(symbols, WORKSPACE_ROOT, kinds=kinds, path=path)
+	if not matching:
+		filters = ", ".join(f"{k}={v!r}" for k, v in (("kind", kind), ("path", path)) if v)
+		return f"No symbols matching {query!r} with {filters} ({len(symbols)} without the filters)."
+	return format_workspace_symbols(matching, WORKSPACE_ROOT, query=query, fuzzy=fuzzy)
 
 
 @mcp.tool()
+@_notices.tool
 async def diagnostics(file_path: str, ctx: Context | None = None) -> str:
 	"""Get ty's type-check diagnostics (errors/warnings) for a single file."""
 	await _use_workspace(ctx)
@@ -263,6 +370,7 @@ async def diagnostics(file_path: str, ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def symbol_info(
 	name: str | None = None,
 	query: str | None = None,
@@ -309,6 +417,7 @@ async def symbol_info(
 
 
 @mcp.tool()
+@_notices.tool
 async def outline(file_path: str, ctx: Context | None = None) -> str:
 	"""What's in this file? Example: `outline(file_path="src/spacemaker/bootstrap/services/jobs.py")`.
 
@@ -328,6 +437,7 @@ async def outline(file_path: str, ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
+@_notices.tool
 async def callers(
 	name: str | None = None,
 	query: str | None = None,
@@ -358,13 +468,14 @@ async def callers(
 	return format_callers(incoming, WORKSPACE_ROOT)
 
 
-def _module_path(abs_path: Path) -> str:
-	"""Dotted import path for a file under `SOURCE_ROOT`."""
+def _module_path(abs_path: Path, base: Path | None = None) -> str:
+	"""Dotted import path for a file under `base` (default `SOURCE_ROOT`)."""
+	base = SOURCE_ROOT if base is None else base
 	try:
-		rel = abs_path.relative_to(SOURCE_ROOT)
+		rel = abs_path.relative_to(base)
 	except ValueError as exc:
 		raise ToolInputError(
-			f"{abs_path} is outside the source root ({SOURCE_ROOT}); "
+			f"{abs_path} is outside the source root ({base}); "
 			"set CODENAV_MCP_SOURCE_ROOT if this project's importable code "
 			"lives under a different directory."
 		) from exc
@@ -523,7 +634,11 @@ def _effective_members(
 	return members
 
 
-_PROBE_RELATIVE_PATH = Path("mcp-servers") / ".codenav_probe.py"
+# In-memory only (never written to disk). Its imports are absolute, so its
+# directory doesn't affect resolution; the workspace root keeps it clear of
+# path-scoped ty overrides (e.g. rules relaxed for `tests/**`) and of any
+# project-specific layout.
+_PROBE_RELATIVE_PATH = Path(".codenav_probe.py")
 
 
 def _probe_source(port_module: str, port_name: str, candidate_module: str, candidate_name: str) -> str:
@@ -567,6 +682,7 @@ def _source_signature(files: list[Path]) -> tuple[tuple[str, int, int], ...]:
 
 
 @mcp.tool()
+@_notices.tool
 async def implementations(
 	port_name: str | None = None,
 	name: str | None = None,
@@ -588,7 +704,9 @@ async def implementations(
 	accepted as aliases for `port_name`. `file_path` narrows the port lookup
 	to one file when the name exists in several. Members inherited from
 	same-workspace base classes, and fields/properties declared by the port,
-	count when matching names.
+	count when matching names. Directories listed in
+	CODENAV_MCP_EXTRA_SOURCE_ROOTS (e.g. `tests`) are scanned too; their
+	matches (test doubles) are listed under a separate heading.
 	"""
 	await _use_workspace(ctx)
 	try:
@@ -633,7 +751,19 @@ async def implementations(
 	# and can be enormous (a `.venv` alone can dwarf the real codebase) — skip
 	# them outright rather than walking (and failing to decode) thousands of
 	# irrelevant files.
-	all_candidate_files = sorted(p for p in SOURCE_ROOT.rglob("*.py") if not is_excluded(p, SOURCE_ROOT))
+	primary_files = sorted(p for p in SOURCE_ROOT.rglob("*.py") if not is_excluded(p, SOURCE_ROOT))
+	primary_set = set(primary_files)
+	# Extra roots (tests, ...): scanned too, reported separately, imported relative to the workspace.
+	extra_files = sorted(
+		{
+			p
+			for root in EXTRA_SOURCE_ROOTS
+			for p in root.rglob("*.py")
+			if not is_excluded(p, root) and p not in primary_set
+		}
+	)
+	extra_set = set(extra_files)
+	all_candidate_files = [*primary_files, *extra_files]
 	port_abs_path = (WORKSPACE_ROOT / port_rel_path).resolve()
 	# Sequential, not `asyncio.gather`: firing ~90 concurrent documentSymbol
 	# requests at ty made it respond with a "content modified" LSP error;
@@ -666,7 +796,7 @@ async def implementations(
 			infos_by_name.setdefault(info.name, []).append(info)
 	port_required = _effective_members(port.name, port_own, infos_by_name)
 
-	name_matches: list[tuple[Path, str, str]] = []  # (path, class name, module path)
+	name_matches: list[tuple[Path, str, str, bool]] = []  # (path, class name, module path, from extra root)
 	for path, symbols in zip(candidate_files, symbol_lists, strict=True):
 		if path not in infos_by_path:
 			continue
@@ -677,7 +807,7 @@ async def implementations(
 			if cls_node["name"] in other_protocols:
 				continue  # another Protocol, not a concrete implementer
 			try:
-				candidate_module = _module_path(path)
+				candidate_module = _module_path(path, WORKSPACE_ROOT if path in extra_set else None)
 			except ToolInputError:
 				continue  # outside SOURCE_ROOT's import-path derivation; can't probe it
 			own = _symbol_members(cls_node)
@@ -685,7 +815,7 @@ async def implementations(
 				if info.name == cls_node["name"]:
 					own |= info.members
 			if port_required <= _effective_members(cls_node["name"], own, infos_by_name):
-				name_matches.append((path, cls_node["name"], candidate_module))
+				name_matches.append((path, cls_node["name"], candidate_module, path in extra_set))
 
 	skipped_note = f" ({len(unreadable)} file(s) under {SOURCE_ROOT} skipped: unreadable)" if unreadable else ""
 	if not name_matches:
@@ -698,6 +828,8 @@ async def implementations(
 	probe_uri = (WORKSPACE_ROOT / _PROBE_RELATIVE_PATH).as_uri()
 	verified: list[str] = []
 	unverified: list[str] = []
+	verified_extra: list[str] = []
+	unverified_extra: list[str] = []
 	opened = False
 	# All calls share one scratch document, so concurrent runs would overwrite
 	# each other's probe (and close it under one another): serialize them.
@@ -707,12 +839,13 @@ async def implementations(
 		if signature != _probe_cache_signature:
 			_probe_cache.clear()
 			_probe_cache_signature = signature
-		for path, cls_name, candidate_module in name_matches:
+		for path, cls_name, candidate_module, is_extra in name_matches:
 			cache_key = (port_module, port.name, candidate_module, cls_name)
 			rel = uri_to_relative(path.as_uri(), WORKSPACE_ROOT)
+			ok_bucket, bad_bucket = (verified_extra, unverified_extra) if is_extra else (verified, unverified)
 			cached = _probe_cache.get(cache_key)
 			if cached is not None:
-				(verified if cached[0] else unverified).append(cached[1])
+				(ok_bucket if cached[0] else bad_bucket).append(cached[1])
 				continue
 			code = _probe_source(port_module, port.name, candidate_module, cls_name)
 			if not opened:
@@ -739,7 +872,7 @@ async def implementations(
 				line = f"{cls_name}  ({rel})  — could not verify: {reasons}"
 				is_verified = False
 			_probe_cache[cache_key] = (is_verified, line)
-			(verified if is_verified else unverified).append(line)
+			(ok_bucket if is_verified else bad_bucket).append(line)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 	finally:
@@ -751,9 +884,16 @@ async def implementations(
 
 	lines = [f"{len(verified)} class(es) implement {port.name} (type-verified):{skipped_note}"]
 	lines += verified or ["(none)"]
-	if unverified:
+	if EXTRA_SOURCE_ROOTS:
+		roots = ", ".join(
+			str(r.relative_to(WORKSPACE_ROOT)) if r.is_relative_to(WORKSPACE_ROOT) else str(r)
+			for r in EXTRA_SOURCE_ROOTS
+		)
+		lines += ["", f"{len(verified_extra)} more in extra roots ({roots}), e.g. test doubles (type-verified):"]
+		lines += verified_extra or ["(none)"]
+	if unverified or unverified_extra:
 		lines += ["", "Method-name matches that don't type-check as the port:"]
-		lines += unverified
+		lines += [*unverified, *unverified_extra]
 	return "\n".join(lines)
 
 

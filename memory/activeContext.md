@@ -1,4 +1,4 @@
-_Last updated: 2026-09-29 (MCP review round 2 + worktree-aware workspace, branch `feature/mcp-improvements`)_
+_Last updated: 2026-09-29 (MCP follow-ups verified live, PR opened; branch `claude/mcp-followups`)_
 
 ## Branch
 
@@ -19,6 +19,14 @@ Done and tested (609 tests, `uv run task checks` green):
 3. Worktree verification: DONE (desktop app answers roots/list). Optionally repeat in Cursor (pinned via `${workspaceFolder}`).
 4. Optional cleanups noticed: none blocking. A tool call racing a workspace switch can fail once (documented).
 5. Merge `feature/mcp-improvements` into `main`; .
+
+## MCP evaluation + fixes (2026-09-29)
+
+Branch `claude/mcp-evaluation-report` (from `main` 3e42762): report `docs/reports/2026-09-29-mcp-evaluation.md` (before/after), all 7 findings fixed in 5b0ff55 and confirmed live after an MCP restart; the two follow-up friction entries (refresh cost, probe path) fixed in f48308b; gate green (651 tests). Next: restart the MCP servers again to load f48308b; decide PR/merge. `search_symbol` fuzzy-filler friction fixed (restart MCPs to load it).
+
+## MCP follow-ups (branch `claude/mcp-followups`)
+
+Done, gate-green (693 tests, Biome + tsc) and confirmed live through codenav: `hover` names a type's definition, out-of-range line gives a range error, editing `pyproject.toml` restarts ty with a note. PR opened against `main` (not yet merged). Next: merge the PR, restart the MCP servers in the primary checkout. `selector` deliberately untouched. The evaluation report (`docs/reports/2026-09-29-mcp-evaluation.md`) is the source for a planned blog post about the MCPs.
 
 ## Older open items
 

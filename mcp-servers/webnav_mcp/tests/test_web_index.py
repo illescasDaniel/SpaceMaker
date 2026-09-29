@@ -541,6 +541,34 @@ def test_given_single_element_selector_api_when_scan_js_then_class_recorded(tmp_
 	assert [h.detail for h in idx.selector_hits[".card"]] == ["querySelector"]
 
 
+@pytest.mark.parametrize(
+	"call",
+	[
+		'el.querySelector<HTMLElement>(".card")',
+		'el.querySelectorAll<HTMLDivElement>(".card")',
+		'el.closest<HTMLElement>(".card")',
+		'el.querySelector<HTMLElement | null>(".card")',
+		'el.querySelector<Array<HTMLElement>>(".card")',
+	],
+)
+def test_given_ts_type_argument_when_scan_ts_then_class_recorded(tmp_path, call):
+	# given — `querySelector<HTMLElement>(...)` has `<T>` between the name and `(`
+	_write(tmp_path / "app.ts", call + ";\n")
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert [h.detail for h in idx.selector_hits[".card"]] == ["querySelector"]
+
+
+def test_given_comparison_expression_when_scan_ts_then_not_mistaken_for_type_argument(tmp_path):
+	# given
+	_write(tmp_path / "app.ts", 'const ok = a.matches < b && c > (".card");\n')
+	# when
+	idx = web_index.build_root_index(tmp_path, "web")
+	# then
+	assert ".card" not in idx.selector_hits
+
+
 def test_given_id_lookup_literal_when_format_class_selector_then_not_reported_as_string_literal(tmp_path):
 	# given — the same name used as an id on this line isn't a class reference
 	_write(tmp_path / "a.ts", 'document.getElementById("media");\n')

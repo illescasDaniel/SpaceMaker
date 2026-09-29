@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+from mcp_nav_shared.errors import ToolInputError
 from mcp_nav_shared.format import (
+	LOCALS_HOLDER_KINDS,
+	filter_symbols_by_kind_and_path,
 	filter_workspace_symbols,
 	format_callers,
 	format_diagnostic,
@@ -14,6 +20,7 @@ from mcp_nav_shared.format import (
 	format_workspace_symbol,
 	format_workspace_symbols,
 	is_hierarchical_document_symbols,
+	parse_kind_filter,
 	rank_workspace_symbols,
 	to_symbol_tree,
 	uri_to_relative,
@@ -308,6 +315,65 @@ def test_given_exact_match_past_cap_when_format_workspace_symbols_then_shown_fir
 	text = format_workspace_symbols(symbols, tmp_path, query="get", limit=2)
 	# then
 	assert text.splitlines()[0].startswith("get  [Function]")
+
+
+def test_given_real_and_fuzzy_hits_when_format_workspace_symbols_then_fuzzy_summarised(tmp_path):
+	# given — ty pads "_probe" with long names that merely contain those letters in order
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	uri = src.as_uri()
+	symbols = [
+		_symbol("test_given_lan_host_when_spa_entry_then_ok", uri),
+		_symbol("_probe", uri),
+		_symbol("run_probe", uri),
+		_symbol("test_given_proxy_when_bootstrap_then_ok", uri),
+	]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="_probe")
+	# then
+	lines = text.splitlines()
+	assert [line.split()[0] for line in lines[:2]] == ["_probe", "run_probe"]
+	assert "test_given" not in text
+	assert (
+		lines[-1] == "(2 looser fuzzy matches whose names don't contain '_probe' hidden; pass fuzzy=true to list them)"
+	)
+
+
+def test_given_fuzzy_true_when_format_workspace_symbols_then_fuzzy_hits_listed_after_real(tmp_path):
+	# given
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	uri = src.as_uri()
+	symbols = [_symbol("test_given_proxy_when_bootstrap_then_ok", uri), _symbol("_probe", uri)]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="_probe", fuzzy=True)
+	# then
+	assert [line.split()[0] for line in text.splitlines()] == ["_probe", "test_given_proxy_when_bootstrap_then_ok"]
+
+
+def test_given_only_fuzzy_hits_when_format_workspace_symbols_then_fuzzy_hits_kept(tmp_path):
+	# given — an abbreviation such as "LspCl" matches nothing by substring
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	symbols = [_symbol("LspClient", src.as_uri()), _symbol("LspConfigLoader", src.as_uri())]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="LspCfL")
+	# then
+	assert [line.split()[0] for line in text.splitlines()] == ["LspClient", "LspConfigLoader"]
+	assert "fuzzy" not in text
+
+
+def test_given_cap_and_hidden_fuzzy_when_format_workspace_symbols_then_counts_exclude_fuzzy(tmp_path):
+	# given
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	uri = src.as_uri()
+	symbols = [_symbol(f"get_{i}", uri) for i in range(4)] + [_symbol("g_e_t", uri)]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="get", limit=2)
+	# then
+	assert "… and 2 more (showing first 2)" in text
+	assert text.splitlines()[-1].startswith("(1 looser fuzzy match whose")
 
 
 def _diagnostic(line: int, message: str, severity: int = 1) -> dict:
@@ -642,3 +708,109 @@ def test_given_non_utf8_file_when_workspace_symbol_position_then_falls_back_to_r
 	_uri, row, col = workspace_symbol_position(_flat_symbol(src, "bad", 0, start_col=3))
 	# then
 	assert (row, col) == (0, 3)
+
+
+def _sym(name: str, kind: int, start: int, end: int, children: list | None = None) -> dict:
+	rng = {"start": {"line": start, "character": 0}, "end": {"line": end, "character": 0}}
+	return {"name": name, "kind": kind, "range": rng, "selectionRange": rng, "children": children or []}
+
+
+def test_given_alphabetical_server_order_when_format_outline_then_source_order():
+	# given — tsserver lists siblings alphabetically: apiGet (line 25) before apiSend (line 6)
+	symbols = [_sym("apiGet", 12, 24, 26), _sym("apiSend", 12, 5, 22), _sym("zeta", 12, 30, 31)]
+	# when
+	lines = format_outline(symbols).splitlines()
+	# then
+	assert [line.split()[0] for line in lines] == ["apiSend", "apiGet", "zeta"]
+
+
+def test_given_alphabetical_children_when_format_outline_then_children_in_source_order():
+	# given
+	cls = _sym("Box", 5, 0, 20, [_sym("zed", 6, 2, 3), _sym("alpha", 6, 10, 12)])
+	# when
+	lines = format_outline([cls]).splitlines()
+	# then
+	assert [line.strip().split()[0] for line in lines] == ["Box", "zed", "alpha"]
+
+
+def test_given_locals_holder_kinds_when_format_outline_collapsed_then_locals_hidden_but_class_members_kept():
+	# given
+	fn = _sym("render", 12, 0, 9, [_sym("tmp", 14, 1, 1), _sym("cb", 12, 2, 4)])
+	cls = _sym("Box", 5, 10, 20, [_sym("size", 7, 11, 11)])
+	const = _sym("CONFIG", 14, 21, 25, [_sym("port", 7, 22, 22)])
+	# when
+	collapsed = format_outline([fn, cls, const], collapse_kinds=LOCALS_HOLDER_KINDS)
+	full = format_outline([fn, cls, const])
+	# then
+	assert [line.strip().split()[0] for line in collapsed.splitlines()] == ["render", "Box", "size", "CONFIG"]
+	assert "tmp" in full and "cb" in full and "port" in full
+
+
+def _kinded(name: str, kind: int, rel: str) -> dict:
+	sym = _symbol(name, f"file:///ws/{rel}")
+	sym["kind"] = kind
+	return sym
+
+
+def test_given_same_tier_when_rank_then_production_code_before_tests():
+	# given
+	symbols = [
+		_kinded("convert_a", 12, "tests/unit/test_convert.py"),
+		_kinded("convert_b", 12, "src/app/convert.py"),
+		_kinded("convert_c", 12, "web/foo.test.ts"),
+		_kinded("convert_d", 12, "src/app/util.py"),
+	]
+	# when
+	ranked = [s["name"] for s in rank_workspace_symbols(symbols, "convert")]
+	# then
+	assert ranked == ["convert_b", "convert_d", "convert_a", "convert_c"]
+
+
+def test_given_better_match_in_tests_when_rank_then_match_tier_still_wins():
+	# given
+	symbols = [_kinded("convert_all", 12, "src/a.py"), _kinded("convert", 12, "tests/t.py")]
+	# when / then
+	assert [s["name"] for s in rank_workspace_symbols(symbols, "convert")] == ["convert", "convert_all"]
+
+
+def test_given_kind_labels_when_parse_then_case_insensitive_numbers():
+	assert parse_kind_filter("Class, function") == frozenset({5, 12})
+	assert parse_kind_filter(None) is None
+	assert parse_kind_filter("  ") is None
+
+
+def test_given_unknown_kind_when_parse_then_error_lists_valid_kinds():
+	with pytest.raises(ToolInputError) as caught:
+		parse_kind_filter("klass")
+	assert "klass" in str(caught.value) and "class" in str(caught.value)
+
+
+def test_given_kind_and_path_filters_when_filter_then_only_matching_symbols_kept():
+	# given
+	root = Path("/ws")
+	symbols = [
+		_kinded("A", 5, "src/a.py"),
+		_kinded("f", 12, "src/a.py"),
+		_kinded("B", 5, "tests/b.py"),
+		_kinded("C", 5, "src/deep/c.py"),
+	]
+	# when
+	classes = filter_symbols_by_kind_and_path(symbols, root, kinds=frozenset({5}))
+	src = filter_symbols_by_kind_and_path(symbols, root, path="src/")
+	src_classes = filter_symbols_by_kind_and_path(symbols, root, kinds=frozenset({5}), path="./src")
+	globbed = filter_symbols_by_kind_and_path(symbols, root, path="src/*/*.py")
+	# then
+	assert [s["name"] for s in classes] == ["A", "B", "C"]
+	assert [s["name"] for s in src] == ["A", "f", "C"]
+	assert [s["name"] for s in src_classes] == ["A", "C"]
+	assert [s["name"] for s in globbed] == ["C"]
+	assert filter_symbols_by_kind_and_path(symbols, root) is symbols
+
+
+def test_given_truncated_results_when_format_then_hint_mentions_filters():
+	# given
+	symbols = [_kinded(f"convert_{i}", 12, "src/a.py") for i in range(5)]
+	# when
+	text = format_workspace_symbols(symbols, Path("/ws"), query="convert", limit=2)
+	# then
+	assert "and 3 more" in text and "kind=" in text and "path=" in text

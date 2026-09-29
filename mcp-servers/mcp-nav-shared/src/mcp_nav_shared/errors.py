@@ -7,7 +7,7 @@ Tools catch `TOOL_ERRORS` and return `format_tool_error(exc)` instead.
 
 from __future__ import annotations
 
-from mcp_nav_shared.lsp_client import LanguageServerExitedError, LspRequestError
+from mcp_nav_shared.lsp_client import InvalidPositionError, LanguageServerExitedError, LspRequestError
 
 
 class ToolInputError(ValueError):
@@ -19,6 +19,7 @@ TOOL_ERRORS: tuple[type[Exception], ...] = (
 	LspRequestError,
 	LanguageServerExitedError,
 	ToolInputError,
+	InvalidPositionError,
 	OSError,
 	UnicodeDecodeError,
 )

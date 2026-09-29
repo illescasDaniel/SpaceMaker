@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from codenav_mcp import server as codenav_server
 from codenav_mcp.server import _check_python_file, _protocol_class_names
 from mcp_nav_shared.errors import ToolInputError, format_tool_error
+from mcp_nav_shared.lsp_client import LspRequestError
 
 
 def test_given_python_file_when_check_python_file_then_no_error():
@@ -316,7 +319,11 @@ def test_given_dead_client_when_get_client_then_stale_one_is_stopped(monkeypatch
 		async def start(self) -> None:
 			pass
 
+		async def refresh(self) -> None:
+			pass
+
 	stale = _Stale()
+	codenav_server._probe_cache[("a", "b", "c", "d")] = (True, "old verdict")
 	monkeypatch.setattr(codenav_server, "_client", stale)
 	monkeypatch.setattr(codenav_server, "LspClient", _Fresh)
 	monkeypatch.setattr(codenav_server, "resolve_ty_command", lambda _root: ["ty"])
@@ -325,4 +332,106 @@ def test_given_dead_client_when_get_client_then_stale_one_is_stopped(monkeypatch
 	# then
 	assert stale.stopped
 	assert isinstance(client, _Fresh)
+	assert codenav_server._probe_cache == {}
 	monkeypatch.setattr(codenav_server, "_client", None)
+
+
+class _TypeDefinitionClient:
+	def __init__(self, locations):
+		self.locations = locations
+		self.asked = 0
+
+	async def type_definition(self, *_a, **_k):
+		self.asked += 1
+		return self.locations
+
+
+def _class_file(tmp_path, source: str):
+	path = tmp_path / "core.py"
+	path.write_text(source, encoding="utf-8")
+	return {"uri": path.as_uri(), "range": {"start": {"line": 1, "character": 6}, "end": {"line": 1, "character": 11}}}
+
+
+def test_given_bare_type_when_enrich_then_location_header_and_docstring_added(tmp_path, monkeypatch):
+	# given
+	location = _class_file(tmp_path, 'import os\nclass Widget(Base):\n\t"""A thing.\n\n\tMore detail."""\n')
+	monkeypatch.setattr(codenav_server, "WORKSPACE_ROOT", tmp_path)
+	client = _TypeDefinitionClient([location])
+	# when
+	text = asyncio.run(codenav_server._enrich_bare_type("Widget", client, "x.py", 1, 1))
+	# then
+	assert text == 'Widget\nType defined at core.py:2:7\n  class Widget(Base):\n  """A thing."""'
+
+
+def test_given_class_without_docstring_when_enrich_then_header_only(tmp_path, monkeypatch):
+	# given
+	location = _class_file(tmp_path, "import os\nclass Widget:\n\tx = 1\n")
+	monkeypatch.setattr(codenav_server, "WORKSPACE_ROOT", tmp_path)
+	# when
+	text = asyncio.run(codenav_server._enrich_bare_type("Widget", _TypeDefinitionClient([location]), "x.py", 1, 1))
+	# then
+	assert text == "Widget\nType defined at core.py:2:7\n  class Widget:"
+
+
+@pytest.mark.parametrize(
+	"hover", ["def start(self) -> None", "line one\nline two", "x" * 200, "(variable) x: int", "Return the value"]
+)
+def test_given_not_a_bare_type_when_enrich_then_unchanged_and_server_not_asked(hover):
+	# given
+	client = _TypeDefinitionClient([{"uri": "file:///x.py", "range": {}}])
+	# when
+	text = asyncio.run(codenav_server._enrich_bare_type(hover, client, "x.py", 1, 1))
+	# then
+	assert text == hover
+	assert client.asked == 0
+
+
+def test_given_builtin_type_without_definition_when_enrich_then_unchanged():
+	# given
+	client = _TypeDefinitionClient([])
+	# when
+	text = asyncio.run(codenav_server._enrich_bare_type("list[str] | None", client, "x.py", 1, 1))
+	# then
+	assert text == "list[str] | None"
+	assert client.asked == 1
+
+
+class _FailingTypeDefinitionClient:
+	async def type_definition(self, *_a, **_k):
+		raise LspRequestError("textDocument/typeDefinition", -32603, "boom")
+
+
+def test_given_type_definition_request_fails_when_enrich_then_plain_hover_kept():
+	# given / when
+	text = asyncio.run(codenav_server._enrich_bare_type("Widget", _FailingTypeDefinitionClient(), "x.py", 1, 1))
+	# then
+	assert text == "Widget"
+
+
+def test_given_builtin_type_when_enrich_then_typeshed_noise_skipped():
+	# given
+	client = _TypeDefinitionClient([{"uri": "file:///cache/stdlib/builtins.pyi", "range": {}}])
+	# when
+	text = asyncio.run(codenav_server._enrich_bare_type("str", client, "x.py", 1, 1))
+	# then
+	assert text == "str"
+
+
+def test_given_union_of_two_types_when_enrich_then_every_definition_listed(tmp_path, monkeypatch):
+	# given
+	location = _class_file(tmp_path, "import os\nclass Widget:\n\tx = 1\n")
+	monkeypatch.setattr(codenav_server, "WORKSPACE_ROOT", tmp_path)
+	client = _TypeDefinitionClient([location, location])
+	# when
+	text = asyncio.run(codenav_server._enrich_bare_type("Widget | Gadget", client, "x.py", 1, 1))
+	# then
+	assert text.count("Type defined at core.py:2:7") == 2
+
+
+def test_given_tools_when_listed_then_ctx_is_not_a_parameter_and_notices_wrap_every_tool():
+	# given / when: the notice decorator must not hide the `Context` parameter from the framework
+	tools = asyncio.run(codenav_server.mcp.list_tools())
+	# then
+	assert {t.name for t in tools} >= {"hover", "symbol_info", "workspace", "implementations"}
+	for tool in tools:
+		assert "ctx" not in tool.input_schema.get("properties", {}), tool.name

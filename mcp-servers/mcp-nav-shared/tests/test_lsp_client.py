@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import pytest
@@ -330,3 +331,420 @@ def test_given_other_error_when_request_then_not_retried(tmp_path, _no_backoff):
 	with pytest.raises(LspRequestError) as caught:
 		_run_request(client, replies)
 	assert caught.value.code == -32601
+
+
+def _recording_client(tmp_path: Path, monkeypatch, **kwargs) -> tuple[LspClient, list[tuple[str, dict]]]:
+	client = LspClient(workspace_root=tmp_path, command=["true"], language_id="python", **kwargs)
+	client._started = True
+	client._proc = _FakeProc()  # type: ignore[assignment]
+	sent: list[tuple[str, dict]] = []
+	monkeypatch.setattr(client, "_notify", lambda method, params: sent.append((method, params)))
+	return client, sent
+
+
+def _watch_changes(sent: list[tuple[str, dict]]) -> list[tuple[str, int]]:
+	return [
+		(Path(c["uri"]).name, c["type"])
+		for method, params in sent
+		if method == "workspace/didChangeWatchedFiles"
+		for c in params["changes"]
+	]
+
+
+def test_given_first_refresh_when_files_exist_then_reports_no_changes(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}))
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert sent == []
+
+
+def test_given_created_edited_deleted_files_when_refresh_then_reports_each_change(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "keep.py").write_text("x = 1\n", encoding="utf-8")
+	(tmp_path / "gone.py").write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}))
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / "new.py").write_text("y = 2\n", encoding="utf-8")
+	(tmp_path / "keep.py").write_text("x = 100\n", encoding="utf-8")
+	(tmp_path / "gone.py").unlink()
+	(tmp_path / "notes.txt").write_text("ignored\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert sorted(_watch_changes(sent)) == [("gone.py", 3), ("keep.py", 2), ("new.py", 1)]
+
+
+def test_given_unchanged_tree_when_refresh_twice_then_second_reports_nothing(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}))
+	asyncio.run(client.refresh())
+	asyncio.run(client.refresh())
+	# then
+	assert sent == []
+
+
+def test_given_excluded_dirs_and_ignored_paths_when_refresh_then_not_reported(tmp_path, monkeypatch):
+	# given
+	(tmp_path / ".venv").mkdir()
+	(tmp_path / "gen").mkdir()
+	client, sent = _recording_client(
+		tmp_path,
+		monkeypatch,
+		watch_suffixes=frozenset({".py"}),
+		watch_ignore=lambda p: "gen" in p.parts,
+	)
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / ".venv" / "lib.py").write_text("x = 1\n", encoding="utf-8")
+	(tmp_path / "gen" / "out.py").write_text("x = 1\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert sent == []
+
+
+def test_given_nested_checkout_when_refresh_then_its_files_not_reported(tmp_path, monkeypatch):
+	# given: a linked worktree nested inside the checkout (e.g. `.claude/worktrees/x`)
+	nested = tmp_path / ".claude" / "worktrees" / "x"
+	nested.mkdir(parents=True)
+	(nested / ".git").write_text("gitdir: /elsewhere\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}))
+	asyncio.run(client.refresh())
+	# when
+	(nested / "other.py").write_text("x = 1\n", encoding="utf-8")
+	(tmp_path / "own.py").write_text("x = 1\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert _watch_changes(sent) == [("own.py", 1)]
+
+
+def test_given_symlinked_workspace_root_when_file_created_then_uri_matches_ensure_open(tmp_path, monkeypatch):
+	# given
+	real = tmp_path / "real"
+	real.mkdir()
+	link = tmp_path / "link"
+	link.symlink_to(real, target_is_directory=True)
+	client, sent = _recording_client(link, monkeypatch, watch_suffixes=frozenset({".py"}))
+	asyncio.run(client.refresh())
+	# when
+	(real / "new.py").write_text("x = 1\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	reported = [c["uri"] for m, p in sent if m == "workspace/didChangeWatchedFiles" for c in p["changes"]]
+	assert reported == [client._to_uri("new.py").as_uri()]
+
+
+def test_given_open_file_edited_on_disk_when_refresh_then_resynced_with_did_change(tmp_path, monkeypatch):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch)
+	asyncio.run(client.ensure_open(str(src)))
+	src.write_text("x = 12345\n", encoding="utf-8")
+	sent.clear()
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert [m for m, _ in sent] == ["textDocument/didChange"]
+	assert sent[0][1]["contentChanges"] == [{"text": "x = 12345\n"}]
+
+
+def test_given_open_file_deleted_when_refresh_then_closed_and_caches_dropped(tmp_path, monkeypatch):
+	# given
+	src = tmp_path / "a.py"
+	src.write_text("x = 1\n", encoding="utf-8")
+	client, sent = _recording_client(tmp_path, monkeypatch)
+	uri = asyncio.run(client.ensure_open(str(src)))
+	client._diagnostics[uri] = [{"message": "old"}]
+	client._symbol_cache[uri] = (1, [])
+	src.unlink()
+	sent.clear()
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert [m for m, _ in sent] == ["textDocument/didClose"]
+	assert uri not in client._open_files
+	assert uri not in client._diagnostics
+	assert uri not in client._symbol_cache
+
+
+def test_given_scratch_document_when_refresh_then_left_alone(tmp_path, monkeypatch):
+	# given
+	client, sent = _recording_client(tmp_path, monkeypatch)
+	uri = (tmp_path / ".probe.py").as_uri()
+	asyncio.run(client.open_scratch_document(uri, "x = 1\n"))
+	sent.clear()
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert sent == []
+	assert uri in client._open_files
+
+
+def test_given_open_watched_changes_when_file_created_then_did_open(tmp_path, monkeypatch):
+	# given
+	client, sent = _recording_client(
+		tmp_path, monkeypatch, watch_suffixes=frozenset({".py"}), open_watched_changes=True
+	)
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / "new.py").write_text("y = 2\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert [m for m, _ in sent] == ["workspace/didChangeWatchedFiles", "textDocument/didOpen"]
+
+
+# -- position validation ---------------------------------------------------------
+
+
+def _position_error(tmp_path: Path, text: str, line: int, column: int) -> str | None:
+	(tmp_path / "a.py").write_text(text, encoding="utf-8")
+	client = _started_client(tmp_path)
+	try:
+		client._check_position("a.py", line, column)
+	except lsp_client.InvalidPositionError as exc:
+		return str(exc)
+	return None
+
+
+def test_given_line_past_end_when_check_position_then_error_names_line_count(tmp_path):
+	# given / when
+	error = _position_error(tmp_path, "x = 1\ny = 2\n", 9, 1)
+	# then: the trailing newline isn't counted as a line
+	assert error is not None
+	assert "line 9 is out of range" in error
+	assert "has 2 line(s)" in error
+
+
+def test_given_line_after_final_newline_when_check_position_then_rejected_like_the_count_says(tmp_path):
+	# given / when
+	error = _position_error(tmp_path, "x = 1\ny = 2\n", 3, 1)
+	# then
+	assert error is not None
+	assert "has 2 line(s)" in error
+
+
+def test_given_line_zero_when_check_position_then_error(tmp_path):
+	# given / when
+	error = _position_error(tmp_path, "x = 1\n", 0, 1)
+	# then
+	assert error is not None
+	assert "line 0 is out of range" in error
+
+
+def test_given_column_past_end_when_check_position_then_error_names_line_length(tmp_path):
+	# given / when
+	error = _position_error(tmp_path, "abc\n", 1, 50)
+	# then
+	assert error is not None
+	assert "column 50 is out of range" in error
+	assert "3 character(s) long" in error
+
+
+def test_given_column_just_after_last_character_when_check_position_then_accepted(tmp_path):
+	# given / when / then: the end-of-line position is valid in LSP
+	assert _position_error(tmp_path, "abc\n", 1, 4) is None
+
+
+def test_given_astral_character_when_check_position_then_column_counts_utf16_units(tmp_path):
+	# given: "😀" is two UTF-16 code units, so "😀a" is 3 long and column 4 is its end
+	text = "😀a\n"
+	# when / then
+	assert _position_error(tmp_path, text, 1, 4) is None
+	assert _position_error(tmp_path, text, 1, 5) is not None
+
+
+def test_given_bad_position_when_hover_then_raises_before_asking_the_server(tmp_path):
+	# given
+	(tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+	client = _started_client(tmp_path)
+	# when / then
+	with pytest.raises(lsp_client.InvalidPositionError):
+		asyncio.run(client.hover("a.py", 99, 1))
+
+
+# -- restart on config change ------------------------------------------------------
+
+
+class _Restarts:
+	def __init__(self) -> None:
+		self.count = 0
+
+
+def _config_client(tmp_path: Path, monkeypatch, **kwargs) -> tuple[LspClient, _Restarts, list[str], list]:
+	notices: list[str] = []
+	client, sent = _recording_client(
+		tmp_path,
+		monkeypatch,
+		watch_suffixes=frozenset({".py"}),
+		config_names=frozenset({"pyproject.toml"}),
+		on_notice=notices.append,
+		**kwargs,
+	)
+	restarts = _Restarts()
+
+	async def _fake_restart() -> None:
+		restarts.count += 1
+
+	monkeypatch.setattr(client, "restart", _fake_restart)
+	return client, restarts, notices, sent
+
+
+def test_given_first_refresh_when_config_exists_then_no_restart(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "pyproject.toml").write_text("[tool.ty]\n", encoding="utf-8")
+	client, restarts, notices, _ = _config_client(tmp_path, monkeypatch)
+	# when
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 0
+	assert notices == []
+
+
+def test_given_config_edited_when_refresh_then_restarts_once_and_names_the_file(tmp_path, monkeypatch):
+	# given
+	config = tmp_path / "pyproject.toml"
+	config.write_text("[tool.ty]\n", encoding="utf-8")
+	client, restarts, notices, _ = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when
+	config.write_text("[tool.ty.environment]\npython-version = '3.12'\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 1
+	assert notices == ["restarted the language server because pyproject.toml changed"]
+
+
+def test_given_nested_config_created_when_refresh_then_restarts(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "web").mkdir()
+	client, restarts, notices, _ = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / "web" / "pyproject.toml").write_text("[tool.ty]\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 1
+	assert notices == ["restarted the language server because pyproject.toml changed"]
+
+
+def test_given_config_rewritten_with_same_text_when_refresh_then_no_restart(tmp_path, monkeypatch):
+	# given
+	config = tmp_path / "pyproject.toml"
+	config.write_text("[tool.ty]\n", encoding="utf-8")
+	client, restarts, notices, _ = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when: new mtime, identical content (touch, git checkout)
+	stat = config.stat()
+	os.utime(config, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 0
+	assert notices == []
+
+
+def test_given_config_deleted_when_refresh_then_restarts(tmp_path, monkeypatch):
+	# given
+	config = tmp_path / "pyproject.toml"
+	config.write_text("[tool.ty]\n", encoding="utf-8")
+	client, restarts, notices, _ = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when
+	config.unlink()
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 1
+	assert notices == ["restarted the language server because pyproject.toml changed"]
+
+
+def test_given_only_source_edit_when_refresh_then_no_restart(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "pyproject.toml").write_text("[tool.ty]\n", encoding="utf-8")
+	(tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+	client, restarts, notices, sent = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / "a.py").write_text("x = 22\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 0
+	assert notices == []
+	assert _watch_changes(sent) == [("a.py", 2)]
+
+
+def test_given_config_and_source_changed_when_refresh_then_restart_replaces_change_report(tmp_path, monkeypatch):
+	# given
+	config = tmp_path / "pyproject.toml"
+	config.write_text("[tool.ty]\n", encoding="utf-8")
+	client, restarts, _, sent = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when: a fresh server reads the disk itself, so nothing needs reporting
+	config.write_text("[tool.ty]\nx = 1\n", encoding="utf-8")
+	(tmp_path / "new.py").write_text("y = 2\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 1
+	assert _watch_changes(sent) == []
+
+
+def test_given_config_in_excluded_dir_when_edited_then_no_restart(tmp_path, monkeypatch):
+	# given
+	(tmp_path / "node_modules").mkdir()
+	client, restarts, _, _ = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when
+	(tmp_path / "node_modules" / "pyproject.toml").write_text("x\n", encoding="utf-8")
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 0
+
+
+def test_given_started_client_when_restart_then_state_reset_and_on_restart_runs(tmp_path, monkeypatch):
+	# given
+	seen: list[LspClient] = []
+
+	async def _on_restart(c: LspClient) -> None:
+		seen.append(c)
+
+	client = LspClient(workspace_root=tmp_path, command=["true"], language_id="python", on_restart=_on_restart)
+	client._open_files["file:///x.py"] = lsp_client.OpenFile(uri="file:///x.py", version=3, mtime_ns=1, size=1)
+	client._diagnostics["file:///x.py"] = [{"message": "old"}]
+	client._symbol_cache["file:///x.py"] = (3, [])
+	calls: list[str] = []
+
+	async def _stop() -> None:
+		calls.append("stop")
+
+	async def _start() -> None:
+		calls.append("start")
+
+	monkeypatch.setattr(client, "stop", _stop)
+	monkeypatch.setattr(client, "start", _start)
+
+	async def _in_flight() -> str:
+		fut = asyncio.get_running_loop().create_future()
+		client._pending[1] = fut
+		asyncio.get_running_loop().call_soon(lambda: asyncio.ensure_future(client.restart()))
+		try:
+			await asyncio.wait_for(fut, timeout=5)
+		except lsp_client.LanguageServerExitedError:
+			return "failed fast"
+		return "answered"
+
+	# when: a request pending on the old server fails at restart instead of timing out
+	assert asyncio.run(_in_flight()) == "failed fast"
+	calls.clear()
+	seen.clear()
+	# when
+	asyncio.run(client.restart())
+	# then
+	assert calls == ["stop", "start"]
+	assert client._open_files == {}
+	assert client._diagnostics == {}
+	assert client._symbol_cache == {}
+	assert seen == [client]

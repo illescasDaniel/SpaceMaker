@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 
@@ -130,7 +131,7 @@ def _rewrite_text_file(path: Path, pairs: list[tuple[str, str]], old_forms: list
 	return True
 
 
-def _iter_site_packages(venv: Path):
+def _iter_site_packages(venv: Path) -> Iterator[Path]:
 	lib = venv / "lib"
 	if lib.is_dir():
 		yield from lib.glob("python*/site-packages")
@@ -189,7 +190,7 @@ def _old_venv_python_forms(old_root: Path) -> list[str]:
 	return forms
 
 
-def _update_windows_trampoline_python_path(exe: Path, new_python: Path):
+def _update_windows_trampoline_python_path(exe: Path, new_python: Path) -> None:
 	"""Set UV_PYTHON_PATH PE resource on a uv trampoline."""
 	import ctypes
 	from ctypes import wintypes

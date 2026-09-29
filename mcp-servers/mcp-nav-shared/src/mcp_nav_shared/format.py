@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
+
+from mcp_nav_shared.errors import ToolInputError
 
 
 # LSP SymbolKind (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#symbolKind)
@@ -200,6 +203,10 @@ def format_workspace_symbol(sym: dict[str, Any], workspace_root: Path) -> str:
 	return f"{name}  [{kind}]  ({rel}:{line + 1}:{col + 1})"
 
 
+# Tier for names that only match the language server's fuzzy subsequence search.
+_FUZZY_TIER = 4
+
+
 def _match_tier(name: str, query: str) -> int:
 	if name == query:
 		return 0
@@ -210,7 +217,7 @@ def _match_tier(name: str, query: str) -> int:
 		return 2
 	if folded_query in folded_name:
 		return 3
-	return 4
+	return _FUZZY_TIER
 
 
 # Property/Field symbols rank after declarations within the same match tier:
@@ -225,9 +232,24 @@ _DECLARATION_KINDS = {5, 10, 11, 12, 14}  # Class, Enum, Interface, Function, Co
 _VARIABLE_KIND = 13
 
 
+_TEST_DIR_NAMES = {"tests", "test", "__tests__", "spec", "specs"}
+
+
+def _is_test_path(path: str) -> bool:
+	"""A path that looks like test code: under a tests-like directory or named like a test file."""
+	parts = path.replace("\\", "/").split("/")
+	name = parts[-1]
+	return (
+		not _TEST_DIR_NAMES.isdisjoint(parts[:-1])
+		or name.startswith("test_")
+		or name.endswith(("_test.py", ".test.ts", ".test.js", ".spec.ts", ".spec.js"))
+	)
+
+
 def rank_workspace_symbols(symbols: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
-	"""Exact → case-insensitive exact → prefix → substring → other, with
-	properties/fields after other kinds within a tier (stable otherwise).
+	"""Exact → case-insensitive exact → prefix → substring → other; within a
+	tier, production code before tests, then declarations before
+	properties/fields (stable otherwise).
 
 	ty's workspace/symbol is fuzzy (`LspClient` also matches long test names
 	containing those letters in order) and returns hits in workspace order, so
@@ -239,6 +261,7 @@ def rank_workspace_symbols(symbols: list[dict[str, Any]], query: str) -> list[di
 		symbols,
 		key=lambda sym: (
 			_match_tier(str(sym.get("name") or ""), query),
+			_is_test_path(_symbol_file_key(sym)),
 			sym.get("kind") in _LOW_PRIORITY_KINDS,
 		),
 	)
@@ -278,21 +301,90 @@ def filter_workspace_symbols(symbols: list[dict[str, Any]]) -> list[dict[str, An
 	return filtered
 
 
+_KIND_BY_LABEL = {label.casefold(): kind for kind, label in _SYMBOL_KINDS.items()}
+
+
+def parse_kind_filter(kind: str | None) -> frozenset[int] | None:
+	"""`"class"` / `"class,function"` (case-insensitive SymbolKind labels) → kind
+	numbers; None/blank → no filter. Unknown labels raise `ToolInputError` listing the valid ones."""
+	if kind is None or not kind.strip():
+		return None
+	wanted: set[int] = set()
+	for part in kind.split(","):
+		label = part.strip().casefold()
+		if not label:
+			continue
+		if label not in _KIND_BY_LABEL:
+			valid = ", ".join(sorted(_KIND_BY_LABEL))
+			raise ToolInputError(f"unknown symbol kind {part.strip()!r}; use one or more of: {valid}")
+		wanted.add(_KIND_BY_LABEL[label])
+	return frozenset(wanted) or None
+
+
+def _path_filter_matches(rel_path: str, pattern: str) -> bool:
+	pattern = pattern.strip().replace("\\", "/").removeprefix("./")
+	if any(ch in pattern for ch in "*?["):
+		return fnmatch.fnmatchcase(rel_path, pattern)
+	return rel_path.startswith(pattern)
+
+
+def filter_symbols_by_kind_and_path(
+	symbols: list[dict[str, Any]],
+	workspace_root: Path,
+	*,
+	kinds: frozenset[int] | None = None,
+	path: str | None = None,
+) -> list[dict[str, Any]]:
+	"""Keep symbols of the given kinds under `path` (workspace-relative prefix, or
+	a glob such as `src/**/*.py` when it contains `*?[`)."""
+	if kinds is None and not (path and path.strip()):
+		return symbols
+	kept = []
+	for sym in symbols:
+		if kinds is not None and sym.get("kind") not in kinds:
+			continue
+		if (
+			path
+			and path.strip()
+			and not _path_filter_matches(uri_to_relative(_symbol_file_key(sym), workspace_root), path)
+		):
+			continue
+		kept.append(sym)
+	return kept
+
+
 def format_workspace_symbols(
 	symbols: list[dict[str, Any]],
 	workspace_root: Path,
 	*,
 	query: str = "",
 	limit: int = DEFAULT_SEARCH_SYMBOL_LIMIT,
+	fuzzy: bool = False,
 ) -> str:
+	"""Ranked, capped listing. Unless `fuzzy`, loose subsequence-only hits
+	(tier 4) are hidden whenever the name really contains the query somewhere
+	(tiers 0–3): language servers pad `_probe` with every long test name that
+	happens to contain those letters in order, which reads as if they all
+	matched. With no real match the fuzzy hits stay (abbreviations like `LspCl`)."""
 	if not symbols:
 		return ""
 	ranked = filter_workspace_symbols(rank_workspace_symbols(symbols, query))
+	hidden_fuzzy = 0
+	if query and not fuzzy:
+		real = [sym for sym in ranked if _match_tier(str(sym.get("name") or ""), query) < _FUZZY_TIER]
+		if real:
+			hidden_fuzzy = len(ranked) - len(real)
+			ranked = real
 	shown = ranked[: max(0, limit)]
 	lines = [format_workspace_symbol(sym, workspace_root) for sym in shown]
 	omitted = len(ranked) - len(shown)
 	if omitted > 0:
-		lines.append(f"… and {omitted} more (showing first {len(shown)})")
+		lines.append(f"… and {omitted} more (showing first {len(shown)}); narrow with kind=… or path=…")
+	if hidden_fuzzy > 0:
+		lines.append(
+			f"({hidden_fuzzy} looser fuzzy match{'es' if hidden_fuzzy != 1 else ''} whose names don't contain "
+			f"{query!r} hidden; pass fuzzy=true to list them)"
+		)
 	return "\n".join(lines)
 
 
@@ -406,7 +498,11 @@ def _document_symbol_node(sym: dict[str, Any]) -> dict[str, Any]:
 		"kind": sym.get("kind"),
 		"start_line": int(start.get("line", 0)),
 		"end_line": int(end.get("line", start.get("line", 0))),
-		"children": [_document_symbol_node(child) for child in sym.get("children") or []],
+		# Some servers (tsserver) return siblings alphabetically, not in file order.
+		"children": sorted(
+			(_document_symbol_node(child) for child in sym.get("children") or []),
+			key=lambda n: n["start_line"],
+		),
 	}
 
 
@@ -450,15 +546,24 @@ def to_symbol_tree(symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	matching, tree search) — one nesting implementation instead of two shape-
 	specific ones scattered across callers."""
 	if is_hierarchical_document_symbols(symbols):
-		return [_document_symbol_node(sym) for sym in symbols]
+		return sorted((_document_symbol_node(sym) for sym in symbols), key=lambda n: n["start_line"])
 	return _nest_symbol_information(symbols)
 
 
-def format_outline(symbols: list[dict[str, Any]], *, indent: str = "  ") -> str:
+# LSP SymbolKind values whose children are implementation detail (locals,
+# callbacks, object-literal keys) rather than structure: Method, Constructor,
+# Function, Variable, Constant.
+LOCALS_HOLDER_KINDS = frozenset({6, 9, 12, 13, 14})
+
+
+def format_outline(
+	symbols: list[dict[str, Any]], *, indent: str = "  ", collapse_kinds: frozenset[int] = frozenset()
+) -> str:
 	"""Indented `name  [Kind]  :start-end` tree, from either shape
 	`documentSymbol` can return (see `is_hierarchical_document_symbols`).
 	The end line lets an agent judge a member's size (e.g. "is this method
-	worth reading in full?") without a separate call."""
+	worth reading in full?") without a separate call. Children of symbols whose
+	kind is in `collapse_kinds` (e.g. `LOCALS_HOLDER_KINDS`) are left out."""
 	if not symbols:
 		return "No symbols found."
 	roots = to_symbol_tree(symbols)
@@ -469,7 +574,8 @@ def format_outline(symbols: list[dict[str, Any]], *, indent: str = "  ") -> str:
 			start, end = node["start_line"] + 1, node["end_line"] + 1
 			span = f":{start}" if start == end else f":{start}-{end}"
 			lines.append(f"{indent * depth}{node['name']}  [{kind}]  {span}")
-			walk(node["children"], depth + 1)
+			if node["kind"] not in collapse_kinds:
+				walk(node["children"], depth + 1)
 
 	lines: list[str] = []
 	walk(roots, 0)

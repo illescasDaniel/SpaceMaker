@@ -302,6 +302,9 @@ class _FakeClient:
 	async def stop(self) -> None:
 		self.stopped = True
 
+	async def refresh(self) -> None:
+		pass
+
 	async def diagnostics(self, _file_path: str) -> list:
 		return self._items
 
@@ -373,3 +376,90 @@ def test_given_dead_client_when_get_client_then_old_one_stopped_and_replaced(mon
 	# then
 	assert got is fresh
 	assert dead.stopped
+
+
+@pytest.fixture
+def two_roots(tmp_path, monkeypatch):
+	_write(
+		tmp_path / "static" / "theme.css",
+		":root { --bg: #fff; }\n.card { color: red; }\nbody { background: var(--bg); }\n",
+	)
+	_write(tmp_path / "static" / "page.html", '<div id="hero" class="card"></div>\n')
+	_write(
+		tmp_path / "wire" / "app.html",
+		'<style>:root { --bg: #000; }\n.card { color: blue; }</style>\n<div class="card"></div>\n',
+	)
+	monkeypatch.setattr(server, "WORKSPACE_ROOT", tmp_path)
+	monkeypatch.setattr(server, "WEB_ROOTS", [("static", tmp_path / "static"), ("wire", tmp_path / "wire")])
+	monkeypatch.setattr(server, "GENERATED_PATHS", [])
+	monkeypatch.setattr(server, "_GENERATED_RELATIVE", ())
+	return tmp_path
+
+
+def test_given_var_in_production_css_when_definition_then_only_own_root_definitions(two_roots):
+	# when — cursor on `--bg` in `var(--bg)` (line 3, col 24)
+	text = asyncio.run(server.definition(str(two_roots / "static" / "theme.css"), 3, 24))
+	# then
+	assert "== static ==" in text and "#fff" in text
+	assert "wire" not in text and "#000" not in text
+	assert "Usages" not in text
+
+
+def test_given_var_in_production_css_when_references_then_own_root_defs_and_usages_only(two_roots):
+	# when
+	text = asyncio.run(server.references(str(two_roots / "static" / "theme.css"), 3, 24))
+	# then
+	assert "== static ==" in text and "Usages" in text
+	assert "wire" not in text
+
+
+def test_given_class_in_wireframe_when_definition_then_wireframe_rule_only(two_roots):
+	# when — cursor on `.card` in the wireframe's <style> (line 2)
+	text = asyncio.run(server.definition(str(two_roots / "wire" / "app.html"), 2, 3))
+	# then
+	assert "== wire ==" in text and "== static ==" not in text
+	assert "CSS" in text and "HTML" not in text
+
+
+def test_given_id_in_html_when_definition_then_markup_attribute_reported(two_roots):
+	# when — `#hero` only exists as an id attribute in static/page.html; query from a CSS file that mentions it
+	_write(two_roots / "static" / "extra.css", "#hero { margin: 0; }\n")
+	text = asyncio.run(server.definition(str(two_roots / "static" / "extra.css"), 1, 3))
+	# then
+	assert "HTML (1)" in text and "page.html: L1" in text
+
+
+def test_given_token_absent_from_own_root_when_definition_then_falls_back_to_all_roots_with_note(two_roots):
+	# given — `.only-wire` exists in the wireframe root only, but is queried from production CSS
+	_write(two_roots / "wire" / "extra.html", '<p class="only-wire"></p>\n<style>.only-wire { top: 0; }</style>\n')
+	_write(two_roots / "static" / "uses.css", "/* .only-wire */ .x { top: 0; }\n")
+	# when — cursor on `.only-wire` inside the comment (col 5)
+	text = asyncio.run(server.definition(str(two_roots / "static" / "uses.css"), 1, 5))
+	# then
+	assert "nothing in static; showing all roots" in text and "== wire ==" in text
+
+
+def test_given_tools_when_listed_then_ctx_is_not_a_parameter():
+	# given / when: the notice decorator must not hide the `Context` parameter from the framework
+	tools = asyncio.run(server.mcp.list_tools())
+	# then
+	assert {t.name for t in tools} >= {"hover", "symbol_info", "outline", "selector", "css_var"}
+	for tool in tools:
+		assert "ctx" not in tool.input_schema.get("properties", {}), tool.name
+
+
+def test_given_ts_client_when_built_then_config_change_restarts_and_reopens_project(monkeypatch):
+	# given
+	made: list = []
+
+	async def _capture(_key, make, after_start=None):
+		made.append(make())
+		return made[-1]
+
+	monkeypatch.setattr(server, "_get_client", _capture)
+	# when
+	client = asyncio.run(server._get_ts_client())
+	# then
+	assert client.config_names == frozenset({"tsconfig.json", "jsconfig.json", "package.json"})
+	assert client.on_restart is server._open_project_files
+	assert client.on_notice == server._notices.post
