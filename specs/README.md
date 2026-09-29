@@ -18,6 +18,8 @@ Source of truth for behavior. Wireframes: [wireframes/app.html](../wireframes/ap
 | [legal/SPEC.md](legal/SPEC.md) | Privacy, disclaimer, third-party notice in release + UI |
 | [ui-motion/SPEC.md](ui-motion/SPEC.md) | Shared motion vocabulary, screen/hover/press/list transitions, reduced-motion |
 
+**Design decisions:** new/changed specs carry a `## Design decisions` section (success criteria, failure handling, performance & resource budget, trust boundary) agreed with the user first — see [spec-driven-development.md](../docs/playbooks/spec-driven-development.md). Existing specs adopt it when next touched.
+
 **Phase gate:** Spec approval required before domain/ports (Phase 2).
 
 **Test mapping:** Each BDD scenario → one or more `tests/unit/` functions named `test_given_…_when_…_then_…`. Integration tests cover outbound adapters with mocked subprocesses unless marked `@pytest.mark.integration`.

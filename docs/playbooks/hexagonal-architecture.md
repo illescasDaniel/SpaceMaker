@@ -23,6 +23,7 @@
 - Protocols in `ports/`; implementations only in `adapters/`.
 - Domain never imports FastAPI or subprocess.
 - Conversion **decisions** (where a file goes) in application/domain; **tool invocation** in outbound adapters.
+- Trust boundary (from the spec's Design decisions): validate untrusted input (paths, filenames, LAN requests) in inbound adapters/application, not in domain.
 - WebSocket progress events are inbound adapter concerns driven by use case callbacks.
 
 ## DI

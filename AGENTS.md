@@ -17,7 +17,7 @@ Despite the small current footprint, **always act as if this project will grow l
 | Phase | Deliverable | Gate |
 |-------|-------------|------|
 | **0 — Design (wireframe)** | `wireframes/<screen>.html` (self-contained HTML/CSS) | **Stop.** Ask for UX/design approval. |
-| **1 — Spec** | `specs/<feature>/SPEC.md` (BDD, out of scope, aligned with wireframe) | **Stop.** Ask for spec approval. |
+| **1 — Spec** | `specs/<feature>/SPEC.md` (agreed **Design decisions** — success criteria, failure handling, perf/resource budget, trust boundary — plus BDD, out of scope, aligned with wireframe) | **Stop.** Ask for spec approval. |
 | **2 — Architecture** | Domain types and ports in `src/spacemaker/domain/`, `ports/` | **Stop.** Ask for approval before tests/adapters. |
 | **3 — Tests** | Unit tests from BDD (`tests/unit/`); implementations may be stubs | Run tests; fix as needed. |
 | **4 — Implementation** | Use cases, adapters, FastAPI/Web UI, desktop | Until tests pass. Must match approved wireframe unless spec is re-approved. |

@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-29 — SPEC.md carries four agreed "Design decisions" (success criteria, failure handling, perf/resource budget, trust boundary)
+
+- **Context:** User read that a useful design doc pins four decisions (success criteria, failure handling, cost/latency budget, trust boundary) and asked to adopt them for SDD, established together per feature. SpaceMaker specs covered these only implicitly and inconsistently.
+- **Decision:** Add a `## Design decisions` section after Metadata in every new/changed `SPEC.md`. The agent drafts, the user confirms at the start of Phase 1 (before the spec body); approved with the spec (no new gate). Each item answered or `N/A — <reason>`; failure-handling and trust-boundary items need a BDD scenario. "Cost/latency" is adapted to "performance & resource budget" (local app). Updated `sdd-feature` skill, SDD playbook, hexagonal playbook, `AGENTS.md`, `specs/README.md`. Existing specs adopt it when next touched; no enforcement test yet.
+- **Rationale:** Cheapest place (specs are truth, gate exists); forces the hard questions before code without a second doc to drift.
+
 ## 2026-09-29 — Full `web/src/*.ts` typing pass: drop `R` registry, drop `@ts-nocheck`, scope Biome's new strict rules via `overrides`
 
 - **Context:** User flagged `function healIfStaleShell(settings)` (no types, `shell.ts`) and `import { R, S } from "./state.js"` (wrong extension) as symptoms of a broader gap: 13 of 18 `web/src` modules still started with `// @ts-nocheck`, and every module called shared helpers through a string-keyed global registry `R` (`R.foo = foo` assignments + `R.foo()` call sites — a runtime service locator) even though every function was already `export`ed and directly importable. This was inherited from the "Qualify bare cross-module shell helpers as `R.*`" / "Keep pre-rename `R.*` aliases" fixes below (2026-09-29), which patched around the registry rather than removing it. User chose (AskUserQuestion): switch relative imports to `./x.ts` (TS 5.9's `rewriteRelativeImportExtensions` rewrites them to `./x.js` in emitted output, so the importmap cache-busting scheme in `ui_shell.py` is untouched), and do the full registry removal (not just alias patching) — every `R.foo(...)` call site becomes a direct named import from the defining module.

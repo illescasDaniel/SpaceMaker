@@ -13,10 +13,24 @@ Spec → ports → tests → implementation. If implementation exposes a spec fl
 ## Anatomy
 
 - **Metadata & dependencies** — links, related wireframe path
+- **Design decisions** — success criteria, failure handling, performance & resource budget, trust boundary (see below)
 - **Triggers & routing** — how the user enters/exits the flow
 - **Visual & UI rules** — must align with approved `wireframes/`
 - **Acceptance criteria (BDD)** — Given/When/Then
 - **Out of scope**
+
+## Design decisions
+
+A useful design document pins four decisions (idea from an Anthropic partner course). Agree them with the user at the start of Phase 1, before writing the spec body; they are approved together with the spec. Each is answered or marked `N/A — <reason>`.
+
+| Decision | SpaceMaker meaning | Traces to |
+|---|---|---|
+| **Success criteria** | Observable "done" beyond the BDD list: user outcome, measurable thresholds (no data loss, idempotent re-run) | BDD scenarios / tests |
+| **Failure handling** | What fails, what the user sees, retry/skip/quarantine (`error/`, `invalid/`), partial state and resume | error/warning scenarios, banners |
+| **Performance & resource budget** | Latency/throughput, disk/CPU/GPU/memory, size limits, network cost | fast-tests, perf-related tests |
+| **Trust boundary** | Untrusted input (device paths, upload filenames, LAN clients on `/share` `/transfer`, subprocess args), what is trusted, what may touch FS/network. Validate at inbound adapters/application, never assume in domain | path-traversal / auth scenarios |
+
+Every failure-handling and trust-boundary decision needs at least one BDD scenario. Existing specs adopt the section when next touched (no bulk retrofit).
 
 ## Phase gates (see AGENTS.md)
 

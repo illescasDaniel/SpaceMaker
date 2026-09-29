@@ -47,15 +47,25 @@ Ask: “Please review the wireframe at … — reply with wireframe approved (or
 
 ## Phase 1 — Spec
 
-Create or update `specs/<feature>/SPEC.md` with:
+**Step 1 — Agree the four design decisions (before writing the spec body).** Draft a proposed answer for each, then ask the user to confirm or adjust (chat or AskUserQuestion). Do not silently invent them. Each must be answered or marked `N/A — <reason>`; empty is not allowed.
+
+| Decision | Pin down |
+|----------|----------|
+| Success criteria | Observable "done" beyond the BDD list: user outcome, measurable thresholds (no data loss, idempotent re-run) |
+| Failure handling | What can fail, what the user sees, retry / skip / quarantine (`error/`, `invalid/`), partial state and resume |
+| Performance & resource budget | Latency/throughput targets, disk/CPU/GPU/memory, size limits, network cost (e.g. CLI downloads) |
+| Trust boundary | Untrusted input (device paths, upload filenames, LAN clients, subprocess args), what is trusted, what may touch FS/network; validated at inbound adapters |
+
+**Step 2 — Write** `specs/<feature>/SPEC.md` with:
 
 - Metadata (link wireframe path)
+- `## Design decisions` (the four above, right after Metadata)
 - Triggers & routing
 - Visual & UI rules (aligned with wireframe)
-- Acceptance criteria (Given/When/Then)
+- Acceptance criteria (Given/When/Then) — every failure-handling and trust-boundary decision needs at least one scenario
 - Out of scope
 
-**Stop.** Ask: “Please review `specs/<feature>/SPEC.md` — approve so I can add ports and implementation?”
+**Stop.** Ask: “Please review `specs/<feature>/SPEC.md` (including Design decisions) — approve so I can add ports and implementation?”
 
 ## Phase 2 — Architecture
 
@@ -81,4 +91,4 @@ Adapters and production UI until tests pass. Update `memory/` at milestones (see
 
 ## Spec template
 
-Follow structure in `docs/playbooks/spec-driven-development.md`. Conversion behavior must cite `docs/playbooks/SpaceMaker-adaptations.md`.
+Follow structure in `docs/playbooks/spec-driven-development.md` (including `## Design decisions`). Conversion behavior must cite `docs/playbooks/SpaceMaker-adaptations.md`.
