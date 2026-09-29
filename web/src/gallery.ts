@@ -1,7 +1,7 @@
 import { apiSend } from "./api.ts";
 import { errorMessage, onClick } from "./dom.ts";
 import { shiftGalleryItem, startFriendlyExport, triggerFileDownload } from "./gallery-item.ts";
-import { loadCalendarMonth, shiftCalendarMonth } from "./gallery-timeline.ts";
+import { loadCalendarMonth, loadGallery, removeGalleryThumb, shiftCalendarMonth } from "./gallery-timeline.ts";
 import { showView } from "./shell.ts";
 import { S } from "./state.ts";
 
@@ -81,8 +81,13 @@ function bindGalleryUi(): void {
 		}
 		apiSend("DELETE", "/api/gallery/item?path=" + encodeURIComponent(S.galleryItemPath))
 			.then(() => {
+				const deletedPath = S.galleryItemPath;
 				S.galleryItemPath = "";
-				showView("gallery");
+				// Show the grid first, animate the deleted tile out, then re-sync from the server.
+				showView("gallery", { skipGalleryReload: true });
+				if (!removeGalleryThumb(deletedPath, loadGallery)) {
+					loadGallery();
+				}
 			})
 			.catch((err: unknown) => {
 				window.alert(errorMessage(err, "Could not delete this file."));

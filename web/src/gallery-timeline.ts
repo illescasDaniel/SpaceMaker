@@ -238,6 +238,47 @@ function fetchGalleryTimelinePage(): void {
 		})
 		.catch(failLoad);
 }
+/** Duration of a CSS time token such as `200ms` / `0.2s` / `0.001ms`, in ms (0 if unparseable). */
+function cssTimeToMs(value: string): number {
+	const token = value.trim();
+	const n = Number.parseFloat(token);
+	if (Number.isNaN(n)) {
+		return 0;
+	}
+	return token.endsWith("ms") ? n : n * 1000;
+}
+/**
+ * Fade/shrink out the still-mounted thumbnail of a just-deleted item, remove it, then call
+ * `onDone` exactly once. Returns false (nothing scheduled, `onDone` not called) when the tile
+ * is not mounted, so the caller can fall back to a plain reload. Removal does not depend on
+ * `transitionend`: a timeout slightly past `--dur-base` guarantees it (also covers reduced
+ * motion, where `--dur-base` is ~0).
+ */
+function removeGalleryThumb(relativePath: string, onDone: () => void): boolean {
+	const tile = Array.from(document.querySelectorAll<HTMLElement>("#timeline-view .thumb-link")).find(
+		(el) => el.querySelector("img")?.alt === relativePath,
+	);
+	if (!tile) {
+		return false;
+	}
+	let finished = false;
+	const finish = (): void => {
+		if (finished) {
+			return;
+		}
+		finished = true;
+		tile.remove();
+		onDone();
+	};
+	const base = cssTimeToMs(getComputedStyle(document.documentElement).getPropertyValue("--dur-base"));
+	// Next frame so the tile has painted its start state and the transition actually runs.
+	requestAnimationFrame(() => {
+		tile.classList.add("thumb-removing");
+		tile.addEventListener("transitionend", finish, { once: true });
+		window.setTimeout(finish, base + 100);
+	});
+	return true;
+}
 function loadGallery(): void {
 	const host = document.getElementById("timeline-view");
 	if (!host) {
@@ -454,6 +495,7 @@ export {
 	loadGallery,
 	loadServerInfo,
 	remountGalleryMonthBlock,
+	removeGalleryThumb,
 	renderCalendarGrid,
 	scheduleGalleryWindowCheck,
 	selectCalendarDay,

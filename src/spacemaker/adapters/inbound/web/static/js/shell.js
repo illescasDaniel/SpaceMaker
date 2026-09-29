@@ -184,7 +184,7 @@ function showView(viewId, options) {
 				(tab === "gallery" && resolved.indexOf("gallery") === 0) || (tab === "home" && isMainHubView(resolved)),
 			);
 		});
-		if ((isMainHubView(resolved) || resolved === "gallery") && resolved === "gallery") {
+		if (resolved === "gallery" && !opts.skipGalleryReload) {
 			loadGallery();
 		}
 		if (!opts.skipHistory) {

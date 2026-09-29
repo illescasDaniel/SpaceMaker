@@ -1,7 +1,7 @@
 import { apiSend } from "./api.js";
 import { errorMessage, onClick } from "./dom.js";
 import { shiftGalleryItem, startFriendlyExport, triggerFileDownload } from "./gallery-item.js";
-import { loadCalendarMonth, shiftCalendarMonth } from "./gallery-timeline.js";
+import { loadCalendarMonth, loadGallery, removeGalleryThumb, shiftCalendarMonth } from "./gallery-timeline.js";
 import { showView } from "./shell.js";
 import { S } from "./state.js";
 
@@ -79,8 +79,13 @@ function bindGalleryUi() {
 		}
 		apiSend("DELETE", "/api/gallery/item?path=" + encodeURIComponent(S.galleryItemPath))
 			.then(() => {
+				const deletedPath = S.galleryItemPath;
 				S.galleryItemPath = "";
-				showView("gallery");
+				// Show the grid first, animate the deleted tile out, then re-sync from the server.
+				showView("gallery", { skipGalleryReload: true });
+				if (!removeGalleryThumb(deletedPath, loadGallery)) {
+					loadGallery();
+				}
 			})
 			.catch((err) => {
 				window.alert(errorMessage(err, "Could not delete this file."));
