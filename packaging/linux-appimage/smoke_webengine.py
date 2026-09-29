@@ -12,8 +12,8 @@ def main() -> int:
 	os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
 
 	from PyQt6.QtCore import QTimer, QUrl
-	from PyQt6.QtWidgets import QApplication
 	from PyQt6.QtWebEngineWidgets import QWebEngineView
+	from PyQt6.QtWidgets import QApplication
 
 	app = QApplication(sys.argv)
 	view = QWebEngineView()
