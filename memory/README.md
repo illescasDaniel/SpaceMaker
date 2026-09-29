@@ -10,6 +10,8 @@ Per-branch project state used as an AI agent memory bank. The folder is **tracke
 | `activeContext.md` | Session scratchpad — current focus, blockers, touched files, immediate next steps. |
 | `decisions.md` | Technical log — significant technical, structural, or dependency decisions and their rationale (newest first, append-only). |
 | `archive.md` | Finished history moved out of `progress.md`/`activeContext.md` — not read at session start. |
+| `friction/` | One file per agent error / bad tool experience (MCP wrong results, misleading docs, workarounds) — the improvement backlog for the MCPs and tooling. See `friction/README.md`. |
+
 
 ## Starting a new feature branch
 
