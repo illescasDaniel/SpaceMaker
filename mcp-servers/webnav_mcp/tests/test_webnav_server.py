@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from mcp_nav_shared.errors import ToolInputError
 from webnav_mcp import server
 
 
@@ -81,3 +82,53 @@ def test_given_ts_file_when_js_files_fallback_then_includes_ts(tmp_path, monkeyp
 	files = server._js_files_fallback(tmp_path)
 	# then
 	assert {p.name for p in files} == {"app.ts"}
+
+
+def test_given_generated_dir_when_client_for_script_then_rejected_with_source_hint(tmp_path, monkeypatch):
+	# given
+	out = tmp_path / "static" / "js"
+	monkeypatch.setattr(server, "WORKSPACE_ROOT", tmp_path)
+	monkeypatch.setattr(server, "GENERATED_PATHS", [out.resolve()])
+	# when / then
+	with pytest.raises(ToolInputError, match="generated output"):
+		asyncio.run(server._client_for(str(out / "dom.js")))
+
+
+def test_given_generated_dir_when_is_generated_then_only_paths_under_it_match(tmp_path, monkeypatch):
+	# given
+	out = tmp_path / "static" / "js"
+	monkeypatch.setattr(server, "GENERATED_PATHS", [out.resolve()])
+	# when / then
+	assert server._is_generated(out / "dom.js")
+	assert server._is_generated(out)
+	assert not server._is_generated(tmp_path / "static" / "other.js")
+	assert not server._is_generated(tmp_path / "web" / "dom.ts")
+
+
+def test_given_symbols_in_generated_and_source_when_search_symbol_then_only_source_listed(tmp_path, monkeypatch):
+	# given
+	out = tmp_path / "static" / "js"
+	monkeypatch.setattr(server, "WORKSPACE_ROOT", tmp_path)
+	monkeypatch.setattr(server, "GENERATED_PATHS", [out.resolve()])
+
+	def _sym(path: Path) -> dict:
+		pos = {"line": 0, "character": 0}
+		return {
+			"name": "isDesktopShell",
+			"kind": 12,
+			"location": {"uri": path.as_uri(), "range": {"start": pos, "end": pos}},
+		}
+
+	class _FakeClient:
+		async def workspace_symbol(self, _query: str) -> list[dict]:
+			return [_sym(tmp_path / "web" / "dom.ts"), _sym(out / "dom.js")]
+
+	async def _fake_ts_client() -> _FakeClient:
+		return _FakeClient()
+
+	monkeypatch.setattr(server, "_get_ts_client", _fake_ts_client)
+	# when
+	result = asyncio.run(server.search_symbol("isDesktopShell"))
+	# then
+	assert "dom.ts" in result
+	assert "dom.js" not in result

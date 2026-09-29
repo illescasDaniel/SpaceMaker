@@ -51,6 +51,7 @@ override-with-sane-default shape as `CODENAV_MCP_WORKSPACE`/
 | Env var | Server | Default (generic) | This repo's value |
 |---|---|---|---|
 | `CODENAV_MCP_SOURCE_ROOT` | codenav | the whole workspace | `src` (scopes/speeds up `implementations`' class scan and import-path derivation) |
+| `WEBNAV_MCP_EXCLUDE` | webnav | nothing treated as generated | `src/spacemaker/adapters/inbound/web/static/js` (the JS `tsc` emits from `web/src/*.ts`: never eagerly opened, dropped from `search_symbol`, rejected by position tools — navigation targets the TS sources only; the CSS/selector index still reads it) |
 | `WEBNAV_MCP_ROOTS` | webnav | one unnamed root spanning the whole workspace | `web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes` (TS sources, production assets, UX wireframes) |
 
 A project that unsets these gets a working, if less scoped/labeled, default
@@ -194,8 +195,10 @@ correct: `LspClient.document_symbol` per document version (bumped by
 and the per-candidate `ty` probe verdicts, which can depend on transitive
 imports and are therefore dropped wholesale whenever *any* file under
 `CODENAV_MCP_SOURCE_ROOT` changes. Warm calls on this repo: ~140 ms → ~15-27 ms.
-Third-party packages changing on disk (`uv sync`) is not detected — restart the
-server after that.
+The probe cache's signature also covers `pyproject.toml`, `uv.lock` and the
+venv's `site-packages` mtime, so `uv sync` (`task sync-dev`) invalidates it
+automatically — no file watcher or restart hook needed, since every call
+re-stats these anyway.
 
 The candidate scan and webnav's JS-fallback file scan (below) both skip
 `.venv`/`node_modules`/`.git`/etc. via the shared `mcp_nav_shared/exclude.py`
@@ -305,8 +308,8 @@ project's JS/TS/HTML/CSS (`search_symbol`, `definition`, `references`, `hover`,
 MCP tool set, routed by file extension:
 
 - `.ts`/`.js`/`.mjs`/`.cjs` → `typescript-language-server` (shell sources in
-  `web/src/` via strict `web/tsconfig.json`; emitted `static/js/*.js` still
-  indexed for runtime debugging; `jsconfig.json` includes both)
+  `web/src/` via strict `web/tsconfig.json`; the emitted `static/js/*.js` is
+  build output and is excluded from navigation via `WEBNAV_MCP_EXCLUDE`)
 - `.html` → `vscode-html-language-server`
 - `.css` → `vscode-css-language-server`
 

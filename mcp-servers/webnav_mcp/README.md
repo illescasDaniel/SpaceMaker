@@ -56,6 +56,7 @@ uv run python -m webnav_mcp.server
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `WEBNAV_MCP_WORKSPACE` | inferred from install / `CLAUDE_PROJECT_DIR` | Project root |
+| `WEBNAV_MCP_EXCLUDE` | nothing | Comma-separated workspace-relative paths of generated script output (e.g. the JS a TS build emits): not opened, hidden from `search_symbol`, rejected by position tools. Does not affect the CSS/selector index |
 | `WEBNAV_MCP_ROOTS` | one unnamed root = whole workspace | Comma-separated `label=relative/path` pairs to index separately (SpaceMaker sets `static=…,wireframes=…`) |
 
 ## Example MCP host config

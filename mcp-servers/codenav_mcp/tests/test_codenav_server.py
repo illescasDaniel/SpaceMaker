@@ -96,3 +96,30 @@ def test_given_edited_source_file_when_source_signature_then_differs(tmp_path):
 	a.write_text("x = 12\n", encoding="utf-8")
 	# then
 	assert codenav_server._source_signature([a]) != before
+
+
+def test_given_site_packages_change_when_source_signature_then_differs(tmp_path, monkeypatch):
+	# given — a venv whose site-packages mtime moves on `uv sync`
+	site = tmp_path / ".venv" / "lib" / "python3.12" / "site-packages"
+	site.mkdir(parents=True)
+	monkeypatch.setattr(codenav_server, "WORKSPACE_ROOT", tmp_path)
+	before = codenav_server._source_signature([])
+	# when
+	(site / "newpkg").mkdir()
+	import os
+
+	os.utime(site, ns=(1, 2))
+	# then
+	assert codenav_server._source_signature([]) != before
+
+
+def test_given_lockfile_change_when_source_signature_then_differs(tmp_path, monkeypatch):
+	# given
+	lock = tmp_path / "uv.lock"
+	lock.write_text("a\n", encoding="utf-8")
+	monkeypatch.setattr(codenav_server, "WORKSPACE_ROOT", tmp_path)
+	before = codenav_server._source_signature([])
+	# when
+	lock.write_text("bb\n", encoding="utf-8")
+	# then
+	assert codenav_server._source_signature([]) != before

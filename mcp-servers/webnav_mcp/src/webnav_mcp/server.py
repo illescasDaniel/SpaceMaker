@@ -30,6 +30,7 @@ from mcp_nav_shared.format import (
 	format_location,
 	format_references,
 	format_workspace_symbols,
+	uri_to_relative,
 )
 from mcp_nav_shared.lsp_client import LspClient
 from mcp_nav_shared.workspace import resolve_workspace_root
@@ -46,6 +47,16 @@ WORKSPACE_ROOT = resolve_workspace_root("WEBNAV_MCP_WORKSPACE")
 # most projects have no such split and don't need to set this.
 _raw_web_roots = os.environ.get("WEBNAV_MCP_ROOTS")
 WEB_ROOTS = web_index.parse_roots_env(_raw_web_roots, WORKSPACE_ROOT) if _raw_web_roots else None
+
+# Comma-separated workspace-relative files/directories of *generated* script
+# output (e.g. the JS a TypeScript build emits). They are never eagerly opened,
+# are dropped from `search_symbol`, and position tools reject them with a
+# pointer to the source — the TS sources are the code the project maintains.
+# Unset means nothing is treated as generated. This is navigation-only: the
+# CSS/selector index (`WEBNAV_MCP_ROOTS`) still reads such files, since
+# emitted JS is where a root's runtime class/id usages live.
+_raw_exclude = os.environ.get("WEBNAV_MCP_EXCLUDE", "")
+GENERATED_PATHS = [(WORKSPACE_ROOT / part.strip()).resolve() for part in _raw_exclude.split(",") if part.strip()]
 
 _POSITION_NOTE = (
 	"Positions are 1-indexed. `column` is a UTF-16 character offset on the "
@@ -134,7 +145,8 @@ async def _get_ts_client() -> LspClient:
 				# for JS files directly rather than opening nothing.
 				open_paths = _js_files_fallback(WORKSPACE_ROOT)
 			for path in open_paths:
-				await _ts_client.ensure_open(str(path))
+				if not _is_generated(path):
+					await _ts_client.ensure_open(str(path))
 		return _ts_client
 
 
@@ -167,6 +179,10 @@ async def _get_css_client() -> LspClient:
 async def _client_for(file_path: str) -> LspClient:
 	suffix = Path(file_path).suffix.lower()
 	if suffix in _SCRIPT_EXTENSIONS:
+		if _is_generated(_resolve_path(file_path)):
+			raise ToolInputError(
+				f"{file_path!r} is generated output (WEBNAV_MCP_EXCLUDE); navigate the source it was built from instead"
+			)
 		return await _get_ts_client()
 	if suffix == ".html":
 		return await _get_html_client()
@@ -175,6 +191,11 @@ async def _client_for(file_path: str) -> LspClient:
 	raise ToolInputError(
 		f"webnav has no language server for {file_path!r} (supported: .js/.mjs/.cjs/.ts/.mts/.cts/.html/.css)"
 	)
+
+
+def _is_generated(path: Path) -> bool:
+	resolved = path.resolve()
+	return any(resolved == root or root in resolved.parents for root in GENERATED_PATHS)
 
 
 def _resolve_path(file_path: str) -> Path:
@@ -285,6 +306,11 @@ async def search_symbol(query: str) -> str:
 		symbols = await client.workspace_symbol(query)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
+	symbols = [
+		sym
+		for sym in symbols
+		if not _is_generated(_resolve_path(uri_to_relative(sym.get("location", {}).get("uri", ""), WORKSPACE_ROOT)))
+	]
 	if not symbols:
 		return f"No symbols matching {query!r}."
 	return format_workspace_symbols(symbols, WORKSPACE_ROOT, query=query)

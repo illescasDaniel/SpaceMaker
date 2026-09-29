@@ -361,15 +361,27 @@ def _probe_source(port_module: str, port_name: str, candidate_module: str, candi
 # A probe verdict depends on the port and candidate files *and* whatever they
 # import, so it can only be reused while nothing under SOURCE_ROOT has changed:
 # the whole cache is keyed to one (path, mtime_ns, size) signature of every
-# candidate file and dropped wholesale when it differs. Verdicts are keyed by
+# candidate file plus the dependency environment (see `_environment_paths`)
+# and dropped wholesale when it differs. Verdicts are keyed by
 # (port module, port name, candidate module, class name) -> (verified?, line).
 _probe_cache: dict[tuple[str, str, str, str], tuple[bool, str]] = {}
 _probe_cache_signature: tuple[tuple[str, int, int], ...] = ()
 
 
+def _environment_paths() -> list[Path]:
+	"""Files/dirs whose change can alter a probe verdict without touching any
+	source file: dependency manifests and the venv's `site-packages` (its own
+	mtime moves whenever a package is installed, upgraded or removed — e.g. by
+	`uv sync`)."""
+	paths = [WORKSPACE_ROOT / "pyproject.toml", WORKSPACE_ROOT / "uv.lock"]
+	for pattern in ("lib/python*/site-packages", "Lib/site-packages"):
+		paths.extend((WORKSPACE_ROOT / ".venv").glob(pattern))
+	return paths
+
+
 def _source_signature(files: list[Path]) -> tuple[tuple[str, int, int], ...]:
 	entries: list[tuple[str, int, int]] = []
-	for path in files:
+	for path in [*files, *_environment_paths()]:
 		try:
 			stat = path.stat()
 		except OSError:
