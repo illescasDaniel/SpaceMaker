@@ -21,7 +21,9 @@ import json
 import os
 from pathlib import Path
 
+from mcp.server.mcpserver import MCPServer
 from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError, format_tool_error
+from mcp_nav_shared.exclude import is_excluded
 from mcp_nav_shared.format import (
 	format_diagnostics,
 	format_location,
@@ -30,7 +32,7 @@ from mcp_nav_shared.format import (
 )
 from mcp_nav_shared.lsp_client import LspClient
 from mcp_nav_shared.workspace import resolve_workspace_root
-from mcp.server.mcpserver import MCPServer
+
 from webnav_mcp import web_index
 from webnav_mcp.lang_command import resolve_css_command, resolve_html_command, resolve_ts_command
 
@@ -85,6 +87,25 @@ def _js_include_globs(workspace_root: Path) -> list[str]:
 	return config.get("include", [])
 
 
+def _js_files_fallback(workspace_root: Path) -> list[Path]:
+	"""Scan `WEB_ROOTS` (or the whole workspace) for JS files when there's no
+	jsconfig.json to read `include` globs from — otherwise no file ever gets
+	eagerly opened and tsserver's `workspace/symbol` reports "No Project" on
+	every `search_symbol` call until some other tool happens to open a JS
+	file first (see docs/agent-tooling.md)."""
+	roots = [root for _, root in WEB_ROOTS] if WEB_ROOTS else [workspace_root]
+	files: list[Path] = []
+	for root in roots:
+		if not root.is_dir():
+			continue
+		files.extend(
+			p
+			for p in root.rglob("*")
+			if p.is_file() and p.suffix.lower() in _JS_EXTENSIONS and not is_excluded(p, root)
+		)
+	return files
+
+
 async def _get_ts_client() -> LspClient:
 	global _ts_client
 	async with _client_lock:
@@ -99,9 +120,15 @@ async def _get_ts_client() -> LspClient:
 			# eagerly open the whole JS project here rather than leaving the
 			# first search_symbol call (agents' typical first lookup) to miss
 			# every file it hasn't happened to hover/define/reference first.
-			for glob in _js_include_globs(WORKSPACE_ROOT):
-				for path in WORKSPACE_ROOT.glob(glob):
-					await _ts_client.ensure_open(str(path))
+			include_globs = _js_include_globs(WORKSPACE_ROOT)
+			if include_globs:
+				open_paths = [path for glob in include_globs for path in WORKSPACE_ROOT.glob(glob)]
+			else:
+				# No jsconfig.json (or no `include` key): fall back to scanning
+				# for JS files directly rather than opening nothing.
+				open_paths = _js_files_fallback(WORKSPACE_ROOT)
+			for path in open_paths:
+				await _ts_client.ensure_open(str(path))
 		return _ts_client
 
 

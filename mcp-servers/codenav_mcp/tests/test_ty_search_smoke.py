@@ -11,9 +11,9 @@ import shutil
 from pathlib import Path
 
 import pytest
+from codenav_mcp.ty_command import resolve_ty_command
 from mcp_nav_shared.format import format_workspace_symbol, workspace_symbol_position
 from mcp_nav_shared.lsp_client import LspClient
-from codenav_mcp.ty_command import resolve_ty_command
 
 
 pytestmark = pytest.mark.integration

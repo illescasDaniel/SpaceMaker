@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import sys
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_ty_command(workspace_root: Path) -> list[str]:
@@ -16,4 +20,8 @@ def resolve_ty_command(workspace_root: Path) -> list[str]:
 	on_path = shutil.which("ty")
 	if on_path:
 		return [on_path, "server"]
+	logger.warning(
+		"ty not found in %s/.venv or on PATH; falling back to 'uv run ty server', which installs it on first use.",
+		workspace_root,
+	)
 	return ["uv", "run", "ty", "server"]

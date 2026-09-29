@@ -1,13 +1,12 @@
-_Last updated: 2026-09-28_
+_Last updated: 2026-09-29_
 
 ## Branch
 
-`feature/cleaner_code` (also tip `cursor/cleaner-code-with-main-2bd1` → draft PR #6 into `main`)
+`cursor/cleaner-code-with-main-2bd1` (draft PR #6 into `main`)
 
 ## Current focus
 
-Merged latest `origin/main` into this branch. Ported cache-bust / Clear browser cache onto the
-modular layout. `uv run task checks` green.
+Merged latest `main` (including codenav/webnav dogfooding fixes) into this branch.
 
 ## Next steps
 
@@ -17,4 +16,4 @@ modular layout. `uv run task checks` green.
 
 ## Just changed
 
-- Merge `origin/main` → `feature/cleaner_code`; ty fix for Qt message handler `str | None`
+- Merged `main` → this branch: workspace-root cwd fallback, `implementations` harden, webnav JS fallback / typescript@5 npx pin, shared `exclude.py`, outline spans, workspace-relative web index paths (plus prior Windows `.cmd` shim resolution already on main).

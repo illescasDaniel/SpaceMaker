@@ -42,7 +42,16 @@ def test_falls_back_to_which_then_npx(tmp_path: Path) -> None:
 		}.get(name)),
 	):
 		resolved = resolve_ts_command(tmp_path)
-	assert resolved == [r"C:\Program Files\nodejs\npx.cmd", "--yes", "typescript-language-server", "--stdio"]
+	assert resolved == [
+		r"C:\Program Files\nodejs\npx.cmd",
+		"--yes",
+		"-p",
+		"typescript@5",
+		"-p",
+		"typescript-language-server",
+		"typescript-language-server",
+		"--stdio",
+	]
 
 
 @pytest.mark.parametrize(

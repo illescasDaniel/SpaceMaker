@@ -11,16 +11,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mcp_nav_shared.errors import ToolInputError
+from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError
 from mcp_nav_shared.format import (
 	_match_tier,
-	format_workspace_symbol,
 	is_hierarchical_document_symbols,
 	rank_workspace_symbols,
+	symbol_kind_label,
+	to_symbol_tree,
 	uri_to_relative,
 	workspace_symbol_position,
 )
 from mcp_nav_shared.lsp_client import LspClient
+
+
+# LSP SymbolKind values that are class members, not top-level symbols — a
+# candidate with one of these kinds gets qualified as `Class.member` in an
+# ambiguity listing (see `_qualify_candidates`) since the bare name alone
+# doesn't say which container it belongs to.
+_MEMBER_KINDS = {6, 7, 9}  # Method, Property, Constructor
 
 
 class SymbolResolutionError(ToolInputError):
@@ -90,18 +98,85 @@ def _resolved_from_hierarchical_node(member_name: str, node: dict[str, Any], uri
 	)
 
 
-def _format_candidates(candidates: list[dict[str, Any]], workspace_root: Path) -> str:
-	return "\n".join(format_workspace_symbol(c, workspace_root) for c in candidates[:10])
+def _enclosing_class_name(nodes: list[dict[str, Any]], target_line: int) -> str | None:
+	"""Walk a `to_symbol_tree` hierarchy for the Class(5) node whose range
+	contains `target_line`, preferring the innermost match (nested classes)."""
+	for node in nodes:
+		start, end = node.get("start_line"), node.get("end_line")
+		if start is None or end is None or not (start <= target_line <= end):
+			continue
+		inner = _enclosing_class_name(node.get("children") or [], target_line)
+		if inner is not None:
+			return inner
+		return str(node.get("name")) if node.get("kind") == 5 else None
+	return None
+
+
+async def _qualify_candidates(
+	client: LspClient, workspace_root: Path, candidates: list[dict[str, Any]]
+) -> dict[int, str]:
+	"""For Method/Property/Constructor-kind candidates, resolve their
+	enclosing class so an ambiguity listing can show `Class.member` — ty's
+	`workspace/symbol` results carry no `containerName`, so this costs one
+	`document_symbol` call per distinct candidate file."""
+	qualified: dict[int, str] = {}
+	trees: dict[str, list[dict[str, Any]]] = {}
+	for i, sym in enumerate(candidates):
+		if sym.get("kind") not in _MEMBER_KINDS:
+			continue
+		uri = (sym.get("location") or {}).get("uri", "")
+		rel = uri_to_relative(uri, workspace_root)
+		if rel not in trees:
+			try:
+				members = await client.document_symbol(rel)
+			except TOOL_ERRORS:
+				trees[rel] = []
+			else:
+				trees[rel] = to_symbol_tree(members)
+		cls_name = _enclosing_class_name(trees[rel], _member_start_line(sym))
+		if cls_name:
+			qualified[i] = cls_name
+	return qualified
+
+
+async def _format_candidates(client: LspClient, candidates: list[dict[str, Any]], workspace_root: Path) -> str:
+	shown = candidates[:10]
+	qualified = await _qualify_candidates(client, workspace_root, shown)
+	lines = []
+	for i, sym in enumerate(shown):
+		name = str(sym.get("name") or "?")
+		qualifier = qualified.get(i)
+		display = f"{qualifier}.{name}" if qualifier else name
+		kind = symbol_kind_label(sym.get("kind"))
+		uri, line, col = workspace_symbol_position(sym)
+		rel = uri_to_relative(uri, workspace_root) if uri else "?"
+		lines.append(f"{display}  [{kind}]  ({rel}:{line + 1}:{col + 1})")
+	return "\n".join(lines)
 
 
 def _not_found(query: str) -> SymbolResolutionError:
 	return SymbolResolutionError(f"No symbol found matching {query!r}.")
 
 
-def _ambiguous(query: str, candidates: list[dict[str, Any]], workspace_root: Path) -> SymbolResolutionError:
+async def _ambiguous(
+	client: LspClient,
+	query: str,
+	candidates: list[dict[str, Any]],
+	workspace_root: Path,
+) -> SymbolResolutionError:
+	same_file = len({(c.get("location") or {}).get("uri", "") for c in candidates}) == 1
+	if same_file:
+		# Narrowing by file_path (or the candidates simply all live in one
+		# file already) still leaves several same-named symbols there — e.g.
+		# a module-level function and a same-named class method — so
+		# file_path alone can't disambiguate further; point at the
+		# position-based escape hatch instead of repeating advice that won't help.
+		hint = "these all live in the same file; use search_symbol to get exact line/column, then hover/definition/references with that position"
+	else:
+		hint = "pass file_path to disambiguate"
 	return SymbolResolutionError(
-		f"{len(candidates)} symbols match {query!r}; pass file_path to disambiguate:\n"
-		f"{_format_candidates(candidates, workspace_root)}"
+		f"{len(candidates)} symbols match {query!r}; {hint}:\n"
+		f"{await _format_candidates(client, candidates, workspace_root)}"
 	)
 
 
@@ -138,7 +213,7 @@ async def _resolve_simple(
 	if not exact:
 		raise _not_found(query)
 	if len(exact) > 1:
-		raise _ambiguous(query, exact, workspace_root)
+		raise await _ambiguous(client, query, exact, workspace_root)
 	return _resolved_from_symbol(exact[0])
 
 
@@ -165,7 +240,7 @@ async def _resolve_dotted(
 	if not matches:
 		raise _not_found(query)
 	if len(matches) > 1:
-		raise _ambiguous(query, matches, workspace_root)
+		raise await _ambiguous(client, query, matches, workspace_root)
 	return _resolved_from_symbol(matches[0])
 
 

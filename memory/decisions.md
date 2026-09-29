@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-28 — webnav's npx `typescript-language-server` fallback must pin and bundle `typescript@5`
+
+- **Context:** While live-verifying the fix for webnav's `search_symbol` "No Project" bug against a real external project (`srxy`, no local `typescript` install), the `npx --yes typescript-language-server` fallback started the binary fine but then failed at LSP `initialize` with "Could not find a valid TypeScript installation" — `typescript-language-server` needs `typescript` as a peer dependency it does not bundle, and resolves it from the *workspace's* own `node_modules`, not from wherever the server binary itself came from. Bundling `-p typescript` (unpinned) alongside it in the same `npx` invocation seemed like the fix, but that resolved TypeScript 7.x — a native-compiler preview with a different package layout (no `lib/tsserverlibrary.js`) — which broke resolution the same way for a different reason.
+- **Decision:** `lang_command.py`'s `resolve_ts_command` npx fallback now runs `npx --yes -p typescript@5 -p typescript-language-server typescript-language-server --stdio`, pinning the bundled TypeScript to the 5.x line.
+- **Rationale:** A workspace with no local `typescript` (increasingly the norm for non-TS-project JS files, e.g. plain vanilla-JS static assets) needs the npx fallback to be fully self-sufficient rather than silently depending on an incidental global/local install. Pinning to `@5` avoids a second, subtler failure mode from an unpinned `-p typescript` resolving the incompatible 7.x preview. Verified live: `search_symbol` as the very first call against real `srxy` now succeeds end-to-end with no env vars and no pre-existing `typescript` install anywhere in the environment.
+
 ## 2026-09-28 — `uv run task checks` runs natively (no bash required)
 
 - **Context:** On Windows, `checks.py` invoked `shutil.which("bash")`, which often resolves to the WindowsApps WSL stub (`…\WindowsApps\bash.exe`). With no WSL distro installed that stub exits immediately (“no installed distributions”), so `uv run task checks` never ran the gate even when Git Bash was installed under `Program Files\Git`.
