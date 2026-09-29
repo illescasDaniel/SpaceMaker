@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 
 class JsonUserPreferences:
@@ -35,11 +35,11 @@ class JsonUserPreferences:
 			tmp = self._path.with_suffix(self._path.suffix + ".tmp")
 			tmp.unlink(missing_ok=True)
 
-	def _read(self) -> dict[str, Any]:
+	def _read(self) -> dict[str, object]:
 		with self._lock:
 			return self._read_unlocked()
 
-	def _read_unlocked(self) -> dict[str, Any]:
+	def _read_unlocked(self) -> dict[str, object]:
 		if not self._path.is_file():
 			return {}
 		try:
@@ -48,9 +48,10 @@ class JsonUserPreferences:
 			return {}
 		if not isinstance(raw, dict):
 			return {}
-		return raw
+		# Preserve unknown keys so future preferences / migrations stay intact.
+		return cast(dict[str, object], raw)
 
-	def _write_unlocked(self, data: dict[str, Any]) -> None:
+	def _write_unlocked(self, data: dict[str, object]) -> None:
 		self._path.parent.mkdir(parents=True, exist_ok=True)
 		text = json.dumps(data, indent="\t", sort_keys=True) + "\n"
 		tmp = self._path.with_suffix(self._path.suffix + ".tmp")

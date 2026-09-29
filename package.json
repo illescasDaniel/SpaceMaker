@@ -2,8 +2,10 @@
 	"name": "spacemaker-web",
 	"private": true,
 	"scripts": {
-		"check": "biome check .",
-		"fix": "biome check --write ."
+		"build:web": "tsc -p web/tsconfig.json && biome check --write src/spacemaker/adapters/inbound/web/static/js",
+		"check": "biome check . && tsc -p web/tsconfig.json --noEmit",
+		"check:biome": "biome check .",
+		"format": "biome check --write ."
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.0.0",

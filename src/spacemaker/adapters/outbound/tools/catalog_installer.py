@@ -8,15 +8,24 @@ import sys
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
 import httpx
 
-from spacemaker.adapters.outbound.tools.catalog import load_platform_catalog
+from spacemaker.adapters.outbound.tools.catalog import CatalogEntry, load_platform_catalog
 from spacemaker.bootstrap.bundled_tools import BundledTool, bundled_tool_path
 from spacemaker.bootstrap.paths import managed_tools_dir
 from spacemaker.bootstrap.platform import platform_catalog_key
 from spacemaker.ports.outbound.tool_installer import ToolInstallResult
+
+
+class _PypiUrlItem(TypedDict, total=False):
+	packagetype: str
+	url: str
+
+
+class _PypiProjectMeta(TypedDict, total=False):
+	urls: list[_PypiUrlItem]
 
 
 class CatalogToolInstaller:
@@ -79,7 +88,7 @@ class CatalogToolInstaller:
 		except Exception as exc:
 			return ToolInstallResult(tool_id=tool_id, ok=False, message=str(exc) or exc.__class__.__name__)
 
-	def _install_file(self, tool_id: str, entry: dict[str, Any]) -> ToolInstallResult:
+	def _install_file(self, tool_id: str, entry: CatalogEntry) -> ToolInstallResult:
 		url = str(entry.get("url", ""))
 		if not url:
 			return ToolInstallResult(tool_id=tool_id, ok=False, message="Missing download URL")
@@ -91,7 +100,7 @@ class CatalogToolInstaller:
 		self._make_executable(dest)
 		return ToolInstallResult(tool_id=tool_id, ok=True)
 
-	def _install_zip_flatten(self, tool_id: str, entry: dict[str, Any]) -> ToolInstallResult:
+	def _install_zip_flatten(self, tool_id: str, entry: CatalogEntry) -> ToolInstallResult:
 		url = str(entry.get("url", ""))
 		prefix = str(entry.get("prefix", ""))
 		if not url:
@@ -138,7 +147,7 @@ class CatalogToolInstaller:
 			)
 		return ToolInstallResult(tool_id=tool_id, ok=True)
 
-	def _install_archive(self, tool_id: str, entry: dict[str, Any], *, kind: str) -> ToolInstallResult:
+	def _install_archive(self, tool_id: str, entry: CatalogEntry, *, kind: str) -> ToolInstallResult:
 		url = str(entry.get("url", ""))
 		files = entry.get("files", {})
 		if not url or not isinstance(files, dict) or not files:
@@ -192,14 +201,14 @@ class CatalogToolInstaller:
 			return members[base_matches[0]]
 		return None
 
-	def _install_static_ffmpeg_wheel(self, entry: dict[str, Any]) -> ToolInstallResult:
+	def _install_static_ffmpeg_wheel(self, entry: CatalogEntry) -> ToolInstallResult:
 		version = str(entry.get("version", ""))
 		if not version:
 			return ToolInstallResult(tool_id="ffmpeg", ok=False, message="Missing wheel version")
 		meta_url = f"https://pypi.org/pypi/static-ffmpeg/{version}/json"
 		response = httpx.get(meta_url, timeout=120.0, follow_redirects=True)
 		response.raise_for_status()
-		meta = response.json()
+		meta = cast(_PypiProjectMeta, response.json())
 		wheel_url = self._pick_wheel_url(meta)
 		if not wheel_url:
 			return ToolInstallResult(tool_id="ffmpeg", ok=False, message="No compatible static-ffmpeg wheel")
@@ -219,7 +228,7 @@ class CatalogToolInstaller:
 		self._make_executable(ffprobe_dest)
 		return ToolInstallResult(tool_id="ffmpeg", ok=True)
 
-	def _pick_wheel_url(self, meta: dict[str, Any]) -> str | None:
+	def _pick_wheel_url(self, meta: _PypiProjectMeta) -> str | None:
 		urls = meta.get("urls", [])
 		for item in urls:
 			if isinstance(item, dict) and item.get("packagetype") == "bdist_wheel":
@@ -244,7 +253,7 @@ class CatalogToolInstaller:
 			raise RuntimeError(f"Download failed (HTTP {status}): {url}") from exc
 		return response.content
 
-	def _checksum_ok(self, data: bytes, entry: dict[str, Any]) -> bool:
+	def _checksum_ok(self, data: bytes, entry: CatalogEntry) -> bool:
 		expected = entry.get("sha256")
 		if not expected:
 			return True

@@ -2,11 +2,41 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-29 — Drop manual shell-version bumps; fingerprint + import map + clear HTTP cache on launch
+
+- **Context:** User still saw gallery "Loading more…" after JS fixes and asked why we need shell versions — lightweight pages should always be latest, not cached. Diagnosis: HTML stamped `main.js?v=VERSION`, but relative ES imports (`import "./api.js"`) fetch unversioned URLs; Qt WebEngine reused stale module bytes despite `Cache-Control: no-store`. A stale `api.js` without `R.api` threw synchronously *after* the spinner was shown, and `.catch()` never ran — spinner stuck. Manual `UI_SHELL_VERSION` bumps were easy to forget and didn't fix relative imports anyway.
+- **Decision:** (1) `UI_SHELL_VERSION` is now an auto SHA-256 prefix of `static/js/*.js` at process start (no hand edits). (2) `stamp_shell_html` emits an import map remapping every `/static/js/*.js` to `?v=<token>`, and also stamps shell CSS hrefs. (3) WebEngine profile slug is fixed `default` (stop proliferating versioned cache dirs). (4) Desktop launch clears HTTP/Code/GPU/Service Worker caches under that profile. (5) Gallery timeline fetch guards `typeof R.api` + try/catch so the spinner cannot stick on sync failures. Keep `no-store` on shell HTML/CSS/JS; keep long-lived cache only for `/media/` (and ETag revalidation for `/thumbs/`).
+- **Rationale:** Matches the product rule "always open the latest UI" without agent ritual; import map closes the relative-import hole that versioned `main.js` alone could not; clearing Chromium HTTP cache on launch is cheap for this app and matches "we don't need a cache for lightweight pages."
+
+## 2026-09-29 — Qualify bare cross-module shell helpers as `R.*` after the TS split
+
+- **Context:** Follow-up to the registry-alias fix below. User still saw gallery stuck + `ReferenceError: pushSettings is not defined`. An auditor found 22 sites where feature modules used bare identifiers (`applyState`, `pushSettings`, `loadServerInfo`) that used to be in-scope in the monolith `app.js` but are now only on the `R` registry (or defined in another module). Worst: `shell-boot.ts` chain `.then(applyState)` / `.then(loadServerInfo)` aborted desktop boot before gallery could load.
+- **Decision:** Replace every bare cross-module ref with `R.<name>` in `home-bind`/`shell-boot`/`lan`/`settings`/`usb`; keep a small Python auditor heuristic for future splits; bump `UI_SHELL_VERSION`.
+- **Rationale:** Same contract as the rest of the shell (`R.foo` for shared helpers). Not worth re-introducing circular ESM imports just to name-import those functions.
+
+## 2026-09-29 — Keep pre-rename `R.*` aliases on the shell runtime registry
+
+- **Context:** After the cleaner_code TypeScript split, core helpers were renamed (`api`→`apiSend`, `bindInfoPanelToggle`→`bindDisclosure`, `setQrImageSrc`→`setQrImage`) and only the new names were assigned onto `R`. Feature modules (`@ts-nocheck`) still called the old names, so bootstrap threw (`R.bindInfoPanelToggle is not a function`) and every gallery/settings fetch failed (`R.api is not a function`) — gallery stuck on "Loading more".
+- **Decision:** Wire the old names as aliases on `R` in `api.ts`/`dom.ts` (and document them on `RuntimeRegistry`) rather than mass-renaming every feature call site in this bugfix.
+- **Rationale:** Call sites are the majority surface; aliases restore the intended bag-of-helpers contract with minimal churn. Call sites can migrate to the new names later behind removing `@ts-nocheck`.
+
 ## 2026-09-28 — webnav's npx `typescript-language-server` fallback must pin and bundle `typescript@5`
 
 - **Context:** While live-verifying the fix for webnav's `search_symbol` "No Project" bug against a real external project (`srxy`, no local `typescript` install), the `npx --yes typescript-language-server` fallback started the binary fine but then failed at LSP `initialize` with "Could not find a valid TypeScript installation" — `typescript-language-server` needs `typescript` as a peer dependency it does not bundle, and resolves it from the *workspace's* own `node_modules`, not from wherever the server binary itself came from. Bundling `-p typescript` (unpinned) alongside it in the same `npx` invocation seemed like the fix, but that resolved TypeScript 7.x — a native-compiler preview with a different package layout (no `lib/tsserverlibrary.js`) — which broke resolution the same way for a different reason.
 - **Decision:** `lang_command.py`'s `resolve_ts_command` npx fallback now runs `npx --yes -p typescript@5 -p typescript-language-server typescript-language-server --stdio`, pinning the bundled TypeScript to the 5.x line.
 - **Rationale:** A workspace with no local `typescript` (increasingly the norm for non-TS-project JS files, e.g. plain vanilla-JS static assets) needs the npx fallback to be fully self-sufficient rather than silently depending on an incidental global/local install. Pinning to `@5` avoids a second, subtler failure mode from an unpinned `-p typescript` resolving the incompatible 7.x preview. Verified live: `search_symbol` as the very first call against real `srxy` now succeeds end-to-end with no env vars and no pre-existing `typescript` install anywhere in the environment.
+
+## 2026-09-28 — `uv run task checks` runs natively (no bash required)
+
+- **Context:** On Windows, `checks.py` invoked `shutil.which("bash")`, which often resolves to the WindowsApps WSL stub (`…\WindowsApps\bash.exe`). With no WSL distro installed that stub exits immediately (“no installed distributions”), so `uv run task checks` never ran the gate even when Git Bash was installed under `Program Files\Git`.
+- **Decision:** Implement the quality gate steps (ruff, ty, pytest, npm check/format) directly in `scripts/quality/checks.py` via `uv`/`npm` subprocesses. Keep `checks.sh` as a bash-friendly mirror for CI/shell users; `web.sh --fix` now calls `npm run format` (there is no `fix` script).
+- **Rationale:** The gate only needs Python tooling + optional Node — not a POSIX shell. Avoids PATH ordering traps between WSL stubs and Git Bash.
+
+## 2026-09-28 — Code modernization: split hubs, aiosqlite, no HTTP/3
+
+- **Context:** Production hubs exceeded 600 lines (`app.js`, `index.html` CSS, `services.py`, `app.py`). User asked for file separation, async HTTP honesty, strict typing, TypeScript, and HTTP/3 QUIC — then dropped HTTP/3 because TLS/certs are a poor fit for loopback desktop + LAN QR phones.
+- **Decision:** (1) FastAPI `APIRouter` modules under `adapters/inbound/web/routes/`; `AppServices` mixins package under `bootstrap/services/`; shell CSS extracted to `static/shell-*.css`; shell UI authored in `web/src/*.ts` and emitted to `static/js/` (`main.js` ES module entry). (2) Gallery index uses **aiosqlite** with async `GalleryIndexPort` / use cases / gallery routes; sync workers bridge via `AppServices.run_coro` (helper-thread `asyncio.run` when already on the ASGI loop). Per-operation DB connections avoid cross-loop cache bugs. (3) **No HTTP/3 / TLS** — stay on uvicorn plain HTTP. (4) Strict TypeScript (`web/tsconfig.json`: `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`; core modules fully typed, feature modules migrate behind `@ts-nocheck`). (5) Production Python: ruff ANN on `src/spacemaker/`, ty-clean mixins via `self: AppServices`, TypedDict gallery serializers.
+- **Rationale:** Keeps hexagonal boundaries while making files reviewable; async SQLite matches FastAPI without rewriting subprocess adapters; HTTP/3 would force cert UX on phones and pywebview for little localhost gain.
 
 ## 2026-09-28 — Thumbnails: drop long-lived HTTP caching instead of URL-versioning it; add an on-disk format-version marker
 

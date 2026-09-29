@@ -269,23 +269,23 @@ class FakeGalleryIndex:
 	def _sorted_rows(self, library_root: str) -> list[GalleryIndexRow]:
 		return sorted(self._bucket(library_root).values(), key=lambda r: (r.captured_at, r.relative_path), reverse=True)
 
-	def snapshot_stats(self, library_root: str) -> dict[str, FileStat]:
+	async def snapshot_stats(self, library_root: str) -> dict[str, FileStat]:
 		return {rel: FileStat(mtime=row.mtime, size=row.size) for rel, row in self._bucket(library_root).items()}
 
-	def apply_sync(self, library_root: str, *, upserts: list[GalleryIndexRow], removed: list[str]) -> None:
+	async def apply_sync(self, library_root: str, *, upserts: list[GalleryIndexRow], removed: list[str]) -> None:
 		bucket = self._bucket(library_root)
 		for row in upserts:
 			bucket[row.relative_path] = row
 		for relative_path in removed:
 			bucket.pop(relative_path, None)
 
-	def remove(self, library_root: str, relative_path: str) -> None:
+	async def remove(self, library_root: str, relative_path: str) -> None:
 		self._bucket(library_root).pop(relative_path, None)
 
-	def get(self, library_root: str, relative_path: str) -> GalleryIndexRow | None:
+	async def get(self, library_root: str, relative_path: str) -> GalleryIndexRow | None:
 		return self._bucket(library_root).get(relative_path)
 
-	def page(self, library_root: str, *, cursor: GalleryCursor | None, limit: int) -> GalleryPage:
+	async def page(self, library_root: str, *, cursor: GalleryCursor | None, limit: int) -> GalleryPage:
 		rows = self._sorted_rows(library_root)
 		if cursor is not None:
 			key = (cursor.captured_at, cursor.relative_path)
@@ -297,7 +297,7 @@ class FakeGalleryIndex:
 			next_cursor = GalleryCursor(captured_at=last.captured_at, relative_path=last.relative_path).encode()
 		return GalleryPage(items=tuple(r.as_item() for r in page_rows), next_cursor=next_cursor)
 
-	def days_with_media(self, library_root: str, year: int, month: int) -> list[int]:
+	async def days_with_media(self, library_root: str, year: int, month: int) -> list[int]:
 		return sorted(
 			{
 				r.captured_at.day
@@ -306,14 +306,14 @@ class FakeGalleryIndex:
 			}
 		)
 
-	def items_for_day(self, library_root: str, year: int, month: int, day: int) -> list[GalleryItem]:
+	async def items_for_day(self, library_root: str, year: int, month: int, day: int) -> list[GalleryItem]:
 		return [
 			r.as_item()
 			for r in self._sorted_rows(library_root)
 			if r.captured_at.year == year and r.captured_at.month == month and r.captured_at.day == day
 		]
 
-	def neighbor(
+	async def neighbor(
 		self, library_root: str, relative_path: str, *, direction: Literal["prev", "next"]
 	) -> GalleryItem | None:
 		rows = self._sorted_rows(library_root)
@@ -325,8 +325,8 @@ class FakeGalleryIndex:
 			return None
 		return rows[target].as_item()
 
-	def count(self, library_root: str) -> int:
+	async def count(self, library_root: str) -> int:
 		return len(self._bucket(library_root))
 
-	def close(self, library_root: str) -> None:
+	async def close(self, library_root: str) -> None:
 		self.rows.pop(library_root, None)

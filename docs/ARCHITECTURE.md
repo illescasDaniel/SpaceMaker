@@ -46,19 +46,32 @@ client-server product with a remote backend.
 
 ## Routing pattern
 
-`create_fastapi_app(services)` builds a **single `FastAPI()` instance** and
-registers every route as an inline closure via
-`@app.get/post/put/delete/websocket(...)` inside that one function — there is
-no separate `APIRouter`/controller-class layer. Routes are grouped by prefix
-convention (`/api/gallery/...`, `/api/extract/...`, `/api/convert/...`,
-`/api/tools/...`, `/api/receive/...`, `/api/share/...`, `/api/transfer/...`) rather than by file.
-Each handler is a thin adapter that calls into `AppServices` /
-application-layer use cases and serializes domain objects to dicts — a
-closure-based composition style, not classic MVC. Static SPA shells are
-served from `adapters/inbound/web/static/` via a `StaticFiles` mount plus
-explicit HTML entry routes (`/`, `/gallery`, `/upload`, `/receive`, `/share`, `/transfer`).
-A single `/ws` WebSocket endpoint pushes state updates to connected clients.
-Request bodies are typed with Pydantic `BaseModel`s.
+`create_fastapi_app(services)` builds a **single `FastAPI()` instance**, mounts
+static files, installs CSP/cache middleware, then registers **`APIRouter`**
+modules from `adapters/inbound/web/routes/` via `register_routes` — one builder
+per area (`pages`, `settings`, `lan`, `extract`, `usb_transfer`, `convert`,
+`gallery`, `media`, `tools`, `websocket`). Shared request models live in
+`models.py`; path helpers in `media_paths.py`; serializers in `serializers.py`.
+
+Each `build_*_router(services)` closes over `AppServices` (same thin-adapter
+style as before). Routes use `/api/<area>/…` prefixes. Static SPA shells are
+served from `adapters/inbound/web/static/` (`index.html` / `gallery_mobile.html`
++ CSS sheets). Shell UI sources live in `web/src/*.ts` (strict TypeScript;
+`npm run build:web` / `tsc -p web/tsconfig.json` emits ES modules to
+`static/js/`; the shell loads `/static/js/main.js` as `type="module"`). A
+single `/ws` WebSocket pushes state to loopback desktop clients. Request
+bodies use Pydantic `BaseModel`s.
+
+Gallery index reads/writes go through **async** `GalleryIndexPort` /
+`SqliteGalleryIndex` (**aiosqlite**). Gallery HTTP handlers are `async def` and
+`await` use cases; worker threads bridge with `AppServices.run_coro`.
+
+Composition root: `bootstrap/services/` package (`AppServices` + mixins for
+snapshots, LAN sessions, jobs, USB browse). Mixin methods annotate
+`self: AppServices` so the type checker sees the composed surface.
+
+**HTTP transport:** plain HTTP on uvicorn (loopback desktop + LAN QR). No
+HTTP/3 / QUIC / TLS — certs are a poor fit for this deployment model.
 
 ## Persistence: filesystem + derived SQLite index
 
@@ -108,10 +121,11 @@ rather than only living in transient in-memory session state
 - New use cases go in `application/`, must stay free of FastAPI/FFmpeg/adb
   imports, and are exposed to the web layer through `AppServices` methods,
   not instantiated inline in `app.py`.
-- New HTTP routes are added as closures inside `create_fastapi_app`,
-  following the existing `/api/<area>/<action>` prefix convention, and
-  should reuse `require_loopback` / `require_loopback_websocket` guards for
-  anything not meant to be LAN-exposed.
+- New HTTP routes are added as `build_*_router` closures in
+  `adapters/inbound/web/routes/`, registered from `register_routes`, following
+  the existing `/api/<area>/<action>` prefix convention, and should reuse
+  `require_loopback` / `require_loopback_websocket` guards for anything not
+  meant to be LAN-exposed.
 
 ## Developer setup
 

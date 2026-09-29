@@ -18,16 +18,18 @@
 - **Theme:** system light/dark via shared `theme.css` (`prefers-color-scheme`) on desktop app, mobile gallery shell, and LAN phone pages.
 - **Layout:** single responsive column (no decorative phone-frame column; narrow viewport is the mobile layout).
 - **Toolbar:** title “Gallery”; toggle **Timeline** | **Calendar**.
-- **Timeline view:** group by **Year**, then **Month**; responsive thumbnail grid with **`object-fit: cover`** on thumb images.
+- **Timeline view:** group by **Year**, then **Month**; responsive **square** thumbnail grid with **`object-fit: cover`** on thumb images (CSS crops the tile; the cached JPEG itself is not square-cropped — see Thumbnails).
 - **Calendar view:** month navigation (prev/next); weekday header row; days with media highlighted; selecting a day shows that day’s thumbnails below the grid.
 - **Mobile:** layout must remain usable at ~320px width.
 - **Thumbnails:** served from `{library_root}/.thumbnails/` (cache dir; excluded from convert/extract scans). Lazy-generated on first request via `GET /thumbs/{relative_path}`; browser uses `loading="lazy"`. Cache paths are a pure function of the source relative path: append `.jpg` to the full relative path (keep the original suffix), e.g. `2025/vacation.avif` → `.thumbnails/2025/vacation.avif.jpg`. This keeps distinct sources from colliding when they share a stem (`vacation.avif` vs `vacation.mp4`). Thumbnail and export cache paths are **not** stored in the gallery index. Generation writes to a temp file beside the cache path and atomically renames it into place, so a concurrent reader never observes a partial thumbnail JPEG. A generation failure returns a non-cached error response (not a long-lived-cached broken image), so the browser retries on the next request instead of caching a dead thumbnail forever; the failure is also recorded in the app log file (see Logging in `docs/ARCHITECTURE.md`) for later diagnosis. The on-disk cache file is also invalidated whenever the thumbnail-generation method changes: a small format-version marker lives alongside `.thumbnails/`, and a mismatch causes the affected cache file to regenerate on next request instead of being reused forever by mtime alone.
-- **Thumbnail framing:** the generated thumbnail file itself preserves the source image's exact aspect ratio — fit within a max edge (longest side capped, shorter side scales proportionally; never letterboxed/padded, never center-cropped to a square). Square/cropped framing is a **display-only** CSS concern (`object-fit: cover` in the grid, see above); the cached JPEG bytes are never pre-cropped, so the same file also works as an aspect-correct placeholder on the item page (`object-fit: contain`, see Progressive preview loading below) without a framing mismatch when the full image loads in.
+	- **Aspect:** each cache JPEG **preserves the source aspect ratio**. Scale to **fit within** a max edge (e.g. 320px on the longer side / bounding box; Magick `WxH>` skips upscaling) — do **not** center-crop to a square at generation time (no Magick `WxH^` + `-extent` square bake). Video poster frames follow the same fit-within rule.
+	- **Display:** grid/calendar tiles remain square and use CSS **`object-fit: cover`** to crop visually; the gallery item progressive placeholder uses the **same** `/thumbs/` URL with **`object-fit: contain`** so landscape/portrait framing matches the full preview.
+	- **Stale caches:** regenerate when the source is newer than the cache file, or when the format-version marker mismatches. After changing generation geometry, wiping `.thumbnails/` (or Reset gallery) also refreshes old square-cropped files.
 - **Friendly export cache:** on-demand **Download as JPEG** / **Download as MP4** outputs (when a re-encode is needed) live under `{library_root}/.exports/` with the same injective path-mirror rule — append `.jpg` or `.mp4` to the full relative path (e.g. `2025/vacation.avif` → `.exports/2025/vacation.avif.jpg`). Reuse when the cache file exists and is at least as new as the source. Safe to delete anytime; regenerates on the next friendly download. Already-friendly sources (JPEG / H.264+AAC MP4) are served from `processed/` and write nothing under `.exports/`.
 - **Video tiles:** poster/thumb image plus a visible **Video** indicator; never use `<img src="…video…">` for the full video file.
 - **Performance:** cached thumbs; `/thumbs/` is served `Cache-Control: no-cache` with an `ETag` so the webview/browser always revalidates before use instead of trusting a stale copy for up to a day — a request to the loopback server for an already-generated ~10–50 KB thumbnail is effectively free (the expensive step, `.thumbnails/` disk generation, is already cached separately), so nothing meaningful is lost by not letting the HTTP layer cache it too, and it closes the class of bug where a webview kept serving a pre-fix or pre-reset thumbnail after the source changed (see `memory/decisions.md`). `/media/` (full-size, several MB) keeps a long-lived `Cache-Control` — those bytes are the finished `processed/` file, a relative path is never reused for different content except via **Reset gallery** or a re-import onto the same filename, and re-encoding cost/size make revalidation-per-view worth avoiding; if this bites the same way `/thumbs/` did, apply the same no-cache treatment. Settings → **Clear browser cache** (see [home-modules](../home-modules/SPEC.md)) is the manual escape hatch for the webview's on-disk HTTP cache regardless of which policy is in effect. Image item open starts full media fetch immediately (metadata must not gate it); neighbor thumb/media prefetch after paths are known; a persisted, incrementally-synced index (derived from `processed/` + EXIF/probe metadata, never a source of truth by itself) backs timeline/calendar/day queries and preferably item display metadata so response time does not scale with total library size. Timeline loads via cursor-paginated pages with infinite scroll. Smooth, responsive scrolling at **50,000+ items**, with a bounded mounted-tile working set (not the full library) regardless of scroll distance.
 - **Item page:** route `/gallery/item/{relative_path}` (SPA); back returns to gallery grid. Large preview (`object-fit: contain`, `max-height: 55vh` on desktop; phone shell ~50vh). **Previous** / **Next** controls sit **beside** the preview stage (not overlaid on the media), with a clear gutter so they never cover image/video content; media is inset inside the stage frame. Both controls remain visible at the first and last item — the boundary control is **disabled** (muted styling, still opaque — not faded to near-invisible) and does not wrap. Stepping uses **timeline order** (newest-first, same as the grid). Metadata block under preview includes **On disk** (absolute path, full-width wrap). Actions depend on shell:
-- **Progressive preview loading:** the preview area reserves its final size up front (never renders at zero/near-zero size). The item's existing thumbnail (`GET /thumbs/{relative_path}` — same one used in the grid) shows immediately as a placeholder using the **same aspect-fit** as the full preview (`object-fit: contain` — letterbox/pillarbox, not cover/crop). A corner status **`• Loading…`** (bottom-left of the media area; no spinner) shows while the full-size preview loads; the full preview then reveals over the thumbnail. This applies on initial open and on every **Previous**/**Next** step.
+- **Progressive preview loading:** the preview area reserves its final size up front (never renders at zero/near-zero size). The item's existing thumbnail (`GET /thumbs/{relative_path}` — same one used in the grid) shows immediately as a placeholder using the **same aspect-fit** as the full preview (`object-fit: contain` — letterbox/pillarbox, not cover/crop). Because the cache JPEG keeps source aspect, the placeholder framing matches the full preview (not a letterboxed square crop). A corner status **`• Loading…`** (bottom-left of the media area; no spinner) shows while the full-size preview loads; the full preview then reveals over the thumbnail. This applies on initial open and on every **Previous**/**Next** step.
 	- **No extra CSS blur** on the placeholder (no `filter: blur(…)` / scale trick). Natural low-resolution softness from the thumb JPEG is fine.
 	- **Smooth scaling:** both the placeholder thumb and the full preview scale with a bilinear-like filter (`image-rendering: auto` / `smooth`) — never nearest-neighbor / pixelated.
 	- **Reveal (no blank flash):** wait until the full bitmap is loaded/decoded; fade the full preview in **on top of** the still-visible thumb; only then hide the thumb (do not fade thumb and full out/in together). Prefer a short crossfade duration (~280ms) — smooth but not slow. Respect `prefers-reduced-motion`.
@@ -151,6 +153,14 @@
 - **When** gallery displays the item
 - **Then** a video indicator or poster frame is shown on the tile
 
+### Scenario: Thumbnail cache preserves source aspect
+
+- **Given** a landscape (or portrait) image in `processed/`
+- **When** `GET /thumbs/{relative_path}` generates or refreshes the cache JPEG
+- **Then** the JPEG’s pixel dimensions keep the source aspect ratio (fit within the max-edge bound)
+- **And** the file is **not** a baked square crop (no generator center-crop / `-extent` to equal width and height)
+- **When** the timeline or calendar grid shows that item
+- **Then** the square tile still displays with CSS **`object-fit: cover`** (visual crop only)
 ### Scenario: Thumbnail generation failure does not stick
 
 - **Given** thumbnail generation fails for a file (e.g. the source is only partially written, or the tool errors)
@@ -159,6 +169,12 @@
 - **And** the failure is written to the app log file
 - **And** the next request for the same thumbnail retries generation rather than reusing a broken cached response
 
+### Scenario: Item placeholder uses aspect-preserving thumb
+
+- **Given** a non-square image whose thumb cache preserves source aspect
+- **When** the gallery item page shows the progressive thumbnail placeholder
+- **Then** the placeholder uses **`object-fit: contain`** and shows landscape letterboxing or portrait pillarboxing matching the eventual full preview
+- **And** it does **not** present a pre-squared crop letterboxed inside the stage
 ### Scenario: Open gallery item page
 
 - **Given** a file in `processed/` listed in the gallery
@@ -184,6 +200,7 @@
 - **Given** the gallery item page is opening, or the user has just chosen **Previous**/**Next**
 - **When** the full-size preview has not finished loading yet
 - **Then** the item's existing thumbnail (`GET /thumbs/{relative_path}`) appears immediately in the preview area using **aspect-fit** (`object-fit: contain` — same fit as the eventual full preview)
+- **And** that thumbnail file itself preserves source aspect (so framing matches the full preview, not a square crop)
 - **And** a corner status **`• Loading…`** is shown (no spinner)
 - **And** the placeholder is **not** given an extra CSS blur filter (low-res softness from the thumb itself is OK)
 - **And** the placeholder and full preview use smooth (bilinear-like) image scaling — not nearest-neighbor / pixelated
@@ -280,6 +297,7 @@
 - URLs for media must be path-safe (no directory traversal).
 - Gallery index (`.index.sqlite`) is a derived cache only; deleting it never loses media, it triggers a full rebuild from `processed/` on next load.
 - Thumbnail and friendly-export paths are derived from the source relative path (not stored in the index); `.thumbnails/` and `.exports/` are safe to delete anytime.
+- Thumbnail cache files preserve source aspect (fit-within max edge); square presentation in the grid is CSS-only.
 
 ## Testing strategy
 
@@ -292,6 +310,7 @@
 | Integration | GET `/api/gallery/calendar` returns month + days-with-media; GET `/thumbs/…` returns JPEG after first request |
 | Integration | GET `/gallery/item/…` SPA 200; GET `/api/gallery/item`; export POST + download |
 | Unit | Path safety; friendly-format skip; injective export/thumbnail cache naming |
+| Unit | Thumbnail generator requests fit-within geometry (preserves aspect; no square `-extent` crop) |
 | Unit | SPA path helper / snapshot includes `visualize` step state (see main-wizard spec) |
 | Unit | Index sync diff: added/changed/removed files computed from mtime/size comparison against the index |
 | Unit | Sync removes orphan `.thumbnails/` and `.exports/` for removed paths; drops stale exports for changed paths |

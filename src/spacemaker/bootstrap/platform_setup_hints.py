@@ -1,10 +1,26 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
+from typing import TypedDict
 
 
-def _windows_winget_ids(*, tools: list[dict[str, Any]]) -> list[str]:
+class ToolStatusHintRow(TypedDict, total=False):
+	"""Managed-tool snapshot fields used for setup hints and status JSON."""
+
+	tool_id: str
+	phase: str
+	resolution: str
+	path: str | None
+	message: str | None
+
+
+class ComponentsSetupHint(TypedDict):
+	title: str
+	detail: str
+	command: str
+
+
+def _windows_winget_ids(*, tools: list[ToolStatusHintRow]) -> list[str]:
 	ids: list[str] = []
 	by_tool = {str(item.get("tool_id", "")): item for item in tools}
 	ffmpeg = by_tool.get("ffmpeg", {})
@@ -28,7 +44,7 @@ def _windows_winget_ids(*, tools: list[dict[str, Any]]) -> list[str]:
 	return ordered
 
 
-def components_setup_hint(*, tools: list[dict[str, Any]] | None = None) -> dict[str, str] | None:
+def components_setup_hint(*, tools: list[ToolStatusHintRow] | None = None) -> ComponentsSetupHint | None:
 	"""Optional copy + install command for the Components setup screen."""
 	if sys.platform != "win32":
 		return None

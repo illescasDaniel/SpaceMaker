@@ -15,12 +15,12 @@ class ResetLibrary:
 		self._filesystem = filesystem
 		self._gallery_index = gallery_index
 
-	def run(self, library_root: str) -> None:
+	async def run(self, library_root: str) -> None:
 		if not library_root:
 			raise ValueError("library_root required")
 		root = Path(library_root)
 		# Close before unlink — Windows cannot delete an open SQLite database.
-		self._gallery_index.close(library_root)
+		await self._gallery_index.close(library_root)
 		for folder in LIBRARY_FOLDERS:
 			self._filesystem.delete_directory(str(root / folder.value))
 		self._filesystem.delete_directory(str(root / THUMBNAILS_DIR_NAME))

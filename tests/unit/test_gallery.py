@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 from tests.unit.fakes import FakeGalleryIndex
 
 from spacemaker.application.generate_gallery import GenerateGallery
@@ -8,7 +9,8 @@ from spacemaker.domain.gallery_index import GalleryIndexRow
 from spacemaker.domain.media import MediaKind
 
 
-def test_given_items_in_two_years_when_group_timeline_then_orders_newest_first():
+@pytest.mark.asyncio
+async def test_given_items_in_two_years_when_group_timeline_then_orders_newest_first():
 	# given
 	from spacemaker.domain.gallery import gallery_item
 
@@ -23,7 +25,8 @@ def test_given_items_in_two_years_when_group_timeline_then_orders_newest_first()
 	assert groups[1].year == 2024
 
 
-def test_given_indexed_items_when_list_timeline_page_then_returns_first_page():
+@pytest.mark.asyncio
+async def test_given_indexed_items_when_list_timeline_page_then_returns_first_page():
 	# given
 	library = "/lib"
 	index = FakeGalleryIndex()
@@ -35,15 +38,16 @@ def test_given_indexed_items_when_list_timeline_page_then_returns_first_page():
 			relative_path="b.avif", captured_at=datetime(2025, 3, 2), kind=MediaKind.IMAGE, mtime=1, size=1
 		),
 	]
-	index.apply_sync(library, upserts=rows, removed=[])
+	await index.apply_sync(library, upserts=rows, removed=[])
 	# when
-	page = GenerateGallery(index).list_timeline_page(library, cursor=None, limit=10)
+	page = await GenerateGallery(index).list_timeline_page(library, cursor=None, limit=10)
 	# then
 	assert [item.relative_path for item in page.items] == ["b.avif", "a.avif"]
 	assert page.next_cursor is None
 
 
-def test_given_more_items_than_limit_when_list_timeline_page_then_paginates():
+@pytest.mark.asyncio
+async def test_given_more_items_than_limit_when_list_timeline_page_then_paginates():
 	# given
 	library = "/lib"
 	index = FakeGalleryIndex()
@@ -53,18 +57,19 @@ def test_given_more_items_than_limit_when_list_timeline_page_then_paginates():
 		)
 		for i in range(3)
 	]
-	index.apply_sync(library, upserts=rows, removed=[])
+	await index.apply_sync(library, upserts=rows, removed=[])
 	gallery = GenerateGallery(index)
 	# when
-	first_page = gallery.list_timeline_page(library, cursor=None, limit=2)
-	second_page = gallery.list_timeline_page(library, cursor=first_page.next_cursor, limit=2)
+	first_page = await gallery.list_timeline_page(library, cursor=None, limit=2)
+	second_page = await gallery.list_timeline_page(library, cursor=first_page.next_cursor, limit=2)
 	# then
 	assert [item.relative_path for item in first_page.items] == ["2.avif", "1.avif"]
 	assert [item.relative_path for item in second_page.items] == ["0.avif"]
 	assert second_page.next_cursor is None
 
 
-def test_given_video_filename_when_gallery_item_then_kind_video():
+@pytest.mark.asyncio
+async def test_given_video_filename_when_gallery_item_then_kind_video():
 	# given
 	from spacemaker.domain.gallery import gallery_item
 

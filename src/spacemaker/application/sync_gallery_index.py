@@ -21,7 +21,7 @@ class SyncGalleryIndex:
 		self._probe = probe
 		self._index = index
 
-	def run(self, library_root: str) -> IndexSyncPlan:
+	async def run(self, library_root: str) -> IndexSyncPlan:
 		processed_root = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, "")
 		relative_paths = self._filesystem.list_files_recursive(processed_root)
 		on_disk = {
@@ -30,7 +30,7 @@ class SyncGalleryIndex:
 			)
 			for relative_path in relative_paths
 		}
-		indexed = self._index.snapshot_stats(library_root)
+		indexed = await self._index.snapshot_stats(library_root)
 		plan = plan_index_sync(indexed, on_disk)
 		if plan.is_empty:
 			return plan
@@ -61,5 +61,5 @@ class SyncGalleryIndex:
 			delete_gallery_export_caches(self._filesystem, library_root, relative_path)
 		if plan.removed or plan.changed:
 			sweep_legacy_hash_export_caches(self._filesystem, library_root)
-		self._index.apply_sync(library_root, upserts=upserts, removed=list(plan.removed))
+		await self._index.apply_sync(library_root, upserts=upserts, removed=list(plan.removed))
 		return plan

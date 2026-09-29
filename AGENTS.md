@@ -61,7 +61,7 @@ Two tools exist so you don't need to read large swaths of the codebase up front 
 
 ## Quality gate
 
-Requires [uv](https://docs.astral.sh/uv/). Python: **ruff**, **ty**, **pytest** via `uv run task checks` ([scripts/quality/checks.sh](scripts/quality/checks.sh)). Web JS/HTML: **Biome** via `npm ci && npm run check`.
+Requires [uv](https://docs.astral.sh/uv/). Python: **ruff**, **ty**, **pytest** via `uv run task checks` ([scripts/quality/checks.py](scripts/quality/checks.py), mirrored by [checks.sh](scripts/quality/checks.sh)). Web JS/HTML/TS: **Biome** + `tsc` via `npm ci && npm run check` (also run by the quality gate).
 
 ## Rules — Cursor vs Claude Code
 

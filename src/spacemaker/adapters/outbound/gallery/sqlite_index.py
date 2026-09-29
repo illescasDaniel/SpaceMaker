@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import sqlite3
-import threading
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypeVar, cast
+
+import aiosqlite
 
 from spacemaker.domain.gallery import GalleryItem
 from spacemaker.domain.gallery_index import (
@@ -19,6 +20,7 @@ from spacemaker.domain.media import MediaKind
 
 
 _SCHEMA_VERSION = 2
+_T = TypeVar("_T")
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS gallery_items (
@@ -58,75 +60,86 @@ def _day_bounds(year: int, month: int, day: int) -> tuple[float, float]:
 
 
 class SqliteGalleryIndex:
-	def __init__(self) -> None:
-		self._connections: dict[str, sqlite3.Connection] = {}
-		# Reentrant: query methods hold this for their whole body (including the _connect()
-		# call), which serializes access to sqlite3.Connection objects across threads —
-		# required because concurrent execute() calls on the same connection from different
-		# threads raise sqlite3.InterfaceError, even with check_same_thread=False.
-		self._lock = threading.RLock()
+	"""Async gallery index backed by aiosqlite.
+
+	Connections are opened per operation (no cross-loop cache) so the same
+	adapter instance can be used from the ASGI loop and from helper-thread
+	``asyncio.run`` bridges without loop-affinity errors.
+	"""
 
 	def db_path(self, library_root: str) -> Path:
 		return Path(library_root) / ".index.sqlite"
 
-	def _connect(self, library_root: str) -> sqlite3.Connection:
-		with self._lock:
-			conn = self._connections.get(library_root)
-			if conn is not None:
-				return conn
-			conn = self._open(library_root)
-			self._connections[library_root] = conn
-			return conn
-
-	def _open(self, library_root: str) -> sqlite3.Connection:
+	async def _open(self, library_root: str) -> aiosqlite.Connection:
 		db_path = self.db_path(library_root)
 		db_path.parent.mkdir(parents=True, exist_ok=True)
-		return self._open_and_ensure_schema(db_path)
+		return await self._open_and_ensure_schema(db_path)
 
-	def _open_and_ensure_schema(self, db_path: Path) -> sqlite3.Connection:
-		conn = sqlite3.connect(str(db_path), check_same_thread=False)
-		self._enable_wal(conn)
-		if self._schema_is_usable(conn):
+	async def _open_and_ensure_schema(self, db_path: Path) -> aiosqlite.Connection:
+		conn = await aiosqlite.connect(str(db_path))
+		await self._enable_wal(conn)
+		if await self._schema_is_usable(conn):
 			return conn
-		# Derived cache: on corruption/version mismatch, drop and rebuild rather than migrate.
-		conn.close()
+		await conn.close()
 		db_path.unlink(missing_ok=True)
-		conn = sqlite3.connect(str(db_path), check_same_thread=False)
-		self._enable_wal(conn)
-		self._create_schema(conn)
+		conn = await aiosqlite.connect(str(db_path))
+		await self._enable_wal(conn)
+		await self._create_schema(conn)
 		return conn
 
-	def _enable_wal(self, conn: sqlite3.Connection) -> None:
+	async def _enable_wal(self, conn: aiosqlite.Connection) -> None:
 		try:
-			conn.execute("PRAGMA journal_mode=WAL")
-		except sqlite3.DatabaseError:
+			await conn.execute("PRAGMA journal_mode=WAL")
+		except aiosqlite.DatabaseError:
 			pass
 
-	def _schema_is_usable(self, conn: sqlite3.Connection) -> bool:
+	async def _schema_is_usable(self, conn: aiosqlite.Connection) -> bool:
 		try:
-			version = conn.execute("PRAGMA user_version").fetchone()[0]
-		except sqlite3.DatabaseError:
+			cursor = await conn.execute("PRAGMA user_version")
+			row = await cursor.fetchone()
+			version = 0 if row is None else int(row[0])
+		except aiosqlite.DatabaseError:
 			return False
 		if version == 0:
-			self._create_schema(conn)
+			await self._create_schema(conn)
 			return True
 		if version != _SCHEMA_VERSION:
 			return False
 		try:
-			conn.execute("SELECT COUNT(*) FROM gallery_items")
-		except sqlite3.DatabaseError:
+			await conn.execute("SELECT COUNT(*) FROM gallery_items")
+		except aiosqlite.DatabaseError:
 			return False
 		return True
 
-	def _create_schema(self, conn: sqlite3.Connection) -> None:
-		conn.executescript(_SCHEMA_SQL)
-		conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
-		conn.commit()
+	async def _create_schema(self, conn: aiosqlite.Connection) -> None:
+		await conn.executescript(_SCHEMA_SQL)
+		await conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+		await conn.commit()
 
-	def _row_from_record(
-		self,
-		record: tuple[str, float, str, float, int, str, str, int | None, int | None, float | None, str],
-	) -> GalleryIndexRow:
+	async def _with_conn(self, library_root: str, body: Callable[[aiosqlite.Connection], Awaitable[_T]]) -> _T:
+		conn = await self._open(library_root)
+		try:
+			return await body(conn)
+		finally:
+			await conn.close()
+
+	def _row_from_record(self, record: Sequence[object]) -> GalleryIndexRow:
+		row = cast(
+			tuple[
+				str,
+				float,
+				str,
+				float,
+				int,
+				str | None,
+				str | None,
+				int | None,
+				int | None,
+				float | None,
+				str | None,
+			],
+			tuple(record),
+		)
 		(
 			relative_path,
 			captured_at,
@@ -139,7 +152,7 @@ class SqliteGalleryIndex:
 			height,
 			duration_seconds,
 			gps,
-		) = record
+		) = row
 		return GalleryIndexRow(
 			relative_path=relative_path,
 			captured_at=from_epoch_seconds(captured_at),
@@ -154,82 +167,88 @@ class SqliteGalleryIndex:
 			gps=gps or "",
 		)
 
-	def snapshot_stats(self, library_root: str) -> dict[str, FileStat]:
-		with self._lock:
-			conn = self._connect(library_root)
-			rows = conn.execute("SELECT relative_path, mtime, size FROM gallery_items").fetchall()
+	async def snapshot_stats(self, library_root: str) -> dict[str, FileStat]:
+		async def body(conn: aiosqlite.Connection) -> dict[str, FileStat]:
+			cursor = await conn.execute("SELECT relative_path, mtime, size FROM gallery_items")
+			rows = await cursor.fetchall()
 			return {relative_path: FileStat(mtime=mtime, size=size) for relative_path, mtime, size in rows}
 
-	def apply_sync(self, library_root: str, *, upserts: list[GalleryIndexRow], removed: list[str]) -> None:
-		with self._lock:
-			conn = self._connect(library_root)
-			with conn:
-				if upserts:
-					conn.executemany(
-						"INSERT INTO gallery_items ("
-						"relative_path, captured_at, kind, mtime, size, "
-						"camera_make, camera_model, width, height, duration_seconds, gps"
-						") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-						"ON CONFLICT(relative_path) DO UPDATE SET "
-						"captured_at = excluded.captured_at, kind = excluded.kind, "
-						"mtime = excluded.mtime, size = excluded.size, "
-						"camera_make = excluded.camera_make, camera_model = excluded.camera_model, "
-						"width = excluded.width, height = excluded.height, "
-						"duration_seconds = excluded.duration_seconds, gps = excluded.gps",
-						[
-							(
-								row.relative_path,
-								to_epoch_seconds(row.captured_at),
-								row.kind.value,
-								row.mtime,
-								row.size,
-								row.camera_make,
-								row.camera_model,
-								row.width,
-								row.height,
-								row.duration_seconds,
-								row.gps,
-							)
-							for row in upserts
-						],
-					)
-				if removed:
-					conn.executemany(
-						"DELETE FROM gallery_items WHERE relative_path = ?",
-						[(relative_path,) for relative_path in removed],
-					)
+		return await self._with_conn(library_root, body)
 
-	def remove(self, library_root: str, relative_path: str) -> None:
-		with self._lock:
-			conn = self._connect(library_root)
-			with conn:
-				conn.execute("DELETE FROM gallery_items WHERE relative_path = ?", (relative_path,))
+	async def apply_sync(self, library_root: str, *, upserts: list[GalleryIndexRow], removed: list[str]) -> None:
+		async def body(conn: aiosqlite.Connection) -> None:
+			if upserts:
+				await conn.executemany(
+					"INSERT INTO gallery_items ("
+					"relative_path, captured_at, kind, mtime, size, "
+					"camera_make, camera_model, width, height, duration_seconds, gps"
+					") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+					"ON CONFLICT(relative_path) DO UPDATE SET "
+					"captured_at = excluded.captured_at, kind = excluded.kind, "
+					"mtime = excluded.mtime, size = excluded.size, "
+					"camera_make = excluded.camera_make, camera_model = excluded.camera_model, "
+					"width = excluded.width, height = excluded.height, "
+					"duration_seconds = excluded.duration_seconds, gps = excluded.gps",
+					[
+						(
+							row.relative_path,
+							to_epoch_seconds(row.captured_at),
+							row.kind.value,
+							row.mtime,
+							row.size,
+							row.camera_make,
+							row.camera_model,
+							row.width,
+							row.height,
+							row.duration_seconds,
+							row.gps,
+						)
+						for row in upserts
+					],
+				)
+			if removed:
+				await conn.executemany(
+					"DELETE FROM gallery_items WHERE relative_path = ?",
+					[(relative_path,) for relative_path in removed],
+				)
+			await conn.commit()
 
-	def get(self, library_root: str, relative_path: str) -> GalleryIndexRow | None:
-		with self._lock:
-			conn = self._connect(library_root)
-			record = conn.execute(
+		await self._with_conn(library_root, body)
+
+	async def remove(self, library_root: str, relative_path: str) -> None:
+		async def body(conn: aiosqlite.Connection) -> None:
+			await conn.execute("DELETE FROM gallery_items WHERE relative_path = ?", (relative_path,))
+			await conn.commit()
+
+		await self._with_conn(library_root, body)
+
+	async def get(self, library_root: str, relative_path: str) -> GalleryIndexRow | None:
+		async def body(conn: aiosqlite.Connection) -> GalleryIndexRow | None:
+			cursor = await conn.execute(
 				_SELECT_ITEMS + " WHERE relative_path = ?",
 				(relative_path,),
-			).fetchone()
+			)
+			record = await cursor.fetchone()
 			return None if record is None else self._row_from_record(record)
 
-	def page(self, library_root: str, *, cursor: GalleryCursor | None, limit: int) -> GalleryPage:
-		with self._lock:
-			conn = self._connect(library_root)
+		return await self._with_conn(library_root, body)
+
+	async def page(self, library_root: str, *, cursor: GalleryCursor | None, limit: int) -> GalleryPage:
+		async def body(conn: aiosqlite.Connection) -> GalleryPage:
 			if cursor is None:
-				records = conn.execute(
+				query = await conn.execute(
 					_SELECT_ITEMS + " ORDER BY captured_at DESC, relative_path DESC LIMIT ?",
 					(limit + 1,),
-				).fetchall()
+				)
 			else:
 				ts = to_epoch_seconds(cursor.captured_at)
-				records = conn.execute(
+				query = await conn.execute(
 					_SELECT_ITEMS + " "
 					"WHERE (captured_at < ?) OR (captured_at = ? AND relative_path < ?) "
 					"ORDER BY captured_at DESC, relative_path DESC LIMIT ?",
 					(ts, ts, cursor.relative_path, limit + 1),
-				).fetchall()
+				)
+			records = list(await query.fetchall())
 			page_records = records[:limit]
 			next_cursor = None
 			if len(records) > limit:
@@ -238,63 +257,72 @@ class SqliteGalleryIndex:
 			items = tuple(self._row_from_record(record).as_item() for record in page_records)
 			return GalleryPage(items=items, next_cursor=next_cursor)
 
-	def days_with_media(self, library_root: str, year: int, month: int) -> list[int]:
-		with self._lock:
-			conn = self._connect(library_root)
+		return await self._with_conn(library_root, body)
+
+	async def days_with_media(self, library_root: str, year: int, month: int) -> list[int]:
+		async def body(conn: aiosqlite.Connection) -> list[int]:
 			start, end = _month_bounds(year, month)
-			records = conn.execute(
+			cursor = await conn.execute(
 				"SELECT captured_at FROM gallery_items WHERE captured_at >= ? AND captured_at < ?",
 				(start, end),
-			).fetchall()
+			)
+			records = await cursor.fetchall()
 			return sorted({from_epoch_seconds(record[0]).day for record in records})
 
-	def items_for_day(self, library_root: str, year: int, month: int, day: int) -> list[GalleryItem]:
-		with self._lock:
-			conn = self._connect(library_root)
+		return await self._with_conn(library_root, body)
+
+	async def items_for_day(self, library_root: str, year: int, month: int, day: int) -> list[GalleryItem]:
+		async def body(conn: aiosqlite.Connection) -> list[GalleryItem]:
 			start, end = _day_bounds(year, month, day)
-			records = conn.execute(
+			cursor = await conn.execute(
 				_SELECT_ITEMS + " "
 				"WHERE captured_at >= ? AND captured_at < ? "
 				"ORDER BY captured_at DESC, relative_path DESC",
 				(start, end),
-			).fetchall()
+			)
+			records = await cursor.fetchall()
 			return [self._row_from_record(record).as_item() for record in records]
 
-	def neighbor(
+		return await self._with_conn(library_root, body)
+
+	async def neighbor(
 		self, library_root: str, relative_path: str, *, direction: Literal["prev", "next"]
 	) -> GalleryItem | None:
-		with self._lock:
-			conn = self._connect(library_root)
-			current = conn.execute(
+		async def body(conn: aiosqlite.Connection) -> GalleryItem | None:
+			current_cursor = await conn.execute(
 				"SELECT captured_at FROM gallery_items WHERE relative_path = ?", (relative_path,)
-			).fetchone()
+			)
+			current = await current_cursor.fetchone()
 			if current is None:
 				return None
 			captured_at = current[0]
 			if direction == "next":
-				record = conn.execute(
+				query = await conn.execute(
 					_SELECT_ITEMS + " "
 					"WHERE (captured_at < ?) OR (captured_at = ? AND relative_path < ?) "
 					"ORDER BY captured_at DESC, relative_path DESC LIMIT 1",
 					(captured_at, captured_at, relative_path),
-				).fetchone()
+				)
 			else:
-				record = conn.execute(
+				query = await conn.execute(
 					_SELECT_ITEMS + " "
 					"WHERE (captured_at > ?) OR (captured_at = ? AND relative_path > ?) "
 					"ORDER BY captured_at ASC, relative_path ASC LIMIT 1",
 					(captured_at, captured_at, relative_path),
-				).fetchone()
+				)
+			record = await query.fetchone()
 			return None if record is None else self._row_from_record(record).as_item()
 
-	def count(self, library_root: str) -> int:
-		with self._lock:
-			conn = self._connect(library_root)
-			return conn.execute("SELECT COUNT(*) FROM gallery_items").fetchone()[0]
+		return await self._with_conn(library_root, body)
 
-	def close(self, library_root: str) -> None:
-		"""Release the cached connection so the index file can be deleted (Windows)."""
-		with self._lock:
-			conn = self._connections.pop(library_root, None)
-			if conn is not None:
-				conn.close()
+	async def count(self, library_root: str) -> int:
+		async def body(conn: aiosqlite.Connection) -> int:
+			cursor = await conn.execute("SELECT COUNT(*) FROM gallery_items")
+			row = await cursor.fetchone()
+			return 0 if row is None else int(row[0])
+
+		return await self._with_conn(library_root, body)
+
+	async def close(self, library_root: str) -> None:
+		"""No-op for per-operation connections; kept for GalleryIndexPort / ResetLibrary."""
+		_ = library_root

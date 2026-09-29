@@ -2,19 +2,20 @@ _Last updated: 2026-09-29_
 
 ## Branch
 
-`main` (then switching to `cursor/cleaner-code-with-main-2bd1`)
+`cursor/cleaner-code-with-main-2bd1` (draft PR #6 into `main`)
 
 ## Current focus
 
-Saving the codenav/webnav external-project dogfooding fix commit to `main`, then checking out `cursor/cleaner-code-with-main-2bd1` and merging latest `main` into it.
+Scrollbar layout-jump fix ready to smoke; gallery shell-cache fix still awaiting restart smoke.
 
 ## Next steps
 
-- After push: checkout `cursor/cleaner-code-with-main-2bd1`, merge latest `main`, push the feature branch.
-- Consider re-running `webnav_calls.json`/`codenav_calls.json` against another external project besides `srxy` before calling these MCPs release-ready for arbitrary third parties.
-- Open app items remain: ADB browse slowness; Easy mode import issues; native pywebview on Win/macOS.
+1. Hard-reload the desktop shell — confirm no horizontal jump on load.
+2. Restart SpaceMaker (full quit) and smoke gallery — leave "Loading more", tiles show, console clean.
+3. Review / merge draft PR #6 when ready.
 
 ## Just changed
 
-- Rebased dogfooding fixes onto `origin/main` (kept Windows `.cmd` shim resolution + typescript@5 npx pin).
-- Committing: workspace-root cwd fallback, `implementations` type-verify + exclude skip, webnav JS fallback, shared `exclude.py`, outline spans, workspace-relative web index paths.
+- `theme.css`: `html { scrollbar-gutter: stable }`
+- `.app-main` gutter in `shell-layout.css` + `wireframes/app.html`
+- Inline critical CSS in `index.html` head (hide screens / body overflow before linked CSS)

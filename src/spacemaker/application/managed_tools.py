@@ -18,7 +18,7 @@ from spacemaker.bootstrap.paths import (
 	managed_tools_dir,
 	save_components_setup_complete,
 )
-from spacemaker.bootstrap.platform_setup_hints import components_setup_hint
+from spacemaker.bootstrap.platform_setup_hints import ToolStatusHintRow, components_setup_hint
 from spacemaker.domain.managed_tool import ManagedToolStatus, ToolInstallPhase, ToolResolution
 from spacemaker.ports.outbound.tool_installer import ToolInstallerPort
 
@@ -190,7 +190,7 @@ class ManagedToolsService:
 
 	def status_dict(self) -> dict[str, object]:
 		items = self.snapshot()
-		tool_rows = [
+		tool_rows: list[ToolStatusHintRow] = [
 			{
 				"tool_id": item.tool_id,
 				"phase": item.phase.value,

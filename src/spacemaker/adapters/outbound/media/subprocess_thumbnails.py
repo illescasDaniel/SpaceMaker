@@ -66,6 +66,7 @@ class SubprocessThumbnailGenerator:
 		return str((base / relative).resolve())
 
 	def _thumb_image(self, source: Path, dest: Path) -> None:
+		# Fit within THUMB_SIZE×THUMB_SIZE; keep source aspect (no ^ cover / -extent crop).
 		size = str(THUMB_SIZE)
 		self._runner.run(
 			BundledTool.MAGICK,
@@ -79,6 +80,7 @@ class SubprocessThumbnailGenerator:
 		)
 
 	def _thumb_video(self, source: Path, dest: Path) -> None:
+		# First frame, fit-within max edge (same intent as image thumbs; no upscale).
 		size = str(THUMB_SIZE)
 		self._runner.run(
 			BundledTool.FFMPEG,
