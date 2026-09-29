@@ -1,8 +1,8 @@
 import sys
 from pathlib import Path
 
-from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.bootstrap.bundled_tools import BundledTool, bundled_tool_path
+from spacemaker.bootstrap.services.managed_tools import ManagedToolsService
 from spacemaker.domain.managed_tool import ToolResolution
 from spacemaker.ports.outbound.tool_installer import ToolInstallResult
 

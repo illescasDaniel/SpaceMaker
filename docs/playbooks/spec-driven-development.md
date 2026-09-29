@@ -50,6 +50,7 @@ Never batch all phases because the user said “implement the plan” or “comp
 2. **Architecture** — domain + ports → stop for approval  
 3. **Tests** — unit tests from BDD  
 4. **Implementation** — adapters + production UI until green; must match **approved** wireframe  
+5. **Grade** — read-only `code-grader` subagent scores the branch against the spec (see `docs/agent-tooling.md`); no approval gate, fix FAILs (max 2 rounds), show the scorecard  
 
 If layout or behavior changes during implementation, update wireframe and/or spec and **re-approve** before continuing.
 

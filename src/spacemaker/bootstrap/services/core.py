@@ -32,7 +32,6 @@ from spacemaker.application.file_share_manifest import (
 )
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.application.get_gallery_item import GetGalleryItem
-from spacemaker.application.managed_tools import ManagedToolsService
 from spacemaker.application.promote_originals import PromoteOriginalsToProcessed
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
@@ -52,6 +51,7 @@ from spacemaker.bootstrap.paths import (
 )
 from spacemaker.bootstrap.services.jobs import JobsMixin
 from spacemaker.bootstrap.services.lan_sessions import LanSessionMixin
+from spacemaker.bootstrap.services.managed_tools import ManagedToolsService
 from spacemaker.bootstrap.services.repo import repo_root
 from spacemaker.bootstrap.services.snapshots import SnapshotMixin
 from spacemaker.bootstrap.services.usb_browse import UsbBrowseMixin

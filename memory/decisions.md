@@ -2,6 +2,18 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-29 — Move `ManagedToolsService` from `application/` to `bootstrap/services/`
+
+- **Context:** `application/managed_tools.py` imported `spacemaker.bootstrap.{bundled_tools,paths,platform_setup_hints}` (layering violation surfaced by `grade_prechecks.py`). The service is inherently environment-bound (install root, `sys.platform`, bundle/dev-mode probing, on-disk setup marker), so injecting it all would have needed a new outbound port.
+- **Decision:** `git mv` to `bootstrap/services/managed_tools.py` (composition-root layer, may import bootstrap); updated imports in `bootstrap/services/core.py` and `tests/unit/test_managed_tools.py`. No behavior or port changes. A future clean split (port for tool-resolution/setup-marker) needs Phase 2 approval.
+- **Rationale:** Smallest behavior-preserving fix that removes the forbidden imports without a new port.
+
+## 2026-09-29 — SDD Phase 5: independent `code-grader` subagent + mechanical pre-check script
+
+- **Context:** User read about "code grading" (LLM-as-judge) and asked to run it after the `sdd-feature` implementation phase. Chose: subagent (not more tests) with all read-only tools incl. `codenav`/`webnav`; Claude and Cursor each get their own agent file (copy with host-specific syntax, not symlink); mechanical-check script only if reliable.
+- **Decision:** Added Phase 5 to `sdd-feature`: after Phase 4 is green, spawn `code-grader` (`.claude/agents/`, `.cursor/agents/`, identical bodies, drift-tested), fix FAILs (max 2 rounds), show scorecard. Automatic, not an approval gate (read-only). `scripts/quality/grade_prechecks.py` (`uv run task grade-prechecks`) does layering / new-test naming / SPEC structure. Layering hard-fails only on branch-touched files (found 3 pre-existing `application → bootstrap` imports in `managed_tools.py`, warned, not fixed). Scenario→test name matching was tested and **dropped** as too noisy (~60% false "uncovered" on the gallery spec).
+- **Rationale:** A fresh-context reviewer avoids self-grading leniency; the spec is already the rubric. Deterministic checks stay deterministic; judgement stays with the grader.
+
 ## 2026-09-29 — SPEC.md carries four agreed "Design decisions" (success criteria, failure handling, perf/resource budget, trust boundary)
 
 - **Context:** User read that a useful design doc pins four decisions (success criteria, failure handling, cost/latency budget, trust boundary) and asked to adopt them for SDD, established together per feature. SpaceMaker specs covered these only implicitly and inconsistently.

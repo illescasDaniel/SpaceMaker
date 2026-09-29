@@ -455,6 +455,21 @@ correctly on any clone). To recreate manually on Windows, use
 `New-Item -ItemType SymbolicLink`, which can mistype it as a file symlink
 (untraversable by `cd`/Explorer) even for a valid directory target.
 
+## Subagents — `code-grader` (SDD Phase 5)
+
+`code-grader` is an independent, read-only reviewer that scores finished work against its approved `SPEC.md` (spec conformance with a scenario→test→code map, the four design decisions, hexagonal layering, test quality, UI fidelity, scope discipline, conventions) and returns a PASS / NEEDS WORK scorecard with `path:line` evidence. `sdd-feature` spawns it after Phase 4 is green; the implementer fixes findings (max 2 rounds) and shows the scorecard to the user.
+
+It is a hand-maintained pair like the rules, with **identical bodies and host-specific frontmatter**:
+
+| File | Host | Read-only enforced by | MCP access |
+|------|------|-----------------------|------------|
+| `.claude/agents/code-grader.md` | Claude Code | `tools:` allow-list (no Edit/Write) | `mcp__codenav`, `mcp__webnav` listed explicitly |
+| `.cursor/agents/code-grader.md` | Cursor | `readonly: true` | inherited from the parent |
+
+`tests/unit/test_agent_context.py` enforces matching bodies/name/description and the read-only settings. Edit both copies together.
+
+The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-prechecks -- --spec specs/<f>/SPEC.md`): hexagonal import guard (hard-fails only for files touched on the branch; legacy violations warn), naming of test functions added on the branch, and SPEC structure (wireframe link resolves, four design decisions answered, every scenario has Given/When/Then). Scenario→test **name matching was tried and dropped**: test names are freeform, and it flagged ~60% of the gallery spec's scenarios as uncovered. The grader maps them by reading instead.
+
 ## Windows / tooling gotchas
 
 - An earlier `docs/architecture.md` (lowercase) collided case-insensitively

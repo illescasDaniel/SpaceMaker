@@ -143,6 +143,7 @@ unresolved-import = "ignore"
 [tool.taskipy.tasks]
 sync-dev = { cmd = "uv sync --group dev", help = "install Python dev dependencies" }
 checks = { cmd = "python scripts/quality/checks.py", help = "quality gate (pass flags after --)" }
+grade-prechecks = { cmd = "python scripts/quality/grade_prechecks.py", help = "mechanical code-grader pre-checks (pass --spec specs/<feature>/SPEC.md after --)" }
 format = { cmd = "uv run ruff check --fix src tests && uv run ruff format src tests", help = "format Python" }
 spacemaker = { cmd = "uv run spacemaker", help = "launch SpaceMaker desktop (pywebview + server)" }
 spacemaker-server = { cmd = "uv run spacemaker --server-only", help = "run API/UI in browser only" }

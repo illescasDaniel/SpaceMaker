@@ -21,6 +21,7 @@ Despite the small current footprint, **always act as if this project will grow l
 | **2 — Architecture** | Domain types and ports in `src/spacemaker/domain/`, `ports/` | **Stop.** Ask for approval before tests/adapters. |
 | **3 — Tests** | Unit tests from BDD (`tests/unit/`); implementations may be stubs | Run tests; fix as needed. |
 | **4 — Implementation** | Use cases, adapters, FastAPI/Web UI, desktop | Until tests pass. Must match approved wireframe unless spec is re-approved. |
+| **5 — Grade** | Read-only `code-grader` subagent scores the branch against the spec | Automatic (no approval); fix FAILs, max 2 rounds, show scorecard. |
 
 **One gate per explicit approval** — do not batch Phase 0→4 in one run, even if todos list all phases. After the wireframe, end the turn and wait. If Phase 4 reveals a spec flaw, rewrite the spec (Phase 1), get re-approval, then continue — don't patch around a bad spec.
 
@@ -70,6 +71,8 @@ Both tools read this file natively. Always-on guidance stays here; anything that
 ## Skills
 
 Project workflows: `.cursor/skills/{sdd-feature,agent-memory,fast-tests}/`, mirrored at `.claude/skills/` via a symlink. User-invoked only: `/save-changes`, `/save-pr-changes`, `/apply-worktree`, `/delete-worktree`, `/new-worktree`.
+
+Subagents: `code-grader` (Phase 5) lives as a hand-maintained pair, `.cursor/agents/code-grader.md` and `.claude/agents/code-grader.md` (host-specific frontmatter, identical body).
 
 ## Source of truth
 

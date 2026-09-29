@@ -89,6 +89,17 @@ Target use cases and domain — not FastAPI routes in unit tests.
 
 Adapters and production UI until tests pass. Update `memory/` at milestones (see `agent-memory` skill).
 
+## Phase 5 — Grade
+
+Runs automatically once Phase 4 is green (`uv run task checks`); it only reads code, so it is **not** a new approval gate.
+
+1. Spawn the read-only **`code-grader`** subagent (`.claude/agents/`, `.cursor/agents/`) with the spec path(s) and diff base (default `main`). Do not grade your own work; the grader must start from a fresh context.
+2. Fix every FAIL (and PARTIAL where cheap), re-run checks, and re-spawn the grader. **Max 2 fix rounds**; if it still says NEEDS WORK, stop and report the remaining findings.
+3. If a finding shows the spec itself is wrong, follow the spec-flaw rule (rewrite spec, get re-approval), don't patch around it.
+4. Show the user the final scorecard verbatim (verdict, table, unresolved findings). The user makes the final call.
+
+Mechanical part only: `uv run task grade-prechecks -- --spec specs/<feature>/SPEC.md` (layering, new-test naming, spec structure). The grader runs it itself.
+
 ## Spec template
 
 Follow structure in `docs/playbooks/spec-driven-development.md` (including `## Design decisions`). Conversion behavior must cite `docs/playbooks/SpaceMaker-adaptations.md`.

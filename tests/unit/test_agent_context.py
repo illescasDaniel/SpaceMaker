@@ -14,6 +14,8 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CURSOR_RULES_DIR = REPO_ROOT / ".cursor" / "rules"
 CLAUDE_RULES_DIR = REPO_ROOT / ".claude" / "rules"
+CURSOR_AGENTS_DIR = REPO_ROOT / ".cursor" / "agents"
+CLAUDE_AGENTS_DIR = REPO_ROOT / ".claude" / "agents"
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 AGENTS_MD_LINE_BUDGET = 130
 
@@ -153,3 +155,44 @@ def test_given_tracked_context_files_when_scanning_then_no_stale_reference_to_de
 
 	# when / then
 	assert not offenders, "\n".join(offenders)
+
+
+def _agent_pairs() -> list[tuple[Path, Path]]:
+	return [(path, CLAUDE_AGENTS_DIR / path.name) for path in sorted(CURSOR_AGENTS_DIR.glob("*.md"))]
+
+
+def test_given_agent_dirs_when_listing_then_every_agent_exists_for_both_hosts():
+	# given
+	cursor_names = {path.name for path in CURSOR_AGENTS_DIR.glob("*.md")}
+	claude_names = {path.name for path in CLAUDE_AGENTS_DIR.glob("*.md")}
+
+	# when / then
+	assert cursor_names, "expected at least one Cursor agent to exist"
+	assert cursor_names == claude_names, f"agent mismatch: cursor={cursor_names} claude={claude_names}"
+
+
+def test_given_an_agent_pair_when_comparing_then_body_name_and_description_match():
+	# given
+	pairs = _agent_pairs()
+
+	# when / then
+	for cursor_path, claude_path in pairs:
+		cursor_meta, cursor_body = _split_frontmatter(cursor_path.read_text(encoding="utf-8"))
+		claude_meta, claude_body = _split_frontmatter(claude_path.read_text(encoding="utf-8"))
+
+		assert cursor_body == claude_body, f"agent body drifted between {cursor_path} and {claude_path}"
+		assert cursor_meta["name"] == claude_meta["name"] == cursor_path.stem
+		assert cursor_meta["description"] == claude_meta["description"]
+
+
+def test_given_the_code_grader_when_checking_access_then_it_is_read_only_on_both_hosts():
+	# given
+	cursor_meta, _ = _split_frontmatter((CURSOR_AGENTS_DIR / "code-grader.md").read_text(encoding="utf-8"))
+	claude_meta, _ = _split_frontmatter((CLAUDE_AGENTS_DIR / "code-grader.md").read_text(encoding="utf-8"))
+
+	# when
+	claude_tools = {tool.strip() for tool in claude_meta["tools"].split(",")}
+
+	# then
+	assert cursor_meta["readonly"] is True
+	assert not claude_tools & {"Edit", "Write", "NotebookEdit"}
