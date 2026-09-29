@@ -4,6 +4,7 @@ Open items only. Finished work: `memory/archive.md`.
 
 ## SpaceMaker app
 
+- [x] **Stop 304 flood on /thumbs/** (2026-09-29) — `loadGallery()` clears and re-creates img elements on each navigation; `no-cache` forced conditional GET revalidation for every visible thumbnail. Fix: `THUMB_CACHE_HEADERS` → `max-age=300, must-revalidate`; ETag/304 route logic preserved for post-expiry revalidation. Self-heals within 5 min after thumbnail changes, or instantly via Clear browser cache.
 - [x] **Quality gate on main** (2026-09-29) — ruff format in `ui_shell.py`; renamed colliding `mcp-servers/*/tests/test_server.py` → unique basenames; media convert unit tests disable PATH fallback so system `avifenc` cannot beat stubbed tool roots. `uv run task checks` green (481 passed).
 - [x] **Desktop smooth wheel scrolling** (2026-09-29) — Qt WebEngine gets `--enable-smooth-scrolling` (user A/B-tested on Linux; felt closest to Brave). `qt_webengine_gpu_flags.py` → `qt_webengine_chromium_flags.py`, merging defaults with user-set `QTWEBENGINE_CHROMIUM_FLAGS` (opt-out via `--disable-smooth-scrolling`). Tests updated.
 - [x] **Load-time scrollbar layout jump** (2026-09-29) — Horizontal jump when CSS arrived / scrollbar appeared. Fix: `scrollbar-gutter: stable` on `html` + `.app-main`; inline critical CSS in `index.html` head (hide `.screen` / body overflow) before linked stylesheets to avoid FOUC. Wireframe `.app-main` matched. Awaiting hard-reload smoke.

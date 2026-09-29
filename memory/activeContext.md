@@ -2,25 +2,20 @@ _Last updated: 2026-09-29_
 
 ## Branch
 
-`claude/web-scroll-behavior-1fc52d` (merged latest `main` quality-gate fixes; all checks green)
+`claude/thumbnail-304-requests-5afc35`
 
 ## Current focus
 
-Smooth wheel scrolling feature complete. Merged main's quality-gate fixes (ruff format, MCP test names, PATH isolation). All 483 pytest tests pass.
+Stop 304 flood on /thumbs/ — complete.
 
 ## Next steps
 
-Ready for PR to main. User-verified smooth scrolling on Linux (feels like Brave). Quality checks pass.
+Ready to apply to main via /apply-worktree.
 
 ## Just changed
 
-- Renamed `qt_webengine_gpu_flags.py` → `qt_webengine_chromium_flags.py`
-- Expanded to merge `--enable-smooth-scrolling` flag (all platforms where Qt WebEngine is used)
-- Updated `desktop.py` to call `install_qt_webengine_chromium_flags()`
-- Updated tests (5 tests, all pass)
-- Merged `main`: ruff format in `ui_shell.py`, unique MCP test names, PATH-isolated convert tests
-- Updated `memory/decisions.md` and `memory/progress.md`
+- `src/spacemaker/bootstrap/ui_shell.py`: changed `THUMB_CACHE_HEADERS` from `no-cache` to `max-age=300, must-revalidate`. Root cause: `loadGallery()` clears and re-creates all `<img>` elements on each navigation; `no-cache` forced a conditional GET (304) per visible thumbnail every time.
 
 ## Open items
 
-None at this time. Branch ready to apply and PR.
+None. Branch ready to apply.
