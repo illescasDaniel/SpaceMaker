@@ -1,21 +1,23 @@
-_Last updated: 2026-09-29_
+_Last updated: 2026-09-29 (applied `claude/mcp-tools-cache-441056` to `main`)_
 
 ## Branch
 
-`claude/code-grading-sdd-feature-14ecc1`
+`main` (merged `claude/mcp-tools-cache-441056`, on top of `claude/code-grading-sdd-feature-14ecc1`).
 
 ## Current focus
 
-Added SDD Phase 5 (`code-grader` subagent + `grade_prechecks.py`). Implemented and tests written; awaiting user review and a first real-feature trial.
+Two threads landed together: SDD Phase 5 (`code-grader` + `grade_prechecks.py`) and the MCP/gallery work below. Gate green after merge.
 
 ## Next steps
 
-Trial `code-grader` on the next real SDD feature (agent files were never spawned; confirm the Cursor agent loads). Other open items in `progress.md` (ADB Browse slowness; Easy mode import; native pywebview hardware smoke).
+- Trial `code-grader` on the next real SDD feature (confirm the Cursor agent loads).
+- Triage `memory/friction/` entries with `status: open` (concrete codenav/webnav example calls in AGENTS.md; maybe a `query` alias on `selector`/`css_var`).
+- Real-app check of the gallery delete animation on the user's library.
+- Older open items in `progress.md` (ADB Browse slowness; Easy mode import; native pywebview hardware smoke).
 
 ## Just changed
 
-- `.claude/agents/code-grader.md`, `.cursor/agents/code-grader.md`, `scripts/quality/grade_prechecks.py`, `tests/unit/test_grade_prechecks.py`, drift tests in `test_agent_context.py`, `sdd-feature` skill Phase 5, AGENTS/docs/memory. Also moved `managed_tools.py` application→bootstrap/services (layering fix). See `decisions.md` 2026-09-29.
-
-- All 18 `web/src/*.ts` modules typed, `R` registry dropped, `./x.ts` imports; Biome strict rules scoped to `web/src/**/*.ts`; guard-rail test `tests/unit/test_web_typing.py`.
-- ruff covers `mcp-servers`. `main` also renamed the colliding `test_server.py` files; `--import-mode=importlib` remains as a belt-and-braces setting.
-- See `memory/decisions.md` 2026-09-29 for rationale.
+- MCP fixes: `querySelector` indexed; `selector` reports exact-name string literals and labels `[generated]`; inherited `Class.method` via typeHierarchy; `search_symbol` ranks properties last; webnav serves TS; stat-keyed caches.
+- Gallery delete: `removeGalleryItem` fades the tile after the screen fade-in, then removes it in place (no reload/flash). Spec `ui-motion` + wireframe updated.
+- New `memory/friction/` log + AGENTS.md rule.
+- SDD Phase 5 `code-grader`, `managed_tools.py` moved to `bootstrap/services/`, `web/src/*.ts` typing pass (see `decisions.md`).

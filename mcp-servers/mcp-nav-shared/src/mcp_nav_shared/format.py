@@ -186,8 +186,16 @@ def _match_tier(name: str, query: str) -> int:
 	return 4
 
 
+# Property/Field symbols rank after declarations within the same match tier:
+# tsserver reports every `state.foo = x` assignment as its own Property symbol,
+# so a broad query otherwise fills the result cap with repeated assignments and
+# pushes the functions/classes/interfaces an agent is looking for past it.
+_LOW_PRIORITY_KINDS = {7, 8}  # Property, Field
+
+
 def rank_workspace_symbols(symbols: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
-	"""Exact → case-insensitive exact → prefix → substring → other (stable within a tier).
+	"""Exact → case-insensitive exact → prefix → substring → other, with
+	properties/fields after other kinds within a tier (stable otherwise).
 
 	ty's workspace/symbol is fuzzy (`LspClient` also matches long test names
 	containing those letters in order) and returns hits in workspace order, so
@@ -195,7 +203,13 @@ def rank_workspace_symbols(symbols: list[dict[str, Any]], query: str) -> list[di
 	"""
 	if not query:
 		return list(symbols)
-	return sorted(symbols, key=lambda sym: _match_tier(str(sym.get("name") or ""), query))
+	return sorted(
+		symbols,
+		key=lambda sym: (
+			_match_tier(str(sym.get("name") or ""), query),
+			sym.get("kind") in _LOW_PRIORITY_KINDS,
+		),
+	)
 
 
 def format_workspace_symbols(

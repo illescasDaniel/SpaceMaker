@@ -238,6 +238,78 @@ function fetchGalleryTimelinePage(): void {
 		})
 		.catch(failLoad);
 }
+/** Duration of a CSS time token such as `200ms` / `0.2s` / `0.001ms`, in ms (0 if unparseable). */
+function cssTimeToMs(value: string): number {
+	const token = value.trim();
+	const n = Number.parseFloat(token);
+	if (Number.isNaN(n)) {
+		return 0;
+	}
+	return token.endsWith("ms") ? n : n * 1000;
+}
+/** Drop a deleted item from the in-memory timeline (and its now-empty month block, if any). */
+function forgetGalleryItem(relativePath: string): void {
+	const blockIndex = S.galleryMonthBlocks.findIndex((b) => b.items.some((i) => i.relative_path === relativePath));
+	const block = S.galleryMonthBlocks[blockIndex];
+	if (!block) {
+		return;
+	}
+	block.items = block.items.filter((i) => i.relative_path !== relativePath);
+	if (block.mounted) {
+		S.galleryMountedTileCount -= 1;
+	}
+	if (block.items.length > 0) {
+		return;
+	}
+	block.el?.remove();
+	block.placeholderEl?.remove();
+	S.galleryMonthBlocks.splice(blockIndex, 1);
+	const next = S.galleryMonthBlocks[blockIndex];
+	if (block.showYear && next && next.year === block.year && !next.showYear) {
+		// The year heading lived on the removed block; hand it to the next month of that year.
+		next.showYear = true;
+		if (next.mounted && next.el) {
+			const rebuilt = buildGalleryMonthBlockElement(next);
+			next.el.replaceWith(rebuilt);
+			next.el = rebuilt;
+		}
+	}
+	if (S.galleryMonthBlocks.length === 0 && !S.galleryHasMore) {
+		showGalleryTimelineMessage("No saved media yet");
+	}
+}
+/**
+ * Remove a just-deleted item from the timeline *in place* — no reload, so there is no blank
+ * flash and the scroll position is untouched. A still-mounted tile fades/shrinks out first
+ * (after the screen's own fade-in, `--dur-base`, or the two fades overlap and the removal goes
+ * unseen); an unmounted one is simply forgotten. Removal never depends on `transitionend`: a
+ * timeout slightly past the fade's `--dur-base` guarantees it (also covers reduced motion,
+ * where `--dur-base` is ~0).
+ */
+function removeGalleryItem(relativePath: string): void {
+	const tile = Array.from(document.querySelectorAll<HTMLElement>("#timeline-view .thumb-link")).find(
+		(el) => el.querySelector("img")?.alt === relativePath,
+	);
+	if (!tile) {
+		forgetGalleryItem(relativePath);
+		return;
+	}
+	let finished = false;
+	const finish = (): void => {
+		if (finished) {
+			return;
+		}
+		finished = true;
+		tile.remove();
+		forgetGalleryItem(relativePath);
+	};
+	const base = cssTimeToMs(getComputedStyle(document.documentElement).getPropertyValue("--dur-base"));
+	window.setTimeout(() => {
+		tile.classList.add("thumb-removing");
+		tile.addEventListener("transitionend", finish, { once: true });
+		window.setTimeout(finish, base + 100);
+	}, base);
+}
 function loadGallery(): void {
 	const host = document.getElementById("timeline-view");
 	if (!host) {
@@ -454,6 +526,7 @@ export {
 	loadGallery,
 	loadServerInfo,
 	remountGalleryMonthBlock,
+	removeGalleryItem,
 	renderCalendarGrid,
 	scheduleGalleryWindowCheck,
 	selectCalendarDay,

@@ -37,6 +37,8 @@ Per-branch project state lives in `memory/` (git-tracked, so it follows the bran
 - `memory/activeContext.md` — focus changes, a blocker is hit, or you're concluding work (log touched files, state, next step).
 - `memory/decisions.md` — a significant technical/structural/dependency decision is made: append with context + decision + rationale (newest first, **never** rewrite history).
 
+- `memory/friction/` — **an agent hits an error, a wrong/misleading/slow MCP result, a lying doc, or needs a workaround**: add one small `YYYY-MM-DD-slug.md` entry right then (template in `memory/friction/README.md`), then keep working. This is the backlog for improving the MCPs, docs and tooling.
+
 Keep `activeContext.md` short — move finished threads to `memory/archive.md` rather than letting it accumulate. Never add worktree cleanup/deletion tasks to tracked memory (per-developer local hygiene, causes merge noise). Commit memory updates at milestones; don't leave the tree permanently dirty. Full protocol, branch-init steps, and merge guidance: `.cursor/skills/agent-memory/SKILL.md`.
 
 ## Orient before editing

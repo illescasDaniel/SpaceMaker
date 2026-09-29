@@ -53,6 +53,8 @@ export type ViewId =
 
 export interface ViewOptions {
 	skipHistory?: boolean;
+	/** Show the gallery without rebuilding the timeline (caller reloads it after its own animation). */
+	skipGalleryReload?: boolean;
 }
 
 /** `{completed, total, percent}` counters shared by every long-running job phase

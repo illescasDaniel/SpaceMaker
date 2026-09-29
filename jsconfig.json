@@ -9,7 +9,6 @@
 	},
 	"include": [
 		"web/src/**/*.ts",
-		"src/spacemaker/adapters/inbound/web/static/**/*.js",
 		"wireframes/**/*.js"
 	]
 }

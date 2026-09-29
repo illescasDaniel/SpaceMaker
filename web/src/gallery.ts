@@ -1,7 +1,7 @@
 import { apiSend } from "./api.ts";
 import { errorMessage, onClick } from "./dom.ts";
 import { shiftGalleryItem, startFriendlyExport, triggerFileDownload } from "./gallery-item.ts";
-import { loadCalendarMonth, shiftCalendarMonth } from "./gallery-timeline.ts";
+import { loadCalendarMonth, loadGallery, removeGalleryItem, shiftCalendarMonth } from "./gallery-timeline.ts";
 import { showView } from "./shell.ts";
 import { S } from "./state.ts";
 
@@ -81,8 +81,16 @@ function bindGalleryUi(): void {
 		}
 		apiSend("DELETE", "/api/gallery/item?path=" + encodeURIComponent(S.galleryItemPath))
 			.then(() => {
+				const deletedPath = S.galleryItemPath;
 				S.galleryItemPath = "";
-				showView("gallery");
+				// Show the grid first, then drop the tile in place (animated). No reload: it would blank
+				// the grid and reset scroll. Only a timeline that was never loaded (deep link) loads fresh.
+				showView("gallery", { skipGalleryReload: true });
+				if (S.galleryMonthBlocks.length === 0) {
+					loadGallery();
+				} else {
+					removeGalleryItem(deletedPath);
+				}
 			})
 			.catch((err: unknown) => {
 				window.alert(errorMessage(err, "Could not delete this file."));

@@ -5,14 +5,16 @@ description: >-
   regenerate) .venv and node_modules from the primary checkout so the
   worktree is immediately usable without re-downloading dependencies. Use
   when the user invokes /new-worktree or asks to start a new worktree/task
-  in isolation.
+  in isolation. Also works from inside an existing worktree (e.g. one the
+  Claude desktop app created): it then only populates .venv/node_modules.
 disable-model-invocation: true
 ---
 
 # New Worktree
 
 Use only when the user explicitly invokes `/new-worktree <task description>` (or clearly asks to start
-a new isolated worktree for a task).
+a new isolated worktree for a task), **or** invokes `/new-worktree` from inside an existing non-primary
+worktree to get its dependencies (see "Already inside a worktree" below).
 
 ## Goal
 
@@ -27,6 +29,15 @@ worktree.
 
 Run from the **primary checkout only**. If this session is already inside a non-primary worktree, skip
 this step and go straight to Step 2 (treat the invocation as "sync this worktree's `.venv`/`node_modules`").
+Detect it with `git rev-parse --git-dir` vs `--git-common-dir` (they differ inside a linked worktree) or
+by comparing `git rev-parse --show-toplevel` to the first entry of `git worktree list`. Create no branch
+and no worktree, and do not call `EnterWorktree`.
+
+**Already inside a worktree.** Because this skill is `disable-model-invocation`, it only runs when the
+user types `/new-worktree`. Typed with no task text inside an existing worktree (such as one the Claude
+desktop app made), it means "Step 2 only": run `copy-venv.sh` and report. Typed with a task description
+inside a worktree, still do Step 2 only for the current worktree, and tell the user no new worktree was
+created (they should run it from the primary checkout for that).
 
 1. Derive a slug from the user's task text: lowercase, non-alphanumeric → `-`, collapse/trim repeated
    dashes, cap at ~40 chars (e.g. "fix gallery thumbnails" → `fix-gallery-thumbnails`).
@@ -57,7 +68,10 @@ Run the helper script from the new worktree root:
 bash .cursor/skills/new-worktree/scripts/copy-venv.sh
 ```
 
-Add `--force` if the worktree already has a `.venv`/`node_modules` you want to replace:
+An existing `.venv`/`node_modules` is inspected, not blindly refused: a `.venv` is kept only if
+`spacemaker` imports from this worktree's `src/` and `pytest --version` runs; a valid one is skipped, a
+broken/foreign one (e.g. unrewritten paths) is replaced by a fresh copy. `node_modules` is kept if
+`@biomejs/biome` is present. Add `--force` to always replace both:
 
 ```bash
 bash .cursor/skills/new-worktree/scripts/copy-venv.sh --force
@@ -65,8 +79,9 @@ bash .cursor/skills/new-worktree/scripts/copy-venv.sh --force
 
 What it does:
 
-- Auto-detects the primary checkout from `git worktree list` (the entry under neither
-  `~/.cursor/worktrees/` nor `.claude/worktrees/`). No-ops if run from the primary itself.
+- Auto-detects the primary checkout as the first entry of `git worktree list` (git always lists the
+  main working tree first, even when the worktree lives under `<primary>/.claude/worktrees/`). No-ops if
+  run from the primary itself.
 - **`.venv`**: mirrors it via `robocopy` (Windows) or `rsync` (Linux/macOS) if the primary has one,
   runs `rewrite_venv_paths.py` to fix shebangs / editable `.pth` files / `direct_url.json` / Windows
   trampolines for every `uv` workspace member (`spacemaker`, `codenav-mcp`, `webnav-mcp`,
@@ -90,10 +105,11 @@ what failed).
 | Situation | What happens |
 |-----------|--------------|
 | Invoked from inside a worktree, not the primary checkout | Step 1 is skipped; Step 2 runs in place to (re)sync that worktree's `.venv`/`node_modules`. |
-| Destination already has `.venv`/`node_modules` | `copy-venv.sh` warns and exits unless `--force` is passed. |
+| Destination already has a valid `.venv`/`node_modules` | `copy-venv.sh` skips them (no work); `--force` replaces them. |
+| Destination has a broken/foreign `.venv` or incomplete `node_modules` | `copy-venv.sh` replaces it with a fresh copy + path rewrite. |
 | Primary checkout has no `.venv` yet | `copy-venv.sh` regenerates with `uv sync --group dev` instead of copying. |
 | Primary checkout has no `node_modules` yet | `copy-venv.sh` regenerates with `npm ci` instead of copying. |
-| Primary checkout not found in `git worktree list` | `copy-venv.sh` aborts with a diagnostic message. |
+| `git worktree list` yields no entry | `copy-venv.sh` aborts with a diagnostic message. |
 | `rsync` missing (Linux/macOS) | `copy-venv.sh` aborts and asks to install `rsync`. |
 | Shebang / `spacemaker.__file__` still points at the primary after rewrite | `copy-venv.sh` exits non-zero — do not treat the copy as successful. |
 

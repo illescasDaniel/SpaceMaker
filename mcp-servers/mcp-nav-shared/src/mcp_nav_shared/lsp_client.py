@@ -20,6 +20,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Max seconds to wait for a push-only server's publishDiagnostics after a sync.
+PUSH_DIAGNOSTICS_TIMEOUT = 5.0
+
 
 class NotStartedError(RuntimeError):
 	pass
@@ -51,11 +54,22 @@ class LspClient:
 	workspace_root: Path
 	command: list[str]
 	language_id: str
+	# Per-suffix override of `language_id` for servers that handle several
+	# languages (e.g. typescript-language-server: `.ts` -> "typescript").
+	language_ids: dict[str, str] = field(default_factory=dict)
 	_proc: asyncio.subprocess.Process | None = field(default=None, init=False)
 	_next_id: int = field(default=0, init=False)
 	_pending: dict[int, asyncio.Future] = field(default_factory=dict, init=False)
 	_diagnostics: dict[str, list[dict[str, Any]]] = field(default_factory=dict, init=False)
 	_open_files: dict[str, OpenFile] = field(default_factory=dict, init=False)
+	# uri -> event set by the first publishDiagnostics after the document was
+	# last synced; lets push-only servers (typescript-language-server has no
+	# pull support) be awaited instead of answered from a stale/empty cache.
+	_diag_events: dict[str, asyncio.Event] = field(default_factory=dict, init=False)
+	# uri -> (document version, documentSymbol result). documentSymbol depends
+	# only on the one file's text, and `ensure_open` bumps the version exactly
+	# when that text changes (stat mtime/size), so a version match means fresh.
+	_symbol_cache: dict[str, tuple[int, list[dict[str, Any]]]] = field(default_factory=dict, init=False)
 	_reader_task: asyncio.Task | None = field(default=None, init=False)
 	_stderr_task: asyncio.Task | None = field(default=None, init=False)
 	_started: bool = field(default=False, init=False)
@@ -93,6 +107,7 @@ class LspClient:
 						"publishDiagnostics": {},
 						"documentSymbol": {"hierarchicalDocumentSymbolSupport": True},
 						"callHierarchy": {},
+						"typeHierarchy": {},
 					},
 					"workspace": {"workspaceFolders": True},
 				},
@@ -178,6 +193,9 @@ class LspClient:
 			uri = params.get("uri")
 			if uri:
 				self._diagnostics[uri] = params.get("diagnostics", [])
+				event = self._diag_events.get(uri)
+				if event is not None:
+					event.set()
 
 	def _send(self, obj: dict[str, Any]) -> None:
 		proc = self._running_proc
@@ -216,6 +234,9 @@ class LspClient:
 			p = self.workspace_root / p
 		return p.resolve()
 
+	def _language_id_for(self, path: Path) -> str:
+		return self.language_ids.get(path.suffix.lower(), self.language_id)
+
 	async def ensure_open(self, file_path: str) -> str:
 		abs_path = self._to_uri(file_path)
 		uri = abs_path.as_uri()
@@ -224,13 +245,14 @@ class LspClient:
 		if known is not None and known.mtime_ns == stat.st_mtime_ns and known.size == stat.st_size:
 			return uri
 		text = abs_path.read_text(encoding="utf-8")
+		self._diag_events[uri] = asyncio.Event()
 		if known is None:
 			self._notify(
 				"textDocument/didOpen",
 				{
 					"textDocument": {
 						"uri": uri,
-						"languageId": self.language_id,
+						"languageId": self._language_id_for(abs_path),
 						"version": 1,
 						"text": text,
 					}
@@ -294,8 +316,15 @@ class LspClient:
 		try:
 			resp = await self._request("textDocument/diagnostic", {"textDocument": {"uri": uri}})
 		except LspRequestError:
-			# HTML/CSS servers often only push publishDiagnostics and reject pull.
-			return cached
+			# HTML/CSS/TS servers often only push publishDiagnostics and reject
+			# pull. If the document was just (re)synced, the push for this
+			# version hasn't necessarily arrived yet: wait for it rather than
+			# report the previous version's (or an empty) result.
+			event = self._diag_events.get(uri)
+			if event is not None and not event.is_set():
+				with contextlib.suppress(TimeoutError):
+					await asyncio.wait_for(event.wait(), timeout=PUSH_DIAGNOSTICS_TIMEOUT)
+			return self._diagnostics.get(uri, [])
 		result = resp.get("result") or {}
 		if result.get("kind") == "unchanged":
 			return cached
@@ -308,8 +337,14 @@ class LspClient:
 
 	async def document_symbol(self, file_path: str) -> list[dict[str, Any]]:
 		uri = await self.ensure_open(file_path)
+		version = self._open_files[uri].version
+		hit = self._symbol_cache.get(uri)
+		if hit is not None and hit[0] == version:
+			return hit[1]
 		resp = await self._request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
-		return resp.get("result") or []
+		result = resp.get("result") or []
+		self._symbol_cache[uri] = (version, result)
+		return result
 
 	async def prepare_call_hierarchy(self, file_path: str, line: int, column: int) -> list[dict[str, Any]]:
 		uri = await self.ensure_open(file_path)
@@ -321,6 +356,18 @@ class LspClient:
 
 	async def incoming_calls(self, item: dict[str, Any]) -> list[dict[str, Any]]:
 		resp = await self._request("callHierarchy/incomingCalls", {"item": item})
+		return resp.get("result") or []
+
+	async def prepare_type_hierarchy(self, file_path: str, line: int, column: int) -> list[dict[str, Any]]:
+		uri = await self.ensure_open(file_path)
+		resp = await self._request(
+			"textDocument/prepareTypeHierarchy",
+			{"textDocument": {"uri": uri}, "position": {"line": line - 1, "character": column - 1}},
+		)
+		return resp.get("result") or []
+
+	async def supertypes(self, item: dict[str, Any]) -> list[dict[str, Any]]:
+		resp = await self._request("typeHierarchy/supertypes", {"item": item})
 		return resp.get("result") or []
 
 	# -- scratch (in-memory-only) documents -----------------------------------
@@ -347,6 +394,8 @@ class LspClient:
 		self._notify("textDocument/didClose", {"textDocument": {"uri": uri}})
 		self._open_files.pop(uri, None)
 		self._diagnostics.pop(uri, None)
+		# Reopening restarts versions at 1, which could falsely match an old entry.
+		self._symbol_cache.pop(uri, None)
 
 	async def pull_diagnostics(self, uri: str) -> list[dict[str, Any]]:
 		"""Pull diagnostics for an already-open `uri` directly, with no cache

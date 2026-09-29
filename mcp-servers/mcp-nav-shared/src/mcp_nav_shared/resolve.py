@@ -226,22 +226,71 @@ async def _resolve_dotted(
 	members = await client.document_symbol(rel_path)
 	if is_hierarchical_document_symbols(members):
 		node = _find_member_node(members, container.name, member_name)
-		if node is None:
-			raise _not_found(query)
-		return _resolved_from_hierarchical_node(member_name, node, container.uri)
-	# Flat `SymbolInformation`: no nesting, so match by name within the
-	# container's own range instead.
-	matches = [
-		m
-		for m in members
-		if str(m.get("name") or "") == member_name
-		and container.range_start_line <= _member_start_line(m) <= container.range_end_line
-	]
-	if not matches:
+		if node is not None:
+			return _resolved_from_hierarchical_node(member_name, node, container.uri)
+	else:
+		# Flat `SymbolInformation`: no nesting, so match by name within the
+		# container's own range instead.
+		matches = [
+			m
+			for m in members
+			if str(m.get("name") or "") == member_name
+			and container.range_start_line <= _member_start_line(m) <= container.range_end_line
+		]
+		if len(matches) > 1:
+			raise await _ambiguous(client, query, matches, workspace_root)
+		if matches:
+			return _resolved_from_symbol(matches[0])
+	inherited = await _resolve_inherited(client, workspace_root, container, member_name)
+	if inherited is None:
 		raise _not_found(query)
-	if len(matches) > 1:
-		raise await _ambiguous(client, query, matches, workspace_root)
-	return _resolved_from_symbol(matches[0])
+	return inherited
+
+
+# Guards against pathological (or cyclic, if a server reports one) hierarchies;
+# real class graphs are far smaller.
+_MAX_SUPERTYPES_VISITED = 64
+
+
+async def _resolve_inherited(
+	client: LspClient, workspace_root: Path, container: ResolvedSymbol, member_name: str
+) -> ResolvedSymbol | None:
+	"""`Class.member` where `member` is inherited — e.g. an `AppServices`
+	composed from mixins, the typed dependency call sites actually see.
+	Walks `typeHierarchy/supertypes` breadth-first (MRO-like for the common
+	case) and returns the first supertype that declares `member_name` directly.
+	Needs hierarchical `documentSymbol` (a supertype item's range doesn't span
+	its body, so the flat-shape range match can't be used), and returns `None`
+	when the server doesn't support type hierarchy."""
+	rel_path = uri_to_relative(container.uri, workspace_root)
+	try:
+		queue = list(await client.prepare_type_hierarchy(rel_path, container.line + 1, container.column + 1))
+	except TOOL_ERRORS:
+		return None
+	seen: set[tuple[str, str]] = set()
+	while queue and len(seen) < _MAX_SUPERTYPES_VISITED:
+		item = queue.pop(0)
+		try:
+			supers = await client.supertypes(item)
+		except TOOL_ERRORS:
+			continue
+		for sup in supers:
+			uri, name = str(sup.get("uri") or ""), str(sup.get("name") or "")
+			if (uri, name) in seen:
+				continue
+			seen.add((uri, name))
+			queue.append(sup)
+			try:
+				members = await client.document_symbol(uri_to_relative(uri, workspace_root))
+			except TOOL_ERRORS:
+				# e.g. a stdlib/vendored base the server reports by a non-file URI.
+				continue
+			if not is_hierarchical_document_symbols(members):
+				continue
+			node = _find_member_node(members, name, member_name)
+			if node is not None:
+				return _resolved_from_hierarchical_node(member_name, node, uri)
+	return None
 
 
 async def resolve_symbol(

@@ -1,11 +1,12 @@
-"""webnav: MCP server exposing JS/HTML/CSS language-server features (hover,
+"""webnav: MCP server exposing JS/TS/HTML/CSS language-server features (hover,
 definition, references, workspace symbol search, diagnostics) plus a
 workspace-wide CSS custom-property/selector index (css_var, selector) as
 MCP tools.
 
 Multiplexes three Node-based language servers behind one MCP tool set,
 routed by file extension: `typescript-language-server` for `.js`/`.mjs`/
-`.cjs` (via `allowJs`, no TypeScript required), and `vscode-html-language-
+`.cjs` (via `allowJs`) and `.ts`/`.mts`/`.cts` (sent with the `typescript`
+languageId), and `vscode-html-language-
 server`/`vscode-css-language-server` (from `vscode-langservers-extracted`)
 for `.html`/`.css`. Mirrors codenav_mcp's shape and its shared
 `mcp_nav_shared.lsp_client.LspClient`; see docs/agent-tooling.md for details.
@@ -29,6 +30,7 @@ from mcp_nav_shared.format import (
 	format_location,
 	format_references,
 	format_workspace_symbols,
+	uri_to_relative,
 )
 from mcp_nav_shared.lsp_client import LspClient
 from mcp_nav_shared.workspace import resolve_workspace_root
@@ -46,6 +48,22 @@ WORKSPACE_ROOT = resolve_workspace_root("WEBNAV_MCP_WORKSPACE")
 _raw_web_roots = os.environ.get("WEBNAV_MCP_ROOTS")
 WEB_ROOTS = web_index.parse_roots_env(_raw_web_roots, WORKSPACE_ROOT) if _raw_web_roots else None
 
+# Comma-separated workspace-relative files/directories of *generated* script
+# output (e.g. the JS a TypeScript build emits). They are never eagerly opened,
+# are dropped from `search_symbol`, and position tools reject them with a
+# pointer to the source — the TS sources are the code the project maintains.
+# Unset means nothing is treated as generated. This is navigation-only: the
+# CSS/selector index (`WEBNAV_MCP_ROOTS`) still reads such files, since
+# emitted JS is where a root's runtime class/id usages live.
+_raw_exclude = os.environ.get("WEBNAV_MCP_EXCLUDE", "")
+GENERATED_PATHS = [(WORKSPACE_ROOT / part.strip()).resolve() for part in _raw_exclude.split(",") if part.strip()]
+# The same paths, workspace-relative, for labeling index hits as generated.
+_GENERATED_RELATIVE = tuple(
+	str(path.relative_to(WORKSPACE_ROOT.resolve())).replace("\\", "/")
+	for path in GENERATED_PATHS
+	if path.is_relative_to(WORKSPACE_ROOT.resolve())
+)
+
 _POSITION_NOTE = (
 	"Positions are 1-indexed. `column` is a UTF-16 character offset on the "
 	"line (not a visual/display column): a leading tab counts as one "
@@ -55,10 +73,10 @@ _POSITION_NOTE = (
 mcp = MCPServer(
 	name="webnav",
 	instructions=(
-		"Code navigation for this project's JS/HTML/CSS, backed by "
-		"typescript-language-server (JS) and vscode-langservers-extracted "
+		"Code navigation for this project's JS/TS/HTML/CSS, backed by "
+		"typescript-language-server (JS/TS) and vscode-langservers-extracted "
 		"(HTML/CSS). Prefer this over grepping for symbol definitions/usages. "
-		"search_symbol only covers JS (the HTML/CSS servers don't implement "
+		"search_symbol only covers JS/TS (the HTML/CSS servers don't implement "
 		"useful workspace-wide symbol search). The language servers only see "
 		"one file at a time, so `--custom-properties` and `#id`/`.class` "
 		"selectors can't be cross-referenced across files that way; use "
@@ -70,6 +88,10 @@ mcp = MCPServer(
 )
 
 _JS_EXTENSIONS = {".js", ".mjs", ".cjs"}
+_TS_EXTENSIONS = {".ts", ".mts", ".cts"}
+# Everything the one typescript-language-server instance serves.
+_SCRIPT_EXTENSIONS = _JS_EXTENSIONS | _TS_EXTENSIONS
+_SCRIPT_LANGUAGE_IDS = {**dict.fromkeys(_JS_EXTENSIONS, "javascript"), **dict.fromkeys(_TS_EXTENSIONS, "typescript")}
 
 _ts_client: LspClient | None = None
 _html_client: LspClient | None = None
@@ -101,7 +123,7 @@ def _js_files_fallback(workspace_root: Path) -> list[Path]:
 		files.extend(
 			p
 			for p in root.rglob("*")
-			if p.is_file() and p.suffix.lower() in _JS_EXTENSIONS and not is_excluded(p, root)
+			if p.is_file() and p.suffix.lower() in _SCRIPT_EXTENSIONS and not is_excluded(p, root)
 		)
 	return files
 
@@ -114,6 +136,7 @@ async def _get_ts_client() -> LspClient:
 				workspace_root=WORKSPACE_ROOT,
 				command=resolve_ts_command(WORKSPACE_ROOT),
 				language_id="javascript",
+				language_ids=_SCRIPT_LANGUAGE_IDS,
 			)
 			await _ts_client.start()
 			# tsserver's workspace/symbol only searches files it has opened, so
@@ -128,7 +151,8 @@ async def _get_ts_client() -> LspClient:
 				# for JS files directly rather than opening nothing.
 				open_paths = _js_files_fallback(WORKSPACE_ROOT)
 			for path in open_paths:
-				await _ts_client.ensure_open(str(path))
+				if not _is_generated(path):
+					await _ts_client.ensure_open(str(path))
 		return _ts_client
 
 
@@ -160,13 +184,24 @@ async def _get_css_client() -> LspClient:
 
 async def _client_for(file_path: str) -> LspClient:
 	suffix = Path(file_path).suffix.lower()
-	if suffix in _JS_EXTENSIONS:
+	if suffix in _SCRIPT_EXTENSIONS:
+		if _is_generated(_resolve_path(file_path)):
+			raise ToolInputError(
+				f"{file_path!r} is generated output (WEBNAV_MCP_EXCLUDE); navigate the source it was built from instead"
+			)
 		return await _get_ts_client()
 	if suffix == ".html":
 		return await _get_html_client()
 	if suffix == ".css":
 		return await _get_css_client()
-	raise ToolInputError(f"webnav has no language server for {file_path!r} (supported: .js/.mjs/.cjs/.html/.css)")
+	raise ToolInputError(
+		f"webnav has no language server for {file_path!r} (supported: .js/.mjs/.cjs/.ts/.mts/.cts/.html/.css)"
+	)
+
+
+def _is_generated(path: Path) -> bool:
+	resolved = path.resolve()
+	return any(resolved == root or root in resolved.parents for root in GENERATED_PATHS)
 
 
 def _resolve_path(file_path: str) -> Path:
@@ -190,8 +225,8 @@ def _index_token_at(file_path: str, line: int, column: int) -> str | None:
 def _index_answer(token: str) -> str:
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
 	if token.startswith("--"):
-		return web_index.format_css_var(indexes, token)
-	return web_index.format_selector(indexes, token)
+		return web_index.format_css_var(indexes, token, generated=_GENERATED_RELATIVE)
+	return web_index.format_selector(indexes, token, generated=_GENERATED_RELATIVE)
 
 
 @mcp.tool()
@@ -263,9 +298,9 @@ async def references(file_path: str, line: int, column: int, include_declaration
 
 @mcp.tool()
 async def search_symbol(query: str) -> str:
-	"""Search JS files for a symbol by name (function, class, const, etc.).
+	"""Search JS/TS files for a symbol by name (function, class, const, etc.).
 
-	JS-only: the HTML/CSS language servers don't implement useful
+	JS/TS-only: the HTML/CSS language servers don't implement useful
 	workspace-wide symbol search (webnav does not reimplement it). Use this
 	to find a symbol's file/position first, then pass that position to
 	definition/references/hover. Returned positions point at the identifier
@@ -277,6 +312,11 @@ async def search_symbol(query: str) -> str:
 		symbols = await client.workspace_symbol(query)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
+	symbols = [
+		sym
+		for sym in symbols
+		if not _is_generated(_resolve_path(uri_to_relative(sym.get("location", {}).get("uri", ""), WORKSPACE_ROOT)))
+	]
 	if not symbols:
 		return f"No symbols matching {query!r}."
 	return format_workspace_symbols(symbols, WORKSPACE_ROOT, query=query)
@@ -324,7 +364,7 @@ async def css_var(name: str) -> str:
 	since each may define its own values.
 	"""
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
-	return web_index.format_css_var(indexes, name)
+	return web_index.format_css_var(indexes, name, generated=_GENERATED_RELATIVE)
 
 
 @mcp.tool()
@@ -333,7 +373,11 @@ async def selector(name: str) -> str:
 
 	Cross-references CSS rule definitions, HTML `id=`/`class=` attributes,
 	and JS usages (`getElementById`, `classList.add/remove/toggle/contains`,
-	`querySelector`/`querySelectorAll`, `className` assignment) — something
+	`querySelector`/`querySelectorAll`, `className` assignment, and any JS
+	string literal exactly equal to the bare name — e.g. an id passed to a
+	project's own helper like `onClick("btn-save", …)`, labeled "string
+	literal"). Hits in generated output (`WEBNAV_MCP_EXCLUDE`) are labeled
+	`[generated]`; edit their source instead. This is something
 	the single-file CSS/HTML language servers can't do. `name` must include
 	the leading `#` or `.`. Grouped by file with line numbers, separately per
 	configured root (see `WEBNAV_MCP_ROOTS`). A JS hit built from string
@@ -344,7 +388,7 @@ async def selector(name: str) -> str:
 	'<prefix>'", instead of being silently dropped or guessed.
 	"""
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
-	return web_index.format_selector(indexes, name)
+	return web_index.format_selector(indexes, name, generated=_GENERATED_RELATIVE)
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@ Only state changes the user directly causes. No page-load intro animations, no d
 - **Gallery item detail** (`gallery` item page, see [gallery](../gallery/SPEC.md) "Item page" / "Progressive preview loading"): opening an item scales up slightly and fades in — a distinct, more "photo-opening" entrance than the generic screen cross-fade above, since it's the one navigation that replaces a grid with a single focused piece of media. **Previous**/**Next** slides the preview out and the adjacent one in from the corresponding side, instead of swapping instantly. While the full-size preview loads (initial open or after a Previous/Next step), the item's existing thumbnail fills the frame immediately and cross-fades to the full preview once it loads, with a loading spinner over it in the meantime.
 - **Wizard steps** (`main-wizard`): a step card's active/done state (numbered badge, opacity when disabled) eases instead of snapping.
 - **Hover/press feedback:** buttons (`.btn` and variants), chips, view tabs, toggle groups, connection-method toggle, module tiles, gallery item prev/next controls, and phone-page buttons ease their background/border/color on hover and scale down slightly on press.
-- **List add/remove** (`gallery` timeline): a thumbnail being removed (e.g. after delete) fades and shrinks out before it's removed from the DOM, instead of popping out of the grid instantly.
+- **List add/remove** (`gallery` timeline): after **Delete** on the item page succeeds, the app returns to the Gallery grid first, then the deleted item's thumbnail (still mounted from the previous render) fades and shrinks out before it's removed from the DOM, instead of the grid being rebuilt without it. The grid is updated **in place** — it is not reloaded or rebuilt, so there is no blank flash and the scroll position is unchanged; a month left empty disappears with its heading. If that thumbnail is not mounted (scrolled out of the bounded tile window), it is dropped without animation; if the timeline was never loaded (item opened by URL), the grid loads normally.
 - **Async state swaps:** progress bar fill width eases as it updates; info panels (connection help, gallery phone-QR popup) fade in when shown; phone-page state panels (Ready/Uploading/Paused, file list/expired) fade in when swapped.
 
 ## Out of scope
@@ -92,6 +92,21 @@ Only state changes the user directly causes. No page-load intro animations, no d
 - **When** an item is removed (e.g. after Delete)
 - **Then** that thumbnail fades and shrinks over `--dur-base` before leaving the grid
 - **And** the remaining thumbnails reflow into its place without a hard jump
+
+### Scenario: Deleting from the item page animates the thumbnail out on the grid
+
+- **Given** the user opened an item from a mounted timeline thumbnail
+- **When** they confirm **Delete** and the delete succeeds
+- **Then** the Gallery grid is shown first (no reload flash), and once its own fade-in has finished, that item's thumbnail fades and shrinks out over `--dur-base` (started sooner, the two fades overlap and the removal is barely visible)
+- **And** the thumbnail is removed even if `transitionend` never fires (fallback shortly after `--dur-base`)
+- **And** with reduced motion (`--dur-base` ≈ 0) it is removed immediately
+- **And** the timeline is not reloaded: no blank/flash, the scroll position is unchanged, and a month whose last item was deleted disappears with its heading
+
+### Scenario: Deleting an item whose thumbnail is not mounted
+
+- **Given** the item's thumbnail is not in the grid because the timeline was never loaded (opened by URL)
+- **When** the delete succeeds
+- **Then** the Gallery grid loads normally, without animation
 
 ### Scenario: Progress and panel state changes ease
 

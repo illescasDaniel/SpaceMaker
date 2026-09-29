@@ -51,6 +51,7 @@ override-with-sane-default shape as `CODENAV_MCP_WORKSPACE`/
 | Env var | Server | Default (generic) | This repo's value |
 |---|---|---|---|
 | `CODENAV_MCP_SOURCE_ROOT` | codenav | the whole workspace | `src` (scopes/speeds up `implementations`' class scan and import-path derivation) |
+| `WEBNAV_MCP_EXCLUDE` | webnav | nothing treated as generated | `src/spacemaker/adapters/inbound/web/static/js` (the JS `tsc` emits from `web/src/*.ts`: never eagerly opened, dropped from `search_symbol`, rejected by position tools — navigation targets the TS sources only; the CSS/selector index still reads it) |
 | `WEBNAV_MCP_ROOTS` | webnav | one unnamed root spanning the whole workspace | `web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes` (TS sources, production assets, UX wireframes) |
 
 A project that unsets these gets a working, if less scoped/labeled, default
@@ -132,7 +133,10 @@ in `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/resolve.py`:
 `resolve_symbol()` accepts a dotted `Class.method` query, narrows by
 `file_path` when a name is ambiguous, and raises a `SymbolResolutionError`
 (a `ToolInputError`) listing candidates rather than guessing when several
-symbols share a name.
+symbols share a name. When `Class` doesn't declare `method` itself, the
+lookup walks `typeHierarchy/supertypes` breadth-first and resolves the first
+base that does — so `AppServices.start_convert` finds `JobsMixin.start_convert`
+(`AppServices` is composed from mixins, and it's the type call sites see).
 
 `hover`/`definition`/`references`/`search_symbol`/`diagnostics` (the
 original position-based tools) are unchanged and still useful once a
@@ -186,6 +190,18 @@ Answering then happens in two stages:
    diagnostics via `pull_diagnostics`; no `invalid-return-type` means ty's
    real type checker accepts the candidate as structurally conforming.
    Results are labeled `(type-verified)`.
+
+`implementations` is cached at three levels, each keyed so a hit is always
+correct: `LspClient.document_symbol` per document version (bumped by
+`ensure_open` exactly when mtime/size change); `_protocol_class_names` per
+`(path, mtime_ns, size)` (parsing every file's AST was ~70% of the warm cost);
+and the per-candidate `ty` probe verdicts, which can depend on transitive
+imports and are therefore dropped wholesale whenever *any* file under
+`CODENAV_MCP_SOURCE_ROOT` changes. Warm calls on this repo: ~140 ms → ~15-27 ms.
+The probe cache's signature also covers `pyproject.toml`, `uv.lock` and the
+venv's `site-packages` mtime, so `uv sync` (`task sync-dev`) invalidates it
+automatically — no file watcher or restart hook needed, since every call
+re-stats these anyway.
 
 The candidate scan and webnav's JS-fallback file scan (below) both skip
 `.venv`/`node_modules`/`.git`/etc. via the shared `mcp_nav_shared/exclude.py`
@@ -254,7 +270,9 @@ decorator line): when the LSP range starts on `@…`, formatting walks the
 range and a short lookahead to the `class`/`def` line. Those positions are
 safe to feed into `hover` / `definition` / `references`. ty's symbol search
 is fuzzy (subsequence) and unordered, so results are ranked before capping:
-exact name → case-insensitive exact → prefix → substring → other fuzzy hits.
+exact name → case-insensitive exact → prefix → substring → other fuzzy hits,
+with Property/Field symbols after other kinds within a tier (tsserver reports
+every `S.foo = x` assignment as a Property, which otherwise fills the cap).
 Results are capped (default 50) with a trailing “and N more” note when
 truncated.
 `definition` / `references` headers use the same `path:line:col` form so
@@ -272,7 +290,13 @@ requests fail immediately and the next tool call starts a fresh one.
 tests importing `mcp_nav_shared` / `codenav_mcp` / `webnav_mcp` resolve (clean `ty
 check`, and codenav `references` include test usages).
 `diagnostics` falls back to the push `publishDiagnostics` cache when pull
-diagnostics are unsupported or empty (common for HTML/CSS servers).
+diagnostics are unsupported or empty (common for HTML/CSS servers, and always
+the case for `typescript-language-server`, which has no pull support). In that
+push-only case `LspClient.diagnostics` awaits the first `publishDiagnostics`
+after the document was last synced (up to `PUSH_DIAGNOSTICS_TIMEOUT`, 5 s)
+rather than answering from a stale or empty cache — before this, the first
+`diagnostics` call on a freshly edited `.ts`/`.js` file reported "No
+diagnostics." even for an obvious type error.
 All four positional tools reject non-Python files (`.py`/`.pyi` only) up
 front with a `ToolInputError` — ty otherwise mis-parses e.g. a `.md` file as
 Python and `diagnostics` returns a wall of bogus syntax errors for it.
@@ -289,8 +313,8 @@ project's JS/TS/HTML/CSS (`search_symbol`, `definition`, `references`, `hover`,
 MCP tool set, routed by file extension:
 
 - `.ts`/`.js`/`.mjs`/`.cjs` → `typescript-language-server` (shell sources in
-  `web/src/` via strict `web/tsconfig.json`; emitted `static/js/*.js` still
-  indexed for runtime debugging; `jsconfig.json` includes both)
+  `web/src/` via strict `web/tsconfig.json`; the emitted `static/js/*.js` is
+  build output and is excluded from navigation via `WEBNAV_MCP_EXCLUDE`)
 - `.html` → `vscode-html-language-server`
 - `.css` → `vscode-css-language-server`
 
@@ -342,9 +366,13 @@ across files that way — the most common question for this project's
 file, inline `<style>` block and wireframe). `mcp-servers/webnav_mcp/src/
 webnav_mcp/web_index.py` answers this with a **pure-Python scanner, not a language
 server**: no `@import` resolution, no real CSS parser, regex/brace-stack
-grade. It rescans on every call rather than caching — about 20 files total
-across both roots, a few ms — so there's no cache-invalidation story to get
-wrong.
+grade. It re-walks the roots on every call but reuses each root's parsed index
+while its files are unchanged: the cache key is the `(path, mtime_ns, size)`
+of every relevant file (`.css`/`.html`/`.js`/`.ts`/`.mts`/`.cts`), re-stat'd on
+every call, so an edit, add, or delete always invalidates it — there is no
+stale-answer window. Measured on this repo: `css_var` ~94 ms → ~2 ms,
+`selector` ~58 ms → ~1 ms, HTML `diagnostics` ~115 ms → ~11 ms (the rescan,
+not the language server, was the cost).
 
 Which roots get indexed, and under what labels, is generic and
 project-configurable via `WEBNAV_MCP_ROOTS` (a comma-separated list of
@@ -365,8 +393,13 @@ misleading.
 - **`selector(name)`** (`#id` or `.class`): CSS rule definitions, HTML
   `id=`/`class=` attributes, and JS usages (`getElementById`,
   `classList.add/remove/toggle/contains`, `querySelector`/
-  `querySelectorAll`, `className` assignment), grouped by file with line
-  numbers, per root.
+  `querySelectorAll`/`closest`/`matches`, `className` assignment), grouped
+  by file with line numbers, per root. A JS/TS string literal exactly equal
+  to the bare name, on a line no DOM API above already covers, is reported
+  as a `string literal` hit — this is how ids passed to project helpers
+  (`onClick("btn-save", …)`, `bindDisclosure(…)`) show up; it also counts
+  as a reference for the unreferenced-selector diagnostic. Hits in
+  `WEBNAV_MCP_EXCLUDE` output are labeled `[generated]`.
 - **`references`/`definition` fallback**: when the token under the cursor
   in a `.css`/`.html` file is `--name`, `#id` or `.class`, both tools answer
   from this index instead of the single-file language server — this is what
