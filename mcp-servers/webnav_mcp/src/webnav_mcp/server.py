@@ -465,6 +465,7 @@ async def search_symbol(
 	name: str | None = None,
 	kind: str | None = None,
 	path: str | None = None,
+	fuzzy: bool = False,
 	ctx: Context | None = None,
 ) -> str:
 	"""Search JS/TS files for a symbol by name (function, class, const, etc.).
@@ -478,6 +479,8 @@ async def search_symbol(
 	`kind` (SymbolKind labels, comma-separated: `class`, `function,method`,
 	`interface`, ...) and `path` (workspace-relative prefix such as `src/`,
 	or a glob such as `src/**/*.py`). Production code ranks before tests.
+	Loose fuzzy hits whose names don't contain the query are summarised as a
+	count when real matches exist; pass `fuzzy=true` to list them too.
 	"""
 	await _use_workspace(ctx)
 	try:
@@ -498,7 +501,7 @@ async def search_symbol(
 	if not matching:
 		filters = ", ".join(f"{k}={v!r}" for k, v in (("kind", kind), ("path", path)) if v)
 		return f"No symbols matching {query!r} with {filters} ({len(symbols)} without the filters)."
-	return format_workspace_symbols(matching, WORKSPACE_ROOT, query=query)
+	return format_workspace_symbols(matching, WORKSPACE_ROOT, query=query, fuzzy=fuzzy)
 
 
 @mcp.tool()

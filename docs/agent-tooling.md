@@ -163,7 +163,9 @@ original position-based tools) are still useful once a composite tool has
 narrowed things down to a specific position. `search_symbol` takes optional
 `kind` (SymbolKind labels, comma-separated: `class`, `function,method`) and
 `path` (workspace-relative prefix such as `src/`, or a glob) filters, and
-ranks production code before tests within a match tier.
+ranks production code before tests within a match tier. When some names
+actually contain the query, fuzzy-only hits (names that merely contain its
+letters in order) are hidden behind a one-line count; `fuzzy=true` lists them.
 
 ### `documentSymbol` shape: hierarchical vs flat
 
@@ -326,7 +328,8 @@ decorator line): when the LSP range starts on `@…`, formatting walks the
 range and a short lookahead to the `class`/`def` line. Those positions are
 safe to feed into `hover` / `definition` / `references`. ty's symbol search
 is fuzzy (subsequence) and unordered, so results are ranked before capping:
-exact name → case-insensitive exact → prefix → substring → other fuzzy hits,
+exact name → case-insensitive exact → prefix → substring → other fuzzy hits
+(the last tier only listed when no other tier matched, or with `fuzzy=true`),
 with Property/Field symbols after other kinds within a tier (tsserver reports
 every `S.foo = x` assignment as a Property, which otherwise fills the cap).
 Identical `(name, kind, file)` hits are then collapsed, and a same-file

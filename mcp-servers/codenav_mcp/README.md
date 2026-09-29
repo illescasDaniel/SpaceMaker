@@ -15,7 +15,7 @@ parameters, dataclass fields), not text grep.
 | `outline` | What's in this file? (classes, methods, functions) |
 | `callers` | Who actually calls this function? (call hierarchy, not imports) |
 | `implementations` | Which classes structurally implement this `Protocol`? |
-| `search_symbol` | Workspace symbol search by name (ranked, capped; optional `kind=` / `path=` filters; production code before tests) |
+| `search_symbol` | Workspace symbol search by name (ranked, capped; optional `kind=` / `path=` filters; production code before tests; fuzzy-only hits summarised unless `fuzzy=true`) |
 
 Then position tools when you already have a `path:line:col`:
 

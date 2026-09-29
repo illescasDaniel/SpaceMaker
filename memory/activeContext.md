@@ -22,7 +22,7 @@ Done and tested (609 tests, `uv run task checks` green):
 
 ## MCP evaluation + fixes (2026-09-29)
 
-Branch `claude/mcp-evaluation-report` (from `main` 3e42762): report `docs/reports/2026-09-29-mcp-evaluation.md` (before/after), all 7 findings fixed in 5b0ff55 and confirmed live after an MCP restart; the two follow-up friction entries (refresh cost, probe path) fixed in f48308b; gate green (651 tests). Next: restart the MCP servers again to load f48308b; decide PR/merge. Optional: `search_symbol` fuzzy-filler friction entry (open).
+Branch `claude/mcp-evaluation-report` (from `main` 3e42762): report `docs/reports/2026-09-29-mcp-evaluation.md` (before/after), all 7 findings fixed in 5b0ff55 and confirmed live after an MCP restart; the two follow-up friction entries (refresh cost, probe path) fixed in f48308b; gate green (651 tests). Next: restart the MCP servers again to load f48308b; decide PR/merge. `search_symbol` fuzzy-filler friction fixed (restart MCPs to load it).
 
 ## Older open items
 

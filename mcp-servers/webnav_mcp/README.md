@@ -24,7 +24,7 @@ Binaries come from `vscode-langservers-extracted` (typically under
 |------|---------|
 | `symbol_info` | What is this? Header + hover + definition + references |
 | `outline` | What's in this file? (source order; locals collapsed, `detailed=true` for everything) |
-| `search_symbol` | JS/TS workspace symbol search (ranked, capped; quieter Property/export noise; optional `kind=` / `path=` filters) |
+| `search_symbol` | JS/TS workspace symbol search (ranked, capped; quieter Property/export noise; optional `kind=` / `path=` filters; fuzzy-only hits summarised unless `fuzzy=true`) |
 
 Then position tools when you already have a `path:line:col`:
 

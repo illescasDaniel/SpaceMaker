@@ -203,6 +203,10 @@ def format_workspace_symbol(sym: dict[str, Any], workspace_root: Path) -> str:
 	return f"{name}  [{kind}]  ({rel}:{line + 1}:{col + 1})"
 
 
+# Tier for names that only match the language server's fuzzy subsequence search.
+_FUZZY_TIER = 4
+
+
 def _match_tier(name: str, query: str) -> int:
 	if name == query:
 		return 0
@@ -213,7 +217,7 @@ def _match_tier(name: str, query: str) -> int:
 		return 2
 	if folded_query in folded_name:
 		return 3
-	return 4
+	return _FUZZY_TIER
 
 
 # Property/Field symbols rank after declarations within the same match tier:
@@ -355,15 +359,32 @@ def format_workspace_symbols(
 	*,
 	query: str = "",
 	limit: int = DEFAULT_SEARCH_SYMBOL_LIMIT,
+	fuzzy: bool = False,
 ) -> str:
+	"""Ranked, capped listing. Unless `fuzzy`, loose subsequence-only hits
+	(tier 4) are hidden whenever the name really contains the query somewhere
+	(tiers 0–3): language servers pad `_probe` with every long test name that
+	happens to contain those letters in order, which reads as if they all
+	matched. With no real match the fuzzy hits stay (abbreviations like `LspCl`)."""
 	if not symbols:
 		return ""
 	ranked = filter_workspace_symbols(rank_workspace_symbols(symbols, query))
+	hidden_fuzzy = 0
+	if query and not fuzzy:
+		real = [sym for sym in ranked if _match_tier(str(sym.get("name") or ""), query) < _FUZZY_TIER]
+		if real:
+			hidden_fuzzy = len(ranked) - len(real)
+			ranked = real
 	shown = ranked[: max(0, limit)]
 	lines = [format_workspace_symbol(sym, workspace_root) for sym in shown]
 	omitted = len(ranked) - len(shown)
 	if omitted > 0:
 		lines.append(f"… and {omitted} more (showing first {len(shown)}); narrow with kind=… or path=…")
+	if hidden_fuzzy > 0:
+		lines.append(
+			f"({hidden_fuzzy} looser fuzzy match{'es' if hidden_fuzzy != 1 else ''} whose names don't contain "
+			f"{query!r} hidden; pass fuzzy=true to list them)"
+		)
 	return "\n".join(lines)
 
 

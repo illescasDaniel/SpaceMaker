@@ -317,6 +317,65 @@ def test_given_exact_match_past_cap_when_format_workspace_symbols_then_shown_fir
 	assert text.splitlines()[0].startswith("get  [Function]")
 
 
+def test_given_real_and_fuzzy_hits_when_format_workspace_symbols_then_fuzzy_summarised(tmp_path):
+	# given — ty pads "_probe" with long names that merely contain those letters in order
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	uri = src.as_uri()
+	symbols = [
+		_symbol("test_given_lan_host_when_spa_entry_then_ok", uri),
+		_symbol("_probe", uri),
+		_symbol("run_probe", uri),
+		_symbol("test_given_proxy_when_bootstrap_then_ok", uri),
+	]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="_probe")
+	# then
+	lines = text.splitlines()
+	assert [line.split()[0] for line in lines[:2]] == ["_probe", "run_probe"]
+	assert "test_given" not in text
+	assert (
+		lines[-1] == "(2 looser fuzzy matches whose names don't contain '_probe' hidden; pass fuzzy=true to list them)"
+	)
+
+
+def test_given_fuzzy_true_when_format_workspace_symbols_then_fuzzy_hits_listed_after_real(tmp_path):
+	# given
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	uri = src.as_uri()
+	symbols = [_symbol("test_given_proxy_when_bootstrap_then_ok", uri), _symbol("_probe", uri)]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="_probe", fuzzy=True)
+	# then
+	assert [line.split()[0] for line in text.splitlines()] == ["_probe", "test_given_proxy_when_bootstrap_then_ok"]
+
+
+def test_given_only_fuzzy_hits_when_format_workspace_symbols_then_fuzzy_hits_kept(tmp_path):
+	# given — an abbreviation such as "LspCl" matches nothing by substring
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	symbols = [_symbol("LspClient", src.as_uri()), _symbol("LspConfigLoader", src.as_uri())]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="LspCfL")
+	# then
+	assert [line.split()[0] for line in text.splitlines()] == ["LspClient", "LspConfigLoader"]
+	assert "fuzzy" not in text
+
+
+def test_given_cap_and_hidden_fuzzy_when_format_workspace_symbols_then_counts_exclude_fuzzy(tmp_path):
+	# given
+	src = tmp_path / "m.py"
+	src.write_text("a = 1\n", encoding="utf-8")
+	uri = src.as_uri()
+	symbols = [_symbol(f"get_{i}", uri) for i in range(4)] + [_symbol("g_e_t", uri)]
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="get", limit=2)
+	# then
+	assert "… and 2 more (showing first 2)" in text
+	assert text.splitlines()[-1].startswith("(1 looser fuzzy match whose")
+
+
 def _diagnostic(line: int, message: str, severity: int = 1) -> dict:
 	return {
 		"range": {"start": {"line": line, "character": 0}, "end": {"line": line, "character": 1}},
