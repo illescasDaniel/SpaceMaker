@@ -51,7 +51,7 @@ from webnav_mcp.lang_command import resolve_css_command, resolve_html_command, r
 # main checkout, even when the session works in a linked worktree.
 _selector = WorkspaceSelector("WEBNAV_MCP_WORKSPACE")
 WORKSPACE_ROOT = _selector.base
-_workspace_source = "configured"
+_workspace_source = _selector.base_source
 
 # One or more `label=relative/path` roots to index separately (see
 # web_index.build_workspace_index); e.g. splitting production assets from
@@ -378,7 +378,7 @@ async def hover(file_path: str, line: int, column: int, ctx: Context | None = No
 async def workspace(ctx: Context | None = None) -> str:
 	"""Which directory is webnav navigating, and why? Use when results look like they come from the wrong checkout/worktree."""
 	await _use_workspace(ctx)
-	return f"{WORKSPACE_ROOT}  (source: {_workspace_source})"
+	return f"{WORKSPACE_ROOT}\nchosen because: {_selector.explain(_workspace_source)}"
 
 
 @mcp.tool()

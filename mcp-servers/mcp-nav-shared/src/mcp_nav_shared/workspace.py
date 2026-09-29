@@ -103,16 +103,33 @@ class WorkspaceSelector:
 	"""
 
 	def __init__(self, explicit_env: str) -> None:
-		self.base, self._base_source = describe_workspace_root(explicit_env)
+		self.base, self.base_source = describe_workspace_root(explicit_env)
+		self._explicit_env = explicit_env
 		self.pinned = bool(os.environ.get(explicit_env))
+
+	def explain(self, source: str) -> str:
+		"""One sentence an agent can act on for a `Selection.source` value."""
+		if source == "client roots":
+			return (
+				"client roots (the MCP client reported this checkout/worktree of the same repository "
+				f"as the configured base {self.base})"
+			)
+		if source == self._explicit_env:
+			return f"pinned by ${self._explicit_env}; client roots are ignored"
+		if source == "CLAUDE_PROJECT_DIR":
+			return (
+				"$CLAUDE_PROJECT_DIR (default; the client has not reported another checkout/worktree "
+				"of this repository)"
+			)
+		return f"server working directory (${self._explicit_env} and $CLAUDE_PROJECT_DIR are unset)"
 
 	async def select(self, session: Any) -> Selection:
 		if self.pinned:
-			return Selection(self.base, self._base_source)
+			return Selection(self.base, self.base_source)
 		for root in await self._client_roots(session):
 			if same_repository(root, self.base):
 				return Selection(root, "client roots")
-		return Selection(self.base, self._base_source)
+		return Selection(self.base, self.base_source)
 
 	@staticmethod
 	async def _client_roots(session: Any) -> list[Path]:

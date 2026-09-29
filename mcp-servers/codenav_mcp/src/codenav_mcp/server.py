@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 # main checkout, even when the session works in a linked worktree.
 _selector = WorkspaceSelector("CODENAV_MCP_WORKSPACE")
 WORKSPACE_ROOT = _selector.base
-_workspace_source = "configured"
+_workspace_source = _selector.base_source
 # Root for import-path derivation and implementations' workspace-wide class
 # scan. Defaults to the whole workspace; set CODENAV_MCP_SOURCE_ROOT (e.g. to
 # "src") in a project's MCP config to scope/speed up the scan.
@@ -160,7 +160,7 @@ def _format_hover_contents(contents: Any) -> str:
 async def workspace(ctx: Context | None = None) -> str:
 	"""Which directory is codenav navigating, and why? Use when results look like they come from the wrong checkout/worktree."""
 	await _use_workspace(ctx)
-	return f"{WORKSPACE_ROOT}  (source: {_workspace_source}; source root: {SOURCE_ROOT})"
+	return f"{WORKSPACE_ROOT}\nchosen because: {_selector.explain(_workspace_source)}\nsource root: {SOURCE_ROOT}"
 
 
 @mcp.tool()

@@ -16,11 +16,9 @@ Done and tested (609 tests, `uv run task checks` green):
 
 1. Primary checkout: `git switch feature/mcp-improvements`, then restart the MCP servers (they only pick up code on restart).
 2. Verify the new code is live: `implementations` schema now has `file_path`; call the `workspace` tool of codenav and webnav (should report the primary path, source `CLAUDE_PROJECT_DIR`).
-3. **Worktree verification (the open question):** start a session in a linked worktree (e.g. `/new-worktree`), call `workspace` on both servers. Expect the worktree path with source `client roots`.
-   - If it still reports the main checkout: the Claude desktop app does not send/answer `roots/list` (or speaks the 2026-07-28 era where servers cannot request roots). Then add a different channel, e.g. accept a `workspace` hint derived from absolute `file_path` arguments, or an explicit per-session pin; record the finding in `memory/friction/`.
-   - Note `.mcp.json` is read from the *primary* checkout, so changes to it made inside a worktree have no effect until merged.
+3. Worktree verification: DONE (desktop app answers roots/list). Optionally repeat in Cursor (pinned via `${workspaceFolder}`).
 4. Optional cleanups noticed: none blocking. A tool call racing a workspace switch can fail once (documented).
-5. When verified: merge `feature/mcp-improvements` into `main`; update `progress.md` (remove the "Open: verify" note).
+5. Merge `feature/mcp-improvements` into `main`; .
 
 ## Older open items
 

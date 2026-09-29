@@ -191,3 +191,23 @@ def test_given_non_file_root_when_select_then_skipped(tmp_path, monkeypatch):
 	selection = asyncio.run(selector.select(_FakeSession(["https://example.com/x"])))
 	# then
 	assert selection.root == tmp_path.resolve()
+
+
+@pytest.mark.parametrize(
+	("env", "source", "expected"),
+	[
+		("SEL_WORKSPACE", "SEL_WORKSPACE", "pinned by $SEL_WORKSPACE"),
+		("CLAUDE_PROJECT_DIR", "CLAUDE_PROJECT_DIR", "$CLAUDE_PROJECT_DIR (default"),
+		(None, "cwd", "working directory"),
+		("CLAUDE_PROJECT_DIR", "client roots", "reported this checkout/worktree"),
+	],
+)
+def test_given_source_when_explain_then_sentence_names_the_rule(env, source, expected, monkeypatch, tmp_path):
+	# given
+	monkeypatch.delenv("SEL_WORKSPACE", raising=False)
+	monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+	if env:
+		monkeypatch.setenv(env, str(tmp_path))
+	selector = WorkspaceSelector("SEL_WORKSPACE")
+	# then
+	assert expected in selector.explain(source)
