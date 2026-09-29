@@ -2510,9 +2510,6 @@
 				<button type="button" id="btn-calendar">Calendar</button>
 			</fieldset>
 		</div>
-		<div class="wf-demo">
-			<button type="button" id="btn-demo-remove-thumb">Remove a thumbnail (delete animation)</button>
-		</div>
 		<aside class="wf-note" data-for="agent">
 			<span class="wf-note-badge">Agent note</span>
 			<strong>Thumbnail cache aspect:</strong> <code>.thumbnails/</code> JPEGs are fit-within a max edge (e.g. 320), <em>preserving source aspect</em> — never Magick <code>WxH^</code> + <code>-extent</code> square crop. Grid tiles stay square with <code>object-fit: cover</code> (CSS crops). Item page reuses the same URL with <code>object-fit: contain</code> so the progressive placeholder matches full framing. Video poster frames follow the same fit-within rule. Stale square caches need a refresh (source newer, or wipe <code>.thumbnails/</code>).
@@ -2601,7 +2598,12 @@
 			<div class="gallery-item-actions">
 				<button type="button" class="btn btn-primary">Download</button>
 				<button type="button" class="btn btn-secondary" id="btn-wireframe-friendly">Download as JPEG</button>
+				<button type="button" class="btn btn-danger" id="btn-wireframe-delete" title="Delete from this computer">Delete</button>
 			</div>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				<strong>Delete → thumbnail removal animation:</strong> after a successful delete, navigate back to the Gallery grid <em>first</em>, then play the removal on that item's thumbnail (<code>.thumb-removing</code>: fade + shrink over <code>--dur-base</code>), remove it from the DOM on <code>transitionend</code>, and let the remaining thumbnails reflow. The removal must also complete if <code>transitionend</code> never fires (timeout fallback slightly longer than <code>--dur-base</code>) and when reduced motion collapses <code>--dur-base</code> to ~0 (remove immediately, no animation). In production the grid reload skips the deleted item and the animation runs on the tile that is still shown from the previous render (or is a no-op if the tile is not mounted).
+			</aside>
 			<div class="alert alert-info" id="wireframe-export-alert" hidden>
 				<span class="alert-icon" aria-hidden="true">⏳</span>
 				<div>
@@ -2763,6 +2765,7 @@
 			{ name: '2025/September/CLIP_0007.mp4', captured: 'September 4, 2025, 15:10', camera: 'Samsung · SM-S921B', dims: '1920 × 1080', size: '18.4 MB', location: '—', color: '5a3540', type: 'video', w: 800, h: 450 },
 		];
 		var galleryDemoIndex = 0;
+		var galleryDemoOpenedThumb = null;
 
 		function svgDataUri(svgMarkup) {
 			return 'data:image/svg+xml,' + encodeURIComponent(svgMarkup);
@@ -2905,6 +2908,7 @@
 		document.querySelectorAll('.thumb-link[data-item-demo]').forEach(function (btn) {
 			btn.addEventListener('click', function () {
 				galleryDemoIndex = btn.getAttribute('data-item-demo') === 'video' ? 3 : 0;
+				galleryDemoOpenedThumb = btn;
 				renderGalleryItem();
 				showView('gallery-item');
 			});
@@ -3018,11 +3022,24 @@
 			document.getElementById('gallery-phone-popup').classList.toggle('panel-hidden');
 		});
 
-		document.getElementById('btn-demo-remove-thumb').addEventListener('click', function () {
-			var thumb = document.querySelector('#timeline-view .thumb');
-			if (!thumb) return;
-			thumb.classList.add('thumb-removing');
-			thumb.addEventListener('transitionend', function () { thumb.remove(); }, { once: true });
+		document.getElementById('btn-wireframe-delete').addEventListener('click', function () {
+			var thumb = galleryDemoOpenedThumb;
+			galleryDemoOpenedThumb = null;
+			showView('gallery');
+			if (!thumb?.isConnected) return;
+			var removed = false;
+			function removeThumb() {
+				if (removed) return;
+				removed = true;
+				thumb.remove();
+			}
+			// Let the grid paint first so the transition has a start state.
+			requestAnimationFrame(function () {
+				thumb.classList.add('thumb-removing');
+				thumb.addEventListener('transitionend', removeThumb, { once: true });
+				var base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dur-base')) || 0;
+				setTimeout(removeThumb, base + 100); // fallback if transitionend never fires
+			});
 		});
 
 		document.getElementById('btn-wireframe-show-components').addEventListener('click', function () {
