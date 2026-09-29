@@ -39,7 +39,13 @@ def test_given_avifenc_and_jpeg_when_encode_then_avifenc_progressive_without_mag
 	src = tmp_path / "photo.jpg"
 	src.write_bytes(b"jpeg-bytes")
 	dest = tmp_path / "photo.avif"
-	converter = SubprocessMediaConverter(ToolRunner(bundle_root_path=tools, platform_is_windows=False))
+	converter = SubprocessMediaConverter(
+		ToolRunner(
+			bundle_root_path=tools,
+			platform_is_windows=False,
+			path_fallback_allowed=lambda _tool: False,
+		),
+	)
 	# when
 	converter.encode_image_to_avif(str(src), str(dest))
 	# then
@@ -65,7 +71,13 @@ def test_given_no_avifenc_when_encode_jpeg_then_magick_fallback(tmp_path: Path) 
 	src = tmp_path / "photo.jpg"
 	src.write_bytes(b"jpeg-bytes")
 	dest = tmp_path / "photo.avif"
-	converter = SubprocessMediaConverter(ToolRunner(bundle_root_path=tools, platform_is_windows=False))
+	converter = SubprocessMediaConverter(
+		ToolRunner(
+			bundle_root_path=tools,
+			platform_is_windows=False,
+			path_fallback_allowed=lambda _tool: False,
+		),
+	)
 	# when
 	converter.encode_image_to_avif(str(src), str(dest))
 	# then
