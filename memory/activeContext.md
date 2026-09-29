@@ -6,15 +6,16 @@ _Last updated: 2026-09-29_
 
 ## Current focus
 
-Gallery / shell-cache fix committed: auto JS fingerprint + import map, `R.*` registry aliases, bare-ref fixes, WebEngine HTTP cache clear on launch.
+Scrollbar layout-jump fix ready to smoke; gallery shell-cache fix still awaiting restart smoke.
 
 ## Next steps
 
-1. Restart SpaceMaker (full quit) and smoke gallery — should leave "Loading more" and show tiles; console clean.
-2. Review / merge draft PR #6 when ready.
+1. Hard-reload the desktop shell — confirm no horizontal jump on load.
+2. Restart SpaceMaker (full quit) and smoke gallery — leave "Loading more", tiles show, console clean.
+3. Review / merge draft PR #6 when ready.
 
 ## Just changed
 
-- Shell `R.api` / `bindInfoPanelToggle` / `setQrImageSrc` aliases; qualify bare `applyState`/`pushSettings`/`loadServerInfo`
-- Auto `UI_SHELL_VERSION` fingerprint + import map; fixed webengine profile `default`; clear HTTP caches on launch
-- Gallery timeline defensive fetch so spinner cannot stick
+- `theme.css`: `html { scrollbar-gutter: stable }`
+- `.app-main` gutter in `shell-layout.css` + `wireframes/app.html`
+- Inline critical CSS in `index.html` head (hide screens / body overflow before linked CSS)

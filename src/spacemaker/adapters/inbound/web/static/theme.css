@@ -1,4 +1,8 @@
 /* System light/dark — all SpaceMaker web shells follow prefers-color-scheme. */
+html {
+	scrollbar-gutter: stable;
+}
+
 :root {
 	--bg: #f7f8fa;
 	--surface: #ffffff;
