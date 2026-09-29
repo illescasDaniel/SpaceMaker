@@ -44,7 +44,7 @@ from mcp_nav_shared.format import (
 	uri_to_path,
 	uri_to_relative,
 )
-from mcp_nav_shared.lsp_client import LspClient
+from mcp_nav_shared.lsp_client import LspClient, LspRequestError
 from mcp_nav_shared.notices import NoticeBoard, package_source_dirs
 from mcp_nav_shared.params import resolve_name_query
 from mcp_nav_shared.resolve import resolve_symbol
@@ -169,13 +169,16 @@ async def get_client() -> LspClient:
 				on_notice=_notices.post,
 			)
 			await _client.start()
+			await _after_ty_restart(_client)  # verdicts from a previous server are suspect too
 		# Tell ty about anything created/edited/deleted on disk since the last call.
 		await _client.refresh()
 		return _client
 
 
 # ty's hover on a variable/parameter is just its type ("AppServices", "list[str] | None").
-_BARE_TYPE_RE = re.compile(r"[A-Za-z_][\w.\[\], |]*")
+# Two words in a row ("Return the value") is prose, not a type expression.
+_BARE_TYPE_RE = re.compile(r"(?!.*\w\s+\w)[A-Za-z_][\w.\[\], |]*")
+_MAX_TYPE_LOCATIONS = 3
 
 
 def _describe_type_definition(loc: dict[str, Any], workspace_root: Path) -> str:
@@ -205,10 +208,23 @@ async def _enrich_bare_type(text: str, client: LspClient, file_path: str, line: 
 	"""A bare type name says nothing about where the type lives; add its definition."""
 	if "\n" in text or len(text) > 120 or not _BARE_TYPE_RE.fullmatch(text):
 		return text
-	locations = await client.type_definition(file_path, line, column)
-	if not locations:
+	try:
+		locations = await client.type_definition(file_path, line, column)
+	except LspRequestError:
+		return text  # the hover itself is still good; the extra is optional
+	described = [
+		_describe_type_definition(loc, WORKSPACE_ROOT)
+		for loc in locations[:_MAX_TYPE_LOCATIONS]
+		if not _is_builtins_stub(loc)
+	]
+	if not described:
 		return text
-	return f"{text}\n{_describe_type_definition(locations[0], WORKSPACE_ROOT)}"
+	return "\n".join([text, *described])
+
+
+def _is_builtins_stub(loc: dict[str, Any]) -> bool:
+	"""`str`/`int`/`list` point into typeshed; that is noise on every plain variable."""
+	return uri_to_path(loc.get("uri") or loc.get("targetUri", "")).name == "builtins.pyi"
 
 
 def _format_hover_contents(contents: Any) -> str:

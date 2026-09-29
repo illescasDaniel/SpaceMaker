@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import pytest
@@ -518,6 +519,14 @@ def test_given_line_past_end_when_check_position_then_error_names_line_count(tmp
 	assert "has 2 line(s)" in error
 
 
+def test_given_line_after_final_newline_when_check_position_then_rejected_like_the_count_says(tmp_path):
+	# given / when
+	error = _position_error(tmp_path, "x = 1\ny = 2\n", 3, 1)
+	# then
+	assert error is not None
+	assert "has 2 line(s)" in error
+
+
 def test_given_line_zero_when_check_position_then_error(tmp_path):
 	# given / when
 	error = _position_error(tmp_path, "x = 1\n", 0, 1)
@@ -623,6 +632,35 @@ def test_given_nested_config_created_when_refresh_then_restarts(tmp_path, monkey
 	assert notices == ["restarted the language server because pyproject.toml changed"]
 
 
+def test_given_config_rewritten_with_same_text_when_refresh_then_no_restart(tmp_path, monkeypatch):
+	# given
+	config = tmp_path / "pyproject.toml"
+	config.write_text("[tool.ty]\n", encoding="utf-8")
+	client, restarts, notices, _ = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when: new mtime, identical content (touch, git checkout)
+	stat = config.stat()
+	os.utime(config, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 0
+	assert notices == []
+
+
+def test_given_config_deleted_when_refresh_then_restarts(tmp_path, monkeypatch):
+	# given
+	config = tmp_path / "pyproject.toml"
+	config.write_text("[tool.ty]\n", encoding="utf-8")
+	client, restarts, notices, _ = _config_client(tmp_path, monkeypatch)
+	asyncio.run(client.refresh())
+	# when
+	config.unlink()
+	asyncio.run(client.refresh())
+	# then
+	assert restarts.count == 1
+	assert notices == ["restarted the language server because pyproject.toml changed"]
+
+
 def test_given_only_source_edit_when_refresh_then_no_restart(tmp_path, monkeypatch):
 	# given
 	(tmp_path / "pyproject.toml").write_text("[tool.ty]\n", encoding="utf-8")
@@ -687,6 +725,21 @@ def test_given_started_client_when_restart_then_state_reset_and_on_restart_runs(
 
 	monkeypatch.setattr(client, "stop", _stop)
 	monkeypatch.setattr(client, "start", _start)
+
+	async def _in_flight() -> str:
+		fut = asyncio.get_running_loop().create_future()
+		client._pending[1] = fut
+		asyncio.get_running_loop().call_soon(lambda: asyncio.ensure_future(client.restart()))
+		try:
+			await asyncio.wait_for(fut, timeout=5)
+		except lsp_client.LanguageServerExitedError:
+			return "failed fast"
+		return "answered"
+
+	# when: a request pending on the old server fails at restart instead of timing out
+	assert asyncio.run(_in_flight()) == "failed fast"
+	calls.clear()
+	seen.clear()
 	# when
 	asyncio.run(client.restart())
 	# then

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import os
@@ -127,8 +128,10 @@ class LspClient:
 	_symbol_cache: dict[str, tuple[int, list[dict[str, Any]]]] = field(default_factory=dict, init=False)
 	# path -> (mtime_ns, size) of every watched file at the last `refresh()`.
 	_watch_snapshot: dict[Path, tuple[int, int]] | None = field(default=None, init=False)
-	# Same, for `config_names` files.
+	# Same, for `config_names` files, plus their content hashes: a `touch` or a
+	# `git checkout` that rewrites identical text must not restart the server.
 	_config_snapshot: dict[Path, tuple[int, int]] | None = field(default=None, init=False)
+	_config_hashes: dict[Path, str] = field(default_factory=dict, init=False)
 	_refresh_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
 	_reader_task: asyncio.Task | None = field(default=None, init=False)
 	_stderr_task: asyncio.Task | None = field(default=None, init=False)
@@ -185,10 +188,11 @@ class LspClient:
 			self._notify("exit", {})
 		except Exception:
 			logger.debug("language server didn't respond to shutdown in time; terminating it directly", exc_info=True)
-		if self._reader_task:
-			self._reader_task.cancel()
-		if self._stderr_task:
-			self._stderr_task.cancel()
+		tasks = [task for task in (self._reader_task, self._stderr_task) if task is not None]
+		for task in tasks:
+			task.cancel()
+		# Let the reader's cleanup run now, not after a restart has created new pending requests.
+		await asyncio.gather(*tasks, return_exceptions=True)
 		with contextlib.suppress(ProcessLookupError):
 			self._proc.terminate()
 		with contextlib.suppress(asyncio.TimeoutError, ProcessLookupError):
@@ -198,6 +202,7 @@ class LspClient:
 
 	async def restart(self) -> None:
 		"""Stop the server and start it again with no memory of the old session."""
+		self._fail_pending()  # requests in flight on the old server fail now, not after their timeout
 		await self.stop()
 		self._pending = {}
 		self._diagnostics = {}
@@ -434,6 +439,29 @@ class LspClient:
 				(configs if is_config else sources)[key] = (st.st_mtime_ns, st.st_size)
 		return sources, configs
 
+	def _changed_configs(
+		self, configs: dict[Path, tuple[int, int]], previous: dict[Path, tuple[int, int]] | None
+	) -> list[str]:
+		"""Names of config files whose *content* differs from the last time we looked
+		(stat-changed files are hashed; the remembered hashes are updated)."""
+		touched: set[str] = set()
+		hashes: dict[Path, str] = {}
+		for path, stat in configs.items():
+			known = self._config_hashes.get(path)
+			if known is not None and previous is not None and previous.get(path) == stat:
+				hashes[path] = known
+				continue
+			try:
+				digest = hashlib.sha256(path.read_bytes()).hexdigest()
+			except OSError:
+				continue
+			hashes[path] = digest
+			if previous is not None and digest != known:
+				touched.add(path.name)
+		touched.update(path.name for path in self._config_hashes.keys() - hashes.keys())
+		self._config_hashes = hashes
+		return sorted(touched)
+
 	async def refresh(self) -> None:
 		"""Bring the language server's view of the disk up to date.
 
@@ -452,21 +480,17 @@ class LspClient:
 			previous_configs = self._config_snapshot
 			self._config_snapshot = configs
 			if previous_configs is not None and configs != previous_configs:
-				# The server only reads its project config at startup: start a fresh one,
-				# which also sees the disk as it is now, so nothing else needs reporting.
-				self._watch_snapshot = current
-				await self.restart()
-				if self.on_notice is not None:
-					touched = sorted(
-						{p.name for p in configs.keys() ^ previous_configs.keys()}
-						| {
-							p.name
-							for p in configs.keys() & previous_configs.keys()
-							if configs[p] != previous_configs[p]
-						}
-					)
-					self.on_notice(f"restarted the language server because {', '.join(touched)} changed")
-				return
+				touched = await asyncio.to_thread(self._changed_configs, configs, previous_configs)
+				if touched:
+					# The server only reads its project config at startup: start a fresh one,
+					# which also sees the disk as it is now, so nothing else needs reporting.
+					self._watch_snapshot = current
+					await self.restart()
+					if self.on_notice is not None:
+						self.on_notice(f"restarted the language server because {', '.join(touched)} changed")
+					return
+			elif previous_configs is None:
+				await asyncio.to_thread(self._changed_configs, configs, None)
 			changes: list[dict[str, Any]] = []
 			previous = self._watch_snapshot
 			if previous is not None:
@@ -501,10 +525,11 @@ class LspClient:
 		empty result indistinguishable from "nothing there"."""
 		abs_path = self._to_uri(file_path)
 		lines = _LINE_BREAK_RE.split(abs_path.read_text(encoding="utf-8"))
+		if len(lines) > 1 and lines[-1] == "":
+			lines.pop()  # the empty "line" after the final newline isn't a line anyone can point at
 		if not 1 <= line <= len(lines):
-			count = len(lines) - 1 if len(lines) > 1 and lines[-1] == "" else len(lines)  # ignore the final newline
 			raise InvalidPositionError(
-				f"line {line} is out of range: {file_path} has {count} line(s) (lines are 1-indexed)"
+				f"line {line} is out of range: {file_path} has {len(lines)} line(s) (lines are 1-indexed)"
 			)
 		width = len(lines[line - 1].encode("utf-16-le")) // 2
 		if not 1 <= column <= width + 1:

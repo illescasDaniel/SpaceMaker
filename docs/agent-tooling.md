@@ -323,7 +323,10 @@ project config once at startup, so the same walk also stamps every
 verdicts) instead of reporting file changes, since the fresh server reads the
 disk itself. The next result carries `[codenav] restarted the language server
 because pyproject.toml changed`. Cost: one cold start (~0.4 s ty, ~1.3 s
-tsserver), only right after such an edit.
+tsserver), only right after such an edit. Only a change in file *content* counts (hashed), so a `touch` or a
+checkout rewriting identical text doesn't restart; in-flight requests on the old server fail immediately. The
+stale-code check is throttled to one stat walk per 2 s. codenav `hover` enrichment skips builtins (typeshed) and
+never turns a good hover into an error if the extra `typeDefinition` request fails.
 
 ### Notices on tool results
 

@@ -14,7 +14,7 @@ def _board(tmp_path: Path) -> tuple[NoticeBoard, Path]:
 	source = tmp_path / "pkg" / "mod.py"
 	source.parent.mkdir()
 	source.write_text("x = 1\n", encoding="utf-8")
-	return NoticeBoard("demo", [source.parent]), source
+	return NoticeBoard("demo", [source.parent], recheck_seconds=0), source
 
 
 def test_given_no_notices_and_fresh_code_when_annotate_then_text_unchanged(tmp_path):
@@ -112,3 +112,19 @@ def test_given_module_when_package_source_dirs_then_its_directory(tmp_path):
 	dirs = package_source_dirs(mcp_nav_shared)
 	# then
 	assert dirs == [Path(mcp_nav_shared.__file__).resolve().parent]
+
+
+def test_given_recent_check_when_source_changes_then_stale_verdict_reused_until_interval(tmp_path):
+	# given
+	source = tmp_path / "pkg" / "mod.py"
+	source.parent.mkdir()
+	source.write_text("x = 1\n", encoding="utf-8")
+	board = NoticeBoard("demo", [source.parent], recheck_seconds=3600)
+	# when
+	source.write_text("x = 22222\n", encoding="utf-8")
+	within_interval = board.code_is_stale()
+	board._checked_at -= 3601
+	after_interval = board.code_is_stale()
+	# then
+	assert not within_interval
+	assert after_interval

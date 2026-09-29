@@ -10,12 +10,14 @@ once), so the most it can do about stale code is say so on every call.
 from __future__ import annotations
 
 import functools
+import time
 import typing
 from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
 from typing import Any
 
 
+_RECHECK_SECONDS = 2.0
 _Stamp = tuple[tuple[str, int, int], ...]
 
 
@@ -32,18 +34,28 @@ def _source_stamp(dirs: Iterable[Path]) -> _Stamp:
 
 
 class NoticeBoard:
-	def __init__(self, server_name: str, source_dirs: Iterable[Path]) -> None:
+	def __init__(
+		self, server_name: str, source_dirs: Iterable[Path], *, recheck_seconds: float = _RECHECK_SECONDS
+	) -> None:
 		self.server_name = server_name
+		self._recheck_seconds = recheck_seconds
 		self._source_dirs = tuple(source_dirs)
 		self._started_with = _source_stamp(self._source_dirs)
 		self._pending: list[str] = []
+		self._checked_at = time.monotonic()
+		self._stale = False
 
 	def post(self, message: str) -> None:
 		if message not in self._pending:
 			self._pending.append(message)
 
 	def code_is_stale(self) -> bool:
-		return _source_stamp(self._source_dirs) != self._started_with
+		# A stat walk per tool call adds up; a few seconds' lag in noticing an edit is fine.
+		now = time.monotonic()
+		if now - self._checked_at >= self._recheck_seconds:
+			self._checked_at = now
+			self._stale = _source_stamp(self._source_dirs) != self._started_with
+		return self._stale
 
 	def drain(self) -> list[str]:
 		"""One-shot notices posted since the last call, plus the sticky stale-code line."""
