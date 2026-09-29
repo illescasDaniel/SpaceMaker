@@ -318,6 +318,23 @@ def _protocol_class_names(source: str) -> set[str]:
 	}
 
 
+# path -> ((mtime_ns, size), protocol class names): a pure function of the
+# file's own text, so the stat pair is a sufficient key. Parsing every file's
+# AST dominated `implementations`' warm cost before this.
+_protocol_names_cache: dict[Path, tuple[tuple[int, int], set[str]]] = {}
+
+
+def _cached_protocol_class_names(path: Path) -> set[str]:
+	stat = path.stat()
+	key = (stat.st_mtime_ns, stat.st_size)
+	hit = _protocol_names_cache.get(path)
+	if hit is not None and hit[0] == key:
+		return hit[1]
+	names = _protocol_class_names(path.read_text(encoding="utf-8"))
+	_protocol_names_cache[path] = (key, names)
+	return names
+
+
 def _method_names(cls_node: dict[str, Any]) -> set[str]:
 	"""Method/property names (no dunders) directly under a `to_symbol_tree` class node."""
 	names: set[str] = set()
@@ -339,6 +356,26 @@ def _probe_source(port_module: str, port_name: str, candidate_module: str, candi
 	if candidate_module != port_module:
 		imports += f"from {candidate_module} import {candidate_name}\n"
 	return f"{imports}\n\ndef _p(x: {candidate_name}) -> {port_name}:\n\treturn x\n"
+
+
+# A probe verdict depends on the port and candidate files *and* whatever they
+# import, so it can only be reused while nothing under SOURCE_ROOT has changed:
+# the whole cache is keyed to one (path, mtime_ns, size) signature of every
+# candidate file and dropped wholesale when it differs. Verdicts are keyed by
+# (port module, port name, candidate module, class name) -> (verified?, line).
+_probe_cache: dict[tuple[str, str, str, str], tuple[bool, str]] = {}
+_probe_cache_signature: tuple[tuple[str, int, int], ...] = ()
+
+
+def _source_signature(files: list[Path]) -> tuple[tuple[str, int, int], ...]:
+	entries: list[tuple[str, int, int]] = []
+	for path in files:
+		try:
+			stat = path.stat()
+		except OSError:
+			continue
+		entries.append((str(path), stat.st_mtime_ns, stat.st_size))
+	return tuple(entries)
 
 
 @mcp.tool()
@@ -410,11 +447,10 @@ async def implementations(port_name: str) -> str:
 	name_matches: list[tuple[Path, str, str]] = []  # (path, class name, module path)
 	for path, symbols in zip(candidate_files, symbol_lists, strict=True):
 		try:
-			candidate_source = path.read_text(encoding="utf-8")
+			other_protocols = _cached_protocol_class_names(path)
 		except (OSError, UnicodeDecodeError):
 			unreadable.append(path)
 			continue
-		other_protocols = _protocol_class_names(candidate_source)
 		for cls_node in (n for n in to_symbol_tree(symbols) if n["kind"] == 5):
 			if path.resolve() == port_abs_path and cls_node["name"] == port.name:
 				continue  # the port never "implements" itself
@@ -434,12 +470,24 @@ async def implementations(port_name: str) -> str:
 			f"{', '.join(sorted(port_method_names))}.{skipped_note}"
 		)
 
+	global _probe_cache_signature
+	signature = _source_signature(all_candidate_files)
+	if signature != _probe_cache_signature:
+		_probe_cache.clear()
+		_probe_cache_signature = signature
+
 	probe_uri = (WORKSPACE_ROOT / _PROBE_RELATIVE_PATH).as_uri()
 	verified: list[str] = []
 	unverified: list[str] = []
 	opened = False
 	try:
 		for path, cls_name, candidate_module in name_matches:
+			cache_key = (port_module, port.name, candidate_module, cls_name)
+			rel = uri_to_relative(path.as_uri(), WORKSPACE_ROOT)
+			cached = _probe_cache.get(cache_key)
+			if cached is not None:
+				(verified if cached[0] else unverified).append(cached[1])
+				continue
 			code = _probe_source(port_module, port.name, candidate_module, cls_name)
 			if not opened:
 				await client.open_scratch_document(probe_uri, code)
@@ -447,7 +495,6 @@ async def implementations(port_name: str) -> str:
 			else:
 				await client.change_scratch_document(probe_uri, code)
 			items = await client.pull_diagnostics(probe_uri)
-			rel = uri_to_relative(path.as_uri(), WORKSPACE_ROOT)
 			# Verified means the probe document has *no* diagnostics at all —
 			# not just none tagged `invalid-return-type`. A candidate module
 			# that fails to import (e.g. it lives outside where its own
@@ -457,12 +504,16 @@ async def implementations(port_name: str) -> str:
 			# narrower check that case was silently counted as verified even
 			# though ty never actually checked the assignment.
 			if not items:
-				verified.append(f"{cls_name}  ({rel})")
+				line, is_verified = f"{cls_name}  ({rel})", True
 			elif any(item.get("code") == "invalid-return-type" for item in items):
-				unverified.append(f"{cls_name}  ({rel})  — method names match but ty rejects the assignment")
+				line = f"{cls_name}  ({rel})  — method names match but ty rejects the assignment"
+				is_verified = False
 			else:
 				reasons = "; ".join(str(item.get("message", "")).splitlines()[0] for item in items[:3])
-				unverified.append(f"{cls_name}  ({rel})  — could not verify: {reasons}")
+				line = f"{cls_name}  ({rel})  — could not verify: {reasons}"
+				is_verified = False
+			_probe_cache[cache_key] = (is_verified, line)
+			(verified if is_verified else unverified).append(line)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 	finally:
