@@ -134,6 +134,127 @@ def test_given_symbols_in_generated_and_source_when_search_symbol_then_only_sour
 	assert "dom.js" not in result
 
 
+def test_given_name_alias_when_search_symbol_called_then_behaves_like_query(tmp_path, monkeypatch):
+	# given
+	seen: list[str] = []
+
+	class _FakeClient:
+		async def workspace_symbol(self, query: str) -> list[dict]:
+			seen.append(query)
+			return []
+
+	async def _fake_ts_client() -> _FakeClient:
+		return _FakeClient()
+
+	monkeypatch.setattr(server, "_get_ts_client", _fake_ts_client)
+	# when
+	result = asyncio.run(server.search_symbol(name="renderGalleryItemStage"))
+	# then
+	assert seen == ["renderGalleryItemStage"]
+	assert "No symbols matching" in result
+
+
+def test_given_neither_query_nor_name_when_search_symbol_then_returns_actionable_error():
+	# when
+	result = asyncio.run(server.search_symbol())
+	# then
+	assert "query" in result
+	assert "alias" in result
+
+
+def test_given_gallery_property_flood_when_search_symbol_then_declarations_visible(tmp_path, monkeypatch):
+	# given — tsserver-style flood: many Property assignments + export Variable
+	# dupes; after filter, GalleryItem / galleryDateParts must stay in the page
+	def _sym(name: str, kind: int, path: Path, line: int = 0) -> dict:
+		pos = {"line": line, "character": 0}
+		return {
+			"name": name,
+			"kind": kind,
+			"location": {"uri": path.as_uri(), "range": {"start": pos, "end": pos}},
+		}
+
+	src = tmp_path / "web" / "src"
+	src.mkdir(parents=True)
+	state = src / "state.ts"
+	timeline = src / "gallery-timeline.ts"
+	types = src / "types.ts"
+	state.write_text("x\n", encoding="utf-8")
+	timeline.write_text("x\n", encoding="utf-8")
+	types.write_text("x\n", encoding="utf-8")
+	symbols = [_sym("GalleryItem", 11, types)]
+	symbols.append(_sym("galleryDateParts", 12, timeline))
+	symbols.append(_sym("galleryDateParts", 13, timeline))  # export list Variable
+	for line in range(5):
+		symbols.append(_sym("galleryHasMore", 7, state, line))
+		symbols.append(_sym("galleryHasMore", 7, timeline, line))
+
+	class _FakeClient:
+		async def workspace_symbol(self, _query: str) -> list[dict]:
+			return symbols
+
+	async def _fake_ts_client() -> _FakeClient:
+		return _FakeClient()
+
+	monkeypatch.setattr(server, "WORKSPACE_ROOT", tmp_path)
+	monkeypatch.setattr(server, "GENERATED_PATHS", [])
+	monkeypatch.setattr(server, "_get_ts_client", _fake_ts_client)
+	# when
+	result = asyncio.run(server.search_symbol("gallery"))
+	# then
+	assert "GalleryItem" in result
+	assert "galleryDateParts" in result
+	assert result.count("galleryHasMore") == 2  # one per file, not five each
+	assert result.count("[Variable]") == 0
+
+
+def test_given_query_alias_when_symbol_info_called_then_resolves_name(monkeypatch):
+	# given
+	seen: list[str] = []
+
+	class _Resolved:
+		name = "renderGalleryItemStage"
+		kind = 12
+		uri = "file:///web/src/gallery-item.ts"
+		line = 134
+		column = 9
+
+	async def _fake_resolve(client, workspace, name, file_path=None):
+		seen.append(name)
+		return _Resolved()
+
+	class _FakeClient:
+		async def hover(self, *_a, **_k):
+			return {"contents": {"value": "fn"}}
+
+		async def definition(self, *_a, **_k):
+			return []
+
+		async def references(self, *_a, **_k):
+			return []
+
+	async def _fake_ts_client() -> _FakeClient:
+		return _FakeClient()
+
+	monkeypatch.setattr(server, "_get_ts_client", _fake_ts_client)
+	monkeypatch.setattr(server, "resolve_symbol", _fake_resolve)
+	monkeypatch.setattr(server, "uri_to_relative", lambda *_: "web/src/gallery-item.ts")
+	monkeypatch.setattr(server, "_is_generated", lambda *_: False)
+	# when
+	result = asyncio.run(server.symbol_info(query="renderGalleryItemStage", include_references=False))
+	# then
+	assert seen == ["renderGalleryItemStage"]
+	assert "renderGalleryItemStage" in result
+	assert "Definition:" in result
+
+
+def test_given_css_file_when_outline_then_rejects_with_hint():
+	# when
+	result = asyncio.run(server.outline("theme.css"))
+	# then
+	assert "JS/TS" in result
+	assert "css_var" in result or "selector" in result
+
+
 def test_given_query_alias_when_selector_called_then_behaves_like_name(monkeypatch):
 	# given
 	seen: list[str] = []

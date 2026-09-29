@@ -1,29 +1,39 @@
 # codenav-mcp
 
-MCP server that exposes [ty](https://github.com/astral-sh/ty)'s language-server
-features as tools for AI agents. Named `codenav` (not `ty`) because `ty` is
-Astral's underlying tool; this package is the MCP wrapper.
+MCP server for type-resolved Python navigation, backed by
+[ty](https://github.com/astral-sh/ty)'s language server. Definitions,
+references, and call sites go through real inference (imports, DI
+parameters, dataclass fields), not text grep.
 
-## What it does
-
-Type-resolved Python navigation — definitions, references, and call sites
-through real inference (imports, DI parameters, dataclass fields), not text
-grep.
+## Tools
 
 **Prefer intent-level (name-based) tools first:**
 
 | Tool | Answers |
 |------|---------|
-| `symbol_info` | What is this? (hover + definition + references) |
-| `outline` | What's in this file? |
-| `callers` | Who calls this function? |
+| `symbol_info` | What is this? Header + hover + definition + references |
+| `outline` | What's in this file? (classes, methods, functions) |
+| `callers` | Who actually calls this function? (call hierarchy, not imports) |
 | `implementations` | Which classes structurally implement this `Protocol`? |
+| `search_symbol` | Workspace symbol search by name (ranked, capped) |
 
 Then position tools when you already have a `path:line:col`:
-`search_symbol`, `hover`, `definition`, `references`, `diagnostics`.
+
+| Tool | Answers |
+|------|---------|
+| `hover` | Type / docs at a position |
+| `definition` | Go to definition (DI-aware) |
+| `references` | All usages across the workspace |
+| `diagnostics` | ty type-check diagnostics for one file |
+
+`name` and `query` are accepted as aliases on the name-based tools
+(`port_name` / `name` / `query` on `implementations`). A missing/wrong
+param yields a soft hint instead of a validation wall.
 
 Positions are **1-indexed**. `column` is a UTF-16 character offset (a leading
 tab counts as one character).
+
+Python only (`.py` / `.pyi`).
 
 ## Dependencies
 

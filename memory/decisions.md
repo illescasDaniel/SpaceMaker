@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-29 — MCP trial: param aliases, webnav composites, quieter search_symbol
+
+- **Context:** Live trial found happy paths solid, but agents still abandoned MCPs after one wrong param (`query` vs `name` → pydantic wall), webnav lacked `symbol_info`/`outline` (forced Read/grep chains), and `search_symbol("gallery")` still flooded the 50-cap with duplicate Property hits plus export-list Variable twins. After ship, `symbol_info` was still ambiguous on Function + `export { foo }` Variable.
+- **Decision:** Shared `mcp_nav_shared.params.resolve_name_query` on all name-based tools (optional params + soft ToolInputError). webnav gained `symbol_info`/`outline` via the same `resolve_symbol` path as codenav (JS/TS only). `filter_workspace_symbols` collapses repeated Property/Field hits per file and drops same-file Variables when a declaration kind exists; `resolve_symbol` uses that filter too. Docs/AGENTS/READMEs/friction updated; no new text-search MCP (grep stays for free text).
+- **Rationale:** Highest-ROI friction from the trial; aliases are cheap forgiveness; composites are why codenav feels one-call; Property-only dedupe avoids collapsing two same-named methods on different classes in one file.
+
 ## 2026-09-29 — Worktree deps: lock-stamped `node_modules`, always-`uv sync` `.venv`
 
 - **Context:** A worktree made with a bare `git worktree add` had no `node_modules`, so the web gate failed. `copy-venv.sh` also kept any working `.venv`/`node_modules` even when the branch's lockfiles differed.

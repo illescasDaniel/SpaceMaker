@@ -26,6 +26,78 @@ def test_given_non_python_file_when_check_python_file_then_tool_input_error():
 	assert text == "codenav only supports Python files (.py/.pyi), got 'README.md'"
 
 
+def test_given_query_alias_when_symbol_info_then_resolves_name(monkeypatch):
+	# given
+	seen: list[str] = []
+
+	class _Resolved:
+		name = "start_convert"
+		kind = 6
+		uri = "file:///jobs.py"
+		line = 296
+		column = 5
+
+	async def _fake_resolve(client, workspace, name, file_path=None):
+		seen.append(name)
+		return _Resolved()
+
+	class _FakeClient:
+		async def hover(self, *_a, **_k):
+			return {"contents": {"value": "def start_convert"}}
+
+		async def definition(self, *_a, **_k):
+			return []
+
+		async def references(self, *_a, **_k):
+			return []
+
+	async def _fake_get_client():
+		return _FakeClient()
+
+	monkeypatch.setattr(codenav_server, "get_client", _fake_get_client)
+	monkeypatch.setattr(codenav_server, "resolve_symbol", _fake_resolve)
+	monkeypatch.setattr(codenav_server, "uri_to_relative", lambda *_: "jobs.py")
+	# when
+	import asyncio
+
+	result = asyncio.run(codenav_server.symbol_info(query="start_convert", include_references=False))
+	# then
+	assert seen == ["start_convert"]
+	assert "start_convert" in result
+
+
+def test_given_name_alias_when_search_symbol_then_uses_query(monkeypatch):
+	# given
+	seen: list[str] = []
+
+	class _FakeClient:
+		async def workspace_symbol(self, query: str) -> list:
+			seen.append(query)
+			return []
+
+	async def _fake_get_client():
+		return _FakeClient()
+
+	monkeypatch.setattr(codenav_server, "get_client", _fake_get_client)
+	import asyncio
+
+	# when
+	result = asyncio.run(codenav_server.search_symbol(name="start_convert"))
+	# then
+	assert seen == ["start_convert"]
+	assert "No symbols matching" in result
+
+
+def test_given_neither_when_implementations_then_actionable_error():
+	import asyncio
+
+	# when
+	result = asyncio.run(codenav_server.implementations())
+	# then
+	assert "port_name" in result
+	assert "alias" in result.lower() or "aliases" in result.lower()
+
+
 def test_given_plain_protocol_base_when_protocol_class_names_then_included():
 	source = "from typing import Protocol\n\nclass Port(Protocol):\n\tdef run(self) -> None: ...\n"
 	assert _protocol_class_names(source) == {"Port"}

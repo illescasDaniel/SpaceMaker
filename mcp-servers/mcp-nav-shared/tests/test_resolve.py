@@ -93,6 +93,33 @@ def test_given_two_exact_matches_when_resolve_symbol_then_ambiguous_lists_candid
 	assert "b.py" in text
 
 
+def test_given_function_and_export_variable_same_file_when_resolve_then_picks_function(tmp_path):
+	# given — tsserver lists `export { foo }` as Variable alongside Function
+	uri = (tmp_path / "gallery-item.ts").as_uri()
+	fn = {
+		"name": "renderGalleryItemStage",
+		"kind": 12,
+		"location": {
+			"uri": uri,
+			"range": {"start": {"line": 134, "character": 9}, "end": {"line": 134, "character": 31}},
+		},
+	}
+	export_var = {
+		"name": "renderGalleryItemStage",
+		"kind": 13,
+		"location": {
+			"uri": uri,
+			"range": {"start": {"line": 522, "character": 1}, "end": {"line": 522, "character": 23}},
+		},
+	}
+	client = _FakeResolveClient([fn, export_var])
+	# when
+	resolved = asyncio.run(resolve_symbol(client, tmp_path, "renderGalleryItemStage"))
+	# then
+	assert resolved.kind == 12
+	assert resolved.line == 134
+
+
 def test_given_ambiguous_methods_when_resolve_symbol_then_qualifies_with_class_name(tmp_path):
 	# given — two classes in the same file each define a `run` method; the
 	# bare name alone can't tell them apart, so the ambiguity listing should

@@ -28,11 +28,16 @@ from mcp_nav_shared.exclude import is_excluded
 from mcp_nav_shared.format import (
 	format_diagnostics,
 	format_location,
+	format_outline,
 	format_references,
+	format_references_grouped,
 	format_workspace_symbols,
+	symbol_kind_label,
 	uri_to_relative,
 )
 from mcp_nav_shared.lsp_client import LspClient
+from mcp_nav_shared.params import resolve_name_query
+from mcp_nav_shared.resolve import resolve_symbol
 from mcp_nav_shared.workspace import resolve_workspace_root
 
 from webnav_mcp import web_index
@@ -76,9 +81,10 @@ mcp = MCPServer(
 		"Code navigation for this project's JS/TS/HTML/CSS, backed by "
 		"typescript-language-server (JS/TS) and vscode-langservers-extracted "
 		"(HTML/CSS). Prefer this over grepping for symbol definitions/usages. "
-		"search_symbol only covers JS/TS (the HTML/CSS servers don't implement "
-		"useful workspace-wide symbol search). The language servers only see "
-		"one file at a time, so `--custom-properties` and `#id`/`.class` "
+		"Start with symbol_info (what is X) or outline (what's in this file) for "
+		"JS/TS; search_symbol is JS/TS-only (the HTML/CSS language servers don't "
+		"implement useful workspace-wide symbol search). The language servers only "
+		"see one file at a time, so `--custom-properties` and `#id`/`.class` "
 		"selectors can't be cross-referenced across files that way; use "
 		"css_var/selector for those instead of hover/definition/references — "
 		"references and definition also answer from that same cross-file "
@@ -229,6 +235,32 @@ def _index_answer(token: str) -> str:
 	return web_index.format_selector(indexes, token, generated=_GENERATED_RELATIVE)
 
 
+def _format_hover_contents(contents: object) -> str:
+	if not contents:
+		return ""
+	if isinstance(contents, dict):
+		return str(contents.get("value", contents)).strip()
+	if isinstance(contents, list):
+		return "\n".join(
+			c.get("value", str(c)) if isinstance(c, dict) else str(c) for c in contents
+		).strip()
+	return str(contents).strip()
+
+
+def _check_script_file(file_path: str) -> None:
+	suffix = Path(file_path).suffix.lower()
+	if suffix not in _SCRIPT_EXTENSIONS:
+		raise ToolInputError(
+			f"webnav outline/symbol_info only support JS/TS files "
+			f"(.js/.mjs/.cjs/.ts/.mts/.cts), got {file_path!r}; "
+			"use css_var/selector for CSS/HTML"
+		)
+	if _is_generated(_resolve_path(file_path)):
+		raise ToolInputError(
+			f"{file_path!r} is generated output (WEBNAV_MCP_EXCLUDE); navigate the source it was built from instead"
+		)
+
+
 @mcp.tool()
 async def hover(file_path: str, line: int, column: int) -> str:
 	"""Get type/documentation info for the symbol at a position.
@@ -242,14 +274,7 @@ async def hover(file_path: str, line: int, column: int) -> str:
 		result = await client.hover(file_path, line, column)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
-	contents = result.get("contents")
-	if not contents:
-		return "No hover information at that position."
-	if isinstance(contents, dict):
-		return contents.get("value", str(contents)).strip()
-	if isinstance(contents, list):
-		return "\n".join(c.get("value", str(c)) if isinstance(c, dict) else str(c) for c in contents).strip()
-	return str(contents).strip()
+	return _format_hover_contents(result.get("contents")) or "No hover information at that position."
 
 
 @mcp.tool()
@@ -297,17 +322,18 @@ async def references(file_path: str, line: int, column: int, include_declaration
 
 
 @mcp.tool()
-async def search_symbol(query: str) -> str:
+async def search_symbol(query: str | None = None, name: str | None = None) -> str:
 	"""Search JS/TS files for a symbol by name (function, class, const, etc.).
 
 	JS/TS-only: the HTML/CSS language servers don't implement useful
-	workspace-wide symbol search (webnav does not reimplement it). Use this
-	to find a symbol's file/position first, then pass that position to
-	definition/references/hover. Returned positions point at the identifier
-	name and use the same character-offset column convention as the other
-	tools. Results include a SymbolKind label and are capped.
+	workspace-wide symbol search (webnav does not reimplement it). Prefer
+	`symbol_info` for a one-call summary. Returned positions point at the
+	identifier name and use the same character-offset column convention as
+	the other tools. Results include a SymbolKind label and are capped.
+	`name` is accepted as an alias for `query`.
 	"""
 	try:
+		query = resolve_name_query(preferred="query", example="renderGalleryItemStage", query=query, name=name)
 		client = await _get_ts_client()
 		symbols = await client.workspace_symbol(query)
 	except TOOL_ERRORS as exc:
@@ -320,6 +346,68 @@ async def search_symbol(query: str) -> str:
 	if not symbols:
 		return f"No symbols matching {query!r}."
 	return format_workspace_symbols(symbols, WORKSPACE_ROOT, query=query)
+
+
+@mcp.tool()
+async def symbol_info(
+	name: str | None = None,
+	query: str | None = None,
+	file_path: str | None = None,
+	include_references: bool = True,
+) -> str:
+	"""What is X and where is it used? Example: `symbol_info(name="renderGalleryItemStage")`.
+
+	One-call summary for a JS/TS name: header, hover text, definition, and
+	references grouped by file — the usual first lookup instead of chaining
+	search_symbol → hover → definition → references by hand. Pass `file_path`
+	to disambiguate; `query` is accepted as an alias for `name`. For CSS/HTML
+	cross-file lookups use `css_var` / `selector` instead.
+	"""
+	try:
+		name = resolve_name_query(
+			preferred="name", example="renderGalleryItemStage", name=name, query=query
+		)
+		client = await _get_ts_client()
+		resolved = await resolve_symbol(client, WORKSPACE_ROOT, name, file_path=file_path)
+		rel_path = uri_to_relative(resolved.uri, WORKSPACE_ROOT)
+		if _is_generated(_resolve_path(rel_path)):
+			raise ToolInputError(
+				f"{rel_path!r} is generated output (WEBNAV_MCP_EXCLUDE); navigate the source it was built from instead"
+			)
+		line, column = resolved.line + 1, resolved.column + 1
+		hover_result = await client.hover(rel_path, line, column)
+		definition_locations = await client.definition(rel_path, line, column)
+		reference_locations = await client.references(rel_path, line, column) if include_references else []
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
+	header = f"{resolved.name}  [{symbol_kind_label(resolved.kind)}]  ({rel_path}:{line}:{column})"
+	hover_text = _format_hover_contents(hover_result.get("contents")) or "No hover information."
+	definition_text = (
+		"\n\n".join(format_location(loc, WORKSPACE_ROOT) for loc in definition_locations)
+		if definition_locations
+		else "No definition found."
+	)
+	parts = [header, "", hover_text, "", "Definition:", definition_text]
+	if include_references:
+		parts += ["", "References:", format_references_grouped(reference_locations, WORKSPACE_ROOT)]
+	return "\n".join(parts)
+
+
+@mcp.tool()
+async def outline(file_path: str) -> str:
+	"""What's in this file? Example: `outline(file_path="web/src/gallery-item.ts")`.
+
+	Indented outline (functions, classes, etc., with line numbers) of a JS/TS
+	file, so you can navigate without reading it in full. Follow up with
+	hover/definition/references at a listed line, or symbol_info by name.
+	"""
+	try:
+		_check_script_file(file_path)
+		client = await _get_ts_client()
+		symbols = await client.document_symbol(file_path)
+	except TOOL_ERRORS as exc:
+		return format_tool_error(exc)
+	return format_outline(symbols)
 
 
 @mcp.tool()
@@ -350,14 +438,6 @@ async def diagnostics(file_path: str) -> str:
 	return "\n".join(combined) if combined else "No diagnostics."
 
 
-def _name_or_query(name: str | None, query: str | None) -> str:
-	"""Accept `query` as an alias for `name` (agents often guess it)."""
-	value = name if name is not None else query
-	if not value:
-		raise ToolInputError("Pass `name` (e.g. name='.my-class'); `query` is accepted as an alias.")
-	return value
-
-
 @mcp.tool()
 async def css_var(name: str | None = None, query: str | None = None) -> str:
 	"""Where is this `--custom-property` defined and used? Example: `css_var(name="--bg")`.
@@ -372,7 +452,7 @@ async def css_var(name: str | None = None, query: str | None = None) -> str:
 	since each may define its own values. `query` is accepted as an alias for `name`.
 	"""
 	try:
-		name = _name_or_query(name, query)
+		name = resolve_name_query(preferred="name", example="--bg", name=name, query=query)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)
@@ -403,7 +483,7 @@ async def selector(name: str | None = None, query: str | None = None) -> str:
 	accepted as an alias for `name`.
 	"""
 	try:
-		name = _name_or_query(name, query)
+		name = resolve_name_query(preferred="name", example=".gallery-item-media", name=name, query=query)
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 	indexes = web_index.build_workspace_index(WORKSPACE_ROOT, WEB_ROOTS)

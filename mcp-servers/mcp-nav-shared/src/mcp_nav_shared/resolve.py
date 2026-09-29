@@ -1,4 +1,4 @@
-"""Name-based symbol resolution shared by codenav's composite tools
+"""Name-based symbol resolution shared by codenav/webnav composite tools
 (`symbol_info`, `callers`, `implementations`): a `workspace_symbol` lookup
 with tiered ranking, dotted `Class.method` resolution via `documentSymbol`,
 and disambiguation by `file_path` — so those tools take a name instead of a
@@ -14,6 +14,7 @@ from typing import Any
 from mcp_nav_shared.errors import TOOL_ERRORS, ToolInputError
 from mcp_nav_shared.format import (
 	_match_tier,
+	filter_workspace_symbols,
 	is_hierarchical_document_symbols,
 	rank_workspace_symbols,
 	symbol_kind_label,
@@ -190,7 +191,10 @@ async def _exact_candidates(
 	client: LspClient, workspace_root: Path, name: str, *, file_path: str | None
 ) -> list[dict[str, Any]]:
 	symbols = await client.workspace_symbol(name)
-	ranked = rank_workspace_symbols(symbols, name)
+	# Same filter as search_symbol: drop export-list Variable twins and
+	# identical (name, kind, file) dupes so `symbol_info("foo")` isn't
+	# ambiguous between `function foo` and `export { foo }`.
+	ranked = filter_workspace_symbols(rank_workspace_symbols(symbols, name))
 	exact = [s for s in ranked if _match_tier(str(s.get("name") or ""), name) <= 1]
 	# Prefer a case-exact match (tier 0) over a merely case-insensitive one
 	# (tier 1) when both exist, e.g. `repo_root` vs. a `REPO_ROOT` constant

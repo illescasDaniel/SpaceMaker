@@ -46,12 +46,14 @@ Keep `activeContext.md` short — move finished threads to `memory/archive.md` r
 Two tools exist so you don't need to read large swaths of the codebase up front — neither skips a Phase Gate.
 
 - **Docs (the *why*):** read `docs/*.md` directly (`docs/index.md`, `docs/ARCHITECTURE.md`, `docs/testing.md`, `docs/agent-tooling.md`, `docs/playbooks/`). `uv run task docs-serve` is for humans browsing the rendered site, not for you.
-- **`codenav` MCP (the *what calls what*):** for finding a symbol's definition, its usages, or its type — prefer the name-based tools (`symbol_info`, `outline`, `callers`, `implementations`), then drop to position tools (`search_symbol`, `definition`, `references`, `hover`, `diagnostics`) once you have a line. Backed by `ty`'s language server, so it resolves through real type inference (imports, dependency-injected parameters, dataclass fields, etc.) rather than text matching. Reserve grep for things codenav can't answer (free-text search across comments/strings/config). See `docs/agent-tooling.md`.
-- **`webnav` MCP (same idea, for JS/HTML/CSS):** same tool shape as `codenav`, for the project's web static assets (`src/spacemaker/adapters/inbound/web/static/`, `wireframes/`) — backed by `typescript-language-server`/`vscode-langservers-extracted`. Use `css_var` / `selector` for cross-file `--custom-properties` and `#id`/`.class` lookups; `search_symbol` is JS-only. See `docs/agent-tooling.md`.
+- **`codenav` MCP (the *what calls what*):** for finding a symbol's definition, its usages, or its type — prefer the name-based tools (`symbol_info`, `outline`, `callers`, `implementations`), then drop to position tools (`search_symbol`, `definition`, `references`, `hover`, `diagnostics`) once you have a line. Backed by `ty`'s language server, so it resolves through real type inference (imports, dependency-injected parameters, dataclass fields, etc.) rather than text matching. Reserve **grep** for free-text / comments / specs / config keys (and anything MCP can't answer). See `docs/agent-tooling.md`.
+- **`webnav` MCP (same idea, for JS/HTML/CSS):** same composites as `codenav` for JS/TS (`symbol_info`, `outline`, plus position tools), for the project's web assets (`web/src/`, `src/spacemaker/adapters/inbound/web/static/`, `wireframes/`) — backed by `typescript-language-server`/`vscode-langservers-extracted`. Use `css_var` / `selector` for cross-file `--custom-properties` and `#id`/`.class` lookups. See `docs/agent-tooling.md`.
 
-**Example calls (copy these; parameter names matter — `selector`/`css_var` take `name`, not `query`):**
+**Example calls (copy these; prefer `name=` / `query=` as documented — each accepts the other as an alias):**
 
-- `symbol_info(name="JobsMixin.start_convert")` — what is X, where is it used
+- `symbol_info(name="JobsMixin.start_convert")` — what is X, where is it used (Python)
+- `symbol_info(name="renderGalleryItemStage")` — same for JS/TS
+- `outline(file_path="web/src/gallery-item.ts")` — what's in this file
 - `callers(name="start_convert")` — who calls this function
 - `selector(name=".gallery-item-media")` — who uses this `#id`/`.class` (CSS + HTML + JS)
 

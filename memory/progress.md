@@ -4,6 +4,8 @@ Open items only. Finished work: `memory/archive.md`.
 
 ## SpaceMaker app
 
+- [x] **MCP trial findings fix package** (2026-09-29) — Live trial of codenav/webnav; happy paths OK. Shipped: shared `resolve_name_query` aliases on all name-based tools (no more pydantic walls); webnav `symbol_info` + `outline`; quieter `search_symbol` (Property dedupe + drop export-list Variables); same Variable filter in `resolve_symbol`; READMEs/AGENTS/docs/friction updated. Live-verified after Cursor restart. MCP unit tests green.
+
 - [x] **SDD Phase 5 code-grader** (2026-09-29) — `code-grader` subagent pair (Claude/Cursor), `grade_prechecks.py` + task + 11 tests, drift tests, skill/AGENTS/docs updated. Not yet exercised end-to-end on a real feature; first real SDD run should validate the rubric. Layering warn fixed by moving `managed_tools.py` to `bootstrap/services/` (see decisions.md).
 
 - [x] **MCP tool review fixes** (2026-09-29) — Exercised every codenav/webnav tool against the repo (plus Cursor agent feedback). Fixed: webnav `_JS_QUERY_RE` was `querySelectorAll?\(` (only the last `l` optional) so plain `querySelector(...)` was never indexed — now also `closest`/`matches`; `selector` missed ids passed to project helpers (`onClick("btn-…")`, 44 call sites) — exact-name JS string literals now reported as `string literal` hits and count as references for diagnostics; hits in `WEBNAV_MCP_EXCLUDE` output labeled `[generated]`; duplicate same-line hits deduped. codenav dotted `Class.method` now resolves inherited members via `typeHierarchy/supertypes` (`AppServices.start_convert` → `JobsMixin`). `search_symbol` ranks Property/Field after declarations within a match tier (tsserver's `S.x = …` assignments filled the 50-cap). 160 MCP tests; `task checks` green.

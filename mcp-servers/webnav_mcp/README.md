@@ -3,10 +3,9 @@
 MCP server for JS/TS/HTML/CSS navigation — the counterpart to
 [`codenav-mcp`](../codenav_mcp/README.md) for front-end and markup assets.
 
-## What it does
+## Language servers
 
-Same tool shape as `codenav`, multiplexing three Node language servers by
-extension:
+Multiplexes three Node language servers by extension:
 
 | Extension | Backend |
 |-----------|---------|
@@ -17,18 +16,38 @@ extension:
 Binaries come from `vscode-langservers-extracted` (typically under
 `node_modules/.bin/` after `npm install`).
 
-**Cross-file CSS index** (pure-Python scanner, not the language servers):
+## Tools
+
+**Prefer intent-level (name-based) tools first for JS/TS:**
+
+| Tool | Answers |
+|------|---------|
+| `symbol_info` | What is this? Header + hover + definition + references |
+| `outline` | What's in this file? |
+| `search_symbol` | JS/TS workspace symbol search (ranked, capped; quieter Property/export noise) |
+
+Then position tools when you already have a `path:line:col`:
+
+| Tool | Answers |
+|------|---------|
+| `hover` | Type / docs at a position |
+| `definition` | Go to definition (CSS/HTML tokens answer from the index below) |
+| `references` | All usages (same index enrichment on CSS/HTML tokens) |
+| `diagnostics` | Language-server diagnostics; CSS/HTML also get unreferenced-selector / undefined-var warnings |
+
+**Cross-file CSS/HTML index** (pure-Python scanner, not the language servers):
 
 | Tool | Answers |
 |------|---------|
 | `css_var` | Where is `--name` defined / used? |
 | `selector` | Where is `#id` or `.class` defined / used (CSS, HTML, JS)? |
 
-`references` / `definition` / `diagnostics` also enrich from this index when
-the token under the cursor is a custom property or selector.
+`search_symbol` / `symbol_info` / `outline` are **JS/TS-only** — use
+`css_var` / `selector` for markup and stylesheets.
 
-`search_symbol` is **JS/TS-only** — the HTML/CSS servers do not implement useful
-workspace symbol search.
+`name` and `query` are accepted as aliases of each other on the name-based
+tools (agents often guess the wrong one). A missing param yields a soft hint
+instead of a validation wall.
 
 Positions are **1-indexed**. `column` is a UTF-16 character offset (a leading
 tab counts as one character).
@@ -57,7 +76,7 @@ uv run python -m webnav_mcp.server
 |----------|---------|---------|
 | `WEBNAV_MCP_WORKSPACE` | inferred from install / `CLAUDE_PROJECT_DIR` | Project root |
 | `WEBNAV_MCP_EXCLUDE` | nothing | Comma-separated workspace-relative paths of generated script output (e.g. the JS a TS build emits): not opened, hidden from `search_symbol`, rejected by position tools. Does not affect the CSS/selector index |
-| `WEBNAV_MCP_ROOTS` | one unnamed root = whole workspace | Comma-separated `label=relative/path` pairs to index separately (SpaceMaker sets `static=…,wireframes=…`) |
+| `WEBNAV_MCP_ROOTS` | one unnamed root = whole workspace | Comma-separated `label=relative/path` pairs to index separately (SpaceMaker sets `web=…,static=…,wireframes=…`) |
 
 ## Example MCP host config
 
@@ -69,7 +88,8 @@ uv run python -m webnav_mcp.server
 			"args": ["run", "python", "-m", "webnav_mcp.server"],
 			"env": {
 				"WEBNAV_MCP_WORKSPACE": "/path/to/project",
-				"WEBNAV_MCP_ROOTS": "static=src/path/to/static,wireframes=wireframes"
+				"WEBNAV_MCP_ROOTS": "web=web/src,static=src/path/to/static,wireframes=wireframes",
+				"WEBNAV_MCP_EXCLUDE": "src/path/to/static/js"
 			}
 		}
 	}

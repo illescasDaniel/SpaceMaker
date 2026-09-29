@@ -38,6 +38,7 @@ from mcp_nav_shared.format import (
 	uri_to_relative,
 )
 from mcp_nav_shared.lsp_client import LspClient
+from mcp_nav_shared.params import resolve_name_query
 from mcp_nav_shared.resolve import resolve_symbol
 from mcp_nav_shared.workspace import resolve_source_root, resolve_workspace_root
 
@@ -168,7 +169,7 @@ async def references(file_path: str, line: int, column: int, include_declaration
 
 
 @mcp.tool()
-async def search_symbol(query: str) -> str:
+async def search_symbol(query: str | None = None, name: str | None = None) -> str:
 	"""Search the whole workspace for a symbol by name (class, function, method, etc.).
 
 	Use this to find a symbol's file/position first, then pass that position
@@ -176,8 +177,10 @@ async def search_symbol(query: str) -> str:
 	Returned positions point at the identifier name (not the `class`/`def`
 	keyword) and use the same character-offset column convention as the
 	other tools. Results include a SymbolKind label and are capped.
+	`name` is accepted as an alias for `query`.
 	"""
 	try:
+		query = resolve_name_query(preferred="query", example="start_convert", query=query, name=name)
 		client = await get_client()
 		symbols = await client.workspace_symbol(query)
 	except TOOL_ERRORS as exc:
@@ -200,7 +203,12 @@ async def diagnostics(file_path: str) -> str:
 
 
 @mcp.tool()
-async def symbol_info(name: str, file_path: str | None = None, include_references: bool = True) -> str:
+async def symbol_info(
+	name: str | None = None,
+	query: str | None = None,
+	file_path: str | None = None,
+	include_references: bool = True,
+) -> str:
 	"""What is X and where is it used? Example: `symbol_info(name="JobsMixin.start_convert")`.
 
 	One-call summary for a name: header, hover text, definition, and
@@ -212,8 +220,12 @@ async def symbol_info(name: str, file_path: str | None = None, include_reference
 	workspace root) to disambiguate when several symbols share a name
 	elsewhere in the workspace; if it's still ambiguous, the candidates are
 	listed back so you can retry with a narrower name or file_path.
+	`query` is accepted as an alias for `name`.
 	"""
 	try:
+		name = resolve_name_query(
+			preferred="name", example="JobsMixin.start_convert", name=name, query=query
+		)
 		client = await get_client()
 		resolved = await resolve_symbol(client, WORKSPACE_ROOT, name, file_path=file_path)
 		rel_path = uri_to_relative(resolved.uri, WORKSPACE_ROOT)
@@ -238,7 +250,7 @@ async def symbol_info(name: str, file_path: str | None = None, include_reference
 
 @mcp.tool()
 async def outline(file_path: str) -> str:
-	"""What's in this file? Example: `outline(file_path="src/spacemaker/application/convert_media.py")`.
+	"""What's in this file? Example: `outline(file_path="src/spacemaker/bootstrap/services/jobs.py")`.
 
 	Indented outline (classes, methods, functions, with line numbers) of a
 	Python file, so you can navigate a large file without reading it in full.
@@ -255,16 +267,22 @@ async def outline(file_path: str) -> str:
 
 
 @mcp.tool()
-async def callers(name: str, file_path: str | None = None) -> str:
+async def callers(
+	name: str | None = None,
+	query: str | None = None,
+	file_path: str | None = None,
+) -> str:
 	"""Who calls this function? Example: `callers(name="start_convert")`.
 
 	Narrower than references, since it
 	leaves out imports and type-only usages and only lists actual call sites.
 
 	`name` resolves the same way as symbol_info (dotted Class.method accepted;
-	pass file_path to disambiguate a common name).
+	pass file_path to disambiguate a common name). `query` is accepted as an
+	alias for `name`.
 	"""
 	try:
+		name = resolve_name_query(preferred="name", example="start_convert", name=name, query=query)
 		client = await get_client()
 		resolved = await resolve_symbol(client, WORKSPACE_ROOT, name, file_path=file_path)
 		rel_path = uri_to_relative(resolved.uri, WORKSPACE_ROOT)
@@ -396,7 +414,11 @@ def _source_signature(files: list[Path]) -> tuple[tuple[str, int, int], ...]:
 
 
 @mcp.tool()
-async def implementations(port_name: str) -> str:
+async def implementations(
+	port_name: str | None = None,
+	name: str | None = None,
+	query: str | None = None,
+) -> str:
 	"""Find concrete classes that structurally satisfy a `Protocol` port.
 
 	Many hexagonal codebases define ports as `Protocol`s that adapters never
@@ -407,9 +429,17 @@ async def implementations(port_name: str) -> str:
 	checker via an in-memory probe file (never written to disk) — so a
 	result means "assignable", not just "same method names". `port_name`
 	must itself resolve to a `Protocol` class; other classes' subclasses are
-	better found with `references`/`symbol_info`.
+	better found with `references`/`symbol_info`. `name` and `query` are
+	accepted as aliases for `port_name`.
 	"""
 	try:
+		port_name = resolve_name_query(
+			preferred="port_name",
+			example="FileSystemPort",
+			port_name=port_name,
+			name=name,
+			query=query,
+		)
 		client = await get_client()
 		port = await resolve_symbol(client, WORKSPACE_ROOT, port_name)
 		port_rel_path = uri_to_relative(port.uri, WORKSPACE_ROOT)

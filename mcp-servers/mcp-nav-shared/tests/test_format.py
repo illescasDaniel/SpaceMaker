@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mcp_nav_shared.format import (
+	filter_workspace_symbols,
 	format_callers,
 	format_diagnostic,
 	format_diagnostics,
@@ -247,6 +248,55 @@ def test_given_property_assignments_before_function_in_same_tier_when_rank_then_
 	ranked = [(sym["name"], sym["kind"]) for sym in rank_workspace_symbols(symbols, "gallery")]
 	# then
 	assert ranked == [("galleryDateParts", 12), ("galleryHasMore", 7), ("galleryHasMore", 7)]
+
+
+def test_given_duplicate_property_same_file_when_filter_then_one_hit():
+	# given
+	symbols = [
+		{**_symbol("galleryHasMore", "file:///a.ts"), "kind": 7},
+		{**_symbol("galleryHasMore", "file:///a.ts"), "kind": 7},
+		{**_symbol("galleryHasMore", "file:///b.ts"), "kind": 7},
+	]
+	# when
+	filtered = filter_workspace_symbols(symbols)
+	# then
+	assert [(s["name"], s["kind"], (s["location"] or {})["uri"]) for s in filtered] == [
+		("galleryHasMore", 7, "file:///a.ts"),
+		("galleryHasMore", 7, "file:///b.ts"),
+	]
+
+
+def test_given_function_and_export_variable_same_file_when_filter_then_drops_variable():
+	# given — tsserver lists `export { renderFoo }` as Variable alongside Function
+	symbols = [
+		{**_symbol("renderFoo", "file:///a.ts"), "kind": 12},
+		{**_symbol("renderFoo", "file:///a.ts"), "kind": 13},
+		{**_symbol("renderFoo", "file:///b.ts"), "kind": 13},  # Variable-only elsewhere kept
+	]
+	# when
+	filtered = filter_workspace_symbols(symbols)
+	# then
+	assert [(s["name"], s["kind"], (s["location"] or {})["uri"]) for s in filtered] == [
+		("renderFoo", 12, "file:///a.ts"),
+		("renderFoo", 13, "file:///b.ts"),
+	]
+
+
+def test_given_duplicate_properties_when_format_workspace_symbols_then_omitted_uses_filtered_count(
+	tmp_path,
+):
+	# given — five identical Property hits in one file would otherwise inflate "and N more"
+	src = tmp_path / "a.ts"
+	src.write_text("x = 1\n", encoding="utf-8")
+	uri = src.as_uri()
+	symbols = [{**_symbol("galleryHasMore", uri), "kind": 7} for _ in range(5)]
+	symbols.append({**_symbol("galleryDateParts", uri), "kind": 12})
+	# when
+	text = format_workspace_symbols(symbols, tmp_path, query="gallery", limit=50)
+	# then — one Property + one Function, no truncation note
+	assert text.count("galleryHasMore") == 1
+	assert "galleryDateParts" in text
+	assert "… and" not in text
 
 
 def test_given_exact_match_past_cap_when_format_workspace_symbols_then_shown_first(tmp_path):

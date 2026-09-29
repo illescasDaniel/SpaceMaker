@@ -12,7 +12,7 @@ aimed at standalone consumers; SpaceMaker-specific wiring stays here.
 | Server | Language surface | Backend | Start here | This repo's roots |
 |--------|------------------|---------|------------|-------------------|
 | [`codenav`](../mcp-servers/codenav_mcp/README.md) | Python (`.py`/`.pyi`) | `ty` language server | `symbol_info`, `outline`, `callers`, `implementations` | `CODENAV_MCP_SOURCE_ROOT=src` |
-| [`webnav`](../mcp-servers/webnav_mcp/README.md) | JS / TS / HTML / CSS | `typescript-language-server` + vscode HTML/CSS servers | `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
+| [`webnav`](../mcp-servers/webnav_mcp/README.md) | JS / TS / HTML / CSS | `typescript-language-server` + vscode HTML/CSS servers | `symbol_info`, `outline`, `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
 
 Shared helpers: [`mcp-nav-shared`](../mcp-servers/mcp-nav-shared/README.md).
 
@@ -123,7 +123,7 @@ in `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/resolve.py`:
   total count.
 - **`outline(file_path)`** — an indented tree of classes/methods/functions
   with line numbers, so an agent can navigate a large file (e.g.
-  `services.py`) without reading it end to end.
+  `src/spacemaker/bootstrap/services/jobs.py`) without reading it end to end.
 - **`callers(name, file_path=None)`** — `prepareCallHierarchy` +
   `incomingCalls`: who actually calls this function, with call-site lines.
   Answers "who calls this?" more precisely than `references`, which also
@@ -273,8 +273,13 @@ is fuzzy (subsequence) and unordered, so results are ranked before capping:
 exact name → case-insensitive exact → prefix → substring → other fuzzy hits,
 with Property/Field symbols after other kinds within a tier (tsserver reports
 every `S.foo = x` assignment as a Property, which otherwise fills the cap).
-Results are capped (default 50) with a trailing “and N more” note when
-truncated.
+Identical `(name, kind, file)` hits are then collapsed, and a same-file
+`Variable` is dropped when a Function/Class/Interface/Constant/Enum of that
+name already exists (tsserver's `export { foo }` twin). Results are capped
+(default 50) with a trailing “and N more” note when truncated.
+Name-based tools accept `name`/`query` (and `port_name` for `implementations`)
+as aliases of each other so a wrong guess yields a soft hint instead of a
+pydantic validation wall.
 `definition` / `references` headers use the same `path:line:col` form so
 agents can copy positions into follow-up calls.
 
@@ -308,9 +313,10 @@ broken file can't flood the caller either.
 ## `webnav` MCP server
 
 `mcp-servers/webnav_mcp/` gives the same kind of navigation for the
-project's JS/TS/HTML/CSS (`search_symbol`, `definition`, `references`, `hover`,
-`diagnostics`), multiplexing three Node-based language servers behind one
-MCP tool set, routed by file extension:
+project's JS/TS/HTML/CSS (`symbol_info`, `outline`, `search_symbol`,
+`definition`, `references`, `hover`, `diagnostics`), multiplexing three
+Node-based language servers behind one MCP tool set, routed by file
+extension:
 
 - `.ts`/`.js`/`.mjs`/`.cjs` → `typescript-language-server` (shell sources in
   `web/src/` via strict `web/tsconfig.json`; the emitted `static/js/*.js` is

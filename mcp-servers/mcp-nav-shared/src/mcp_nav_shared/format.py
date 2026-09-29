@@ -191,6 +191,11 @@ def _match_tier(name: str, query: str) -> int:
 # so a broad query otherwise fills the result cap with repeated assignments and
 # pushes the functions/classes/interfaces an agent is looking for past it.
 _LOW_PRIORITY_KINDS = {7, 8}  # Property, Field
+# Kinds that are "real" declarations — when one of these shares a name+file
+# with a Variable, the Variable is almost always the TS `export { foo }` list
+# entry (tsserver reports both), not a separate symbol worth listing.
+_DECLARATION_KINDS = {5, 10, 11, 12, 14}  # Class, Enum, Interface, Function, Constant
+_VARIABLE_KIND = 13
 
 
 def rank_workspace_symbols(symbols: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
@@ -212,6 +217,42 @@ def rank_workspace_symbols(symbols: list[dict[str, Any]], query: str) -> list[di
 	)
 
 
+def _symbol_file_key(sym: dict[str, Any]) -> str:
+	loc = sym.get("location") or {}
+	return str(loc.get("uri") or loc.get("targetUri") or "")
+
+
+def filter_workspace_symbols(symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
+	"""Drop export-list Variable noise and repeated Property/Field assignments.
+
+	Preserves input order (call after `rank_workspace_symbols`). A Variable in
+	the same file as a Function/Class/Interface/Constant/Enum of the same name
+	is dropped. Identical `(name, kind, file)` Property/Field hits collapse to
+	one (tsserver reports every `state.foo = x` assignment); other kinds keep
+	every hit so two `run` methods on different classes in one file stay distinct.
+	"""
+	declaration_keys = {
+		(str(sym.get("name") or ""), _symbol_file_key(sym))
+		for sym in symbols
+		if sym.get("kind") in _DECLARATION_KINDS
+	}
+	filtered: list[dict[str, Any]] = []
+	seen_low_priority: set[tuple[str, Any, str]] = set()
+	for sym in symbols:
+		name = str(sym.get("name") or "")
+		kind = sym.get("kind")
+		file_key = _symbol_file_key(sym)
+		if kind == _VARIABLE_KIND and (name, file_key) in declaration_keys:
+			continue
+		if kind in _LOW_PRIORITY_KINDS:
+			key = (name, kind, file_key)
+			if key in seen_low_priority:
+				continue
+			seen_low_priority.add(key)
+		filtered.append(sym)
+	return filtered
+
+
 def format_workspace_symbols(
 	symbols: list[dict[str, Any]],
 	workspace_root: Path,
@@ -221,9 +262,10 @@ def format_workspace_symbols(
 ) -> str:
 	if not symbols:
 		return ""
-	shown = rank_workspace_symbols(symbols, query)[: max(0, limit)]
+	ranked = filter_workspace_symbols(rank_workspace_symbols(symbols, query))
+	shown = ranked[: max(0, limit)]
 	lines = [format_workspace_symbol(sym, workspace_root) for sym in shown]
-	omitted = len(symbols) - len(shown)
+	omitted = len(ranked) - len(shown)
 	if omitted > 0:
 		lines.append(f"… and {omitted} more (showing first {len(shown)})")
 	return "\n".join(lines)
