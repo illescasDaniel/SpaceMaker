@@ -70,6 +70,7 @@ override-with-sane-default shape as `CODENAV_MCP_WORKSPACE`/
 | Env var | Server | Default (generic) | This repo's value |
 |---|---|---|---|
 | `CODENAV_MCP_SOURCE_ROOT` | codenav | the whole workspace | `src` (scopes/speeds up `implementations`' class scan and import-path derivation) |
+| `CODENAV_MCP_EXTRA_SOURCE_ROOTS` | codenav | none | `tests` (`implementations` also scans these — test doubles such as `FakeFileSystem` — and lists them under a separate heading; their import paths are derived from the workspace root) |
 | `WEBNAV_MCP_EXCLUDE` | webnav | nothing treated as generated | `src/spacemaker/adapters/inbound/web/static/js` (the JS `tsc` emits from `web/src/*.ts`: never eagerly opened, dropped from `search_symbol`, rejected by position tools — navigation targets the TS sources only; the CSS/selector index still reads it) |
 | `WEBNAV_MCP_ROOTS` | webnav | one unnamed root spanning the whole workspace | `web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes` (TS sources, production assets, UX wireframes) |
 
@@ -158,8 +159,11 @@ base that does — so `AppServices.start_convert` finds `JobsMixin.start_convert
 (`AppServices` is composed from mixins, and it's the type call sites see).
 
 `hover`/`definition`/`references`/`search_symbol`/`diagnostics` (the
-original position-based tools) are unchanged and still useful once a
-composite tool has narrowed things down to a specific position.
+original position-based tools) are still useful once a composite tool has
+narrowed things down to a specific position. `search_symbol` takes optional
+`kind` (SymbolKind labels, comma-separated: `class`, `function,method`) and
+`path` (workspace-relative prefix such as `src/`, or a glob) filters, and
+ranks production code before tests within a match tier.
 
 ### `documentSymbol` shape: hierarchical vs flat
 
@@ -278,6 +282,33 @@ hits)` header and `L<line>:<col>` entries per file instead of full snippets,
 so a single broad query doesn't flood the response; the line:col pairs are
 still enough to follow up with a targeted `definition`/`hover` call.
 
+### Freshness: `LspClient.refresh()`
+
+A language server only knows what its client tells it. `didOpen` freezes a
+document at the text it was opened with, and files created, edited or deleted
+behind the server's back (the agent's own Edit tool, `git checkout`, a
+formatter) are invisible to workspace-wide answers (`callers`, `references`,
+`search_symbol`) — before this existed, `callers` kept reporting call sites
+in code that had been reverted, and never saw new ones.
+`LspClient.refresh()` (`mcp_nav_shared/lsp_client.py`) therefore runs before
+every tool call (`get_client()` in codenav, `_get_client()` in webnav):
+
+1. every open document is re-`stat`ed: changed → `didChange`, missing → `didClose`
+   (and its diagnostics/symbol caches are dropped);
+2. a `(mtime_ns, size)` snapshot of every file with a watched suffix under the
+   workspace (`watch_suffixes`, minus `EXCLUDED_DIR_NAMES` and `watch_ignore`,
+   e.g. webnav's generated JS) is diffed against the previous call, and the
+   differences go out as `workspace/didChangeWatchedFiles`;
+3. webnav's TS client also sets `open_watched_changes=True`: created/changed
+   files are additionally `didOpen`ed, because tsserver only treats opened
+   documents as part of the project deterministically (its own disk watchers
+   are racy right after a write). ty needs only step 2.
+
+Cost: one stat walk per call (~20 ms on this repo). Not covered: changes to
+config that alters resolution (`pyproject.toml`, `tsconfig.json`) — restart
+the server after editing those. `codenav_mcp/tests/test_ty_live.py` exercises
+create/edit/delete against a real `ty`.
+
 ### Positioning (codenav and webnav)
 
 `line` and `column` are **1-indexed**. `column` is a UTF-16 **character
@@ -365,6 +396,11 @@ can resolve the 7.x native-compiler preview, which ships a different
 package layout (no `lib/tsserverlibrary.js`) and breaks resolution the same
 way.
 
+`outline` lists top-level declarations in source order and leaves out the
+locals, callbacks and object-literal keys inside functions/variables
+(`detailed=true` brings them back) — tsserver returns siblings alphabetically
+with every local, which made the raw tree ~4 KB for a 500-line file.
+
 `search_symbol` only covers JS/TS: the HTML/CSS language servers don't
 implement a useful `workspace/symbol`, and webnav does **not** reimplement
 general HTML/CSS symbol search. Prefer editing `web/src/*.ts` (strict check
@@ -420,7 +456,8 @@ misleading.
 - **`selector(name)`** (`#id` or `.class`): CSS rule definitions, HTML
   `id=`/`class=` attributes, and JS usages (`getElementById`,
   `classList.add/remove/toggle/contains`, `querySelector`/
-  `querySelectorAll`/`closest`/`matches`, `className` assignment), grouped
+  `querySelectorAll`/`closest`/`matches` — including TS type arguments such as
+  `querySelector<HTMLElement>(…)` — `className` assignment), grouped
   by file with line numbers, per root. A JS/TS string literal exactly equal
   to the bare name, on a line no DOM API above already covers, is reported
   as a `string literal` hit — this is how ids passed to project helpers
@@ -429,7 +466,12 @@ misleading.
   `WEBNAV_MCP_EXCLUDE` output are labeled `[generated]`.
 - **`references`/`definition` fallback**: when the token under the cursor
   in a `.css`/`.html` file is `--name`, `#id` or `.class`, both tools answer
-  from this index instead of the single-file language server — this is what
+  from this index instead of the single-file language server, limited to the
+  root the file lives in (production vs. wireframes define their own values):
+  `definition` reports only the definition(s) (a class's CSS rules, an id's
+  markup attribute, a variable's declarations), `references` that root's
+  definitions and usages; a token with no hits in its own root falls back to
+  all roots with a note — this is what
   actually fixes the CSS-var cross-file limitation (confirmed before this
   existed: `--bg` in `theme.css` didn't resolve from a `var(--bg)` usage in
   `shell-gallery.css`, even though both are served together).

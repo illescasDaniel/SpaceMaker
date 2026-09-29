@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: webnav
 severity: wrong-result
-status: open
+status: fixed (5b0ff55)
 ---
 
 **Call:** append `export function probeEdit() { void apiGet("/y"); }` to `web/src/lan.ts`, then `symbol_info(name="apiGet")` / `search_symbol("probeEdit")`.

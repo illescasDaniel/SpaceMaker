@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: webnav
 severity: confusing
-status: open
+status: fixed (5b0ff55)
 ---
 
 **Call:** `outline(file_path="web/src/api.ts")`, `outline(file_path="web/src/gallery-item.ts")`

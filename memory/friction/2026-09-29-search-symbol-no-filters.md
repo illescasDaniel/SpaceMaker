@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: codenav
 severity: confusing
-status: open
+status: fixed (5b0ff55)
 ---
 
 **Call:** `search_symbol(query="convert")`

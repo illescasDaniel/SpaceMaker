@@ -20,9 +20,9 @@ Done and tested (609 tests, `uv run task checks` green):
 4. Optional cleanups noticed: none blocking. A tool call racing a workspace switch can fail once (documented).
 5. Merge `feature/mcp-improvements` into `main`; .
 
-## MCP evaluation (2026-09-29)
+## MCP evaluation + fixes (2026-09-29)
 
-Report: `docs/reports/2026-09-29-mcp-evaluation.md` (added to mkdocs nav). 6 new open friction entries; top priority is the freshness bug in `mcp_nav_shared/lsp_client.py` (shared by both servers). Touched: `docs/reports/`, `mkdocs.yml`, `memory/friction/*` (6 new), `memory/progress.md`.
+Branch `claude/mcp-evaluation-report` (from `main` 3e42762): report `docs/reports/2026-09-29-mcp-evaluation.md` (before/after), all 7 findings fixed in 5b0ff55 + docs/friction follow-up commit, gate green (649 tests). Next: restart the MCP servers in your session to load the fixes and try them live; decide PR/merge; optional follow-ups are the two open friction entries (refresh cost, probe path).
 
 ## Older open items
 

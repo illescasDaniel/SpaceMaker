@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: codenav
 severity: missing-feature
-status: open
+status: fixed (5b0ff55)
 ---
 
 **Call:** `implementations(port_name="FileSystemPort")`

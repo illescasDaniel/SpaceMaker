@@ -15,7 +15,7 @@ parameters, dataclass fields), not text grep.
 | `outline` | What's in this file? (classes, methods, functions) |
 | `callers` | Who actually calls this function? (call hierarchy, not imports) |
 | `implementations` | Which classes structurally implement this `Protocol`? |
-| `search_symbol` | Workspace symbol search by name (ranked, capped) |
+| `search_symbol` | Workspace symbol search by name (ranked, capped; optional `kind=` / `path=` filters; production code before tests) |
 
 Then position tools when you already have a `path:line:col`:
 
@@ -58,6 +58,7 @@ uv run python -m codenav_mcp.server
 |----------|---------|---------|
 | `CODENAV_MCP_WORKSPACE` | unset → follows the client's MCP roots when they name a worktree of the same repo, else `CLAUDE_PROJECT_DIR`/cwd | Pins the project root (never overridden). See the `workspace` tool |
 | `CODENAV_MCP_SOURCE_ROOT` | whole workspace | Directory scanned for `implementations` candidates and dotted-import derivation (SpaceMaker sets `src`) |
+| `CODENAV_MCP_EXTRA_SOURCE_ROOTS` | none | Comma-separated directories (e.g. `tests`) `implementations` also scans; matches (test doubles) are listed under a separate heading, import paths derived from the workspace root |
 
 ## Example MCP host config
 

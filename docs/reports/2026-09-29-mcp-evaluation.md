@@ -1,26 +1,88 @@
-# MCP evaluation — `codenav` & `webnav` (2026-09-29)
+# MCP evaluation — `codenav` & `webnav` (2026-09-29, re-evaluated after fixes)
 
 **Question:** how useful are these MCPs for AI agentic coding?
 
-**Short answer:** very useful for *reading and understanding* code, and not yet trustworthy right after
-*writing* it. The composite tools (`symbol_info`, `callers`, `implementations`, `css_var`, `selector`)
-answer in one call, in a few milliseconds, questions that take 3–6 grep/read rounds and still
-miss things. Every answer I cross-checked against grep was exact. The one serious gap is
-**freshness after on-disk edits**: files the agent (or git) changes are not re-synced unless a tool
-touches that exact path. In an edit→verify loop the tools can report ghost or missing call sites
-with no warning.
+**Short answer:** very useful, and now safe to use inside an edit → verify loop. The first
+evaluation found that both servers answered from a stale picture of the disk after the agent
+edited files (ghost and missing call sites, no warning). All 7 issues from that evaluation are
+fixed, each with tests, and re-running every original repro against freshly started servers
+passes 34/34 checks.
 
-| Server | Overall | Read-only navigation | After edits | Speed (warm) | Maturity |
-|---|---|---|---|---|---|
-| `codenav` (Python / ty) | **7.5 / 10** | 9 | 4 | 2–25 ms | 7 |
-| `webnav` (TS/HTML/CSS) | **7 / 10** | 8 | 6 | 3–70 ms | 7 |
+| Server | Before fixes | After fixes | What moved |
+|---|---|---|---|
+| `codenav` (Python / ty) | 7.5 / 10 | **8.5 / 10** | After-edit reliability 4 → 9; `implementations` now shows test doubles; `search_symbol` filters |
+| `webnav` (TS/HTML/CSS) | 7 / 10 | **8.5 / 10** | After-edit reliability 6 → 9; `selector` sees `querySelector<T>`; `outline` 3.6× smaller and in order; scoped CSS `definition` |
 
-Fixing the freshness bug (shared root cause, one place: `mcp_nav_shared/lsp_client.py`) would take
-both servers to about 8.5–9.
+Not higher because of the remaining weaknesses listed at the end (about +20 ms per call, thin
+`hover`, regex-grade selector scanning, restart needed after config changes).
+
+## Re-evaluation: what was fixed and how it was verified
+
+Verification was a script (`reeval.py`) that starts each server fresh with the new code and
+drives it over the real MCP protocol against this repo, one persistent session per server,
+making temporary edits and reverting them (`git status` clean afterwards). The Python quality
+gate is also green (ruff, ty, 649 tests; the 3 TS smoke tests that were skipped in the first run
+now execute because `npm ci` ran).
+
+| # | Issue (from the first evaluation) | Fix | Evidence |
+|---|---|---|---|
+| 1 | codenav stale after on-disk create/edit/delete | `LspClient.refresh()` before every call: re-sync open docs, `didClose` deleted ones, `didChangeWatchedFiles` for watched-suffix changes | New file visible on the next call (35 ms); edit of an *unopened* file visible; no ghost callers after `git checkout`/`rm`; a live-ty test fails with the fix disabled and passes with it |
+| 2 | webnav stale after edits to open TS files | same `refresh()`; TS client also `didOpen`s created/changed files | Edit, new file, revert and delete all reflected via `search_symbol`/`symbol_info` on the next call |
+| 3 | `selector` missed `querySelector<T>(…)` | regex accepts one level of TS type arguments | `#gallery-item-media` now reports gallery-item.ts L140; `.gallery-item-thumb` found in `web/src` |
+| 4 | webnav `outline` alphabetical and noisy | sort by line; locals under functions/variables collapsed; `detailed=true` restores | `api.ts`: `apiSend` before `apiGet`; `gallery-item.ts`: 3 993 → 1 096 chars |
+| 5 | `implementations` ignored test doubles | `CODENAV_MCP_EXTRA_SOURCE_ROOTS=tests`, listed under their own heading | `FakeFileSystem`, `FakeDeviceRepository`, `FakeMediaConverter`, `FakeGalleryIndex` found; real adapters stay in the main list |
+| 6 | `search_symbol` had no filters, tests dominated | `kind=` and `path=` (prefix or glob) on both servers; production ranks before tests in a tier; truncation hint mentions the filters; bad kind and empty result explained | `kind=class` returns only classes; `kind=class` + `path=src/` returns 406 chars instead of 5 005 for the unfiltered query; production code sorts before tests |
+| 7 | CSS `definition` dumped every root | scoped to the file's own root; `definition` = definitions only, `references` = that root's defs + usages; falls back to all roots with a note | From `shell-gallery.css`: only `== static ==`, no usages; from `wireframes/app.html`: only `== wireframes ==` |
+
+### Speed after the fixes
+
+Freshness is not free: every call now walks the workspace and stats the source files.
+
+| Server | Typical warm call before | After | Note |
+|---|---|---|---|
+| codenav | 2–11 ms (`implementations` 24 ms) | **22–28 ms** (`implementations` 55 ms) | ~20 ms is the refresh walk |
+| webnav TS tools | 4–69 ms | **10–49 ms** | tsserver's own latency dominates |
+| webnav index tools (`css_var`, `selector`) | 4–5 ms | 4 ms | unchanged: they don't use a language server |
+
+Cold starts are similar: codenav ~0.4 s (first ty query) and ~1.6 s for the first
+`implementations`; webnav's first TS query dropped from ~3.0 s to ~1.3 s and the first HTML/CSS
+diagnostics from 1.7–2.5 s to 1.1–2.0 s, because `npm ci` meant no `npx` download this time.
+
+### Still open (new or remaining)
+
+| Server | Severity | Issue |
+|---|---|---|
+| mcp-nav-shared | slow | The refresh walk costs ~20 ms per call; could be scoped to source + tests roots or debounced ([friction](../../memory/friction/2026-09-29-refresh-adds-20ms-per-call.md)) |
+| codenav | confusing | Probe document path is hard-coded `mcp-servers/.codenav_probe.py` while the docs say `<root>/.codenav_probe.py` ([friction](../../memory/friction/2026-09-29-probe-path-hardcoded-mcp-servers.md)) |
+| both | limitation | Changes to config that alters resolution (`pyproject.toml`, `tsconfig.json`) aren't picked up until the server restarts |
+| both | limitation | The MCP servers attached to a running Claude session keep the code they started with; restart them (or the session) to get these fixes |
+| codenav | minor | `hover` is still thin (a variable shows only its type name) |
+| webnav | minor | `selector` is regex-grade: template literals and selectors built from several variables aren't resolved (documented) |
+
+### Revised per-tool scores
+
+| Tool | codenav before → after | webnav before → after |
+|---|---|---|
+| `symbol_info` | 9 → 9 | 8 → 9 |
+| `outline` | 9 → 9 | 5 → 8 |
+| `callers` | 8 → 9 | — |
+| `implementations` | 8 → 9 | — |
+| `diagnostics` | 9 → 9 | 8 → 8 |
+| `definition` | 8 → 8 | 7 → 8 |
+| `references` | 8 → 9 | 7 → 8 |
+| `hover` | 6 → 6 | 8 → 8 |
+| `search_symbol` | 6 → 8 | 8 → 8 |
+| `selector` | — | 7 → 8 |
+| `css_var` | — | 9 → 9 |
+| `workspace` | 8 → 8 | 8 → 8 |
+
+The rest of this document is the **baseline evaluation, before the fixes**: method, latency,
+strengths and weaknesses as first measured. Where it describes a bug from the table above, that
+bug is now fixed.
 
 ---
 
-## Method
+## Baseline (before fixes) — method
 
 - The tests ran in a cloud session on this repo (`feature/mcp-improvements` head `3e42762`), through
   the real MCP connection, as an agent would use it.
@@ -61,7 +123,7 @@ once per session. The only cold outliers come from starting a language server
 
 ---
 
-## `codenav` — Python via ty — 7.5 / 10
+## `codenav` — Python via ty — baseline 7.5 / 10 (now 8.5)
 
 **Strengths**
 - Name-based composites, with no column arithmetic. `symbol_info("JobsMixin.start_convert")`
@@ -125,7 +187,7 @@ trusting `callers`/`references`**, until the freshness bug is fixed.
 
 ---
 
-## `webnav` — TS/HTML/CSS — 7 / 10
+## `webnav` — TS/HTML/CSS — baseline 7 / 10 (now 8.5)
 
 **Strengths**
 - `css_var` and `selector` answer questions no single-file language server can. Results are split
@@ -192,7 +254,7 @@ APIs and exported helpers. Prefer reading the file over `outline`.
 - It's young: all friction entries are from the same day, and it hasn't been used on real feature
   work yet.
 
-## Bugs and improvements found (logged in `memory/friction/`)
+## Bugs found in the baseline (all fixed; logged in `memory/friction/`)
 
 | # | Server | Severity | Issue |
 |---|---|---|---|
@@ -212,6 +274,8 @@ then fix 3 (a one-line regex change), then 4.
 
 For an AI agent, these MCPs remove the most expensive part of coding in an unfamiliar codebase:
 building an accurate picture of who calls what. `implementations`, `css_var` and `selector` have
-no good grep equivalent. Everything else answers in milliseconds, with less output than grep and
-with type-aware precision. Until bugs 1–2 are fixed, treat their answers as a snapshot taken when
-the server last saw each file, and re-`outline` the files you've just edited.
+no good grep equivalent, and everything else answers in tens of milliseconds with less output
+than grep and type-aware precision. The baseline's one serious problem (answers that silently
+lagged behind the agent's own edits) is fixed and covered by tests, so the answers can now be
+trusted inside an edit → verify loop. What's left is polish: the per-call cost of staying fresh,
+a thin `hover`, and a restart after changing resolution config.

@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: webnav
 severity: wrong-result
-status: open
+status: fixed (5b0ff55)
 ---
 
 **Call:** `selector(".gallery-item-media")`, `selector("#gallery-item-media")`

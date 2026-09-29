@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: codenav
 severity: wrong-result
-status: open
+status: fixed (5b0ff55)
 ---
 
 **Call:** `callers(name="convert_control_flags")` after (a) creating a new `src/…/_probe.py` that calls it, (b) appending a call to an existing, not-yet-opened `application/reset_library.py`, (c) reverting/deleting those edits.
