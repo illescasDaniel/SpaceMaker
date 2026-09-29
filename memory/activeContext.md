@@ -1,4 +1,4 @@
-_Last updated: 2026-09-29 (MCP follow-ups: config restart, stale-code notice, hover, position checks; branch `claude/mcp-followups`)_
+_Last updated: 2026-09-29 (MCP follow-ups verified live, PR opened; branch `claude/mcp-followups`)_
 
 ## Branch
 
@@ -24,9 +24,9 @@ Done and tested (609 tests, `uv run task checks` green):
 
 Branch `claude/mcp-evaluation-report` (from `main` 3e42762): report `docs/reports/2026-09-29-mcp-evaluation.md` (before/after), all 7 findings fixed in 5b0ff55 and confirmed live after an MCP restart; the two follow-up friction entries (refresh cost, probe path) fixed in f48308b; gate green (651 tests). Next: restart the MCP servers again to load f48308b; decide PR/merge. `search_symbol` fuzzy-filler friction fixed (restart MCPs to load it).
 
-## MCP follow-ups (branch `claude/mcp-followups`, from d125389)
+## MCP follow-ups (branch `claude/mcp-followups`)
 
-Done and gate-green (689 tests): config-change restart, `NoticeBoard` stale-code line, codenav `hover` type-definition enrichment, `InvalidPositionError`. Next: restart the MCP servers and confirm live (`hover` on `services` in `routes/convert.py`, a line-500 hover, edit `pyproject.toml` and see the restart note); then decide PR/merge. `selector` deliberately untouched.
+Done, gate-green (693 tests, Biome + tsc) and confirmed live through codenav: `hover` names a type's definition, out-of-range line gives a range error, editing `pyproject.toml` restarts ty with a note. PR opened against `main` (not yet merged). Next: merge the PR, restart the MCP servers in the primary checkout. `selector` deliberately untouched. The evaluation report (`docs/reports/2026-09-29-mcp-evaluation.md`) is the source for a planned blog post about the MCPs.
 
 ## Older open items
 
