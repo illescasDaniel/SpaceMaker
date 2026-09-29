@@ -1,63 +1,82 @@
-// @ts-nocheck — typed surface: types.ts/state.ts/api.ts/dom.ts
-import { R, S } from "./state.js";
+import { apiSend } from "./api.js";
+import { clearFormBanner, errorMessage, onClick, showFormBanner } from "./dom.js";
+import { libraryRootForSave } from "./jobs.js";
+import { applyState } from "./shell.js";
+import { S } from "./state.js";
 
+const UFT_ANDROID_FOLDERS = [
+	{ id: "download", label: "Download" },
+	{ id: "documents", label: "Documents" },
+	{ id: "dcim", label: "Camera (DCIM)" },
+	{ id: "pictures", label: "Pictures" },
+	{ id: "movies", label: "Movies" },
+	{ id: "music", label: "Music" },
+];
+const UFT_IPHONE_FOLDERS = [{ id: "dcim", label: "Camera (DCIM)" }];
+/** device_id -> label cache for the USB file-transfer device picker, refreshed by
+ * `refreshUsbTransferDevices` and read by `updateUsbTransferDeviceStatus`/`pushUsbTransferSettingsWithExtras`. */
+let uftDeviceLabels = {};
 function selectedUsbTransferMethod() {
-	var active = document.querySelector("#view-usb-file-transfer .connection-toggle button.active");
+	const active = document.querySelector("#view-usb-file-transfer .connection-toggle button.active");
 	return active?.getAttribute("data-uft-method") || "adb";
 }
 function selectedUsbTransferFolders() {
-	var boxes = document.querySelectorAll("#uft-folder-picker input[data-folder]:checked");
-	var out = [];
-	boxes.forEach(function (box) {
-		out.push(box.getAttribute("data-folder"));
+	const boxes = document.querySelectorAll("#uft-folder-picker input[data-folder]:checked");
+	const out = [];
+	boxes.forEach((box) => {
+		const id = box.getAttribute("data-folder");
+		if (id) {
+			out.push(id);
+		}
 	});
 	return out;
 }
 function currentUsbExtraPaths() {
-	var list = document.getElementById("uft-extra-sources");
+	const list = document.getElementById("uft-extra-sources");
 	if (!list) {
 		return [];
 	}
-	var out = [];
-	list.querySelectorAll("li[data-extra-path]").forEach(function (li) {
-		out.push(li.getAttribute("data-extra-path"));
+	const out = [];
+	list.querySelectorAll("li[data-extra-path]").forEach((li) => {
+		const path = li.getAttribute("data-extra-path");
+		if (path) {
+			out.push(path);
+		}
 	});
 	return out;
 }
 function extraPathKind(path) {
-	var name = (path || "").split("/").pop() || path;
+	const name = path.split("/").pop() || path;
 	return name.indexOf(".") > 0 ? "file" : "folder";
 }
 function renderUsbTransferExtras(paths) {
-	var list = document.getElementById("uft-extra-sources");
+	const list = document.getElementById("uft-extra-sources");
 	if (!list) {
 		return;
 	}
 	list.innerHTML = "";
-	var items = paths || [];
+	const items = paths ?? [];
 	if (!items.length) {
 		list.hidden = true;
 		return;
 	}
 	list.hidden = false;
-	items.forEach(function (path) {
-		var li = document.createElement("li");
+	items.forEach((path) => {
+		const li = document.createElement("li");
 		li.setAttribute("data-extra-path", path);
-		var name = document.createElement("span");
+		const name = document.createElement("span");
 		name.className = "uft-extra-name";
 		name.textContent = path;
-		var kind = document.createElement("span");
+		const kind = document.createElement("span");
 		kind.className = "uft-extra-kind";
 		kind.textContent = extraPathKind(path);
-		var remove = document.createElement("button");
+		const remove = document.createElement("button");
 		remove.type = "button";
 		remove.className = "btn-uft-extra-remove";
 		remove.textContent = "Remove";
 		remove.setAttribute("aria-label", "Remove " + path);
-		remove.addEventListener("click", function () {
-			var next = currentUsbExtraPaths().filter(function (p) {
-				return p !== path;
-			});
+		remove.addEventListener("click", () => {
+			const next = currentUsbExtraPaths().filter((p) => p !== path);
 			pushUsbTransferSettingsWithExtras(next);
 		});
 		li.appendChild(name);
@@ -67,79 +86,78 @@ function renderUsbTransferExtras(paths) {
 	});
 }
 function rebuildUsbTransferFolders(method, selected, available) {
-	var picker = document.getElementById("uft-folder-picker");
-	var emptyHint = document.getElementById("uft-presets-empty");
+	const picker = document.getElementById("uft-folder-picker");
+	const emptyHint = document.getElementById("uft-presets-empty");
 	if (!picker) {
 		return;
 	}
-	var catalog = method === "afc" ? UFT_IPHONE_FOLDERS.slice() : UFT_ANDROID_FOLDERS.slice();
-	var filtered = false;
+	let catalog = method === "afc" ? UFT_IPHONE_FOLDERS.slice() : UFT_ANDROID_FOLDERS.slice();
+	let filtered = false;
 	if (Array.isArray(available)) {
 		filtered = true;
-		catalog = catalog.filter(function (item) {
-			return available.indexOf(item.id) >= 0;
-		});
+		catalog = catalog.filter((item) => available.includes(item.id));
 	}
-	var selectedSet = {};
-	(selected || []).forEach(function (id) {
+	const selectedSet = {};
+	(selected ?? []).forEach((id) => {
 		selectedSet[id] = true;
 	});
 	picker.innerHTML = '<legend class="sr-only">Device folders that exist on this phone</legend>';
-	catalog.forEach(function (item) {
-		var label = document.createElement("label");
-		var input = document.createElement("input");
+	catalog.forEach((item) => {
+		const label = document.createElement("label");
+		const input = document.createElement("input");
 		input.type = "checkbox";
 		input.setAttribute("data-folder", item.id);
 		input.checked = !!selectedSet[item.id];
-		input.addEventListener("change", function () {
+		input.addEventListener("change", () => {
 			pushUsbTransferSettings();
 		});
 		label.appendChild(input);
 		label.appendChild(document.createTextNode(" " + item.label));
 		picker.appendChild(label);
 	});
-	var showEmpty = filtered && catalog.length === 0;
+	const showEmpty = filtered && catalog.length === 0;
 	picker.hidden = showEmpty;
 	if (emptyHint) {
 		emptyHint.classList.toggle("panel-hidden", !showEmpty);
 	}
 }
 function syncUsbTransferBrowseUi(next) {
-	var browse = next.usb_transfer_browse || {};
-	var btnFiles = document.getElementById("btn-uft-add-files");
-	var btnFolder = document.getElementById("btn-uft-add-folder");
-	var hint = document.getElementById("uft-browse-unavailable");
-	var mountOk = !!browse.mount_available;
-	if (btnFiles) {
+	const browse = next.usb_transfer_browse;
+	const btnFiles = document.getElementById("btn-uft-add-files");
+	const btnFolder = document.getElementById("btn-uft-add-folder");
+	const hint = document.getElementById("uft-browse-unavailable");
+	const mountOk = !!browse?.mount_available;
+	if (btnFiles instanceof HTMLButtonElement) {
 		btnFiles.disabled = !mountOk;
 	}
-	if (btnFolder) {
+	if (btnFolder instanceof HTMLButtonElement) {
 		btnFolder.disabled = !mountOk;
 	}
 	if (hint) {
 		hint.classList.toggle("panel-hidden", mountOk);
-		if (browse.hint) {
+		if (browse?.hint) {
 			hint.textContent = browse.hint;
 		}
 	}
 }
 function syncUsbTransferConnectionButtons(method) {
-	document.querySelectorAll("#view-usb-file-transfer .connection-toggle button").forEach(function (btn) {
+	document.querySelectorAll("#view-usb-file-transfer .connection-toggle button").forEach((btn) => {
 		btn.classList.toggle("active", btn.getAttribute("data-uft-method") === method);
 	});
 }
 function updateUsbTransferDeviceStatus(next) {
-	var root = document.getElementById("uft-device-status");
-	var textEl = document.getElementById("uft-device-status-text");
+	const root = document.getElementById("uft-device-status");
+	const textEl = document.getElementById("uft-device-status-text");
 	if (!root || !textEl) {
 		return;
 	}
-	var method = next.connection_method || "adb";
-	var methodLabel = method === "afc" ? "iPhone USB" : method === "adb" ? "ADB" : method.toUpperCase();
-	if (next.device_id && (uftDeviceLabels[next.device_id] || next.device_label)) {
+	const method = next.connection_method || "adb";
+	const methodLabel = method === "afc" ? "iPhone USB" : method === "adb" ? "ADB" : method.toUpperCase();
+	const label = next.device_id ? uftDeviceLabels[next.device_id] : undefined;
+	if (next.device_id && (label || next.device_label)) {
 		root.classList.add("connected");
 		root.classList.remove("disconnected");
-		textEl.textContent = (uftDeviceLabels[next.device_id] || next.device_label) + " · Connected via " + methodLabel;
+		textEl.textContent = (label || next.device_label) + " · Connected via " + methodLabel;
 	} else {
 		root.classList.remove("connected");
 		root.classList.add("disconnected");
@@ -147,22 +165,22 @@ function updateUsbTransferDeviceStatus(next) {
 	}
 }
 function refreshUsbTransferDevices(method) {
-	return R.api("GET", "/api/devices?connection_method=" + encodeURIComponent(method || "adb"))
-		.then(function (devices) {
+	return apiSend("GET", "/api/devices?connection_method=" + encodeURIComponent(method || "adb"))
+		.then((devices) => {
 			uftDeviceLabels = {};
-			var sel = document.getElementById("uft-select-device");
-			if (!sel) {
-				return;
+			const sel = document.getElementById("uft-select-device");
+			if (!(sel instanceof HTMLSelectElement)) {
+				return undefined;
 			}
-			var previous = sel.value;
+			const previous = sel.value;
 			sel.innerHTML = "";
-			var empty = document.createElement("option");
+			const empty = document.createElement("option");
 			empty.value = "";
 			empty.textContent = devices.length ? "Select device" : "No device";
 			sel.appendChild(empty);
-			devices.forEach(function (d) {
+			devices.forEach((d) => {
 				uftDeviceLabels[d.device_id] = d.label;
-				var opt = document.createElement("option");
+				const opt = document.createElement("option");
 				opt.value = d.device_id;
 				opt.textContent = d.label;
 				sel.appendChild(opt);
@@ -172,38 +190,39 @@ function refreshUsbTransferDevices(method) {
 			} else if (S.state?.device_id && uftDeviceLabels[S.state.device_id]) {
 				sel.value = S.state.device_id;
 			} else if (devices.length) {
-				sel.value = devices[0].device_id;
+				sel.value = devices[0]?.device_id ?? "";
 			}
 			if (S.state) {
-				updateUsbTransferDeviceStatus(
-					Object.assign({}, S.state, {
-						device_id: sel.value || S.state.device_id,
-						device_label: uftDeviceLabels[sel.value] || S.state.device_label,
-					}),
-				);
+				const selLabel = uftDeviceLabels[sel.value];
+				updateUsbTransferDeviceStatus({
+					...S.state,
+					device_id: sel.value || S.state.device_id || "",
+					device_label: selLabel || S.state.device_label || "",
+				});
 			}
 			if (sel.value && sel.value !== (S.state?.device_id || "")) {
-				return pushUsbTransferSettings();
+				return pushUsbTransferSettings().then(() => undefined);
 			}
+			return undefined;
 		})
-		.catch(function (err) {
+		.catch((err) => {
 			uftDeviceLabels = {};
-			var sel = document.getElementById("uft-select-device");
-			if (sel) {
+			const sel = document.getElementById("uft-select-device");
+			if (sel instanceof HTMLSelectElement) {
 				sel.innerHTML = '<option value="">No device</option>';
 			}
-			R.showFormBanner(err.message || "Could not list devices.", "uft-form-banner");
+			showFormBanner(errorMessage(err, "Could not list devices."), "uft-form-banner");
 		});
 }
 function pushUsbTransferSettings() {
 	return pushUsbTransferSettingsWithExtras(currentUsbExtraPaths());
 }
 function pushUsbTransferSettingsWithExtras(extras) {
-	var sel = document.getElementById("uft-select-device");
-	var deviceId = sel ? sel.value : "";
-	var method = selectedUsbTransferMethod();
-	var body = {
-		library_root: R.libraryRootForSave(),
+	const sel = document.getElementById("uft-select-device");
+	const deviceId = sel instanceof HTMLSelectElement ? sel.value : "";
+	const method = selectedUsbTransferMethod();
+	const body = {
+		library_root: libraryRootForSave(),
 		ui_mode: S.uiMode,
 		connection_method: method,
 		transfer_mode: document.getElementById("uft-chip-move")?.classList.contains("selected") ? "move" : "copy",
@@ -212,14 +231,14 @@ function pushUsbTransferSettingsWithExtras(extras) {
 		transfer_folders: selectedUsbTransferFolders(),
 		transfer_extra_paths: extras || [],
 	};
-	return R.api("PUT", "/api/settings", body)
-		.then(function (data) {
-			R.clearFormBanner("uft-form-banner");
-			R.applyState(data);
+	return apiSend("PUT", "/api/settings", body)
+		.then((data) => {
+			clearFormBanner("uft-form-banner");
+			applyState(data);
 			return data;
 		})
-		.catch(function (err) {
-			R.showFormBanner(err.message || "Could not save settings.", "uft-form-banner");
+		.catch((err) => {
+			showFormBanner(errorMessage(err, "Could not save settings."), "uft-form-banner");
 			throw err;
 		});
 }
@@ -227,45 +246,47 @@ function updateUsbTransferUi(next) {
 	if (!document.getElementById("view-usb-file-transfer") || !next.usb_transfer) {
 		return;
 	}
-	var method = next.connection_method || "adb";
-	var dest = document.getElementById("uft-dest-path");
-	var banner = document.getElementById("uft-iphone-limit-banner");
-	var chipCopy = document.getElementById("uft-chip-copy");
-	var chipMove = document.getElementById("uft-chip-move");
-	var sel = document.getElementById("uft-select-device");
-	var phase = next.usb_transfer.phase;
-	var progress = next.usb_transfer.progress || { completed: 0, total: 0, percent: 0 };
-	var statusText = document.getElementById("uft-status-text");
-	var bar = document.getElementById("uft-progress");
-	var fill = document.getElementById("uft-progress-fill");
-	var countLine = document.getElementById("uft-count-line");
-	var countText = document.getElementById("uft-count-text");
-	var actions = next.usb_transfer_actions || {};
-	var btnStart = document.getElementById("btn-uft-start");
-	var btnPause = document.getElementById("btn-uft-pause");
-	var btnResume = document.getElementById("btn-uft-resume");
-	var btnStop = document.getElementById("btn-uft-stop");
-	var openWrap = document.getElementById("uft-open-folder-wrap");
-	var showProgress = phase === "running" || phase === "paused" || phase === "done" || phase === "stopped";
-	var transferActive = phase === "running" || phase === "paused";
-	var available = next.usb_transfer_available_folders;
-	var availableKey = Array.isArray(available) ? available.slice().sort().join(",") : "all";
+	const method = next.connection_method || "adb";
+	const dest = document.getElementById("uft-dest-path");
+	const banner = document.getElementById("uft-iphone-limit-banner");
+	const chipCopy = document.getElementById("uft-chip-copy");
+	const chipMove = document.getElementById("uft-chip-move");
+	const sel = document.getElementById("uft-select-device");
+	const phase = next.usb_transfer.phase;
+	const progress = next.usb_transfer.progress ?? { completed: 0, total: 0, percent: 0 };
+	const statusText = document.getElementById("uft-status-text");
+	const bar = document.getElementById("uft-progress");
+	const fill = document.getElementById("uft-progress-fill");
+	const countLine = document.getElementById("uft-count-line");
+	const countText = document.getElementById("uft-count-text");
+	const actions = next.usb_transfer_actions ?? {};
+	const btnStart = document.getElementById("btn-uft-start");
+	const btnPause = document.getElementById("btn-uft-pause");
+	const btnResume = document.getElementById("btn-uft-resume");
+	const btnStop = document.getElementById("btn-uft-stop");
+	const openWrap = document.getElementById("uft-open-folder-wrap");
+	const showProgress = phase === "running" || phase === "paused" || phase === "done" || phase === "stopped";
+	const transferActive = phase === "running" || phase === "paused";
+	const available = next.usb_transfer_available_folders;
+	const availableKey = Array.isArray(available) ? available.slice().sort().join(",") : "all";
 	if (next.active_module === "usb_file_transfer") {
 		syncUsbTransferConnectionButtons(method);
 		if (S.uftFoldersMethod !== method || S.uftAvailableFoldersKey !== availableKey) {
-			rebuildUsbTransferFolders(method, next.transfer_folders || [], available);
+			rebuildUsbTransferFolders(method, next.transfer_folders ?? [], available);
 			S.uftFoldersMethod = method;
 			S.uftAvailableFoldersKey = availableKey;
 			refreshUsbTransferDevices(method);
 		} else {
-			document.querySelectorAll("#uft-folder-picker input[data-folder]").forEach(function (box) {
-				var id = box.getAttribute("data-folder");
-				box.checked = (next.transfer_folders || []).indexOf(id) >= 0;
+			document.querySelectorAll("#uft-folder-picker input[data-folder]").forEach((box) => {
+				if (box instanceof HTMLInputElement) {
+					const id = box.getAttribute("data-folder");
+					box.checked = !!id && (next.transfer_folders ?? []).includes(id);
+				}
 			});
 		}
-		renderUsbTransferExtras(next.transfer_extra_paths || []);
+		renderUsbTransferExtras(next.transfer_extra_paths ?? []);
 		syncUsbTransferBrowseUi(next);
-		if (dest) {
+		if (dest instanceof HTMLInputElement) {
 			dest.value = next.documents_receive_root_display || next.documents_receive_root || "";
 		}
 		if (banner) {
@@ -276,7 +297,7 @@ function updateUsbTransferUi(next) {
 			chipMove.classList.toggle("selected", next.transfer_mode === "move");
 		}
 		updateUsbTransferDeviceStatus(next);
-		if (sel && next.device_id && uftDeviceLabels[next.device_id]) {
+		if (sel instanceof HTMLSelectElement && next.device_id && uftDeviceLabels[next.device_id]) {
 			sel.value = next.device_id;
 		}
 	}
@@ -308,182 +329,164 @@ function updateUsbTransferUi(next) {
 	if (countText) {
 		countText.textContent = progress.completed + " files transferred";
 	}
-	if (btnStart) {
+	if (btnStart instanceof HTMLButtonElement) {
 		btnStart.disabled = !actions.start;
 		btnStart.hidden = phase === "running" || phase === "paused";
 	}
-	if (btnPause) {
+	if (btnPause instanceof HTMLButtonElement) {
 		btnPause.hidden = !actions.pause;
 		btnPause.disabled = !actions.pause;
 	}
-	if (btnResume) {
+	if (btnResume instanceof HTMLButtonElement) {
 		btnResume.hidden = !actions.resume;
 		btnResume.disabled = !actions.resume;
 	}
-	if (btnStop) {
+	if (btnStop instanceof HTMLButtonElement) {
 		btnStop.hidden = !actions.stop;
 		btnStop.disabled = !actions.stop;
 	}
 	if (openWrap) {
 		openWrap.classList.toggle("panel-hidden", !next.usb_transfer_show_open_folder);
 	}
-	document.querySelectorAll("#view-usb-file-transfer .connection-toggle button").forEach(function (btn) {
-		btn.disabled = transferActive;
+	document.querySelectorAll("#view-usb-file-transfer .connection-toggle button").forEach((btn) => {
+		if (btn instanceof HTMLButtonElement) {
+			btn.disabled = transferActive;
+		}
 	});
 	document
 		.querySelectorAll("#uft-folder-picker input, #uft-select-device, #uft-chip-copy, #uft-chip-move")
-		.forEach(function (el) {
-			el.disabled = transferActive;
+		.forEach((el) => {
+			if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLButtonElement) {
+				el.disabled = transferActive;
+			}
 		});
 }
 function bindUsbDesktop() {
-	document.querySelectorAll("#view-usb-file-transfer .connection-toggle button").forEach(function (btn) {
-		btn.addEventListener("click", function () {
-			var method = btn.getAttribute("data-uft-method");
+	document.querySelectorAll("#view-usb-file-transfer .connection-toggle button").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const method = btn.getAttribute("data-uft-method") || "adb";
 			syncUsbTransferConnectionButtons(method);
 			S.uftFoldersMethod = "";
 			S.uftAvailableFoldersKey = "";
-			refreshUsbTransferDevices(method).then(function () {
-				return pushUsbTransferSettingsWithExtras([]);
-			});
+			refreshUsbTransferDevices(method).then(() => pushUsbTransferSettingsWithExtras([]));
 		});
 	});
-	R.onClick("uft-chip-copy", function () {
+	onClick("uft-chip-copy", () => {
 		document.getElementById("uft-chip-copy")?.classList.add("selected");
 		document.getElementById("uft-chip-move")?.classList.remove("selected");
 		pushUsbTransferSettings();
 	});
-	R.onClick("uft-chip-move", function () {
+	onClick("uft-chip-move", () => {
 		document.getElementById("uft-chip-move")?.classList.add("selected");
 		document.getElementById("uft-chip-copy")?.classList.remove("selected");
 		pushUsbTransferSettings();
 	});
-	var uftSelect = document.getElementById("uft-select-device");
+	const uftSelect = document.getElementById("uft-select-device");
 	if (uftSelect) {
-		uftSelect.addEventListener("change", pushUsbTransferSettings);
+		uftSelect.addEventListener("change", () => {
+			pushUsbTransferSettings();
+		});
 	}
 	function ensureUsbMountForPicks() {
-		var browse = S.state?.usb_transfer_browse || {};
-		if (!browse.mount_available && !browse.mount_root) {
-			R.showFormBanner(
-				browse.hint || "Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.",
+		const browse = S.state?.usb_transfer_browse;
+		if (browse?.mount_root) {
+			return Promise.resolve(browse.mount_root);
+		}
+		if (!browse?.mount_available) {
+			showFormBanner(
+				browse?.hint || "Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.",
 				"uft-form-banner",
 			);
 			return Promise.reject(new Error("mount unavailable"));
 		}
-		if (browse.mount_root) {
-			return Promise.resolve(browse.mount_root);
-		}
-		return R.api("POST", "/api/usb-transfer/mount").then(function (data) {
-			R.applyState(data);
-			var next = data.usb_transfer_browse || {};
-			if (!next.mount_root) {
-				throw new Error(next.hint || "Could not mount phone for Add files/folder.");
+		return apiSend("POST", "/api/usb-transfer/mount").then((data) => {
+			applyState(data);
+			const next = data.usb_transfer_browse;
+			if (!next?.mount_root) {
+				throw new Error(next?.hint || "Could not mount phone for Add files/folder.");
 			}
 			return next.mount_root;
 		});
 	}
 	function postUsbHostPicks(paths) {
-		var filtered = Array.isArray(paths) ? paths.filter(Boolean) : [];
+		const filtered = Array.isArray(paths) ? paths.filter(Boolean) : [];
 		if (!filtered.length) {
 			return Promise.resolve(null);
 		}
-		return R.api("POST", "/api/usb-transfer/extras", { host_paths: filtered }).then(function (data) {
-			R.clearFormBanner("uft-form-banner");
-			R.applyState(data);
+		return apiSend("POST", "/api/usb-transfer/extras", { host_paths: filtered }).then((data) => {
+			clearFormBanner("uft-form-banner");
+			applyState(data);
 			return data;
 		});
 	}
-	R.onClick("btn-uft-add-files", function () {
+	onClick("btn-uft-add-files", () => {
 		if (!window.pywebview?.api?.choose_device_files) {
-			R.showFormBanner("Add files works in the desktop app.", "uft-form-banner");
+			showFormBanner("Add files works in the desktop app.", "uft-form-banner");
 			return;
 		}
 		ensureUsbMountForPicks()
-			.then(function (mount) {
-				return Promise.resolve(window.pywebview.api.choose_device_files(mount));
-			})
+			.then((mount) => Promise.resolve(window.pywebview?.api?.choose_device_files?.(mount)))
 			.then(postUsbHostPicks)
-			.catch(function (err) {
-				if (err && err.message === "mount unavailable") {
+			.catch((err) => {
+				if (err instanceof Error && err.message === "mount unavailable") {
 					return;
 				}
-				R.showFormBanner(err.message || "Could not add files.", "uft-form-banner");
+				showFormBanner(errorMessage(err, "Could not add files."), "uft-form-banner");
 			});
 	});
-	R.onClick("btn-uft-add-folder", function () {
+	onClick("btn-uft-add-folder", () => {
 		if (!window.pywebview?.api?.choose_device_folder) {
-			R.showFormBanner("Add folder works in the desktop app.", "uft-form-banner");
+			showFormBanner("Add folder works in the desktop app.", "uft-form-banner");
 			return;
 		}
 		ensureUsbMountForPicks()
-			.then(function (mount) {
-				return Promise.resolve(window.pywebview.api.choose_device_folder(mount));
-			})
-			.then(function (folder) {
-				return postUsbHostPicks(folder ? [folder] : []);
-			})
-			.catch(function (err) {
-				if (err && err.message === "mount unavailable") {
+			.then((mount) => Promise.resolve(window.pywebview?.api?.choose_device_folder?.(mount)))
+			.then((folder) => postUsbHostPicks(folder ? [folder] : []))
+			.catch((err) => {
+				if (err instanceof Error && err.message === "mount unavailable") {
 					return;
 				}
-				R.showFormBanner(err.message || "Could not add folder.", "uft-form-banner");
+				showFormBanner(errorMessage(err, "Could not add folder."), "uft-form-banner");
 			});
 	});
-	R.onClick("btn-uft-start", function () {
+	onClick("btn-uft-start", () => {
 		pushUsbTransferSettings()
-			.then(function () {
-				return R.api("POST", "/api/usb-transfer/start");
-			})
-			.then(R.applyState)
-			.catch(function (err) {
-				R.showFormBanner(err.message || "Transfer could not start.", "uft-form-banner");
+			.then(() => apiSend("POST", "/api/usb-transfer/start"))
+			.then(applyState)
+			.catch((err) => {
+				showFormBanner(errorMessage(err, "Transfer could not start."), "uft-form-banner");
 				if (S.state) {
 					updateUsbTransferUi(S.state);
 				}
 			});
 	});
-	R.onClick("btn-uft-pause", function () {
-		R.api("POST", "/api/usb-transfer/pause")
-			.then(R.applyState)
-			.catch(function (err) {
-				R.showFormBanner(err.message || "Pause failed.", "uft-form-banner");
+	onClick("btn-uft-pause", () => {
+		apiSend("POST", "/api/usb-transfer/pause")
+			.then(applyState)
+			.catch((err) => {
+				showFormBanner(errorMessage(err, "Pause failed."), "uft-form-banner");
 			});
 	});
-	R.onClick("btn-uft-resume", function () {
-		R.api("POST", "/api/usb-transfer/resume")
-			.then(R.applyState)
-			.catch(function (err) {
-				R.showFormBanner(err.message || "Resume failed.", "uft-form-banner");
+	onClick("btn-uft-resume", () => {
+		apiSend("POST", "/api/usb-transfer/resume")
+			.then(applyState)
+			.catch((err) => {
+				showFormBanner(errorMessage(err, "Resume failed."), "uft-form-banner");
 			});
 	});
-	R.onClick("btn-uft-stop", function () {
-		R.api("POST", "/api/usb-transfer/stop")
-			.then(R.applyState)
-			.catch(function (err) {
-				R.showFormBanner(err.message || "Stop failed.", "uft-form-banner");
+	onClick("btn-uft-stop", () => {
+		apiSend("POST", "/api/usb-transfer/stop")
+			.then(applyState)
+			.catch((err) => {
+				showFormBanner(errorMessage(err, "Stop failed."), "uft-form-banner");
 			});
 	});
-	R.onClick("btn-uft-open-folder", function () {
-		R.api("POST", "/api/documents/open-folder").catch(function (err) {
-			R.showFormBanner(err.message || "Could not open destination folder.", "uft-form-banner");
+	onClick("btn-uft-open-folder", () => {
+		apiSend("POST", "/api/documents/open-folder").catch((err) => {
+			showFormBanner(errorMessage(err, "Could not open destination folder."), "uft-form-banner");
 		});
 	});
 }
-R.selectedUsbTransferMethod = selectedUsbTransferMethod;
-R.selectedUsbTransferFolders = selectedUsbTransferFolders;
-R.currentUsbExtraPaths = currentUsbExtraPaths;
-R.extraPathKind = extraPathKind;
-R.renderUsbTransferExtras = renderUsbTransferExtras;
-R.rebuildUsbTransferFolders = rebuildUsbTransferFolders;
-R.syncUsbTransferBrowseUi = syncUsbTransferBrowseUi;
-R.syncUsbTransferConnectionButtons = syncUsbTransferConnectionButtons;
-R.updateUsbTransferDeviceStatus = updateUsbTransferDeviceStatus;
-R.refreshUsbTransferDevices = refreshUsbTransferDevices;
-R.pushUsbTransferSettings = pushUsbTransferSettings;
-R.pushUsbTransferSettingsWithExtras = pushUsbTransferSettingsWithExtras;
-R.updateUsbTransferUi = updateUsbTransferUi;
-R.bindUsbDesktop = bindUsbDesktop;
 
 export {
 	bindUsbDesktop,

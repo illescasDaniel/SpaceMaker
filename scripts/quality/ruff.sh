@@ -14,7 +14,7 @@ for arg in "$@"; do
 done
 
 lib_require_venv
-targets=(src tests)
+targets=(src tests mcp-servers)
 
 if [[ "${CHECK_ONLY}" == true ]]; then
 	lib_uv_run ruff check "${targets[@]}"

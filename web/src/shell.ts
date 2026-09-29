@@ -1,56 +1,84 @@
-// @ts-nocheck — typed surface: types.ts/state.ts/api.ts/dom.ts
-import { R, S } from "./state.js";
+import { apiSend } from "./api.ts";
+import { errorMessage, isDesktopShell, isMobileGalleryShell, showFormBanner } from "./dom.ts";
+import { bindGalleryUi } from "./gallery.ts";
+import {
+	applyGalleryExport,
+	galleryItemPathFromLocation,
+	showGalleryItem,
+	syncGalleryPhoneHelpVisibility,
+} from "./gallery-item.ts";
+import { loadGallery } from "./gallery-timeline.ts";
+import {
+	clearHomeFormBanner,
+	maybeShowMissingTools,
+	syncConnectionButtons,
+	syncFolderCheckboxes,
+	updateAboutMeta,
+	updateDeviceStatus,
+	updateEasyUi,
+	updateWifiUploadPanel,
+	validateStep1Form,
+} from "./home.ts";
+import { bindHomeDesktop } from "./home-bind.ts";
+import { updateConvertUi, updateExtractButtons, updateExtractUi, updateVisualizeUi, updateWarnings } from "./jobs.ts";
+import { bindLanDesktop, updateReceiveUi, updateSendUi, updateTransferUi } from "./lan.ts";
+import { bindSettingsDesktop, maybeShowComponentsScreen, renderComponentsList, toolsBlockMainApp } from "./settings.ts";
+import { bootDesktopSession } from "./shell-boot.ts";
+import { bindDesktopChrome } from "./shell-chrome.ts";
+import { S } from "./state.ts";
+import type { AppModuleId, AppSnapshot, GalleryExportJob, ViewId, ViewOptions } from "./types.ts";
+import { bindUsbDesktop, updateUsbTransferUi } from "./usb.ts";
 
-function reloadStaleShell(serverVersion) {
-	var slug = String(serverVersion || "").replace(/\./g, "-");
-	var next = "/?_shell=" + encodeURIComponent(slug || "latest") + "&_=" + String(Date.now());
+function reloadStaleShell(serverVersion: string): void {
+	const slug = serverVersion.replace(/\./g, "-");
+	const next = "/?_shell=" + encodeURIComponent(slug || "latest") + "&_=" + String(Date.now());
 	location.replace(next);
 }
-function healIfStaleShell(settings) {
-	if (!R.isDesktopShell() || !settings) {
+function healIfStaleShell(settings: AppSnapshot | null): void {
+	if (!isDesktopShell() || !settings) {
 		return;
 	}
-	var pageVersion = window.SPACEMAKER_UI_SHELL_VERSION || "";
-	var serverVersion = settings.ui_shell_version || "";
+	const pageVersion = window.SPACEMAKER_UI_SHELL_VERSION || "";
+	const serverVersion = settings.ui_shell_version || "";
 	if (pageVersion && serverVersion && pageVersion === serverVersion) {
-		R.clearHomeFormBanner();
+		clearHomeFormBanner();
 		return;
 	}
 	// Stale WebEngine document vs live server — pull latest once, no user-facing panic.
-	var reloadKey = "spacemaker-shell-reload:" + serverVersion;
+	const reloadKey = "spacemaker-shell-reload:" + serverVersion;
 	try {
 		if (!sessionStorage.getItem(reloadKey)) {
 			sessionStorage.setItem(reloadKey, "1");
 			reloadStaleShell(serverVersion);
 			return;
 		}
-	} catch (_err) {
+	} catch {
 		reloadStaleShell(serverVersion);
 		return;
 	}
-	R.clearHomeFormBanner();
+	clearHomeFormBanner();
 }
-function syncActiveModuleView(next) {
-	if (!R.isDesktopShell() || !next || R.toolsBlockMainApp(next)) {
+function syncActiveModuleView(next: AppSnapshot): void {
+	if (!isDesktopShell() || !next || toolsBlockMainApp(next)) {
 		return;
 	}
-	var active = document.querySelector(".screen.active");
+	const active = document.querySelector(".screen.active");
 	if (!active?.id) {
 		return;
 	}
 	if (active.id === "view-components") {
 		return;
 	}
-	var currentId = active.id.replace(/^view-/, "");
+	const currentId = active.id.replace(/^view-/, "");
 	if (currentId === "gallery" || currentId === "gallery-item" || currentId === "settings" || currentId === "legal") {
 		return;
 	}
-	var target = !next.active_module || next.active_module === "home" ? "home" : moduleToViewId(next.active_module);
+	const target = !next.active_module || next.active_module === "home" ? "home" : moduleToViewId(next.active_module);
 	if (currentId !== target) {
 		showView(target, { skipHistory: true });
 	}
 }
-function moduleToViewId(module) {
+function moduleToViewId(module: AppModuleId | undefined): ViewId {
 	switch (module) {
 		case "photo_backup":
 			return "easy";
@@ -68,13 +96,13 @@ function moduleToViewId(module) {
 			return "home";
 	}
 }
-function homeViewId() {
+function homeViewId(): ViewId {
 	if (!S.state?.active_module || S.state.active_module === "home") {
 		return "home";
 	}
 	return moduleToViewId(S.state.active_module);
 }
-function isMainHubView(resolved) {
+function isMainHubView(resolved: string): boolean {
 	return (
 		resolved === "home" ||
 		resolved === "easy" ||
@@ -85,55 +113,54 @@ function isMainHubView(resolved) {
 		resolved === "transfer-files"
 	);
 }
-function enterModule(moduleId) {
-	return R.api("POST", "/api/module/enter", { module: moduleId })
+function enterModule(moduleId: AppModuleId): Promise<void> {
+	return apiSend<AppSnapshot>("POST", "/api/module/enter", { module: moduleId })
 		.then(applyState)
-		.then(function () {
+		.then(() => {
 			showView(moduleToViewId(moduleId));
 		})
-		.catch(function (err) {
-			R.showFormBanner(err.message || "Could not open this module.");
+		.catch((err: unknown) => {
+			showFormBanner(errorMessage(err, "Could not open this module."));
 		});
 }
-function goHomeHub() {
-	return R.api("POST", "/api/module/home")
+function goHomeHub(): Promise<void> {
+	return apiSend<AppSnapshot>("POST", "/api/module/home")
 		.then(applyState)
-		.then(function () {
+		.then(() => {
 			showView("home");
 		})
-		.catch(function (err) {
-			R.showFormBanner(err.message || "Could not return to Home.");
+		.catch((err: unknown) => {
+			showFormBanner(errorMessage(err, "Could not return to Home."));
 		});
 }
-function easyFileCountLabel(count, singular, plural) {
+function easyFileCountLabel(count: number, singular: string, plural: string): string {
 	if (count === 1) {
 		return "1 " + singular;
 	}
 	return count + " " + plural;
 }
-function _setUiMode(mode, options) {
-	options = options || {};
+function _setUiMode(mode: string, options?: { skipViewSwitch?: boolean }): void {
+	const opts = options || {};
 	S.uiMode = mode === "advanced" ? "advanced" : "easy";
-	var btnEasy = document.getElementById("btn-ui-easy");
-	var btnAdvanced = document.getElementById("btn-ui-advanced");
-	var active;
+	const btnEasy = document.getElementById("btn-ui-easy");
+	const btnAdvanced = document.getElementById("btn-ui-advanced");
 	if (btnEasy) {
 		btnEasy.classList.toggle("active", S.uiMode === "easy");
 	}
 	if (btnAdvanced) {
 		btnAdvanced.classList.toggle("active", S.uiMode === "advanced");
 	}
-	if (!options.skipViewSwitch && !R.toolsBlockMainApp(S.state)) {
-		active = document.querySelector(".screen.active");
+	if (!opts.skipViewSwitch && !toolsBlockMainApp(S.state)) {
+		const active = document.querySelector(".screen.active");
 		if (active && (active.id === "view-easy" || active.id === "view-wizard")) {
 			showView("home", { skipHistory: true });
 		}
 	}
 }
-function setUiModeFromState(next) {
+function setUiModeFromState(next: AppSnapshot): void {
 	S.uiMode = next.ui_mode === "advanced" ? "advanced" : "easy";
 }
-function pathForMainView(viewId) {
+function pathForMainView(viewId: string): string | null {
 	if (viewId === "gallery") {
 		return "/gallery";
 	}
@@ -142,55 +169,48 @@ function pathForMainView(viewId) {
 	}
 	return null;
 }
-function showView(viewId, options) {
-	var path;
-	var itemPath;
-	var resolved = viewId;
-	options = options || {};
-	if (viewId === "home") {
-		resolved = "home";
-	}
-	document.querySelectorAll(".screen").forEach(function (s) {
+function showView(viewId: ViewId, options?: ViewOptions): void {
+	const opts = options || {};
+	const resolved: ViewId = viewId === "home" ? "home" : viewId;
+	document.querySelectorAll(".screen").forEach((s) => {
 		s.classList.remove("active");
 	});
-	document.getElementById("view-" + resolved).classList.add("active");
-	R.syncGalleryPhoneHelpVisibility(resolved);
+	document.getElementById("view-" + resolved)?.classList.add("active");
+	syncGalleryPhoneHelpVisibility(resolved);
 	if (isMainHubView(resolved) || resolved === "gallery" || resolved === "gallery-item") {
-		document.querySelectorAll(".view-tabs button").forEach(function (b) {
-			var tab = b.getAttribute("data-view");
+		document.querySelectorAll(".view-tabs button").forEach((b) => {
+			const tab = b.getAttribute("data-view");
 			b.classList.toggle(
 				"active",
 				(tab === "gallery" && resolved.indexOf("gallery") === 0) || (tab === "home" && isMainHubView(resolved)),
 			);
 		});
-		if (isMainHubView(resolved) || resolved === "gallery") {
-			if (resolved === "gallery") {
-				R.loadGallery();
-			}
+		if ((isMainHubView(resolved) || resolved === "gallery") && resolved === "gallery") {
+			loadGallery();
 		}
-		if (!options.skipHistory) {
+		if (!opts.skipHistory) {
 			if (resolved === "gallery-item" && S.galleryItemPath) {
-				itemPath = "/gallery/item/" + encodeURI(S.galleryItemPath);
+				const itemPath = "/gallery/item/" + encodeURI(S.galleryItemPath);
 				if (location.pathname !== itemPath) {
 					history.pushState({ view: "gallery-item", path: S.galleryItemPath }, "", itemPath);
 				}
 			} else {
-				path = pathForMainView(isMainHubView(resolved) ? "home" : resolved);
+				const path = pathForMainView(isMainHubView(resolved) ? "home" : resolved);
 				if (path !== null && location.pathname !== path) {
 					history.pushState({ view: resolved }, "", path);
 				}
 			}
 		}
 	} else if (resolved === "settings" || resolved === "settings-tools" || resolved === "legal") {
-		document.querySelectorAll(".view-tabs button").forEach(function (b) {
+		document.querySelectorAll(".view-tabs button").forEach((b) => {
 			b.classList.toggle("active", b.getAttribute("data-view") === "settings");
 		});
 	}
 }
-function routeFromPath() {
-	var itemPath = R.galleryItemPathFromLocation();
+function routeFromPath(): void {
+	const itemPath = galleryItemPathFromLocation();
 	if (itemPath) {
-		R.showGalleryItem(itemPath, { skipHistory: true });
+		showGalleryItem(itemPath, { skipHistory: true });
 		return;
 	}
 	if (location.pathname === "/gallery") {
@@ -201,98 +221,79 @@ function routeFromPath() {
 		showView(homeViewId(), { skipHistory: true });
 	}
 }
-window.addEventListener("popstate", function () {
+window.addEventListener("popstate", () => {
 	routeFromPath();
 });
-function applyState(next) {
+function applyState(next: AppSnapshot): void {
 	S.state = next;
-	if (R.isMobileGalleryShell()) {
+	if (isMobileGalleryShell()) {
 		return;
 	}
-	R.updateAboutMeta(next);
+	updateAboutMeta(next);
 	setUiModeFromState(next);
-	R.maybeShowMissingTools(next);
-	R.syncConnectionButtons(next.connection_method || "wifi");
-	var lib = document.getElementById("input-library-root");
-	if (lib && document.activeElement !== lib) {
+	maybeShowMissingTools(next);
+	syncConnectionButtons(next.connection_method || "wifi");
+	const lib = document.getElementById("input-library-root");
+	if (lib instanceof HTMLInputElement && document.activeElement !== lib) {
 		lib.value = next.library_root || "";
 	}
-	R.syncFolderCheckboxes(next.source_folders);
+	syncFolderCheckboxes(next.source_folders);
 	if ((next.connection_method || "wifi") !== "wifi") {
-		R.updateDeviceStatus(next);
+		updateDeviceStatus(next);
 	}
-	R.updateWifiUploadPanel(next);
-	R.updateExtractUi(next);
-	R.updateConvertUi(next);
-	R.updateVisualizeUi(next);
-	R.updateWarnings(next);
-	R.updateEasyUi(next);
-	R.updateReceiveUi(next);
-	R.updateSendUi(next);
-	R.updateUsbTransferUi(next);
-	R.updateTransferUi(next);
+	updateWifiUploadPanel(next);
+	updateExtractUi(next);
+	updateConvertUi(next);
+	updateVisualizeUi(next);
+	updateWarnings(next);
+	updateEasyUi(next);
+	updateReceiveUi(next);
+	updateSendUi(next);
+	updateUsbTransferUi(next);
+	updateTransferUi(next);
 	if (next.managed_tools) {
-		R.renderComponentsList(next.managed_tools);
+		renderComponentsList(next.managed_tools);
 	}
-	R.maybeShowComponentsScreen(next);
-	if (R.toolsBlockMainApp(next)) {
+	maybeShowComponentsScreen(next);
+	if (toolsBlockMainApp(next)) {
 		return;
 	}
 	syncActiveModuleView(next);
-	R.validateStep1Form(false);
-	R.updateExtractButtons(next);
+	validateStep1Form(false);
+	updateExtractButtons(next);
 }
-function isGalleryEntryPath() {
+function isGalleryEntryPath(): boolean {
 	return location.pathname === "/gallery" || location.pathname.indexOf("/gallery/item/") === 0;
 }
-function connectWs() {
-	var proto = location.protocol === "https:" ? "wss" : "ws";
-	var ws = new WebSocket(proto + "://" + location.host + "/ws");
-	ws.onmessage = function (ev) {
-		var msg = JSON.parse(ev.data);
-		if (msg.type === "state") {
+function connectWs(): void {
+	const proto = location.protocol === "https:" ? "wss" : "ws";
+	const ws = new WebSocket(proto + "://" + location.host + "/ws");
+	ws.onmessage = (ev: MessageEvent<string>) => {
+		const msg: { type?: string; state?: AppSnapshot; export?: GalleryExportJob } = JSON.parse(ev.data);
+		if (msg.type === "state" && msg.state) {
 			applyState(msg.state);
 		}
 		if (msg.type === "gallery_export") {
-			R.applyGalleryExport(msg.export);
+			applyGalleryExport(msg.export);
 		}
 	};
-	ws.onclose = function () {
+	ws.onclose = () => {
 		setTimeout(connectWs, 2000);
 	};
 }
-function bootstrapMobileGalleryShell() {
-	R.bindGalleryUi();
+function bootstrapMobileGalleryShell(): void {
+	bindGalleryUi();
 	routeFromPath();
 	connectWs();
 }
-function bootstrapDesktopShell() {
-	R.bindDesktopChrome();
-	R.bindUsbDesktop();
-	R.bindLanDesktop();
-	R.bindSettingsDesktop();
-	R.bindHomeDesktop();
-	R.bootDesktopSession();
+function bootstrapDesktopShell(): void {
+	bindDesktopChrome();
+	bindUsbDesktop();
+	bindLanDesktop();
+	bindSettingsDesktop();
+	bindHomeDesktop();
+	bootDesktopSession();
 }
-R.reloadStaleShell = reloadStaleShell;
-R.healIfStaleShell = healIfStaleShell;
-R.syncActiveModuleView = syncActiveModuleView;
-R.moduleToViewId = moduleToViewId;
-R.homeViewId = homeViewId;
-R.isMainHubView = isMainHubView;
-R.enterModule = enterModule;
-R.goHomeHub = goHomeHub;
-R.easyFileCountLabel = easyFileCountLabel;
-R._setUiMode = _setUiMode;
-R.setUiModeFromState = setUiModeFromState;
-R.pathForMainView = pathForMainView;
-R.showView = showView;
-R.routeFromPath = routeFromPath;
-R.applyState = applyState;
-R.isGalleryEntryPath = isGalleryEntryPath;
-R.connectWs = connectWs;
-R.bootstrapMobileGalleryShell = bootstrapMobileGalleryShell;
-R.bootstrapDesktopShell = bootstrapDesktopShell;
 
 export {
 	_setUiMode,

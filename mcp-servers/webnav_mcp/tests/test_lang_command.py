@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from webnav_mcp.lang_command import resolve_css_command, resolve_html_command, resolve_ts_command
 
 
@@ -36,10 +35,13 @@ def test_uses_extensionless_shim_on_posix(tmp_path: Path) -> None:
 def test_falls_back_to_which_then_npx(tmp_path: Path) -> None:
 	with (
 		patch("webnav_mcp.lang_command.sys.platform", "win32"),
-		patch("webnav_mcp.lang_command.shutil.which", side_effect=lambda name: {
-			"typescript-language-server": None,
-			"npx": r"C:\Program Files\nodejs\npx.cmd",
-		}.get(name)),
+		patch(
+			"webnav_mcp.lang_command.shutil.which",
+			side_effect=lambda name: {
+				"typescript-language-server": None,
+				"npx": r"C:\Program Files\nodejs\npx.cmd",
+			}.get(name),
+		),
 	):
 		resolved = resolve_ts_command(tmp_path)
 	assert resolved == [

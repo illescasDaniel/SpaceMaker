@@ -58,7 +58,14 @@ style as before). Routes use `/api/<area>/…` prefixes. Static SPA shells are
 served from `adapters/inbound/web/static/` (`index.html` / `gallery_mobile.html`
 + CSS sheets). Shell UI sources live in `web/src/*.ts` (strict TypeScript;
 `npm run build:web` / `tsc -p web/tsconfig.json` emits ES modules to
-`static/js/`; the shell loads `/static/js/main.js` as `type="module"`). A
+`static/js/`; the shell loads `/static/js/main.js` as `type="module"`).
+Modules call each other via direct named imports — there is no runtime
+service-locator/registry, and every exported function carries explicit
+parameter/return types (no `// @ts-nocheck`/`@ts-ignore`). Relative imports
+name the real `./x.ts` source file; `tsconfig.json`'s
+`rewriteRelativeImportExtensions` rewrites them to `./x.js` in the emitted
+output so the importmap cache-busting scheme is unaffected.
+`tests/unit/test_web_typing.py` guards these conventions. A
 single `/ws` WebSocket pushes state to loopback desktop clients. Request
 bodies use Pydantic `BaseModel`s.
 

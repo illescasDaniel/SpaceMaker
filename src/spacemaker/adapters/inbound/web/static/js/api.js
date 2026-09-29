@@ -1,4 +1,6 @@
-import { R } from "./state.js";
+/** Generic response type defaults to the loose `JsonValue` the server actually promises
+ * (every route here returns `dict[str, object]`); callers that know a payload's shape
+ * pass it explicitly, e.g. `apiSend<GalleryItemDetail>("GET", ...)`. */
 export async function apiSend(method, path, body) {
 	const headers = { Accept: "application/json" };
 	const init = { method, headers };
@@ -29,8 +31,3 @@ export function formatApiError(item) {
 	}
 	return JSON.stringify(item);
 }
-/** Callers use method-first `R.api(method, path, body)` (same as `apiSend`). */
-R.api = apiSend;
-R.apiSend = (url, method, body) => apiSend(method || "GET", url, body);
-R.apiGet = apiGet;
-R.formatApiError = formatApiError;

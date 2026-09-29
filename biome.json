@@ -10,7 +10,8 @@
 			"wireframes/**/*.html",
 			"wireframes/**/*.js",
 			"src/spacemaker/adapters/inbound/web/static/**/*.js",
-			"src/spacemaker/adapters/inbound/web/static/**/*.html"
+			"src/spacemaker/adapters/inbound/web/static/**/*.html",
+			"web/src/**/*.ts"
 		]
 	},
 	"formatter": {
@@ -41,5 +42,19 @@
 		"formatter": {
 			"quoteStyle": "double"
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["web/src/**/*.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "error",
+						"noTsIgnore": "error",
+						"noVar": "error"
+					}
+				}
+			}
+		}
+	]
 }

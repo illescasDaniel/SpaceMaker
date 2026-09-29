@@ -1,13 +1,6 @@
-/** Shared shell state and runtime registry. */
+/** Shared shell state. */
 
-import type {
-	AppSnapshot,
-	FormValidation,
-	GalleryMonthBlock,
-	GalleryNeighbor,
-	RuntimeRegistry,
-	ShellKind,
-} from "./types.js";
+import type { AppSnapshot, FormValidation, GalleryMonthBlock, GalleryNeighbor, ShellKind } from "./types.ts";
 
 export interface ShellState {
 	clientShell: ShellKind;
@@ -75,6 +68,3 @@ export const S: ShellState = {
 	uftAvailableFoldersKey: "",
 	COMPONENTS_DISMISS_KEY: "spacemaker_components_continue",
 };
-
-/** Filled by feature modules at import time; typed bag, not `any`. */
-export const R: RuntimeRegistry = {};

@@ -1,42 +1,44 @@
-// @ts-nocheck — typed surface: types.ts/state.ts/api.ts/dom.ts
-import { R, S } from "./state.js";
+import { isAbsolutePath, setQrImage, setQrUrlField, showFormBanner } from "./dom.ts";
+import { easyFileCountLabel } from "./shell.ts";
+import { S } from "./state.ts";
+import type { AppSnapshot, FormValidation } from "./types.ts";
 
-function clearHomeFormBanner() {
-	var homeBanner = document.getElementById("home-form-banner");
+function clearHomeFormBanner(): void {
+	const homeBanner = document.getElementById("home-form-banner");
 	if (homeBanner) {
 		homeBanner.hidden = true;
 		homeBanner.textContent = "";
 	}
 }
-function selectedConnectionMethod() {
-	var btnWifi = document.getElementById("btn-conn-wifi");
+function selectedConnectionMethod(): string {
+	const btnWifi = document.getElementById("btn-conn-wifi");
 	if (!btnWifi) {
 		return "wifi";
 	}
 	if (btnWifi.classList.contains("active")) {
 		return "wifi";
 	}
-	if (document.getElementById("btn-conn-adb").classList.contains("active")) {
+	if (document.getElementById("btn-conn-adb")?.classList.contains("active")) {
 		return "adb";
 	}
-	if (document.getElementById("btn-conn-afc").classList.contains("active")) {
+	if (document.getElementById("btn-conn-afc")?.classList.contains("active")) {
 		return "afc";
 	}
 	return "wifi";
 }
-function validateStep1Form(showFieldErrors) {
-	var lib = document.getElementById("input-library-root");
-	var sel = document.getElementById("select-device");
-	var libraryPath = lib ? lib.value.trim() : "";
-	if (!libraryPath && S.state && S.state.library_root) {
+function validateStep1Form(showFieldErrors: boolean): FormValidation {
+	const lib = document.getElementById("input-library-root");
+	const sel = document.getElementById("select-device");
+	let libraryPath = lib instanceof HTMLInputElement ? lib.value.trim() : "";
+	if (!libraryPath && S.state?.library_root) {
 		libraryPath = S.state.library_root;
 	}
-	var folders = selectedFolders();
-	var method = selectedConnectionMethod();
-	var deviceOk = method === "wifi" || !!sel?.value;
-	var libraryOk = R.isAbsolutePath(libraryPath);
-	var foldersOk = method === "wifi" || folders.length > 0;
-	var libErr = document.getElementById("library-root-error");
+	const folders = selectedFolders();
+	const method = selectedConnectionMethod();
+	const deviceOk = method === "wifi" || !!(sel instanceof HTMLSelectElement && sel.value);
+	const libraryOk = isAbsolutePath(libraryPath);
+	const foldersOk = method === "wifi" || folders.length > 0;
+	const libErr = document.getElementById("library-root-error");
 	if (showFieldErrors && lib) {
 		lib.classList.toggle("field-invalid", !libraryOk);
 		lib.setAttribute("aria-invalid", libraryOk ? "false" : "true");
@@ -59,8 +61,8 @@ function validateStep1Form(showFieldErrors) {
 	};
 	return S.formValidation;
 }
-function monthName(n) {
-	return [
+function monthName(n: number): string {
+	const names = [
 		"January",
 		"February",
 		"March",
@@ -73,9 +75,10 @@ function monthName(n) {
 		"October",
 		"November",
 		"December",
-	][n - 1];
+	];
+	return names[n - 1] ?? "";
 }
-function connectionLabel(method) {
+function connectionLabel(method: string | undefined): string {
 	if (method === "wifi") {
 		return "Wi‑Fi";
 	}
@@ -87,43 +90,47 @@ function connectionLabel(method) {
 	}
 	return "ADB";
 }
-function applyConnectionPanels(method) {
-	var isWifi = method === "wifi";
-	document.getElementById("panel-usb").classList.toggle("panel-hidden", isWifi);
-	document.getElementById("panel-wifi").classList.toggle("panel-hidden", !isWifi);
-	var chipMove = document.getElementById("chip-move");
-	var chipCopy = document.getElementById("chip-copy");
-	var moveHint = document.getElementById("move-wifi-hint");
+function applyConnectionPanels(method: string): void {
+	const isWifi = method === "wifi";
+	document.getElementById("panel-usb")?.classList.toggle("panel-hidden", isWifi);
+	document.getElementById("panel-wifi")?.classList.toggle("panel-hidden", !isWifi);
+	const chipMove = document.getElementById("chip-move");
+	const chipCopy = document.getElementById("chip-copy");
+	const moveHint = document.getElementById("move-wifi-hint");
 	if (isWifi) {
-		chipMove.classList.add("disabled");
-		chipMove.disabled = true;
-		chipCopy.classList.add("selected");
-		chipMove.classList.remove("selected");
+		chipMove?.classList.add("disabled");
+		if (chipMove instanceof HTMLButtonElement) {
+			chipMove.disabled = true;
+		}
+		chipCopy?.classList.add("selected");
+		chipMove?.classList.remove("selected");
 		if (moveHint) {
 			moveHint.hidden = false;
 		}
 	} else {
-		chipMove.classList.remove("disabled");
-		chipMove.disabled = false;
+		chipMove?.classList.remove("disabled");
+		if (chipMove instanceof HTMLButtonElement) {
+			chipMove.disabled = false;
+		}
 		if (moveHint) {
 			moveHint.hidden = true;
 		}
 	}
 }
-function syncConnectionButtons(method) {
-	document.getElementById("btn-conn-wifi").classList.toggle("active", method === "wifi");
-	document.getElementById("btn-conn-adb").classList.toggle("active", method === "adb");
-	document.getElementById("btn-conn-afc").classList.toggle("active", method === "afc");
+function syncConnectionButtons(method: string): void {
+	document.getElementById("btn-conn-wifi")?.classList.toggle("active", method === "wifi");
+	document.getElementById("btn-conn-adb")?.classList.toggle("active", method === "adb");
+	document.getElementById("btn-conn-afc")?.classList.toggle("active", method === "afc");
 	applyConnectionPanels(method);
 }
-function updateWifiUploadPanel(next) {
-	var wifi = next.wifi_upload || {};
-	var idle = document.getElementById("wifi-idle-hint");
-	var live = document.getElementById("wifi-live-receive");
-	var urlInput = document.getElementById("wifi-upload-url");
-	var qrImg = document.getElementById("wifi-upload-qr");
-	var wizardLibraryHint = document.getElementById("wizard-library-hint");
-	var libDisplay = next.library_root_display || next.library_root;
+function updateWifiUploadPanel(next: AppSnapshot): void {
+	const wifi = next.wifi_upload;
+	const idle = document.getElementById("wifi-idle-hint");
+	const live = document.getElementById("wifi-live-receive");
+	const urlInput = document.getElementById("wifi-upload-url");
+	const qrImg = document.getElementById("wifi-upload-qr");
+	const wizardLibraryHint = document.getElementById("wizard-library-hint");
+	const libDisplay = next.library_root_display || next.library_root;
 	if (!idle || !live) {
 		return;
 	}
@@ -132,47 +139,48 @@ function updateWifiUploadPanel(next) {
 	} else if (wizardLibraryHint) {
 		wizardLibraryHint.textContent = "";
 	}
-	R.setQrUrlField("wifi-qr-url-copy", wifi.upload_url || "");
-	if (wifi.active) {
+	setQrUrlField("wifi-qr-url-copy", wifi?.upload_url || "");
+	if (wifi?.active) {
 		idle.classList.add("panel-hidden");
 		live.classList.remove("panel-hidden");
-		if (urlInput) {
+		if (urlInput instanceof HTMLInputElement) {
 			urlInput.value = wifi.upload_url || "";
 		}
-		R.setQrImageSrc(qrImg, wifi.qr_url, "wifi-upload-qr");
+		setQrImage(qrImg instanceof HTMLImageElement ? qrImg : null, wifi.qr_url, "wifi-upload-qr");
 	} else {
 		idle.classList.remove("panel-hidden");
 		live.classList.add("panel-hidden");
 	}
 }
-function selectedFolders() {
-	var boxes = document.querySelectorAll("#folder-picker input[type=checkbox]");
-	var out = [];
-	boxes.forEach(function (box) {
-		if (box.checked && box.dataset.folder) {
+function selectedFolders(): string[] {
+	const boxes = document.querySelectorAll("#folder-picker input[type=checkbox]");
+	const out: string[] = [];
+	boxes.forEach((box) => {
+		if (box instanceof HTMLInputElement && box.checked && box.dataset.folder) {
 			out.push(box.dataset.folder);
 		}
 	});
 	return out;
 }
-function syncFolderCheckboxes(folders) {
-	var set = new Set(folders || []);
-	document.querySelectorAll("#folder-picker input[type=checkbox]").forEach(function (box) {
-		if (box.dataset.folder) {
+function syncFolderCheckboxes(folders: string[] | undefined): void {
+	const set = new Set(folders || []);
+	document.querySelectorAll("#folder-picker input[type=checkbox]").forEach((box) => {
+		if (box instanceof HTMLInputElement && box.dataset.folder) {
 			box.checked = set.has(box.dataset.folder);
 		}
 	});
 }
-function updateDeviceStatus(next) {
-	var root = document.getElementById("device-status");
-	var textEl = document.getElementById("device-status-text");
-	var name = "";
+function updateDeviceStatus(next: AppSnapshot): void {
+	const root = document.getElementById("device-status");
+	const textEl = document.getElementById("device-status-text");
+	let name = "";
 	if (!root || !textEl) {
 		return;
 	}
-	var method = connectionLabel(next.connection_method);
-	if (next.device_id && S.deviceLabels[next.device_id]) {
-		name = S.deviceLabels[next.device_id];
+	const method = connectionLabel(next.connection_method);
+	const label = next.device_id ? S.deviceLabels[next.device_id] : undefined;
+	if (label) {
+		name = label;
 		root.classList.add("connected");
 		root.classList.remove("disconnected");
 		textEl.textContent = name + " · Connected via " + method;
@@ -182,51 +190,46 @@ function updateDeviceStatus(next) {
 		textEl.textContent = "No device found · Check USB and " + method + " setup";
 	}
 }
-function maybeShowMissingTools(next) {
-	var missing = next.missing_tools || [];
+function maybeShowMissingTools(next: AppSnapshot): void {
+	const missing = next.missing_tools || [];
 	if (!missing.length) {
 		return;
 	}
-	var banner = document.getElementById("form-banner");
+	const banner = document.getElementById("form-banner");
 	if (banner && !banner.hidden) {
 		return;
 	}
-	R.showFormBanner(
+	showFormBanner(
 		"Some components are missing (" + missing.join(", ") + "). Open Components setup or install them on your PATH.",
 	);
 }
-function updateEasyUi(next) {
-	var wifi = next.wifi_upload || {};
-	var uploadQr = document.getElementById("easy-upload-qr");
-	var uploadWait = document.getElementById("easy-upload-wait");
-	var transferStatus = document.getElementById("easy-transfer-status");
-	var transferFill = document.getElementById("easy-transfer-fill");
-	var convertStatus = document.getElementById("easy-convert-status");
-	var convertFill = document.getElementById("easy-convert-fill");
-	var convertProgressBlock = document.getElementById("easy-convert-progress-block");
-	var compressOffStatus = document.getElementById("easy-compress-off-status");
-	var compressCheckbox = document.getElementById("easy-compress-checkbox");
-	var compressLabel = document.getElementById("easy-compress-pref-label");
-	var compressToolsHint = document.getElementById("easy-compress-tools-hint");
-	var viewGalleryWrap = document.getElementById("easy-view-gallery-wrap");
-	var processed = next.library_counts?.processed || 0;
-	var compress = next.compress_media || {};
-	var compressOn = compress.enabled !== false;
-	var compressControlEnabled = compress.control_enabled !== false;
-	var toolsAvailable = compress.tools_available !== false;
-	var ep = next.extract.progress || { completed: 0, percent: 0 };
-	var cp = next.convert.progress || { completed: 0, total: 0, percent: 0 };
-	var photoLibraryHint = document.getElementById("photo-library-hint");
-	var libDisplay = next.library_root_display || next.library_root;
-	var transferPct;
-	var issues;
-	var errN;
-	var invN;
-	var parts;
+function updateEasyUi(next: AppSnapshot): void {
+	const wifi = next.wifi_upload;
+	const uploadQr = document.getElementById("easy-upload-qr");
+	const uploadWait = document.getElementById("easy-upload-wait");
+	const transferStatus = document.getElementById("easy-transfer-status");
+	const transferFill = document.getElementById("easy-transfer-fill");
+	const convertStatus = document.getElementById("easy-convert-status");
+	const convertFill = document.getElementById("easy-convert-fill");
+	const convertProgressBlock = document.getElementById("easy-convert-progress-block");
+	const compressOffStatus = document.getElementById("easy-compress-off-status");
+	const compressCheckbox = document.getElementById("easy-compress-checkbox");
+	const compressLabel = document.getElementById("easy-compress-pref-label");
+	const compressToolsHint = document.getElementById("easy-compress-tools-hint");
+	const viewGalleryWrap = document.getElementById("easy-view-gallery-wrap");
+	const processed = next.library_counts?.processed || 0;
+	const compress = next.compress_media;
+	const compressOn = compress?.enabled !== false;
+	const compressControlEnabled = compress?.control_enabled !== false;
+	const toolsAvailable = compress?.tools_available !== false;
+	const ep = next.extract?.progress ?? { completed: 0, total: 0, percent: 0 };
+	const cp = next.convert?.progress ?? { completed: 0, total: 0, percent: 0 };
+	const photoLibraryHint = document.getElementById("photo-library-hint");
+	const libDisplay = next.library_root_display || next.library_root;
 	if (photoLibraryHint && libDisplay) {
 		photoLibraryHint.textContent = "Photos and videos are saved under " + libDisplay;
 	}
-	if (compressCheckbox && document.activeElement !== compressCheckbox) {
+	if (compressCheckbox instanceof HTMLInputElement && document.activeElement !== compressCheckbox) {
 		compressCheckbox.checked = compressOn;
 		compressCheckbox.disabled = !compressControlEnabled;
 	}
@@ -242,10 +245,10 @@ function updateEasyUi(next) {
 	if (compressOffStatus) {
 		compressOffStatus.classList.toggle("panel-hidden", compressOn);
 	}
-	R.setQrUrlField("easy-qr-url", wifi.upload_url || "");
-	if (wifi.active && uploadQr) {
+	setQrUrlField("easy-qr-url", wifi?.upload_url || "");
+	if (wifi?.active && uploadQr) {
 		uploadQr.hidden = false;
-		R.setQrImageSrc(uploadQr, wifi.qr_url, "easy-upload-qr");
+		setQrImage(uploadQr instanceof HTMLImageElement ? uploadQr : null, wifi.qr_url, "easy-upload-qr");
 		if (uploadWait) {
 			uploadWait.hidden = true;
 		}
@@ -256,29 +259,29 @@ function updateEasyUi(next) {
 		if (uploadWait) {
 			uploadWait.hidden = false;
 			uploadWait.textContent =
-				next.extract.phase === "running" || next.extract.phase === "paused"
+				next.extract?.phase === "running" || next.extract?.phase === "paused"
 					? "Preparing upload QR…"
 					: "Waiting to start Wi‑Fi receive…";
 		}
 	}
 	if (transferStatus) {
-		transferStatus.textContent = R.easyFileCountLabel(ep.completed, "file received", "files received");
+		transferStatus.textContent = easyFileCountLabel(ep.completed, "file received", "files received");
 	}
 	if (transferFill) {
-		transferPct = ep.total > 0 ? ep.percent : ep.completed > 0 ? 100 : 0;
+		const transferPct = ep.total > 0 ? ep.percent : ep.completed > 0 ? 100 : 0;
 		transferFill.style.width = transferPct + "%";
 	}
 	if (convertStatus) {
-		if (next.convert.phase === "running") {
+		if (next.convert?.phase === "running") {
 			convertStatus.textContent = "In progress — " + cp.completed + " / " + cp.total + " (" + cp.percent + "%)";
-		} else if (next.convert.phase === "error") {
+		} else if (next.convert?.phase === "error") {
 			convertStatus.textContent = "Failed — " + (next.last_error || "see Advanced for details");
 		} else if (next.last_error) {
 			convertStatus.textContent = next.last_error;
-		} else if (next.convert.phase === "done" && cp.total > 0) {
+		} else if (next.convert?.phase === "done" && cp.total > 0) {
 			convertStatus.textContent = "Completed — " + cp.completed + " file(s)";
 		} else if (processed > 0) {
-			convertStatus.textContent = R.easyFileCountLabel(
+			convertStatus.textContent = easyFileCountLabel(
 				processed,
 				"file converted, waiting for more",
 				"files converted, waiting for more",
@@ -288,17 +291,17 @@ function updateEasyUi(next) {
 		}
 	}
 	if (convertFill) {
-		convertFill.style.width = (next.convert.phase === "running" ? cp.percent : 0) + "%";
+		convertFill.style.width = (next.convert?.phase === "running" ? cp.percent : 0) + "%";
 	}
 	if (viewGalleryWrap) {
 		viewGalleryWrap.classList.toggle("panel-hidden", processed <= 0);
 	}
-	var importIssues = document.getElementById("easy-import-issues");
+	const importIssues = document.getElementById("easy-import-issues");
 	if (importIssues) {
-		issues = next.image_import_issues || {};
-		errN = issues.errors || 0;
-		invN = issues.invalid || 0;
-		parts = [];
+		const issues = next.image_import_issues ?? { errors: 0, invalid: 0 };
+		const errN = issues.errors || 0;
+		const invN = issues.invalid || 0;
+		const parts: string[] = [];
 		if (compressOn && errN > 0) {
 			parts.push(errN + (errN === 1 ? " image failed to convert" : " images failed to convert"));
 		}
@@ -314,15 +317,15 @@ function updateEasyUi(next) {
 		}
 	}
 }
-function updateAboutMeta(next) {
-	var line = document.getElementById("about-app-meta");
+function updateAboutMeta(next: AppSnapshot | null | undefined): void {
+	const line = document.getElementById("about-app-meta");
 	if (!line || !next) {
 		return;
 	}
-	var ver = next.app_version || "";
-	var author = next.app_author || "";
-	var contact = next.app_contact || "";
-	var parts = ["SpaceMaker"];
+	const ver = next.app_version || "";
+	const author = next.app_author || "";
+	const contact = next.app_contact || "";
+	const parts = ["SpaceMaker"];
 	if (ver) {
 		parts[0] += " " + ver;
 	}
@@ -330,26 +333,12 @@ function updateAboutMeta(next) {
 		parts.push(author);
 	}
 	line.textContent = parts.join(" · ");
-	var link = document.getElementById("about-contact-link");
-	if (link && contact) {
+	const link = document.getElementById("about-contact-link");
+	if (link instanceof HTMLAnchorElement && contact) {
 		link.href = "mailto:" + contact;
 		link.textContent = contact;
 	}
 }
-R.clearHomeFormBanner = clearHomeFormBanner;
-R.selectedConnectionMethod = selectedConnectionMethod;
-R.validateStep1Form = validateStep1Form;
-R.monthName = monthName;
-R.connectionLabel = connectionLabel;
-R.applyConnectionPanels = applyConnectionPanels;
-R.syncConnectionButtons = syncConnectionButtons;
-R.updateWifiUploadPanel = updateWifiUploadPanel;
-R.selectedFolders = selectedFolders;
-R.syncFolderCheckboxes = syncFolderCheckboxes;
-R.updateDeviceStatus = updateDeviceStatus;
-R.maybeShowMissingTools = maybeShowMissingTools;
-R.updateEasyUi = updateEasyUi;
-R.updateAboutMeta = updateAboutMeta;
 
 export {
 	applyConnectionPanels,

@@ -1,20 +1,35 @@
-// @ts-nocheck — typed surface: types.ts/state.ts/api.ts/dom.ts
-import { R, S } from "./state.js";
+import { apiSend } from "./api.ts";
+import { errorMessage, showFormBanner } from "./dom.ts";
+import { loadServerInfo } from "./gallery-timeline.ts";
+import { selectedConnectionMethod, validateStep1Form } from "./home.ts";
+import { loadDevices, updateExtractButtons } from "./jobs.ts";
+import { maybeShowComponentsScreen, runComponentsEnsure, toolsBlockMainApp } from "./settings.ts";
+import {
+	applyState,
+	connectWs,
+	healIfStaleShell,
+	isGalleryEntryPath,
+	moduleToViewId,
+	routeFromPath,
+	showView,
+} from "./shell.ts";
+import { S } from "./state.ts";
+import type { AppSnapshot, Defaults } from "./types.ts";
 
-function bootDesktopSession() {
-	R.api("GET", "/api/defaults")
-		.then(function (defaults) {
+function bootDesktopSession(): void {
+	apiSend<Defaults>("GET", "/api/defaults")
+		.then((defaults) => {
 			S.defaultLibraryRoot = defaults.default_library_root || "";
-			var lib = document.getElementById("input-library-root");
-			if (lib) {
+			const lib = document.getElementById("input-library-root");
+			if (lib instanceof HTMLInputElement) {
 				lib.placeholder = S.defaultLibraryRoot;
 			}
-			return R.api("GET", "/api/settings");
+			return apiSend<AppSnapshot>("GET", "/api/settings");
 		})
-		.then(function (settings) {
+		.then((settings) => {
 			if (!settings.library_root && S.defaultLibraryRoot) {
 				settings.library_root = S.defaultLibraryRoot;
-				return R.api("PUT", "/api/settings", {
+				return apiSend<AppSnapshot>("PUT", "/api/settings", {
 					library_root: S.defaultLibraryRoot,
 					ui_mode: settings.ui_mode || "easy",
 					connection_method: settings.connection_method,
@@ -26,53 +41,50 @@ function bootDesktopSession() {
 			}
 			return settings;
 		})
-		.then(R.applyState)
-		.then(function () {
-			R.healIfStaleShell(S.state);
-			if (S.state && R.toolsBlockMainApp(S.state)) {
-				R.maybeShowComponentsScreen(S.state);
-				return R.runComponentsEnsure()
-					.then(function () {
-						return R.api("GET", "/api/settings");
-					})
-					.then(R.applyState);
+		.then(applyState)
+		.then(() => {
+			healIfStaleShell(S.state);
+			if (S.state && toolsBlockMainApp(S.state)) {
+				maybeShowComponentsScreen(S.state);
+				return runComponentsEnsure()
+					.then(() => apiSend<AppSnapshot>("GET", "/api/settings"))
+					.then(applyState);
 			}
 			return null;
 		})
-		.then(function () {
-			if (S.state && R.toolsBlockMainApp(S.state)) {
-				R.maybeShowComponentsScreen(S.state);
+		.then(() => {
+			if (S.state && toolsBlockMainApp(S.state)) {
+				maybeShowComponentsScreen(S.state);
 				return null;
 			}
-			R.routeFromPath();
-			if (R.isGalleryEntryPath()) {
+			routeFromPath();
+			if (isGalleryEntryPath()) {
 				return null;
 			}
 			if (S.state?.active_module && S.state.active_module !== "home") {
-				R.showView(R.moduleToViewId(S.state.active_module), { skipHistory: true });
+				showView(moduleToViewId(S.state.active_module), { skipHistory: true });
 			} else {
-				R.showView("home", { skipHistory: true });
+				showView("home", { skipHistory: true });
 			}
-			if (S.state && S.state.active_module === "usb_photo_backup" && R.selectedConnectionMethod() !== "wifi") {
-				return R.loadDevices();
+			if (S.state && S.state.active_module === "usb_photo_backup" && selectedConnectionMethod() !== "wifi") {
+				return loadDevices();
 			}
 			return null;
 		})
-		.then(function () {
-			if (R.isGalleryEntryPath()) {
-				return null;
+		.then(() => {
+			if (isGalleryEntryPath()) {
+				return;
 			}
-			R.validateStep1Form(true);
+			validateStep1Form(true);
 			if (S.state) {
-				R.updateExtractButtons(S.state);
+				updateExtractButtons(S.state);
 			}
 		})
-		.then(R.loadServerInfo)
-		.catch(function (err) {
-			R.showFormBanner(err.message || "Failed to load settings.");
+		.then(loadServerInfo)
+		.catch((err: unknown) => {
+			showFormBanner(errorMessage(err, "Failed to load settings."));
 		});
-	R.connectWs();
+	connectWs();
 }
-R.bootDesktopSession = bootDesktopSession;
 
 export { bootDesktopSession };

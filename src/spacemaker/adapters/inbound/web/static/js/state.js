@@ -1,4 +1,4 @@
-/** Shared shell state and runtime registry. */
+/** Shared shell state. */
 function initialShell() {
 	if (typeof window !== "undefined" && window.SPACEMAKER_SHELL) {
 		return window.SPACEMAKER_SHELL;
@@ -34,5 +34,3 @@ export const S = {
 	uftAvailableFoldersKey: "",
 	COMPONENTS_DISMISS_KEY: "spacemaker_components_continue",
 };
-/** Filled by feature modules at import time; typed bag, not `any`. */
-export const R = {};

@@ -149,9 +149,7 @@ def stamp_shell_html(
 	html = _APP_JS_SRC_RE.sub(_stamp_js, html)
 	html = _SHELL_CSS_HREF_RE.sub(rf"\1\2?v={version}\3", html)
 
-	import_map = (
-		f'<script type="importmap">{shell_js_import_map(version=version, js_dir=js_dir)}</script>\n'
-	)
+	import_map = f'<script type="importmap">{shell_js_import_map(version=version, js_dir=js_dir)}</script>\n'
 	html = _IMPORT_MAP_RE.sub("", html)
 	# Import map must precede the module entry script.
 	module_script = re.search(

@@ -1,48 +1,51 @@
-// @ts-nocheck — typed surface: types.ts/state.ts/api.ts/dom.ts
-import { R } from "./state.js";
+import { apiSend } from "./api.js";
+import { errorMessage, onClick, showFormBanner } from "./dom.js";
+import { enterModule, goHomeHub, showView } from "./shell.js";
 
 function bindDesktopChrome() {
-	document.querySelectorAll(".view-tabs button").forEach(function (btn) {
-		btn.addEventListener("click", function () {
-			var v = btn.getAttribute("data-view");
+	document.querySelectorAll(".view-tabs button").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const v = btn.getAttribute("data-view");
 			if (v === "home") {
-				R.goHomeHub();
+				goHomeHub();
 				return;
 			}
-			R.showView(v);
-		});
-	});
-	document.querySelectorAll("[data-module]").forEach(function (tile) {
-		tile.addEventListener("click", function () {
-			var moduleId = tile.getAttribute("data-module");
-			if (moduleId) {
-				R.enterModule(moduleId);
+			if (v) {
+				showView(v);
 			}
 		});
 	});
-	document.querySelectorAll(".breadcrumb-home").forEach(function (btn) {
-		btn.addEventListener("click", function () {
-			R.goHomeHub();
+	document.querySelectorAll("[data-module]").forEach((tile) => {
+		tile.addEventListener("click", () => {
+			const moduleId = tile.getAttribute("data-module");
+			if (moduleId) {
+				enterModule(moduleId);
+			}
 		});
 	});
-	R.onClick("btn-open-documents-folder", function () {
-		R.api("POST", "/api/documents/open-folder").catch(function (err) {
-			R.showFormBanner(err.message || "Could not open documents folder.");
+	document.querySelectorAll(".breadcrumb-home").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			goHomeHub();
 		});
 	});
-	R.onClick("btn-transfer-open-documents", function () {
-		R.api("POST", "/api/documents/open-folder").catch(function (err) {
-			window.alert(err.message || "Could not open documents folder.");
+	onClick("btn-open-documents-folder", () => {
+		apiSend("POST", "/api/documents/open-folder").catch((err) => {
+			showFormBanner(errorMessage(err, "Could not open documents folder."));
+		});
+	});
+	onClick("btn-transfer-open-documents", () => {
+		apiSend("POST", "/api/documents/open-folder").catch((err) => {
+			window.alert(errorMessage(err, "Could not open documents folder."));
 		});
 	});
 	function bindInfoToggle(btnId, panelId) {
-		var btn = document.getElementById(btnId);
-		var panel = document.getElementById(panelId);
+		const btn = document.getElementById(btnId);
+		const panel = document.getElementById(panelId);
 		if (!btn || !panel) {
 			return;
 		}
-		btn.addEventListener("click", function () {
-			var open = panel.classList.toggle("visible");
+		btn.addEventListener("click", () => {
+			const open = panel.classList.toggle("visible");
 			btn.setAttribute("aria-expanded", open ? "true" : "false");
 			panel.setAttribute("aria-hidden", open ? "false" : "true");
 		});
@@ -53,6 +56,5 @@ function bindDesktopChrome() {
 	bindInfoToggle("btn-uft-mode-info", "uft-mode-info-panel");
 	bindInfoToggle("btn-uft-actions-info", "uft-actions-info-panel");
 }
-R.bindDesktopChrome = bindDesktopChrome;
 
 export { bindDesktopChrome };

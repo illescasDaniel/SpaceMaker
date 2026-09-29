@@ -317,8 +317,17 @@ way.
 `search_symbol` only covers JS/TS: the HTML/CSS language servers don't
 implement a useful `workspace/symbol`, and webnav does **not** reimplement
 general HTML/CSS symbol search. Prefer editing `web/src/*.ts` (strict check
-via `npm run check`); emitted `static/js/*.js` is build output. Feature
-modules may still carry `// @ts-nocheck` until fully migrated.
+via `npm run check`); emitted `static/js/*.js` is build output. Every module
+is fully typed with no `// @ts-nocheck`/`@ts-ignore` escape hatches, calls
+other modules via direct named imports (no runtime registry), and writes
+relative imports against the real `./x.ts` source file — `tsconfig.json`'s
+`rewriteRelativeImportExtensions` rewrites those to `./x.js` in the emitted
+output. `biome.json` enforces `noExplicitAny`/`noTsIgnore`/`noVar` as errors
+on `web/src/**/*.ts` via a scoped `overrides` entry (not the top-level
+`linter.rules`, which would also apply to legacy `wireframes/`/static `.js`
+files never meant to be held to that bar), and
+`tests/unit/test_web_typing.py` guards the no-nocheck/no-`.js`-import/no-registry
+rules at the Python test level.
 Run it standalone for manual testing with `uv run python
 -m webnav_mcp.server`; point it at a different workspace via
 the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above). See

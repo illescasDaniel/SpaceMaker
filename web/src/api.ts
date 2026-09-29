@@ -1,7 +1,9 @@
-import { R } from "./state.js";
-import type { HttpMethod, JsonValue } from "./types.js";
+import type { HttpMethod, JsonValue } from "./types.ts";
 
-export async function apiSend(method: HttpMethod | string, path: string, body?: unknown): Promise<JsonValue> {
+/** Generic response type defaults to the loose `JsonValue` the server actually promises
+ * (every route here returns `dict[str, object]`); callers that know a payload's shape
+ * pass it explicitly, e.g. `apiSend<GalleryItemDetail>("GET", ...)`. */
+export async function apiSend<T = JsonValue>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
 	const headers: Record<string, string> = { Accept: "application/json" };
 	const init: RequestInit = { method, headers };
 	if (body !== undefined) {
@@ -17,11 +19,11 @@ export async function apiSend(method: HttpMethod | string, path: string, body?: 
 				: response.statusText;
 		throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
 	}
-	return data as JsonValue;
+	return data as T;
 }
 
-export async function apiGet(path: string): Promise<JsonValue> {
-	return apiSend("GET", path);
+export async function apiGet<T = JsonValue>(path: string): Promise<T> {
+	return apiSend<T>("GET", path);
 }
 
 export function formatApiError(item: unknown): string {
@@ -36,9 +38,3 @@ export function formatApiError(item: unknown): string {
 	}
 	return JSON.stringify(item);
 }
-
-/** Callers use method-first `R.api(method, path, body)` (same as `apiSend`). */
-R.api = apiSend;
-R.apiSend = (url, method, body) => apiSend(method || "GET", url, body);
-R.apiGet = apiGet;
-R.formatApiError = formatApiError;

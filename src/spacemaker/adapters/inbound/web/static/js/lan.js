@@ -1,18 +1,17 @@
-// @ts-nocheck — typed surface: types.ts/state.ts/api.ts/dom.ts
-import { R, S } from "./state.js";
+import { apiSend } from "./api.js";
+import { errorMessage, onClick, setQrUrlField, showFormBanner } from "./dom.js";
+import { applyState, easyFileCountLabel } from "./shell.js";
+import { S } from "./state.js";
 
 function updateReceiveUi(next) {
-	var session = next.receive_files_session || {};
-	var uploadQr = document.getElementById("receive-upload-qr");
-	var uploadWait = document.getElementById("receive-upload-wait");
-	var transferStatus = document.getElementById("receive-transfer-status");
-	var transferFill = document.getElementById("receive-transfer-fill");
-	var destHint = document.getElementById("receive-dest-hint");
-	var rf = next.receive_files || {};
-	var rp = rf.progress || { completed: 0, percent: 0, total: 0 };
-	var transferPct;
-	var fileCount;
-	if (session.active && uploadQr) {
+	const session = next.receive_files_session;
+	const uploadQr = document.getElementById("receive-upload-qr");
+	const uploadWait = document.getElementById("receive-upload-wait");
+	const transferStatus = document.getElementById("receive-transfer-status");
+	const transferFill = document.getElementById("receive-transfer-fill");
+	const destHint = document.getElementById("receive-dest-hint");
+	const rp = next.receive_files?.progress ?? { completed: 0, percent: 0, total: 0 };
+	if (session?.active && uploadQr instanceof HTMLImageElement) {
 		uploadQr.hidden = false;
 		if (session.qr_url) {
 			uploadQr.src = session.qr_url + "&_=" + Date.now();
@@ -20,7 +19,7 @@ function updateReceiveUi(next) {
 		if (uploadWait) {
 			uploadWait.hidden = true;
 		}
-	} else if (uploadQr) {
+	} else if (uploadQr instanceof HTMLImageElement) {
 		uploadQr.hidden = true;
 		if (uploadWait) {
 			uploadWait.hidden = false;
@@ -28,62 +27,60 @@ function updateReceiveUi(next) {
 		}
 	}
 	if (transferStatus) {
-		transferStatus.textContent = R.easyFileCountLabel(rp.completed, "file received", "files received");
+		transferStatus.textContent = easyFileCountLabel(rp.completed, "file received", "files received");
 	}
 	if (transferFill) {
-		transferPct = rp.total > 0 ? rp.percent : rp.completed > 0 ? 100 : 0;
+		const transferPct = rp.total > 0 ? rp.percent : rp.completed > 0 ? 100 : 0;
 		transferFill.style.width = transferPct + "%";
 	}
-	var destDisplay = next.documents_receive_root_display || next.documents_receive_root;
+	const destDisplay = next.documents_receive_root_display || next.documents_receive_root;
 	if (destHint && destDisplay) {
 		destHint.textContent = "Files are saved under " + destDisplay;
 	}
-	var openWrap = document.getElementById("receive-open-wrap");
+	const openWrap = document.getElementById("receive-open-wrap");
 	if (openWrap) {
-		fileCount = next.documents_receive_file_count;
-		if (typeof fileCount !== "number") {
-			fileCount = rp.completed;
-		}
+		const fileCount =
+			typeof next.documents_receive_file_count === "number" ? next.documents_receive_file_count : rp.completed;
 		openWrap.classList.toggle("panel-hidden", fileCount < 1);
 	}
-	R.setQrUrlField("receive-qr-url", session.page_url || "");
+	setQrUrlField("receive-qr-url", session?.page_url || "");
 }
 function updateSendUi(next) {
-	var share = next.file_share || {};
-	var paths = next.share_selection || [];
-	var list = document.getElementById("share-path-list");
-	var qrSection = document.getElementById("send-qr-section");
-	var uploadQr = document.getElementById("send-share-qr");
-	var serverHint = document.getElementById("send-server-only-hint");
-	var hasDesktop = !!window.pywebview?.api;
+	const share = next.file_share;
+	const paths = next.share_selection || [];
+	const list = document.getElementById("share-path-list");
+	const qrSection = document.getElementById("send-qr-section");
+	const uploadQr = document.getElementById("send-share-qr");
+	const serverHint = document.getElementById("send-server-only-hint");
+	const hasDesktop = !!window.pywebview?.api;
 	if (serverHint) {
 		serverHint.classList.toggle("panel-hidden", hasDesktop);
 	}
 	if (list) {
 		list.innerHTML = "";
-		paths.forEach(function (p) {
-			var li = document.createElement("li");
+		paths.forEach((p) => {
+			const li = document.createElement("li");
 			li.textContent = p;
 			list.appendChild(li);
 		});
 	}
-	if (share.active && paths.length && qrSection && uploadQr) {
+	if (share?.active && paths.length && qrSection && uploadQr instanceof HTMLImageElement) {
 		qrSection.classList.remove("panel-hidden");
 		uploadQr.hidden = false;
 		if (share.qr_url) {
 			uploadQr.src = share.qr_url + "&_=" + Date.now();
 		}
-		R.setQrUrlField("send-qr-url", share.page_url || "");
-	} else if (qrSection && uploadQr) {
+		setQrUrlField("send-qr-url", share.page_url || "");
+	} else if (qrSection && uploadQr instanceof HTMLImageElement) {
 		qrSection.classList.add("panel-hidden");
 		uploadQr.hidden = true;
-		R.setQrUrlField("send-qr-url", "");
+		setQrUrlField("send-qr-url", "");
 	}
 }
 function showTransferSaveTip(displayPath) {
-	var tip = document.getElementById("transfer-save-tip");
-	var tipText = document.getElementById("transfer-save-tip-text");
-	var actions = document.getElementById("transfer-save-actions");
+	const tip = document.getElementById("transfer-save-tip");
+	const tipText = document.getElementById("transfer-save-tip-text");
+	const actions = document.getElementById("transfer-save-actions");
 	if (tipText) {
 		tipText.textContent = "Saved to " + (displayPath || "Documents/SpaceMaker");
 	}
@@ -95,9 +92,9 @@ function showTransferSaveTip(displayPath) {
 	}
 }
 function hideTransferSaveTip() {
-	var tip = document.getElementById("transfer-save-tip");
-	var tipText = document.getElementById("transfer-save-tip-text");
-	var actions = document.getElementById("transfer-save-actions");
+	const tip = document.getElementById("transfer-save-tip");
+	const tipText = document.getElementById("transfer-save-tip-text");
+	const actions = document.getElementById("transfer-save-actions");
 	if (tip) {
 		tip.hidden = true;
 	}
@@ -109,28 +106,28 @@ function hideTransferSaveTip() {
 	}
 }
 function saveTransferItemToDocuments(fileId) {
-	return R.api("POST", "/api/transfer/save", { file_id: fileId })
-		.then(function (result) {
+	return apiSend("POST", "/api/transfer/save", { file_id: fileId })
+		.then((result) => {
 			showTransferSaveTip(result.saved_path_display || result.saved_path || "");
 		})
-		.catch(function (err) {
-			window.alert(err.message || "Could not save to Documents/SpaceMaker.");
+		.catch((err) => {
+			window.alert(errorMessage(err, "Could not save to Documents/SpaceMaker."));
 		});
 }
 function updateTransferUi(next) {
-	var session = next.transfer_files_session || {};
-	var uploadQr = document.getElementById("transfer-qr");
-	var uploadWait = document.getElementById("transfer-qr-wait");
-	var list = document.getElementById("transfer-item-list");
-	var status = document.getElementById("transfer-item-status");
-	var serverHint = document.getElementById("transfer-server-only-hint");
-	var hasDesktop = !!window.pywebview?.api;
-	var items = session.items || [];
-	var pageUrl = session.page_url || "";
+	const session = next.transfer_files_session;
+	const uploadQr = document.getElementById("transfer-qr");
+	const uploadWait = document.getElementById("transfer-qr-wait");
+	const list = document.getElementById("transfer-item-list");
+	const status = document.getElementById("transfer-item-status");
+	const serverHint = document.getElementById("transfer-server-only-hint");
+	const hasDesktop = !!window.pywebview?.api;
+	const items = session?.items || [];
+	const pageUrl = session?.page_url || "";
 	if (serverHint) {
 		serverHint.classList.toggle("panel-hidden", hasDesktop);
 	}
-	if (session.active && uploadQr) {
+	if (session?.active && uploadQr instanceof HTMLImageElement) {
 		uploadQr.hidden = false;
 		if (session.qr_url) {
 			uploadQr.src = session.qr_url + "&_=" + Date.now();
@@ -138,7 +135,7 @@ function updateTransferUi(next) {
 		if (uploadWait) {
 			uploadWait.hidden = true;
 		}
-	} else if (uploadQr) {
+	} else if (uploadQr instanceof HTMLImageElement) {
 		uploadQr.hidden = true;
 		if (uploadWait) {
 			uploadWait.hidden = false;
@@ -146,18 +143,18 @@ function updateTransferUi(next) {
 		}
 		hideTransferSaveTip();
 	}
-	R.setQrUrlField("transfer-qr-url", pageUrl);
+	setQrUrlField("transfer-qr-url", pageUrl);
 	if (list) {
 		list.innerHTML = "";
-		items.forEach(function (item) {
-			var li = document.createElement("li");
+		items.forEach((item) => {
+			const li = document.createElement("li");
 			li.className = "transfer-item";
-			var meta = document.createElement("span");
+			const meta = document.createElement("span");
 			meta.className = "transfer-item-meta";
-			var name = document.createElement("span");
+			const name = document.createElement("span");
 			name.className = "transfer-item-name";
 			name.textContent = item.name || "";
-			var from = document.createElement("span");
+			const from = document.createElement("span");
 			from.className = "transfer-item-from";
 			from.textContent =
 				(item.kind === "folder_zip" ? "folder · " : "") +
@@ -165,11 +162,11 @@ function updateTransferUi(next) {
 				(item.origin_label || (item.origin === "pc" ? "PC" : "Phone"));
 			meta.appendChild(name);
 			meta.appendChild(from);
-			var btn = document.createElement("button");
+			const btn = document.createElement("button");
 			btn.type = "button";
 			btn.className = "btn btn-secondary transfer-dl";
 			btn.textContent = "Download";
-			btn.addEventListener("click", function () {
+			btn.addEventListener("click", () => {
 				saveTransferItemToDocuments(item.id);
 			});
 			li.appendChild(meta);
@@ -183,31 +180,24 @@ function updateTransferUi(next) {
 }
 function bindLanDesktop() {
 	function mergeShareSelection(extra) {
-		var base = S.state?.share_selection ? S.state.share_selection.slice() : [];
-		var seen = {};
-		var merged = [];
-		var i;
-		var _p;
-		var key;
+		const base = S.state?.share_selection ? S.state.share_selection.slice() : [];
+		const seen = {};
+		const merged = [];
 		function addPath(path) {
 			if (!path || !String(path).trim()) {
 				return;
 			}
-			key = String(path).trim();
+			const key = String(path).trim();
 			if (seen[key]) {
 				return;
 			}
 			seen[key] = true;
 			merged.push(key);
 		}
-		for (i = 0; i < base.length; i++) {
-			addPath(base[i]);
-		}
+		base.forEach(addPath);
 		if (extra) {
 			if (Array.isArray(extra)) {
-				for (i = 0; i < extra.length; i++) {
-					addPath(extra[i]);
-				}
+				extra.forEach(addPath);
 			} else {
 				addPath(extra);
 			}
@@ -215,108 +205,115 @@ function bindLanDesktop() {
 		return merged;
 	}
 	function refreshShareSelection(paths) {
-		return R.api("POST", "/api/share/selection", { paths: paths })
-			.then(R.applyState)
-			.catch(function (err) {
-				if (paths?.length) {
-					window.alert(err.message || "Could not update the share list.");
+		return apiSend("POST", "/api/share/selection", { paths: paths })
+			.then((data) => {
+				applyState(data);
+				return data;
+			})
+			.catch((err) => {
+				if (paths.length) {
+					window.alert(errorMessage(err, "Could not update the share list."));
 				} else {
-					R.showFormBanner(err.message || "Could not update the share list.");
+					showFormBanner(errorMessage(err, "Could not update the share list."));
 				}
 				throw err;
 			});
 	}
-	R.onClick("btn-share-clear", function () {
+	onClick("btn-share-clear", () => {
 		refreshShareSelection([]);
 	});
-	R.onClick("btn-share-add-files", function () {
+	onClick("btn-share-add-files", () => {
 		if (!window.pywebview?.api?.choose_files) {
-			R.showFormBanner("Use the desktop app to pick files.");
+			showFormBanner("Use the desktop app to pick files.");
 			return;
 		}
-		var current = S.state?.share_selection?.[0] || "";
+		const current = S.state?.share_selection?.[0] || "";
 		Promise.resolve(window.pywebview.api.choose_files(current))
-			.then(function (picked) {
+			.then((picked) => {
 				if (!picked?.length) {
 					return null;
 				}
 				return refreshShareSelection(mergeShareSelection(picked));
 			})
-			.catch(function () {
-				R.showFormBanner("Could not open the file picker.");
+			.catch(() => {
+				showFormBanner("Could not open the file picker.");
 			});
 	});
-	R.onClick("btn-share-add-folder", function () {
+	onClick("btn-share-add-folder", () => {
 		if (!window.pywebview?.api?.choose_share_folder) {
-			R.showFormBanner("Use the desktop app to pick a folder.");
+			showFormBanner("Use the desktop app to pick a folder.");
 			return;
 		}
-		var current = S.state?.share_selection?.[S.state.share_selection.length - 1] || "";
+		const shareSelection = S.state?.share_selection;
+		const current = shareSelection?.[shareSelection.length - 1] || "";
 		Promise.resolve(window.pywebview.api.choose_share_folder(current))
-			.then(function (folder) {
+			.then((folder) => {
 				if (!folder || !String(folder).trim()) {
 					return null;
 				}
-				var countPromise = window.pywebview.api.share_folder_file_count
+				const countPromise = window.pywebview?.api?.share_folder_file_count
 					? Promise.resolve(window.pywebview.api.share_folder_file_count(folder))
 					: Promise.resolve(1);
-				return countPromise.then(function (count) {
+				return countPromise.then((count) => {
 					if (count < 1) {
 						window.alert("This folder has no files. Choose a folder that contains at least one file.");
 						return null;
 					}
-					var merged = mergeShareSelection(folder);
+					const merged = mergeShareSelection(folder);
 					if (S.state?.share_selection && merged.length === S.state.share_selection.length) {
 						return null;
 					}
 					return refreshShareSelection(merged);
 				});
 			})
-			.catch(function () {
-				R.showFormBanner("Could not open the folder picker.");
+			.catch(() => {
+				showFormBanner("Could not open the folder picker.");
 			});
 	});
 	function addTransferPaths(paths) {
 		if (!paths?.length) {
 			return Promise.resolve(null);
 		}
-		return R.api("POST", "/api/transfer/add", { paths: paths })
-			.then(R.applyState)
-			.catch(function (err) {
-				window.alert(err.message || "Could not add to the transfer session.");
+		return apiSend("POST", "/api/transfer/add", { paths: paths })
+			.then((data) => {
+				applyState(data);
+				return data;
+			})
+			.catch((err) => {
+				window.alert(errorMessage(err, "Could not add to the transfer session."));
 				throw err;
 			});
 	}
-	R.onClick("btn-transfer-add-files", function () {
+	onClick("btn-transfer-add-files", () => {
 		if (!window.pywebview?.api?.choose_files) {
-			R.showFormBanner("Use the desktop app to pick files.");
+			showFormBanner("Use the desktop app to pick files.");
 			return;
 		}
 		Promise.resolve(window.pywebview.api.choose_files(""))
-			.then(function (picked) {
+			.then((picked) => {
 				if (!picked?.length) {
 					return null;
 				}
 				return addTransferPaths(picked);
 			})
-			.catch(function () {
-				R.showFormBanner("Could not open the file picker.");
+			.catch(() => {
+				showFormBanner("Could not open the file picker.");
 			});
 	});
-	R.onClick("btn-transfer-add-folder", function () {
+	onClick("btn-transfer-add-folder", () => {
 		if (!window.pywebview?.api?.choose_share_folder) {
-			R.showFormBanner("Use the desktop app to pick a folder.");
+			showFormBanner("Use the desktop app to pick a folder.");
 			return;
 		}
 		Promise.resolve(window.pywebview.api.choose_share_folder(""))
-			.then(function (folder) {
+			.then((folder) => {
 				if (!folder || !String(folder).trim()) {
 					return null;
 				}
-				var countPromise = window.pywebview.api.share_folder_file_count
+				const countPromise = window.pywebview?.api?.share_folder_file_count
 					? Promise.resolve(window.pywebview.api.share_folder_file_count(folder))
 					: Promise.resolve(1);
-				return countPromise.then(function (count) {
+				return countPromise.then((count) => {
 					if (count < 1) {
 						window.alert("This folder has no files. Choose a folder that contains at least one file.");
 						return null;
@@ -324,18 +321,11 @@ function bindLanDesktop() {
 					return addTransferPaths([folder]);
 				});
 			})
-			.catch(function () {
-				R.showFormBanner("Could not open the folder picker.");
+			.catch(() => {
+				showFormBanner("Could not open the folder picker.");
 			});
 	});
 }
-R.updateReceiveUi = updateReceiveUi;
-R.updateSendUi = updateSendUi;
-R.showTransferSaveTip = showTransferSaveTip;
-R.hideTransferSaveTip = hideTransferSaveTip;
-R.saveTransferItemToDocuments = saveTransferItemToDocuments;
-R.updateTransferUi = updateTransferUi;
-R.bindLanDesktop = bindLanDesktop;
 
 export {
 	bindLanDesktop,

@@ -1,88 +1,93 @@
-// @ts-nocheck — typed surface: types.ts/state.ts/api.ts/dom.ts
-import { R, S } from "./state.js";
+import { apiSend } from "./api.ts";
+import { errorMessage, onClick } from "./dom.ts";
+import { shiftGalleryItem, startFriendlyExport, triggerFileDownload } from "./gallery-item.ts";
+import { loadCalendarMonth, shiftCalendarMonth } from "./gallery-timeline.ts";
+import { showView } from "./shell.ts";
+import { S } from "./state.ts";
 
-function bindGalleryUi() {
-	var btnTimeline = document.getElementById("btn-timeline");
-	var btnCalendar = document.getElementById("btn-calendar");
-	var timelineView = document.getElementById("timeline-view");
-	var calendarView = document.getElementById("calendar-view");
+function bindGalleryUi(): void {
+	const btnTimeline = document.getElementById("btn-timeline");
+	const btnCalendar = document.getElementById("btn-calendar");
+	const timelineView = document.getElementById("timeline-view");
+	const calendarView = document.getElementById("calendar-view");
 	if (btnTimeline && btnCalendar && timelineView && calendarView) {
-		btnTimeline.addEventListener("click", function () {
+		btnTimeline.addEventListener("click", () => {
 			btnTimeline.classList.add("active");
 			btnCalendar.classList.remove("active");
 			timelineView.style.display = "block";
 			calendarView.classList.remove("visible");
 			calendarView.setAttribute("aria-hidden", "true");
 		});
-		btnCalendar.addEventListener("click", function () {
+		btnCalendar.addEventListener("click", () => {
 			btnCalendar.classList.add("active");
 			btnTimeline.classList.remove("active");
 			timelineView.style.display = "none";
 			calendarView.classList.add("visible");
 			calendarView.setAttribute("aria-hidden", "false");
-			R.loadCalendarMonth();
+			loadCalendarMonth();
 		});
 	}
-	R.onClick("btn-cal-prev", function () {
-		R.shiftCalendarMonth(-1);
+	onClick("btn-cal-prev", () => {
+		shiftCalendarMonth(-1);
 	});
-	R.onClick("btn-cal-next", function () {
-		R.shiftCalendarMonth(1);
+	onClick("btn-cal-next", () => {
+		shiftCalendarMonth(1);
 	});
-	R.onClick("btn-gallery-item-back", function () {
-		R.showView("gallery");
+	onClick("btn-gallery-item-back", () => {
+		showView("gallery");
 	});
-	R.onClick("btn-gallery-item-prev", function () {
-		R.shiftGalleryItem(-1);
+	onClick("btn-gallery-item-prev", () => {
+		shiftGalleryItem(-1);
 	});
-	R.onClick("btn-gallery-item-next", function () {
-		R.shiftGalleryItem(1);
+	onClick("btn-gallery-item-next", () => {
+		shiftGalleryItem(1);
 	});
-	R.onClick("btn-gallery-download", function () {
+	onClick("btn-gallery-download", () => {
 		if (!S.galleryItemPath) {
 			return;
 		}
-		R.triggerFileDownload("/media/" + encodeURI(S.galleryItemPath) + "?download=1");
+		triggerFileDownload("/media/" + encodeURI(S.galleryItemPath) + "?download=1");
 	});
-	R.onClick("btn-gallery-open", function () {
+	onClick("btn-gallery-open", () => {
 		if (!S.galleryItemPath) {
 			return;
 		}
-		R.api("POST", "/api/gallery/open", { relative_path: S.galleryItemPath, target: "file" }).catch(function (err) {
-			window.alert(err.message || "Could not open this file.");
+		apiSend("POST", "/api/gallery/open", { relative_path: S.galleryItemPath, target: "file" }).catch((err: unknown) => {
+			window.alert(errorMessage(err, "Could not open this file."));
 		});
 	});
-	R.onClick("btn-gallery-open-folder", function () {
+	onClick("btn-gallery-open-folder", () => {
 		if (!S.galleryItemPath) {
 			return;
 		}
-		R.api("POST", "/api/gallery/open", { relative_path: S.galleryItemPath, target: "folder" }).catch(function (err) {
-			window.alert(err.message || "Could not open the folder.");
-		});
+		apiSend("POST", "/api/gallery/open", { relative_path: S.galleryItemPath, target: "folder" }).catch(
+			(err: unknown) => {
+				window.alert(errorMessage(err, "Could not open the folder."));
+			},
+		);
 	});
-	R.onClick("btn-gallery-friendly", function () {
+	onClick("btn-gallery-friendly", () => {
 		if (!S.galleryItemPath) {
 			return;
 		}
-		R.startFriendlyExport();
+		startFriendlyExport();
 	});
-	R.onClick("btn-gallery-delete", function () {
+	onClick("btn-gallery-delete", () => {
 		if (!S.galleryItemPath) {
 			return;
 		}
 		if (!window.confirm("Delete this file from processed/ on this computer? This cannot be undone.")) {
 			return;
 		}
-		R.api("DELETE", "/api/gallery/item?path=" + encodeURIComponent(S.galleryItemPath))
-			.then(function () {
+		apiSend("DELETE", "/api/gallery/item?path=" + encodeURIComponent(S.galleryItemPath))
+			.then(() => {
 				S.galleryItemPath = "";
-				R.showView("gallery");
+				showView("gallery");
 			})
-			.catch(function (err) {
-				window.alert(err.message || "Could not delete this file.");
+			.catch((err: unknown) => {
+				window.alert(errorMessage(err, "Could not delete this file."));
 			});
 	});
 }
-R.bindGalleryUi = bindGalleryUi;
 
 export { bindGalleryUi };

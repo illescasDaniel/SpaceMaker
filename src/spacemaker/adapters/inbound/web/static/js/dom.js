@@ -1,4 +1,4 @@
-import { R, S } from "./state.js";
+import { S } from "./state.js";
 export function isDesktopShell() {
 	return S.clientShell === "desktop";
 }
@@ -10,6 +10,11 @@ export function onClick(id, handler) {
 	if (el) {
 		el.addEventListener("click", handler);
 	}
+}
+/** Every rejected `apiSend()` call lands here as `unknown` (strict `catch` typing);
+ * this is the one place that turns it into UI copy. */
+export function errorMessage(err, fallback) {
+	return err instanceof Error && err.message ? err.message : fallback;
 }
 export function isAbsolutePath(path) {
 	if (!path) {
@@ -72,16 +77,3 @@ export function setQrImage(img, qrUrl, cacheKey) {
 	S.lastQrSrcByElementId[key] = qrUrl;
 	img.src = qrUrl;
 }
-R.isDesktopShell = isDesktopShell;
-R.isMobileGalleryShell = isMobileGalleryShell;
-R.onClick = onClick;
-R.isAbsolutePath = isAbsolutePath;
-R.showFormBanner = showFormBanner;
-R.clearFormBanner = clearFormBanner;
-R.setStatusLine = setStatusLine;
-R.bindDisclosure = bindDisclosure;
-/** Feature modules still call the pre-rename names. */
-R.bindInfoPanelToggle = bindDisclosure;
-R.setQrUrlField = setQrUrlField;
-R.setQrImage = setQrImage;
-R.setQrImageSrc = setQrImage;

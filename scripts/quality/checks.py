@@ -45,7 +45,7 @@ def _npm() -> str | None:
 
 def step_ruff(*, fix: bool, quiet: bool) -> int:
 	_log(quiet, "== ruff ==")
-	targets = ["src", "tests"]
+	targets = ["src", "tests", "mcp-servers"]
 	if fix:
 		code = _run(_uv("ruff", "check", *targets, "--fix"), quiet=quiet)
 		if code != 0:
