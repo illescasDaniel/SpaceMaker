@@ -1,4 +1,4 @@
-_Last updated: 2026-09-29 (MCP review round 2 + worktree-aware workspace, branch `feature/mcp-improvements`)_
+_Last updated: 2026-09-29 (MCP live re-check + refresh/probe follow-ups, branch `claude/mcp-evaluation-report`)_
 
 ## Branch
 
@@ -22,7 +22,7 @@ Done and tested (609 tests, `uv run task checks` green):
 
 ## MCP evaluation + fixes (2026-09-29)
 
-Branch `claude/mcp-evaluation-report` (from `main` 3e42762): report `docs/reports/2026-09-29-mcp-evaluation.md` (before/after), all 7 findings fixed in 5b0ff55 + docs/friction follow-up commit, gate green (649 tests). Next: restart the MCP servers in your session to load the fixes and try them live; decide PR/merge; optional follow-ups are the two open friction entries (refresh cost, probe path).
+Branch `claude/mcp-evaluation-report` (from `main` 3e42762): report `docs/reports/2026-09-29-mcp-evaluation.md` (before/after), all 7 findings fixed in 5b0ff55 and confirmed live after an MCP restart; the two follow-up friction entries (refresh cost, probe path) fixed in f48308b; gate green (651 tests). Next: restart the MCP servers again to load f48308b; decide PR/merge. Optional: `search_symbol` fuzzy-filler friction entry (open).
 
 ## Older open items
 

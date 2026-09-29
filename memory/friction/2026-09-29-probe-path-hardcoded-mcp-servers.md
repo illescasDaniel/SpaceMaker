@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: codenav
 severity: confusing
-status: open
+status: fixed (f48308b)
 ---
 
 **Where:** `codenav_mcp/server.py` `_PROBE_RELATIVE_PATH = Path("mcp-servers") / ".codenav_probe.py"`; `docs/agent-tooling.md` (Protocol conformance, step 2) and `decisions.md` say `<root>/.codenav_probe.py`.

@@ -13,8 +13,10 @@ passes 34/34 checks.
 | `codenav` (Python / ty) | 7.5 / 10 | **8.5 / 10** | After-edit reliability 4 → 9; `implementations` now shows test doubles; `search_symbol` filters |
 | `webnav` (TS/HTML/CSS) | 7 / 10 | **8.5 / 10** | After-edit reliability 6 → 9; `selector` sees `querySelector<T>`; `outline` 3.6× smaller and in order; scoped CSS `definition` |
 
-Not higher because of the remaining weaknesses listed at the end (about +20 ms per call, thin
-`hover`, regex-grade selector scanning, restart needed after config changes).
+Not higher because of the remaining weaknesses listed at the end (thin `hover`, regex-grade
+selector scanning, restart needed after config changes). The two follow-ups found during the
+re-evaluation (refresh cost, probe path) were fixed afterwards in f48308b, and all 7 fixes were
+confirmed live in a new session after an MCP restart (see "Live check after restart").
 
 ## Re-evaluation: what was fixed and how it was verified
 
@@ -52,12 +54,24 @@ diagnostics from 1.7–2.5 s to 1.1–2.0 s, because `npm ci` meant no `npx` dow
 
 | Server | Severity | Issue |
 |---|---|---|
-| mcp-nav-shared | slow | The refresh walk costs ~20 ms per call; could be scoped to source + tests roots or debounced ([friction](../../memory/friction/2026-09-29-refresh-adds-20ms-per-call.md)) |
-| codenav | confusing | Probe document path is hard-coded `mcp-servers/.codenav_probe.py` while the docs say `<root>/.codenav_probe.py` ([friction](../../memory/friction/2026-09-29-probe-path-hardcoded-mcp-servers.md)) |
+| ~~mcp-nav-shared~~ | ~~slow~~ | ~~The refresh walk costs ~20 ms per call~~ — fixed in f48308b: the cost came from nested worktrees under `.claude/worktrees/` (walked and reported to the server) plus a `resolve()` per file; now ~2.3 ms with or without a nested worktree ([friction](../../memory/friction/2026-09-29-refresh-adds-20ms-per-call.md)) |
+| ~~codenav~~ | ~~confusing~~ | ~~Probe document path hard-coded `mcp-servers/.codenav_probe.py`~~ — fixed in f48308b: now `<root>/.codenav_probe.py` as documented; `implementations` results unchanged ([friction](../../memory/friction/2026-09-29-probe-path-hardcoded-mcp-servers.md)) |
+| codenav | minor | `search_symbol` on a short query pads the cap with ty's fuzzy subsequence matches after the real substring hits ([friction](../../memory/friction/2026-09-29-search-symbol-fuzzy-filler.md)) |
 | both | limitation | Changes to config that alters resolution (`pyproject.toml`, `tsconfig.json`) aren't picked up until the server restarts |
 | both | limitation | The MCP servers attached to a running Claude session keep the code they started with; restart them (or the session) to get these fixes |
 | codenav | minor | `hover` is still thin (a variable shows only its type name) |
 | webnav | minor | `selector` is regex-grade: template literals and selectors built from several variables aren't resolved (documented) |
+
+### Live check after restart (new session)
+
+With the servers restarted on the new code, each fix was re-checked through the real MCP tools:
+`implementations(FileSystemPort)` lists `FakeFileSystem` under the extra-roots heading;
+`search_symbol("convert", kind="class", path="src/")` returns 5 classes; `selector("#gallery-item-media")`
+reports `web/src/gallery-item.ts` L140 (`querySelector`); webnav `outline(api.ts)` is 3 lines in
+source order; `definition` on `var(--bg)` in `shell-gallery.css` returns only the `static` root's
+two definitions. Freshness: a new Python file, an edit to an unopened `reset_library.py`, and an
+edit to an already-open `web/src/lan.ts` all showed up on the next call; after `git checkout` +
+`rm`, `callers` and `search_symbol` had no ghosts.
 
 ### Revised per-tool scores
 

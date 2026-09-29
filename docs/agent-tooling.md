@@ -304,7 +304,11 @@ every tool call (`get_client()` in codenav, `_get_client()` in webnav):
    documents as part of the project deterministically (its own disk watchers
    are racy right after a write). ty needs only step 2.
 
-Cost: one stat walk per call (~20 ms on this repo). Not covered: changes to
+Cost: one stat walk per call (~2 ms on this repo). The walk resolves the root
+once rather than every file, and skips nested checkouts (any directory below
+the root holding a `.git` entry, e.g. worktrees under `.claude/worktrees/`):
+walking those used to cost ~15 ms per worktree and reported another
+checkout's files to the server. Not covered: changes to
 config that alters resolution (`pyproject.toml`, `tsconfig.json`) — restart
 the server after editing those. `codenav_mcp/tests/test_ty_live.py` exercises
 create/edit/delete against a real `ty`.

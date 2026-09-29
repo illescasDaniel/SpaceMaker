@@ -2,7 +2,7 @@
 date: 2026-09-29
 area: mcp-nav-shared
 severity: slow
-status: open
+status: fixed (f48308b)
 ---
 
 **Call:** any codenav tool, warm (measured with a stdio client on this repo).
