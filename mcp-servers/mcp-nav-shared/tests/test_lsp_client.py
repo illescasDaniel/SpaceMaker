@@ -273,3 +273,60 @@ def test_given_push_only_server_when_diagnostics_then_waits_for_push_after_sync(
 	items = asyncio.run(_run())
 	# then
 	assert items == pushed
+
+
+def _respond_with(client: LspClient, replies: list[dict]) -> asyncio.Future:
+	async def _serve() -> None:
+		for reply in replies:
+			while not client._pending:
+				await asyncio.sleep(0)
+			client._dispatch({"jsonrpc": "2.0", "id": next(iter(client._pending)), **reply})
+			await asyncio.sleep(0)
+
+	return asyncio.ensure_future(_serve())
+
+
+def _run_request(client: LspClient, replies: list[dict]) -> dict:
+	async def _run() -> dict:
+		serving = _respond_with(client, replies)
+		try:
+			return await client._request("textDocument/hover", {})
+		finally:
+			serving.cancel()
+
+	return asyncio.run(_run())
+
+
+@pytest.fixture
+def _no_backoff(monkeypatch):
+	monkeypatch.setattr(lsp_client, "_CONTENT_MODIFIED_BACKOFF", (0, 0, 0))
+
+
+def test_given_content_modified_once_when_request_then_retried_and_succeeds(tmp_path, _no_backoff):
+	# given
+	client = _started_client(tmp_path)
+	replies = [{"error": {"code": -32801, "message": "content modified"}}, {"result": {"ok": 1}}]
+	# when
+	resp = _run_request(client, replies)
+	# then
+	assert resp["result"] == {"ok": 1}
+
+
+def test_given_persistent_content_modified_when_request_then_error_surfaces(tmp_path, _no_backoff):
+	# given
+	client = _started_client(tmp_path)
+	replies = [{"error": {"code": -32801, "message": "content modified"}}] * 4
+	# when / then
+	with pytest.raises(LspRequestError) as caught:
+		_run_request(client, replies)
+	assert caught.value.code == -32801
+
+
+def test_given_other_error_when_request_then_not_retried(tmp_path, _no_backoff):
+	# given
+	client = _started_client(tmp_path)
+	replies = [{"error": {"code": -32601, "message": "nope"}}, {"result": {"ok": 1}}]
+	# when / then
+	with pytest.raises(LspRequestError) as caught:
+		_run_request(client, replies)
+	assert caught.value.code == -32601

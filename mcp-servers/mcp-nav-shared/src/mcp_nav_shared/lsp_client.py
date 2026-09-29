@@ -35,6 +35,11 @@ _NULL_REPLY_METHODS = {
 }
 
 
+# LSP `ContentModified` (-32801) and `ServerCancelled` (-32802): both mean "ask again".
+_RETRYABLE_CODES = frozenset({-32801, -32802})
+_CONTENT_MODIFIED_BACKOFF = (0.1, 0.25, 0.5)
+
+
 class NotStartedError(RuntimeError):
 	pass
 
@@ -237,6 +242,22 @@ class LspClient:
 		proc.stdin.write(header + body)
 
 	async def _request(self, method: str, params: dict[str, Any], timeout: float = 20) -> dict[str, Any]:
+		"""Send a request, retrying when the server reports the document changed mid-flight.
+
+		LSP says a client should re-issue a request that failed with `ContentModified`
+		(e.g. an edit landed while the server was still computing); other errors surface as-is.
+		"""
+		for delay in _CONTENT_MODIFIED_BACKOFF:
+			try:
+				return await self._request_once(method, params, timeout)
+			except LspRequestError as exc:
+				if exc.code not in _RETRYABLE_CODES:
+					raise
+				logger.debug("retrying %s after LSP error %s", method, exc.code)
+			await asyncio.sleep(delay)
+		return await self._request_once(method, params, timeout)
+
+	async def _request_once(self, method: str, params: dict[str, Any], timeout: float) -> dict[str, Any]:
 		self._next_id += 1
 		msg_id = self._next_id
 		fut: asyncio.Future = asyncio.get_running_loop().create_future()
