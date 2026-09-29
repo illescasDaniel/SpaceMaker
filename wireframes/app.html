@@ -2602,7 +2602,7 @@
 			</div>
 			<aside class="wf-note" data-for="agent">
 				<span class="wf-note-badge">Agent note</span>
-				<strong>Delete → thumbnail removal animation:</strong> after a successful delete, navigate back to the Gallery grid <em>first</em>, then play the removal on that item's thumbnail (<code>.thumb-removing</code>: fade + shrink over <code>--dur-base</code>), remove it from the DOM on <code>transitionend</code>, and let the remaining thumbnails reflow. The removal must also complete if <code>transitionend</code> never fires (timeout fallback slightly longer than <code>--dur-base</code>) and when reduced motion collapses <code>--dur-base</code> to ~0 (remove immediately, no animation). In production the grid reload skips the deleted item and the animation runs on the tile that is still shown from the previous render (or is a no-op if the tile is not mounted).
+				<strong>Delete → thumbnail removal animation:</strong> after a successful delete, navigate back to the Gallery grid <em>first</em>, then play the removal on that item's thumbnail (<code>.thumb-removing</code>: fade + shrink over <code>--dur-base</code>), remove it from the DOM on <code>transitionend</code>, and let the remaining thumbnails reflow. The removal must also complete if <code>transitionend</code> never fires (timeout fallback slightly longer than <code>--dur-base</code>) and when reduced motion collapses <code>--dur-base</code> to ~0 (remove immediately, no animation). In production the tile is removed <em>in place</em> — no timeline reload (it would blank the grid and reset scroll); a month left empty disappears with its heading.
 			</aside>
 			<div class="alert alert-info" id="wireframe-export-alert" hidden>
 				<span class="alert-icon" aria-hidden="true">⏳</span>

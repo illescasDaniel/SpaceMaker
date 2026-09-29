@@ -234,20 +234,52 @@ function cssTimeToMs(value) {
 	}
 	return token.endsWith("ms") ? n : n * 1000;
 }
+/** Drop a deleted item from the in-memory timeline (and its now-empty month block, if any). */
+function forgetGalleryItem(relativePath) {
+	const blockIndex = S.galleryMonthBlocks.findIndex((b) => b.items.some((i) => i.relative_path === relativePath));
+	const block = S.galleryMonthBlocks[blockIndex];
+	if (!block) {
+		return;
+	}
+	block.items = block.items.filter((i) => i.relative_path !== relativePath);
+	if (block.mounted) {
+		S.galleryMountedTileCount -= 1;
+	}
+	if (block.items.length > 0) {
+		return;
+	}
+	block.el?.remove();
+	block.placeholderEl?.remove();
+	S.galleryMonthBlocks.splice(blockIndex, 1);
+	const next = S.galleryMonthBlocks[blockIndex];
+	if (block.showYear && next && next.year === block.year && !next.showYear) {
+		// The year heading lived on the removed block; hand it to the next month of that year.
+		next.showYear = true;
+		if (next.mounted && next.el) {
+			const rebuilt = buildGalleryMonthBlockElement(next);
+			next.el.replaceWith(rebuilt);
+			next.el = rebuilt;
+		}
+	}
+	if (S.galleryMonthBlocks.length === 0 && !S.galleryHasMore) {
+		showGalleryTimelineMessage("No saved media yet");
+	}
+}
 /**
- * Fade/shrink out the still-mounted thumbnail of a just-deleted item, remove it, then call
- * `onDone` exactly once. Returns false (nothing scheduled, `onDone` not called) when the tile
- * is not mounted, so the caller can fall back to a plain reload. The fade starts after the
- * screen's fade-in (`--dur-base`). Removal does not depend on `transitionend`: a timeout
- * slightly past the fade's `--dur-base` guarantees it (also covers reduced
- * motion, where `--dur-base` is ~0).
+ * Remove a just-deleted item from the timeline *in place* — no reload, so there is no blank
+ * flash and the scroll position is untouched. A still-mounted tile fades/shrinks out first
+ * (after the screen's own fade-in, `--dur-base`, or the two fades overlap and the removal goes
+ * unseen); an unmounted one is simply forgotten. Removal never depends on `transitionend`: a
+ * timeout slightly past the fade's `--dur-base` guarantees it (also covers reduced motion,
+ * where `--dur-base` is ~0).
  */
-function removeGalleryThumb(relativePath, onDone) {
+function removeGalleryItem(relativePath) {
 	const tile = Array.from(document.querySelectorAll("#timeline-view .thumb-link")).find(
 		(el) => el.querySelector("img")?.alt === relativePath,
 	);
 	if (!tile) {
-		return false;
+		forgetGalleryItem(relativePath);
+		return;
 	}
 	let finished = false;
 	const finish = () => {
@@ -256,17 +288,14 @@ function removeGalleryThumb(relativePath, onDone) {
 		}
 		finished = true;
 		tile.remove();
-		onDone();
+		forgetGalleryItem(relativePath);
 	};
 	const base = cssTimeToMs(getComputedStyle(document.documentElement).getPropertyValue("--dur-base"));
-	// Wait out the screen's own fade-in (`.screen.active`, also `--dur-base`): started together,
-	// the tile's fade would finish while the screen is still nearly transparent and go unseen.
 	window.setTimeout(() => {
 		tile.classList.add("thumb-removing");
 		tile.addEventListener("transitionend", finish, { once: true });
 		window.setTimeout(finish, base + 100);
 	}, base);
-	return true;
 }
 function loadGallery() {
 	const host = document.getElementById("timeline-view");
@@ -481,7 +510,7 @@ export {
 	loadGallery,
 	loadServerInfo,
 	remountGalleryMonthBlock,
-	removeGalleryThumb,
+	removeGalleryItem,
 	renderCalendarGrid,
 	scheduleGalleryWindowCheck,
 	selectCalendarDay,
