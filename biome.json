@@ -11,7 +11,8 @@
 			"wireframes/**/*.js",
 			"src/spacemaker/adapters/inbound/web/static/**/*.js",
 			"src/spacemaker/adapters/inbound/web/static/**/*.html",
-			"web/src/**/*.ts"
+			"web/src/**/*.ts",
+			"!!**/experiments"
 		]
 	},
 	"formatter": {

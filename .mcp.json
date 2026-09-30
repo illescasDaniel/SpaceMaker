@@ -18,7 +18,7 @@
 		"webnav": {
 			"command": "node",
 			"args": [
-				"${CLAUDE_PROJECT_DIR:-.}/experiments/webnav-mcp-ts/dist/cli.js"
+				"${CLAUDE_PROJECT_DIR:-.}/experiments/webnav-mcp-ts/bin/launch.mjs"
 			],
 			"env": {
 				"WEBNAV_MCP_ROOTS": "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes",

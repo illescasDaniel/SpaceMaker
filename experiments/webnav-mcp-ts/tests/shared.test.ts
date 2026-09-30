@@ -418,6 +418,14 @@ describe("heritage clauses", () => {
 		]);
 	});
 
+	it("given an object type inside type parameters, when parsed, then the bases after it are still found", () => {
+		expect(names("Foo<T extends { a: number }, U extends () => void> extends Base implements Sized<T> {")).toEqual([
+			"Base",
+			"Sized",
+		]);
+		expect(names("Foo extends Base<{ a: 1 }> {\n\tx = { extends: Other };\n}")).toEqual(["Base"]);
+	});
+
 	it("given a qualified name, when parsed, then the last segment is the base", () => {
 		expect(names("A extends ns.sub.Base {")).toEqual(["Base"]);
 	});

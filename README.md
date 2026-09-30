@@ -83,7 +83,7 @@ In-app: **About & Legal** in the footer.
 ```bash
 uv run task sync-dev          # install Python + dev dependencies
 npm ci                        # clean install from package-lock.json (Biome, TypeScript)
-npm run setup:webnav          # install + build the webnav MCP (experiments/webnav-mcp-ts) used by .mcp.json
+npm run setup:webnav          # optional: pre-build the webnav MCP (experiments/webnav-mcp-ts); its launcher does this on first start
 uv run task spacemaker        # desktop (pywebview + local server)
 uv run task spacemaker-server # API/UI in browser only (no file picker)
 ```

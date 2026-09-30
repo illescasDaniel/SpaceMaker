@@ -315,13 +315,11 @@ interface ClassRef {
 
 /**
  * Names in the `extends`/`implements` clauses of a declaration, with their offsets in `text`.
- * `text` starts at the declaration's name; the clause list ends at the first `{`.
+ * `text` starts at the declaration's name; the clause list ends at the first `{` outside any `<...>`/`(...)`.
  * Generic arguments (`Base<T>`) are skipped, `a.B` yields `B`, and call expressions
  * (`extends mixin(Base)`) are ignored because there is no class to follow.
  */
 export function heritageNames(text: string): { name: string; offset: number }[] {
-	const end = text.indexOf("{");
-	const header = end === -1 ? text : text.slice(0, end);
 	const found: { name: string; offset: number }[] = [];
 	let inHeritage = false;
 	let depth = 0;
@@ -332,17 +330,21 @@ export function heritageNames(text: string): { name: string; offset: number }[] 
 		}
 		candidate = undefined;
 	};
-	for (const match of header.matchAll(/[A-Za-z_$][\w$]*|[<>(),.]/g)) {
+	// `=>` is one token so its `>` doesn't close a type-parameter list (`<T extends () => void>`).
+	for (const match of text.matchAll(/=>|[A-Za-z_$][\w$]*|[<>(){}[\],.]/g)) {
 		const token = match[0];
 		const offset = match.index ?? 0;
-		if (token === "<" || token === "(") {
+		if (token === "{" && depth === 0) {
+			break; // the class/interface body; a `{` inside `<...>` is an object type and doesn't end the header
+		}
+		if (token === "<" || token === "(" || token === "{" || token === "[") {
 			if (token === "(" && depth === 0) {
 				candidate = undefined; // `extends mixin(Base)`
 			}
 			depth++;
-		} else if (token === ">" || token === ")") {
+		} else if (token === ">" || token === ")" || token === "}" || token === "]") {
 			depth = Math.max(0, depth - 1);
-		} else if (depth > 0) {
+		} else if (depth > 0 || token === "=>") {
 			// inside type arguments or call arguments
 		} else if (token === ",") {
 			flush();

@@ -187,6 +187,36 @@ describe("typescript navigation", () => {
 	);
 
 	it(
+		"given generated output configured, when asking symbol_info, callers or implementations, then all three refuse alike",
+		async () => {
+			const w = start({ WEBNAV_MCP_EXCLUDE: "src/util.js" });
+			const refusal =
+				"'src/util.js' is generated output (WEBNAV_MCP_EXCLUDE); navigate the source it was built from instead";
+			expect(await w.symbolInfo({ name: "debounce" })).toBe(refusal);
+			expect(await w.callers({ name: "debounce" })).toBe(refusal);
+			expect(await w.implementations({ name: "debounce" })).toBe(refusal);
+		},
+		T,
+	);
+
+	it(
+		"given imports, when outlined, then they are hidden unless detailed is asked for",
+		async () => {
+			const w = start();
+			fs.writeFileSync(
+				path.join(ws, "src/consumer.ts"),
+				'import { Base } from "./app.ts";\nimport type {\n\tOptions,\n\tWidget,\n} from "./app.ts";\n\nexport class Own extends Base {}\nexport const opts: Options = { title: "x" };\nexport const make = (): Widget => new Widget(opts);\n',
+			);
+			expect(await w.outline("src/consumer.ts")).toBe("Own  [Class]  :7\nopts  [Variable]  :8\nmake  [Variable]  :9");
+			const detailed = await w.outline("src/consumer.ts", true);
+			for (const imported of ["Base  [", "Options  [", "Widget  ["]) {
+				expect(detailed).toContain(imported);
+			}
+		},
+		T,
+	);
+
+	it(
 		"given a non-script file, when outlined, then the error points at css_var/selector",
 		async () => {
 			expect(await start().outline("styles.css")).toContain("use css_var/selector for CSS/HTML");

@@ -101,12 +101,12 @@ so `uv sync` installs it from PyPI and `.mcp.json`/`.cursor/mcp.json` launch it 
 next `uv sync` restores the PyPI version.
 
 **`webnav` is different:** both host configs run the built TypeScript port,
-`node <project>/experiments/webnav-mcp-ts/dist/cli.js` (the Python `webnav-mcp`
+`node <project>/experiments/webnav-mcp-ts/bin/launch.mjs` (the Python `webnav-mcp`
 dependency was dropped from `pyproject.toml`). `dist/` and `node_modules/` are not
-committed, so after cloning (and in a fresh worktree) run `npm run setup:webnav` once
-from the repo root (`npm ci` + build inside the package), and again after pulling changes to
-the package. The MCP reports "own code changed" when `dist/` is rebuilt under a running
-server. The package's own checks are `npm run check` in that directory; its
+committed, so the launcher installs and builds them itself on first start (or when `src/` is
+newer than `dist/`, e.g. after pulling); progress goes to stderr, and the first start takes
+about a minute. `npm run setup:webnav` from the repo root does the same up front. The MCP
+reports "own code changed" when `dist/` is rebuilt under a running server. The package's own checks are `npm run check` in that directory; its
 `scripts/parity.mjs` compares it against the Python `webnav-mcp` if that is checked out.
 
 ## Publishing to PyPI
@@ -484,7 +484,7 @@ files never meant to be held to that bar), and
 `tests/unit/test_web_typing.py` guards the no-nocheck/no-`.js`-import/no-registry
 rules at the Python test level.
 Run it standalone for manual testing with `node
-experiments/webnav-mcp-ts/dist/cli.js`; point it at a different workspace via
+experiments/webnav-mcp-ts/bin/launch.mjs`; point it at a different workspace via
 the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above). See
 **Positioning** under codenav above — the same column rules apply.
 
@@ -654,7 +654,7 @@ The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-
   with `docs/ARCHITECTURE.md` on this Windows filesystem and briefly
   overwrote it — recovered from git history and merged. Watch for this with
   any new doc filename differing only by case.
-- webnav needs `npm run setup:webnav` (installs and builds the package, which
+- webnav's launcher (or `npm run setup:webnav`) installs and builds the package, which
   brings its own TypeScript 7 and `vscode-*-language-server`). The TypeScript
   port launches servers with `node`, so Windows shims are not involved, but it
-  has only been exercised on Linux + Node 22 so far.
+  has only been exercised on Linux + Node 22/24 so far.

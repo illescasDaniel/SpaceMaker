@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-30 — webnav TS launcher self-builds; `outline` hides imports
+
+- **Context:** A fresh clone/worktree without `dist/` made the host drop webnav for the whole session (`CONNECTION_CLOSED`). Separately, TypeScript's LSP reports imported names as top-level `Variable`s, which filled the top of every `outline`.
+- **Decision:** (1) `.mcp.json` / `.cursor/mcp.json` now run `experiments/webnav-mcp-ts/bin/launch.mjs`: it runs `npm ci` / `npm run build` (output to stderr, stdout is the protocol) when `node_modules` is missing or `src/` is newer than `dist/`, then imports `dist/cli.js`. `setup:webnav` stays as an optional pre-build. (2) `outline` (default, not `detailed`) drops symbols declared on `import` statement lines, found in the source text so multi-line imports work; same fix in the Python `webnav-mcp` (kept out of `mcp-nav-shared`, since codenav's Python imports aren't affected). (3) Root `biome.json` force-ignores `!!**/experiments` (nested `root: true` config otherwise fails the web gate).
+- **Rationale / trade-off:** the first start takes ~a minute (npm ci) and may hit a host connection timeout; later starts add only a source-mtime scan (~ms).
+
 ## 2026-09-30 — SpaceMaker's webnav MCP now runs the TypeScript port; inherited lookup, `callers`, `implementations`
 
 - **Context:** After the prototype proved parity, the owner asked to switch this branch's MCP configs to it (no publishing yet), and to fix inherited-member lookup and add `callers`/`implementations`. TypeScript 7's LSP has no type hierarchy (the old `resolve_inherited` path is dead for TS) but does offer call hierarchy and `textDocument/implementation`.

@@ -17,6 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { globFiles } from "./glob.js";
 import { resolveCssCommand, resolveHtmlCommand, resolveTsCommand } from "./langCommand.js";
+import { dropImportSymbols } from "./outlineImports.js";
 import { formatToolError, isToolError, ToolInputError } from "./shared/errors.js";
 import { isExcluded } from "./shared/exclude.js";
 import {
@@ -41,7 +42,7 @@ import { NoticeBoard } from "./shared/notices.js";
 import { resolveNameQuery } from "./shared/params.js";
 import { relativeWithin, resolveReal } from "./shared/paths.js";
 import { resolveSymbol } from "./shared/resolve.js";
-import { splitLines } from "./shared/text.js";
+import { readTextStrict, splitLines } from "./shared/text.js";
 import { type RootsProvider, WorkspaceSelector } from "./shared/workspace.js";
 import * as webIndex from "./webIndex.js";
 
@@ -525,11 +526,7 @@ export class Webnav {
 			const client = await this.getTsClient();
 			const resolved = await resolveSymbol(client, this.workspaceRoot, name, args.filePath);
 			const relPath = uriToRelative(resolved.uri, this.workspaceRoot);
-			if (this.isGenerated(this.resolvePath(relPath))) {
-				throw new ToolInputError(
-					`'${relPath}' is generated output (WEBNAV_MCP_EXCLUDE); navigate the source it was built from instead`,
-				);
-			}
+			this.rejectGenerated(relPath);
 			const line = resolved.line + 1;
 			const column = resolved.column + 1;
 			const hoverResult = await client.hover(relPath, line, column);
@@ -563,6 +560,7 @@ export class Webnav {
 			const client = await this.getTsClient();
 			const resolved = await resolveSymbol(client, this.workspaceRoot, name, args.filePath);
 			const relPath = uriToRelative(resolved.uri, this.workspaceRoot);
+			this.rejectGenerated(relPath);
 			const items = await client.prepareCallHierarchy(relPath, resolved.line + 1, resolved.column + 1);
 			const [item] = items;
 			if (item === undefined) {
@@ -586,6 +584,7 @@ export class Webnav {
 			const client = await this.getTsClient();
 			const resolved = await resolveSymbol(client, this.workspaceRoot, name, args.filePath);
 			const relPath = uriToRelative(resolved.uri, this.workspaceRoot);
+			this.rejectGenerated(relPath);
 			const locations = await client.implementation(relPath, resolved.line + 1, resolved.column + 1);
 			// The language server lists a class as one of its own implementations; that isn't news.
 			const others = locations.filter((loc) => {
@@ -604,7 +603,8 @@ export class Webnav {
 		return this.run(async () => {
 			this.checkScriptFile(filePath);
 			const client = await this.getTsClient();
-			const symbols = await client.documentSymbol(filePath);
+			const all = await client.documentSymbol(filePath);
+			const symbols = detailed ? all : dropImportSymbols(all, readTextStrict(this.resolvePath(filePath)));
 			return formatOutline(symbols, { collapseKinds: detailed ? new Set() : LOCALS_HOLDER_KINDS });
 		});
 	}

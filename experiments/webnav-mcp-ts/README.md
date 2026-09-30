@@ -27,8 +27,8 @@ working. See the [Python README](https://github.com/illescasDaniel/webnav-mcp#re
 for the tool reference.
 
 > **Status: prototype, in use by SpaceMaker.** Not published. SpaceMaker's `.mcp.json` /
-> `.cursor/mcp.json` launch `dist/cli.js` from here (run `npm run setup:webnav` at the
-> SpaceMaker root first). Lives in `experiments/` of SpaceMaker
+> `.cursor/mcp.json` launch `bin/launch.mjs` from here, which installs and builds `dist/` on first start
+> (`npm run setup:webnav` at the SpaceMaker root does it up front). Lives in `experiments/` of SpaceMaker
 > (outside `src/spacemaker/`, so the SDD phase gates don't apply) to answer "is
 > a port feasible?". The answer is in [Findings](#findings).
 

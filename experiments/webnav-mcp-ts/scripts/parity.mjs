@@ -21,7 +21,7 @@ const args = process.argv.slice(2);
 const opt = (name, fallback) => (args.includes(name) ? args[args.indexOf(name) + 1] : fallback);
 const scenarioArg = opt("--scenario", "all");
 const spacemaker = path.resolve(opt("--workspace", path.join(here, "../../..")));
-const pyDir = path.resolve(opt("--py-dir", path.join(here, "../../../../webnav-mcp")));
+const pyDir = path.resolve(opt("--py-dir", path.join(here, "../../../../MCPs/webnav-mcp")));
 const verbose = args.includes("--verbose");
 
 const servers = {
