@@ -2,7 +2,7 @@ _Last updated: 2026-09-30 (webnav TypeScript port prototype on `claude/webnav-ty
 
 ## Branch
 
-`claude/webnav-typescript-port`: webnav in TypeScript (`experiments/webnav-mcp-ts/`) is now what `.mcp.json`/`.cursor/mcp.json` launch; run `npm run setup:webnav` once. Not publishing yet. Otherwise primary checkout `main`. Worktree `faak` / `cursor/094eb8f7` still on disk.
+`claude/webnav-typescript-port`: webnav is the published npm package `webnav-ts-mcp` (own repo `~/Projects/Code/Python/MCPs/webnav-ts-mcp`); `.mcp.json`/`.cursor/mcp.json` launch it with `npx --yes webnav-ts-mcp@^0.1.0`. Otherwise primary checkout `main`. Worktree `faak` / `cursor/094eb8f7` still on disk.
 
 ## Current focus
 
@@ -16,5 +16,7 @@ MCP servers live in their own repos (`~/Projects/Python/MCPs/{mcp-nav-shared,cod
 
 ## Next steps
 
-1. Restart the MCPs once more (they report "own code changed" after the mid-session `mcp-nav-shared` upgrade).
-2. `/delete-worktree` for `faak` when finished with it.
+1. Published `webnav-ts-mcp@0.1.0` verified live in-session via `npx` (workspace, search_symbol, symbol_info, callers, outline, selector all correct).
+2. `/apply-worktree` to land this branch on `main`.
+3. `/delete-worktree` for `faak` when finished with it.
+4. Still open: verify webnav-ts-mcp on Windows/macOS/Node 20.

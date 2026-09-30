@@ -16,9 +16,10 @@
 			}
 		},
 		"webnav": {
-			"command": "node",
+			"command": "npx",
 			"args": [
-				"${CLAUDE_PROJECT_DIR:-.}/experiments/webnav-mcp-ts/bin/launch.mjs"
+				"--yes",
+				"webnav-ts-mcp@^0.1.0"
 			],
 			"env": {
 				"WEBNAV_MCP_ROOTS": "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes",

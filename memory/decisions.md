@@ -2,6 +2,19 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-30 — SpaceMaker consumes the published `webnav-ts-mcp`; Python `webnav-mcp` 0.1.2
+
+- **Context:** `webnav-ts-mcp` 0.1.0 is on npm (https://www.npmjs.com/package/webnav-ts-mcp) and on GitHub (`illescasDaniel/webnav-ts-mcp`, tag `v0.1.0`). The Python `webnav-mcp` had an uncommitted `outline` fix.
+- **Decision:** (1) `.mcp.json` / `.cursor/mcp.json` launch `npx --yes webnav-ts-mcp@^0.1.0` instead of the local checkout's launcher. (2) Python `webnav-mcp` 0.1.2 (outline hides imports) committed, pushed, tagged `v0.1.2`, uploaded to PyPI and verified with `task test-package`. (3) `webnav-ts-mcp` gained `npm run upload` (`scripts/publish.sh`) and `npm run test-package`, mirroring the Python tasks.
+- **Trade-off:** first start downloads ~180 MB into npm's cache; `^0.1.0` picks up patch releases automatically.
+
+## 2026-09-30 — webnav TS port extracted to its own repo `webnav-ts-mcp`
+
+- **Context:** The port lived in `experiments/webnav-mcp-ts/` (prototype, inside SpaceMaker). It works and is meant to be published on npm so SpaceMaker can consume it as a package.
+- **Decision:** (1) Moved it to `~/Projects/Code/Python/MCPs/webnav-ts-mcp` (git-initialised, MIT, author/version like the Python package, npm name `webnav-ts-mcp`, version 0.1.0, bin `webnav-ts-mcp`). Nothing of it remains in SpaceMaker: dropped `experiments/`, the `setup:webnav` script and the root `biome.json` `!!**/experiments` ignore. (2) Until it is on npm, `.mcp.json` / `.cursor/mcp.json` launch `${HOME}/Projects/Code/Python/MCPs/webnav-ts-mcp/bin/launch.mjs` (Cursor: `${env:HOME}`); after publishing, switch both to `npx webnav-ts-mcp`. (3) `scripts/bench.mjs` (new, in the package) measures speed/memory against the Python server.
+- **Result:** package `npm run check` 152 tests, parity 71/71 + SpaceMaker scenario, tarball (51 kB) installed into an empty project and all 12 tools driven over `npx webnav-ts-mcp`. Vs Python (median of 7): cold start 103 ms vs 528 ms, whole session 1.6 s vs 3.5 s, warm calls 2-5x faster, memory 359 vs 477 MiB.
+- **Open:** publish (owner needs `npm login`); then switch the host configs to `npx`; Windows/macOS/Node 20 unverified.
+
 ## 2026-09-30 — webnav TS launcher self-builds; `outline` hides imports
 
 - **Context:** A fresh clone/worktree without `dist/` made the host drop webnav for the whole session (`CONNECTION_CLOSED`). Separately, TypeScript's LSP reports imported names as top-level `Variable`s, which filled the top of every `outline`.

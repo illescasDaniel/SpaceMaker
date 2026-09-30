@@ -17,9 +17,10 @@
 			}
 		},
 		"webnav": {
-			"command": "node",
+			"command": "npx",
 			"args": [
-				"${workspaceFolder}/experiments/webnav-mcp-ts/bin/launch.mjs"
+				"--yes",
+				"webnav-ts-mcp@^0.1.0"
 			],
 			"env": {
 				"WEBNAV_MCP_WORKSPACE": "${workspaceFolder}",

@@ -8,7 +8,7 @@ you need more. `codenav` lives in its own repository
 ([`codenav-mcp`](https://github.com/illescasDaniel/codenav-mcp), with
 [`mcp-nav-shared`](https://github.com/illescasDaniel/mcp-nav-shared)); its README is aimed at standalone
 consumers, and SpaceMaker-specific wiring stays here. `webnav` is the TypeScript
-port in `experiments/webnav-mcp-ts/` (prototype, see its README); the older Python
+package [`webnav-ts-mcp`](https://github.com/illescasDaniel/webnav-ts-mcp) (own repo); the older Python
 [`webnav-mcp`](https://github.com/illescasDaniel/webnav-mcp) is no longer used by this repo.
 
 ## At a glance
@@ -16,7 +16,7 @@ port in `experiments/webnav-mcp-ts/` (prototype, see its README); the older Pyth
 | Server | Language surface | Backend | Start here | This repo's roots |
 |--------|------------------|---------|------------|-------------------|
 | [`codenav`](https://github.com/illescasDaniel/codenav-mcp) | Python (`.py`/`.pyi`) | `ty` language server | `symbol_info`, `outline`, `callers`, `implementations` | `CODENAV_MCP_SOURCE_ROOT=src` |
-| `webnav` (`experiments/webnav-mcp-ts/`) | JS / TS / HTML / CSS | TypeScript 7 `tsc --lsp --stdio` + vscode HTML/CSS servers | `symbol_info`, `outline`, `callers`, `implementations`, `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
+| [`webnav`](https://github.com/illescasDaniel/webnav-ts-mcp) (`webnav-ts-mcp`) | JS / TS / HTML / CSS | TypeScript 7 `tsc --lsp --stdio` + vscode HTML/CSS servers | `symbol_info`, `outline`, `callers`, `implementations`, `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
 
 Shared helpers: [`mcp-nav-shared`](https://github.com/illescasDaniel/mcp-nav-shared).
 
@@ -100,14 +100,15 @@ so `uv sync` installs it from PyPI and `.mcp.json`/`.cursor/mcp.json` launch it 
 `uv pip install -e ~/Projects/Python/MCPs/codenav-mcp` into this repo's venv; the
 next `uv sync` restores the PyPI version.
 
-**`webnav` is different:** both host configs run the built TypeScript port,
-`node <project>/experiments/webnav-mcp-ts/bin/launch.mjs` (the Python `webnav-mcp`
-dependency was dropped from `pyproject.toml`). `dist/` and `node_modules/` are not
-committed, so the launcher installs and builds them itself on first start (or when `src/` is
-newer than `dist/`, e.g. after pulling); progress goes to stderr, and the first start takes
-about a minute. `npm run setup:webnav` from the repo root does the same up front. The MCP
-reports "own code changed" when `dist/` is rebuilt under a running server. The package's own checks are `npm run check` in that directory; its
-`scripts/parity.mjs` compares it against the Python `webnav-mcp` if that is checked out.
+**`webnav` is different:** it is the npm package
+[`webnav-ts-mcp`](https://www.npmjs.com/package/webnav-ts-mcp), developed in its own repo
+(`~/Projects/Code/Python/MCPs/webnav-ts-mcp`), and both host configs launch the published
+version with `npx --yes webnav-ts-mcp@^0.1.0` (the Python `webnav-mcp` dependency was dropped from
+`pyproject.toml`). The first start downloads the package and its language servers
+(about 180 MB) into npm's cache; later starts reuse it. To try an unreleased change, temporarily point a
+config at `node ~/Projects/Code/Python/MCPs/webnav-ts-mcp/bin/launch.mjs`, which installs and builds
+the checkout on first start. The package's own checks are `npm run check` in its directory, and
+`npm run upload` / `npm run test-package` publish and verify a release.
 
 ## Publishing to PyPI
 
@@ -428,7 +429,7 @@ broken file can't flood the caller either.
 
 ## `webnav` MCP server
 
-`webnav` (TypeScript, `experiments/webnav-mcp-ts/`) gives the same kind of navigation for the
+`webnav` (TypeScript, package `webnav-ts-mcp`) gives the same kind of navigation for the
 project's JS/TS/HTML/CSS (`symbol_info`, `outline`, `callers`, `implementations`, `search_symbol`,
 `definition`, `references`, `hover`, `diagnostics`), multiplexing three
 Node-based language servers behind one MCP tool set, routed by file
@@ -442,8 +443,7 @@ extension:
 - `.css` → `vscode-css-language-server`
 
 HTML/CSS binaries come from `vscode-langservers-extracted`. Both language
-servers are ordinary npm dependencies of the webnav package (`npm run
-setup:webnav`), so nothing is downloaded at runtime and there is no `npx`
+servers are ordinary npm dependencies of the webnav package, so nothing is downloaded at runtime and there is no `npx`
 fallback. `langCommand.ts` resolves them in order: a TypeScript ≥ 7 (or the
 HTML/CSS package) in the navigated workspace's `node_modules` → the copy installed
 with webnav. They are launched as `node <server>.js` rather than through `.bin`
@@ -483,8 +483,8 @@ on `web/src/**/*.ts` via a scoped `overrides` entry (not the top-level
 files never meant to be held to that bar), and
 `tests/unit/test_web_typing.py` guards the no-nocheck/no-`.js`-import/no-registry
 rules at the Python test level.
-Run it standalone for manual testing with `node
-experiments/webnav-mcp-ts/bin/launch.mjs`; point it at a different workspace via
+Run it standalone for manual testing with
+`npx webnav-ts-mcp`; point it at a different workspace via
 the `WEBNAV_MCP_WORKSPACE` env var (otherwise falls back as above). See
 **Positioning** under codenav above — the same column rules apply.
 
@@ -494,7 +494,7 @@ The CSS/HTML language servers each see one document at a time, so `var(--x)`
 custom-property usages and `#id`/`.class` selectors can't be cross-referenced
 across files that way — the most common question for this project's
 `--custom-properties` (defined once in `theme.css`, used across every CSS
-file, inline `<style>` block and wireframe). `experiments/webnav-mcp-ts/src/webIndex.ts` answers this with a **plain TypeScript scanner, not a language
+file, inline `<style>` block and wireframe). `webnav-ts-mcp`'s `src/webIndex.ts` answers this with a **plain TypeScript scanner, not a language
 server**: no `@import` resolution, no real CSS parser, regex/brace-stack
 grade. It re-walks the roots on every call but reuses each root's parsed index
 while its files are unchanged: the cache key is the `(path, mtime_ns, size)`
@@ -654,7 +654,7 @@ The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-
   with `docs/ARCHITECTURE.md` on this Windows filesystem and briefly
   overwrote it — recovered from git history and merged. Watch for this with
   any new doc filename differing only by case.
-- webnav's launcher (or `npm run setup:webnav`) installs and builds the package, which
-  brings its own TypeScript 7 and `vscode-*-language-server`). The TypeScript
+- `npx` installs the package on first start, which
+  brings its own TypeScript 7 and `vscode-*-language-server`. The TypeScript
   port launches servers with `node`, so Windows shims are not involved, but it
   has only been exercised on Linux + Node 22/24 so far.
