@@ -4,17 +4,19 @@ Reference material for the AI-agent-facing tooling in this repo: the
 `codenav` and `webnav` MCP servers, how the Cursor/Claude Code rule pairs
 are maintained, and durable gotchas hit while building this tooling.
 `AGENTS.md` covers the everyday commands and rules; this page is for when
-you need more. Package-level READMEs under `mcp-servers/*/README.md` are
-aimed at standalone consumers; SpaceMaker-specific wiring stays here.
+you need more. The servers live in their own repositories
+([`codenav-mcp`](https://github.com/illescasDaniel/codenav-mcp), [`webnav-mcp`](https://github.com/illescasDaniel/webnav-mcp),
+[`mcp-nav-shared`](https://github.com/illescasDaniel/mcp-nav-shared)); their READMEs are aimed at standalone
+consumers, and SpaceMaker-specific wiring stays here.
 
 ## At a glance
 
 | Server | Language surface | Backend | Start here | This repo's roots |
 |--------|------------------|---------|------------|-------------------|
-| [`codenav`](../mcp-servers/codenav_mcp/README.md) | Python (`.py`/`.pyi`) | `ty` language server | `symbol_info`, `outline`, `callers`, `implementations` | `CODENAV_MCP_SOURCE_ROOT=src` |
-| [`webnav`](../mcp-servers/webnav_mcp/README.md) | JS / TS / HTML / CSS | TypeScript 7 `tsc --lsp --stdio` + vscode HTML/CSS servers | `symbol_info`, `outline`, `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
+| [`codenav`](https://github.com/illescasDaniel/codenav-mcp) | Python (`.py`/`.pyi`) | `ty` language server | `symbol_info`, `outline`, `callers`, `implementations` | `CODENAV_MCP_SOURCE_ROOT=src` |
+| [`webnav`](https://github.com/illescasDaniel/webnav-mcp) | JS / TS / HTML / CSS | TypeScript 7 `tsc --lsp --stdio` + vscode HTML/CSS servers | `symbol_info`, `outline`, `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
 
-Shared helpers: [`mcp-nav-shared`](../mcp-servers/mcp-nav-shared/README.md).
+Shared helpers: [`mcp-nav-shared`](https://github.com/illescasDaniel/mcp-nav-shared).
 
 ## MCP config — Cursor vs Claude Code
 
@@ -77,59 +79,50 @@ override-with-sane-default shape as `CODENAV_MCP_WORKSPACE`/
 A project that unsets these gets a working, if less scoped/labeled, default
 rather than an error or a SpaceMaker-shaped assumption.
 
-## Package layout (uv workspace)
+## Package layout (separate repos)
 
-`mcp-servers/` is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
-(`[tool.uv.workspace]` in the root `pyproject.toml`), not just a folder of
-scripts — each server is its own installable package, published
-standalone to PyPI (see below):
+The servers were extracted from this repo (2026-09-30) into their own
+repositories under `~/Projects/Python/MCPs/`, one per PyPI distribution:
 
-- [`mcp-servers/mcp-nav-shared/`](../mcp-servers/mcp-nav-shared/README.md) →
-  distribution `mcp-nav-shared`, import name `mcp_nav_shared`. No runtime
-  deps; shared LSP client, symbol resolution, formatting, and
+- [`mcp-nav-shared`](https://github.com/illescasDaniel/mcp-nav-shared): import name `mcp_nav_shared`. No
+  runtime deps; shared LSP client, symbol resolution, formatting, and
   workspace-root discovery.
-- [`mcp-servers/codenav_mcp/`](../mcp-servers/codenav_mcp/README.md) →
-  distribution `codenav-mcp`, import name `codenav_mcp`. Depends on
-  `mcp-nav-shared` via `tool.uv.sources` (`{ workspace = true }`),
-  resolved to the local sibling rather than PyPI.
-- [`mcp-servers/webnav_mcp/`](../mcp-servers/webnav_mcp/README.md) →
-  distribution `webnav-mcp`, import name `webnav_mcp`. Same
-  `mcp-nav-shared` dependency wiring.
+- [`codenav-mcp`](https://github.com/illescasDaniel/codenav-mcp): import name `codenav_mcp`. Depends on
+  `mcp-nav-shared>=X.Y.0,<X.(Y+1)` from PyPI.
+- [`webnav-mcp`](https://github.com/illescasDaniel/webnav-mcp): import name `webnav_mcp`. Same dependency.
 
-Each follows the repo's own `src/<pkg>/` layout and has its own
-`pyproject.toml` with a package-local `[tool.pytest.ini_options]`
-(`testpaths = ["tests"]`, `pythonpath = ["src"]`) — necessary because pytest
-walks upward for the nearest ini file, and without a local one a bare
-`pytest` run from inside e.g. `mcp-servers/codenav_mcp/` would pick up the
-root's `testpaths = ["tests"]` instead. The root project depends on both
-servers as dev dependencies (also workspace-sourced), and `uv sync` installs
-all three editable into the one shared venv — this is what lets
-`.mcp.json`/`.cursor/mcp.json` launch them as `python -m codenav_mcp.server`
-/ `python -m webnav_mcp.server` (proper package imports, no `sys.path`
-hacks) and lets each package's `tests/` run standalone from its own
-directory as well as from the repo root.
+SpaceMaker consumes the **published** packages: `codenav-mcp` and `webnav-mcp`
+are ordinary dev dependencies in the root `pyproject.toml` (no workspace, no
+`tool.uv.sources`), so `uv sync` installs them from PyPI and
+`.mcp.json`/`.cursor/mcp.json` launch them as `python -m codenav_mcp.server` /
+`python -m webnav_mcp.server`. To try an unreleased change in SpaceMaker, run
+`uv pip install -e ~/Projects/Python/MCPs/codenav-mcp` (and/or the others) into
+this repo's venv; the next `uv sync` restores the PyPI versions. Each repo has
+its own tests (`uv run task test`), ruff config and CI-free quality flow.
 
 ## Publishing to PyPI
 
-The three packages are published separately as `mcp-nav-shared`,
-`codenav-mcp` and `webnav-mcp`. Each wheel ships its `LICENSE`
-(`license-files`) and a console script (`codenav-mcp` / `webnav-mcp`,
-i.e. `server:main`), so end users run `uvx codenav-mcp` with no checkout. The
-package READMEs become the PyPI pages, so they use absolute GitHub/PyPI links
-only (relative links 404 on PyPI).
+Each repo has the same tooling (modelled on `srxy`): `uploader` dependency
+group (twine), `uv run task sync-uploader` once, then
+`uv run task upload -- --build-only` (build + `twine check` into `dist/`),
+`upload -- --testpypi`, and `test-package -- --testpypi` (install that exact
+version into a fresh venv *outside* the repo, then an MCP stdio handshake for
+the servers or an import check for `mcp-nav-shared`). Drop `--testpypi` for the
+real index. Credentials come from `~/.pypirc`. PyPI stays the primary index in
+the TestPyPI check, so a squatted dependency there can't shadow the real one.
 
-- **Versioning:** the servers pin `mcp-nav-shared>=X.Y.0,<X.(Y+1)` (0.x: any
-  minor may break the shared API). A shared change that a server needs means
-  bumping `mcp-nav-shared`'s minor, publishing it first, then raising the
-  servers' pin. `tool.uv.sources` keeps local development on the workspace
-  copy regardless of the pin.
-- **Build and check:** `uv build --package mcp-nav-shared` (then
-  `codenav-mcp`, `webnav-mcp`) into a scratch `dist/`. Before uploading,
-  install the wheels into a clean venv *outside* this repo and drive both
-  servers over stdio against a throwaway project. In-repo runs hide
-  environment bugs: codenav once only worked because SpaceMaker's own
-  `.venv/bin/ty` was found first.
-- **Upload:** `uv publish` from that `dist/`, shared package first.
+- **Order and versioning:** in 0.x any minor may break the shared API, so the
+  servers pin `mcp-nav-shared>=X.Y.0,<X.(Y+1)`. A shared change a server needs
+  means bumping and publishing `mcp-nav-shared` first, then raising the pin.
+- **Metadata:** each wheel ships its `LICENSE` (`license-files`) and a console
+  script (`codenav-mcp` / `webnav-mcp`, i.e. `server:main`), so end users run
+  `uvx codenav-mcp`. The READMEs become the PyPI pages, so they use absolute
+  links only (relative links 404 on PyPI).
+- **Why the fresh-venv check matters:** in-repo runs hide environment bugs;
+  codenav once only worked because SpaceMaker's own `.venv/bin/ty` was found
+  first.
+- **Re-runs:** an index never accepts the same version twice. Bump the
+  version, or pass `--skip-existing` after a partial upload.
 
 ## Why no MCP prompts/resources
 
@@ -146,7 +139,7 @@ below), not from templates the agent has to know to ask for.
 
 ## `codenav` MCP server
 
-`mcp-servers/codenav_mcp/` wraps `ty server` (Astral's type checker running
+`codenav-mcp` wraps `ty server` (Astral's type checker running
 as a language server) as MCP tools. It's named `codenav`, not `ty`, since
 `ty` is Astral's name for the underlying tool it wraps, not this project's
 server.
@@ -157,7 +150,7 @@ The LSP mirrors position-based lookups 1:1, which forces an agent to
 `references` separately just to answer "what does this do" or "who calls
 this". Four composite tools answer those questions in one call, all
 name-based (no column arithmetic) via the shared `resolve_symbol()` helper
-in `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/resolve.py`:
+in `mcp-nav-shared/src/mcp_nav_shared/resolve.py`:
 
 - **`symbol_info(name, file_path=None, include_references=True)`** — the
   default first call for "what is this": header, hover text (signature +
@@ -196,7 +189,7 @@ letters in order) are hidden behind a one-line count; `fuzzy=true` lists them.
 and not guaranteed: ty may return hierarchical `DocumentSymbol` nodes
 (`range`/`selectionRange`/`children`) or flat `SymbolInformation` entries
 (`location` only, no nesting), depending on what the client advertised at
-`initialize`. `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/lsp_client.py` advertises
+`initialize`. `mcp-nav-shared/src/mcp_nav_shared/lsp_client.py` advertises
 `hierarchicalDocumentSymbolSupport: true`, but code that consumes the result
 still branches on `is_hierarchical_document_symbols()` (`mcp_nav_shared/format.py`)
 rather than assuming one shape — `to_symbol_tree()` normalizes either shape
@@ -291,13 +284,13 @@ the `CODENAV_MCP_WORKSPACE` env var (otherwise falls back as above).
 
 The generic JSON-RPC/LSP wire protocol (subprocess framing, request/
 response dispatch, document sync) lives in
-`mcp-servers/mcp-nav-shared/src/mcp_nav_shared/lsp_client.py` as `LspClient`, shared with
+`mcp-nav-shared/src/mcp_nav_shared/lsp_client.py` as `LspClient`, shared with
 `webnav` below. Only the `ty`-specific launch command
-(`mcp-servers/codenav_mcp/src/codenav_mcp/ty_command.py`: the workspace's
+(`codenav-mcp/src/codenav_mcp/ty_command.py`: the workspace's
 `.venv` ty, then the `ty` installed with codenav via `ty.find_ty_bin()`, then
 `PATH`, then `uvx ty server`) and languageId are codenav's own. If a language
 server dies, the tool error quotes its last stderr lines. Location formatting (`path:line:col` headers + snippets)
-lives in `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/format.py`.
+lives in `mcp-nav-shared/src/mcp_nav_shared/format.py`.
 
 `references` (both servers) uses `format_references()`: at or under
 `DEFAULT_REFERENCES_SNIPPET_LIMIT` (8) hits, each gets its own
@@ -408,9 +401,6 @@ returned as text (`mcp_nav_shared/errors.py`) instead of the MCP framework's opa
 “Error executing tool”. If the language server process dies, in-flight
 requests fail immediately and the next tool call starts a fresh one.
 
-`pyproject.toml` lists each `mcp-servers/*/src` directory as a ty `root`, so
-tests importing `mcp_nav_shared` / `codenav_mcp` / `webnav_mcp` resolve (clean `ty
-check`, and codenav `references` include test usages).
 `diagnostics` falls back to the push `publishDiagnostics` cache when pull
 diagnostics are unsupported or empty (common for HTML/CSS servers, and always
 the case for some older servers with no pull support). In that
@@ -429,7 +419,7 @@ broken file can't flood the caller either.
 
 ## `webnav` MCP server
 
-`mcp-servers/webnav_mcp/` gives the same kind of navigation for the
+`webnav-mcp` gives the same kind of navigation for the
 project's JS/TS/HTML/CSS (`symbol_info`, `outline`, `search_symbol`,
 `definition`, `references`, `hover`, `diagnostics`), multiplexing three
 Node-based language servers behind one MCP tool set, routed by file
@@ -445,7 +435,7 @@ extension:
 HTML/CSS binaries come from `vscode-langservers-extracted`. SpaceMaker's root
 `npm ci` (Node ≥ 18) installs `typescript@^7` for `tsc` check/emit and the
 HTML/CSS servers. webnav also owns a package-local install under
-`mcp-servers/webnav_mcp/` (`npm ci` there) so standalone launch does not depend
+its repo checkout (`npm ci` there) so standalone launch does not depend
 on the host project's `node_modules`. `lang_command.py` resolves
 `tsc` / HTML / CSS in order: navigated workspace → webnav package → `PATH` →
 `npx` (`npx -p typescript@7 tsc --lsp --stdio` for JS/TS). On Windows it
@@ -490,7 +480,7 @@ The CSS/HTML language servers each see one document at a time, so `var(--x)`
 custom-property usages and `#id`/`.class` selectors can't be cross-referenced
 across files that way — the most common question for this project's
 `--custom-properties` (defined once in `theme.css`, used across every CSS
-file, inline `<style>` block and wireframe). `mcp-servers/webnav_mcp/src/
+file, inline `<style>` block and wireframe). `webnav-mcp/src/
 webnav_mcp/web_index.py` answers this with a **pure-Python scanner, not a language
 server**: no `@import` resolution, no real CSS parser, regex/brace-stack
 grade. It re-walks the roots on every call but reuses each root's parsed index
@@ -653,7 +643,7 @@ The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-
   any new doc filename differing only by case.
 - webnav needs TypeScript 7 `tsc` plus `vscode-*-language-server` under a
   resolvable `node_modules/.bin/` (SpaceMaker root `npm ci`, and/or
-  `npm ci` in `mcp-servers/webnav_mcp/` for standalone). A partial install
+  `npm ci` in the `webnav-mcp` checkout). A partial install
   forces the `npx` fallback, which also fails under bare `CreateProcess`
   unless `npx` is resolved to `npx.cmd`. Node ≥ 18 is required for the
   TypeScript 7 npm shim.

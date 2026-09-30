@@ -19,9 +19,6 @@ _REPO = Path(__file__).resolve().parents[2]
 _PYTEST_TARGETS = [
 	"tests/unit",
 	"tests/integration",
-	"mcp-servers/mcp-nav-shared/tests",
-	"mcp-servers/codenav_mcp/tests",
-	"mcp-servers/webnav_mcp/tests",
 ]
 
 
@@ -45,7 +42,7 @@ def _npm() -> str | None:
 
 def step_ruff(*, fix: bool, quiet: bool) -> int:
 	_log(quiet, "== ruff ==")
-	targets = ["src", "tests", "mcp-servers"]
+	targets = ["src", "tests"]
 	if fix:
 		code = _run(_uv("ruff", "check", *targets, "--fix"), quiet=quiet)
 		if code != 0:

@@ -28,7 +28,7 @@ spacemaker = "spacemaker.desktop:main"
 
 [dependency-groups]
 dev = [
-	"codenav-mcp",
+	"codenav-mcp>=0.1.0",
 	"mkdocs>=1.6.1",
 	"mkdocs-material>=9.7.7",
 	"pyinstaller>=6.19",
@@ -40,7 +40,7 @@ dev = [
 	"ruff>=0.15",
 	"taskipy>=1.14",
 	"ty>=0.0.75",
-	"webnav-mcp",
+	"webnav-mcp>=0.1.0",
 ]
 
 [build-system]
@@ -50,20 +50,9 @@ build-backend = "uv_build"
 [tool.uv]
 default-groups = ["dev"]
 
-[tool.uv.workspace]
-members = ["mcp-servers/mcp-nav-shared", "mcp-servers/codenav_mcp", "mcp-servers/webnav_mcp"]
-
-[tool.uv.sources]
-codenav-mcp = { workspace = true }
-webnav-mcp = { workspace = true }
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# importlib: the quality gate also runs mcp-servers/*/tests in the same pytest session
-# (see scripts/quality/pytest.sh); codenav_mcp and webnav_mcp each have their own
-# test_server.py with no __init__.py, and the legacy rootdir-insertion import mode
-# can't tell those two modules apart across dirs.
-addopts = "--tb=short -rs --import-mode=importlib"
+addopts = "--tb=short -rs"
 filterwarnings = [
 	"ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
 ]
@@ -98,7 +87,6 @@ lines-after-imports = 2
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = ["S603", "S607", "ANN"]
 "tests/**" = ["S101", "S603", "ANN"]
-"mcp-servers/*/tests/**" = ["S101", "S603", "ANN"]
 "src/spacemaker/adapters/outbound/**" = ["S603", "S607"]
 "src/spacemaker/desktop.py" = ["S104"]
 "src/spacemaker/bootstrap/services/**" = ["S104"]
@@ -109,16 +97,13 @@ lines-after-imports = 2
 python-version = "3.11"
 python = ".venv"
 python-platform = "all"
-# mcp-servers/*: each is its own workspace package under src/; listing their
-# src/ roots lets `mcp_nav_shared` / `codenav_mcp` / `webnav_mcp` resolve as the
-# servers (and their own tests) import them at runtime.
-root = ["./src", ".", "./mcp-servers/mcp-nav-shared/src", "./mcp-servers/codenav_mcp/src", "./mcp-servers/webnav_mcp/src"]
+root = ["./src", "."]
 
 [tool.ty.src]
 exclude = ["scripts/**", "wireframes/**"]
 
 [[tool.ty.overrides]]
-include = ["tests/**", "mcp-servers/*/tests/**"]
+include = ["tests/**"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "ignore"
 invalid-assignment = "ignore"
