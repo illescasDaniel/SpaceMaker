@@ -16,14 +16,9 @@
 			}
 		},
 		"webnav": {
-			"command": "uv",
+			"command": "node",
 			"args": [
-				"run",
-				"--directory",
-				"${CLAUDE_PROJECT_DIR:-.}",
-				"python",
-				"-m",
-				"webnav_mcp.server"
+				"${CLAUDE_PROJECT_DIR:-.}/experiments/webnav-mcp-ts/dist/cli.js"
 			],
 			"env": {
 				"WEBNAV_MCP_ROOTS": "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes",

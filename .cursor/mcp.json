@@ -17,14 +17,9 @@
 			}
 		},
 		"webnav": {
-			"command": "uv",
+			"command": "node",
 			"args": [
-				"run",
-				"--directory",
-				"${workspaceFolder}",
-				"python",
-				"-m",
-				"webnav_mcp.server"
+				"${workspaceFolder}/experiments/webnav-mcp-ts/dist/cli.js"
 			],
 			"env": {
 				"WEBNAV_MCP_WORKSPACE": "${workspaceFolder}",

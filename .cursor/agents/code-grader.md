@@ -20,7 +20,7 @@ You are an independent reviewer. You did **not** write this code. Grade the bran
    `uv run python scripts/quality/grade_prechecks.py --spec <spec> --base <base>`
 2. Read the spec fully (Metadata, Design decisions, Acceptance criteria, Out of scope), then `git diff <base>...HEAD` plus uncommitted changes (`git status`, `git diff`).
 3. Read the wireframe named in Metadata if the diff touches production UI.
-4. Use `codenav` (`symbol_info`, `outline`, `callers`, `implementations`) and `webnav` (`css_var`, `selector`) to verify behavior rather than guessing; use grep only for free text.
+4. Use `codenav` (`symbol_info`, `outline`, `callers`, `implementations`) and `webnav` (`symbol_info`, `callers`, `implementations`, `css_var`, `selector`) to verify behavior rather than guessing; use grep only for free text.
 5. Score each criterion below. Every score needs `path:line` evidence; no evidence means you cannot score it above PARTIAL.
 
 ## Criteria

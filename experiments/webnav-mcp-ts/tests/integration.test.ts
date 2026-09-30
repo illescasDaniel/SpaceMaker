@@ -215,6 +215,147 @@ describe("typescript navigation", () => {
 	);
 });
 
+describe("inheritance, callers and implementations", () => {
+	it(
+		"given a member declared on a base class, when asked through a subclass, then the base's member is found",
+		async () => {
+			const w = start();
+			const text = await w.symbolInfo({ name: "Widget.greet", includeReferences: false });
+			expect(text).toContain("greet  [Method]  (src/app.ts:6:2)");
+			expect(text).toContain("(method) Base.greet(name: string): string");
+		},
+		T,
+	);
+
+	it(
+		"given a chain across files, when asked through the leaf, then it walks every hop",
+		async () => {
+			const w = start();
+			// FancyWidget (fancy.ts) -> Widget (app.ts) -> Base (app.ts)
+			expect(await w.symbolInfo({ name: "FancyWidget.greet", includeReferences: false })).toContain("(src/app.ts:6:2)");
+		},
+		T,
+	);
+
+	it(
+		"given a generic class over an abstract base, when asked through it, then generics don't break the walk",
+		async () => {
+			const w = start();
+			// Unit<T> extends Square extends Polygon (declares describe)
+			expect(await w.symbolInfo({ name: "Unit.describe", includeReferences: false })).toContain("(src/shapes.ts:7:2)");
+		},
+		T,
+	);
+
+	it(
+		"given a member no ancestor declares, when asked, then it is not found",
+		async () => {
+			expect(await start().symbolInfo({ name: "Circle.describe" })).toBe("No symbol found matching 'Circle.describe'.");
+		},
+		T,
+	);
+
+	it(
+		"given a function, when asking callers, then every calling function is listed with its call-site lines",
+		async () => {
+			const text = await start().callers({ name: "totalArea" });
+			expect(text.split("\n").sort()).toEqual([
+				"report  [Function]  (src/shapes.ts:38) calls at L39",
+				"shine  [Method]  (src/fancy.ts:5) calls at L6",
+			]);
+		},
+		T,
+	);
+
+	it(
+		"given an inherited or dotted name, when asking callers, then it resolves like symbol_info",
+		async () => {
+			const w = start();
+			expect(await w.callers({ name: "FancyWidget.shine" })).toBe(
+				"shineAll  [Function]  (src/fancy.ts:10) calls at L11",
+			);
+			expect(await w.callers({ name: "Polygon.area" })).toContain("describe  [Method]  (src/shapes.ts:7) calls at L8");
+		},
+		T,
+	);
+
+	it(
+		"given something that isn't callable, when asking callers, then it says so",
+		async () => {
+			expect(await start().callers({ name: "Shape" })).toBe(
+				"Shape has no call hierarchy entry at that position (it may not be a callable).",
+			);
+		},
+		T,
+	);
+
+	it(
+		"given a function nobody calls, when asking callers, then a fixed message",
+		async () => {
+			expect(await start().callers({ name: "shineAll" })).toBe("No callers found.");
+		},
+		T,
+	);
+
+	it(
+		"given an interface, when asking implementations, then implementing and extending classes are listed transitively",
+		async () => {
+			expect(await start().implementations({ name: "Shape" })).toBe(
+				[
+					"4 implementation(s) of Shape [Interface]:",
+					"Polygon  [Class]  (src/shapes.ts:5:23)",
+					"Square  [Class]  (src/shapes.ts:12:14)",
+					"Circle  [Class]  (src/shapes.ts:21:14)",
+					"Unit  [Class]  (src/shapes.ts:28:14)",
+				].join("\n"),
+			);
+		},
+		T,
+	);
+
+	it(
+		"given a base class, when asking implementations, then the class itself is not listed",
+		async () => {
+			const text = await start().implementations({ name: "Polygon" });
+			expect(text).toContain("2 implementation(s) of Polygon [Class]:");
+			expect(text).not.toContain("Polygon  [Class]");
+		},
+		T,
+	);
+
+	it(
+		"given an interface method, when asking implementations, then the implementing methods are qualified by class",
+		async () => {
+			expect(await start().implementations({ name: "Shape.area" })).toBe(
+				[
+					"2 implementation(s) of Shape.area [Method]:",
+					"Square.area  [Method]  (src/shapes.ts:16:2)",
+					"Circle.area  [Method]  (src/shapes.ts:23:2)",
+				].join("\n"),
+			);
+		},
+		T,
+	);
+
+	it(
+		"given a class nobody extends, when asking implementations, then a fixed message",
+		async () => {
+			expect(await start().implementations({ name: "Circle" })).toBe("No implementations of Circle [Class] found.");
+		},
+		T,
+	);
+
+	it(
+		"given no name, when asking callers or implementations, then the alias hint is returned",
+		async () => {
+			const w = start();
+			expect(await w.callers({})).toBe("Pass `name` (e.g. name='renderSidebar'); `query` is accepted as an alias.");
+			expect(await w.implementations({})).toBe("Pass `name` (e.g. name='Shape'); `query` is accepted as an alias.");
+		},
+		T,
+	);
+});
+
 describe("html and css", () => {
 	it(
 		"given a css file, when diagnosing, then index warnings for undefined vars and unreferenced rules appear",

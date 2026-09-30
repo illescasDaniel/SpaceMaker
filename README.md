@@ -82,7 +82,8 @@ In-app: **About & Legal** in the footer.
 
 ```bash
 uv run task sync-dev          # install Python + dev dependencies
-npm ci                        # clean install from package-lock.json (Biome, TypeScript, webnav LSPs)
+npm ci                        # clean install from package-lock.json (Biome, TypeScript)
+npm run setup:webnav          # install + build the webnav MCP (experiments/webnav-mcp-ts) used by .mcp.json
 uv run task spacemaker        # desktop (pywebview + local server)
 uv run task spacemaker-server # API/UI in browser only (no file picker)
 ```
@@ -125,7 +126,7 @@ Uses an isolated temp profile and offscreen Qt WebEngine (same 1200×900 viewpor
 - [specs/](specs/) — feature specifications and acceptance criteria
 - `uv run task docs-serve` — browsable docs site (architecture, testing conventions) at `http://127.0.0.1:8000`
 - [`codenav`](https://github.com/illescasDaniel/codenav-mcp) MCP — Python navigation via `ty` (symbol search, definition, references; name-based `symbol_info` / `outline` / `callers` / `implementations`)
-- [`webnav`](https://github.com/illescasDaniel/webnav-mcp) MCP — JS/HTML/CSS navigation for `static/` + `wireframes/` (same tool shape; plus `css_var` / `selector` for cross-file CSS)
+- `webnav` MCP (`experiments/webnav-mcp-ts/`, TypeScript) — JS/TS/HTML/CSS navigation for `web/src/` + `static/` + `wireframes/` (same tool shape incl. `callers` / `implementations`; plus `css_var` / `selector` for cross-file CSS)
 - Deep reference: [docs/agent-tooling.md](docs/agent-tooling.md); when to use them: [AGENTS.md](AGENTS.md) "Orient before editing"
 
 ## License

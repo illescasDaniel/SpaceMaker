@@ -21,6 +21,7 @@ import { formatToolError, isToolError, ToolInputError } from "./shared/errors.js
 import { isExcluded } from "./shared/exclude.js";
 import {
 	filterSymbolsByKindAndPath,
+	formatCallers,
 	formatDiagnostics,
 	formatLocation,
 	formatOutline,
@@ -30,11 +31,12 @@ import {
 	LOCALS_HOLDER_KINDS,
 	parseKindFilter,
 	pyRepr,
+	symbolAt,
 	symbolKindLabel,
 	uriToRelative,
 } from "./shared/format.js";
 import { LspClient } from "./shared/lspClient.js";
-import type { LspHover } from "./shared/lspTypes.js";
+import type { LspHover, LspLocation } from "./shared/lspTypes.js";
 import { NoticeBoard } from "./shared/notices.js";
 import { resolveNameQuery } from "./shared/params.js";
 import { relativeWithin, resolveReal } from "./shared/paths.js";
@@ -67,7 +69,8 @@ export const INSTRUCTIONS =
 	"TypeScript 7 native tsc LSP (JS/TS) and vscode-langservers-extracted " +
 	"(HTML/CSS). Prefer this over grepping for symbol definitions/usages. " +
 	"Start with symbol_info (what is X) or outline (what's in this file) for " +
-	"JS/TS; search_symbol is JS/TS-only (the HTML/CSS language servers don't " +
+	"JS/TS; callers (who calls X) and implementations (who implements/extends X) " +
+	"answer from the type checker; search_symbol is JS/TS-only (the HTML/CSS language servers don't " +
 	"implement useful workspace-wide symbol search). The language servers only " +
 	"see one file at a time, so `--custom-properties` and `#id`/`.class` " +
 	"selectors can't be cross-referenced across files that way; use " +
@@ -546,6 +549,57 @@ export class Webnav {
 		});
 	}
 
+	callers(args: {
+		name?: string | undefined;
+		query?: string | undefined;
+		filePath?: string | undefined;
+	}): Promise<string> {
+		return this.run(async () => {
+			const name = resolveNameQuery({
+				preferred: "name",
+				example: "renderSidebar",
+				params: { name: args.name, query: args.query },
+			});
+			const client = await this.getTsClient();
+			const resolved = await resolveSymbol(client, this.workspaceRoot, name, args.filePath);
+			const relPath = uriToRelative(resolved.uri, this.workspaceRoot);
+			const items = await client.prepareCallHierarchy(relPath, resolved.line + 1, resolved.column + 1);
+			const [item] = items;
+			if (item === undefined) {
+				return `${resolved.name} has no call hierarchy entry at that position (it may not be a callable).`;
+			}
+			return formatCallers(await client.incomingCalls(item), this.workspaceRoot);
+		});
+	}
+
+	implementations(args: {
+		name?: string | undefined;
+		query?: string | undefined;
+		filePath?: string | undefined;
+	}): Promise<string> {
+		return this.run(async () => {
+			const name = resolveNameQuery({
+				preferred: "name",
+				example: "Shape",
+				params: { name: args.name, query: args.query },
+			});
+			const client = await this.getTsClient();
+			const resolved = await resolveSymbol(client, this.workspaceRoot, name, args.filePath);
+			const relPath = uriToRelative(resolved.uri, this.workspaceRoot);
+			const locations = await client.implementation(relPath, resolved.line + 1, resolved.column + 1);
+			// The language server lists a class as one of its own implementations; that isn't news.
+			const others = locations.filter((loc) => {
+				const start = (loc.targetSelectionRange ?? loc.range ?? loc.targetRange)?.start;
+				return !(
+					(loc.uri ?? loc.targetUri) === resolved.uri &&
+					start?.line === resolved.line &&
+					start?.character === resolved.column
+				);
+			});
+			return formatImplementations(client, name, resolved.kind, others, this.workspaceRoot);
+		});
+	}
+
 	outline(filePath: string, detailed = false): Promise<string> {
 		return this.run(async () => {
 			this.checkScriptFile(filePath);
@@ -603,6 +657,47 @@ export class Webnav {
 			return webIndex.formatSelector(this.indexes(), name, { generated: this.generatedRelative });
 		});
 	}
+}
+
+/** `Class.member  [Kind]  (path:line:col)` per implementation, deduplicated and in file order. */
+async function formatImplementations(
+	client: LspClient,
+	name: string,
+	kind: number | undefined,
+	locations: LspLocation[],
+	workspaceRoot: string,
+): Promise<string> {
+	const rows = new Map<string, { path: string; line: number; text: string }>();
+	for (const loc of locations) {
+		const uri = loc.uri ?? loc.targetUri ?? "";
+		const start = (loc.targetSelectionRange ?? loc.range ?? loc.targetRange)?.start;
+		const line = start?.line ?? 0;
+		const character = start?.character ?? 0;
+		const rel = uriToRelative(uri, workspaceRoot);
+		let label = "?";
+		let labelKind: number | undefined;
+		try {
+			const found = symbolAt(await client.documentSymbol(rel), line, character);
+			label = found?.label ?? "?";
+			labelKind = found?.kind;
+		} catch (error) {
+			if (!isToolError(error)) {
+				throw error;
+			}
+		}
+		rows.set(`${rel}:${line}:${character}`, {
+			path: rel,
+			line,
+			text: `${label}  [${symbolKindLabel(labelKind)}]  (${rel}:${line + 1}:${character + 1})`,
+		});
+	}
+	if (rows.size === 0) {
+		return `No implementations of ${name} [${symbolKindLabel(kind)}] found.`;
+	}
+	const sorted = [...rows.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.line - b.line));
+	return [`${rows.size} implementation(s) of ${name} [${symbolKindLabel(kind)}]:`, ...sorted.map((r) => r.text)].join(
+		"\n",
+	);
 }
 
 function formatHoverContents(contents: LspHover["contents"]): string {

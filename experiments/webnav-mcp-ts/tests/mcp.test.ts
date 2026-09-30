@@ -41,14 +41,16 @@ const textOf = (result: Awaited<ReturnType<Client["callTool"]>>): string =>
 	(result.content as { type: string; text: string }[]).map((c) => c.text).join("\n");
 
 describe("tool surface", () => {
-	it("given a client, when listing tools, then the ten webnav tools exist with snake_case parameters", async () => {
+	it("given a client, when listing tools, then the twelve webnav tools exist with snake_case parameters", async () => {
 		const client = await connect();
 		const { tools } = await client.listTools();
 		expect(tools.map((t) => t.name).sort()).toEqual([
+			"callers",
 			"css_var",
 			"definition",
 			"diagnostics",
 			"hover",
+			"implementations",
 			"outline",
 			"references",
 			"search_symbol",

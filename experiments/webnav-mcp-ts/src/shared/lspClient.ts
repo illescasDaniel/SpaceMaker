@@ -26,7 +26,14 @@ import { InvalidPositionError, LanguageServerExitedError, LspRequestError, LspTi
 import { EXCLUDED_DIR_NAMES } from "./exclude.js";
 import { uriToPath } from "./format.js";
 import { debug } from "./log.js";
-import type { CallHierarchyItemLike, LspDiagnostic, LspHover, LspLocation, LspSymbol } from "./lspTypes.js";
+import type {
+	CallHierarchyItemLike,
+	IncomingCall,
+	LspDiagnostic,
+	LspHover,
+	LspLocation,
+	LspSymbol,
+} from "./lspTypes.js";
 import { LINE_BREAK_RE, readTextStrict } from "./text.js";
 
 /** Max ms to wait for a push-only server's publishDiagnostics after a sync. */
@@ -722,18 +729,31 @@ export class LspClient {
 		return result;
 	}
 
-	async prepareTypeHierarchy(filePath: string, line: number, column: number): Promise<CallHierarchyItemLike[]> {
+	async implementation(filePath: string, line: number, column: number): Promise<LspLocation[]> {
+		const result = await this.positionRequest<LspLocation | LspLocation[] | null>(
+			"textDocument/implementation",
+			filePath,
+			line,
+			column,
+		);
+		if (result === null || result === undefined) {
+			return [];
+		}
+		return Array.isArray(result) ? result : [result];
+	}
+
+	async prepareCallHierarchy(filePath: string, line: number, column: number): Promise<CallHierarchyItemLike[]> {
 		const uri = await this.ensureOpen(filePath);
 		return (
-			(await this.request<CallHierarchyItemLike[] | null>("textDocument/prepareTypeHierarchy", {
+			(await this.request<CallHierarchyItemLike[] | null>("textDocument/prepareCallHierarchy", {
 				textDocument: { uri },
 				position: { line: line - 1, character: column - 1 },
 			})) ?? []
 		);
 	}
 
-	async supertypes(item: CallHierarchyItemLike): Promise<CallHierarchyItemLike[]> {
-		return (await this.request<CallHierarchyItemLike[] | null>("typeHierarchy/supertypes", { item })) ?? [];
+	async incomingCalls(item: CallHierarchyItemLike): Promise<IncomingCall[]> {
+		return (await this.request<IncomingCall[] | null>("callHierarchy/incomingCalls", { item })) ?? [];
 	}
 }
 

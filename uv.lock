@@ -2038,7 +2038,6 @@ dev = [
     { name = "ruff" },
     { name = "taskipy" },
     { name = "ty" },
-    { name = "webnav-mcp" },
 ]
 
 [package.metadata]
@@ -2073,7 +2072,6 @@ dev = [
     { name = "ruff", specifier = ">=0.15" },
     { name = "taskipy", specifier = ">=1.14" },
     { name = "ty", specifier = ">=0.0.75" },
-    { name = "webnav-mcp", specifier = ">=0.1.1" },
 ]
 
 [[package]]
@@ -2273,19 +2271,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/07/f6/d0e5b343768e8bcb4cda79f0f2f55051bf26177ecd5651f84c07567461cf/watchdog-6.0.0-py3-none-win32.whl", hash = "sha256:07df1fdd701c5d4c8e55ef6cf55b8f0120fe1aef7ef39a1c6fc6bc2e606d517a", size = 79065, upload-time = "2024-11-01T14:07:09.525Z" },
     { url = "https://files.pythonhosted.org/packages/db/d9/c495884c6e548fce18a8f40568ff120bc3a4b7b99813081c8ac0c936fa64/watchdog-6.0.0-py3-none-win_amd64.whl", hash = "sha256:cbafb470cf848d93b5d013e2ecb245d4aa1c8fd0504e863ccefa32445359d680", size = 79070, upload-time = "2024-11-01T14:07:10.686Z" },
     { url = "https://files.pythonhosted.org/packages/33/e8/e40370e6d74ddba47f002a32919d91310d6074130fe4e17dabcafc15cbf1/watchdog-6.0.0-py3-none-win_ia64.whl", hash = "sha256:a1914259fa9e1454315171103c6a30961236f508b9b623eae470268bbcc6a22f", size = 79067, upload-time = "2024-11-01T14:07:11.845Z" },
-]
-
-[[package]]
-name = "webnav-mcp"
-version = "0.1.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "mcp" },
-    { name = "mcp-nav-shared" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/bc/6c/8488082420de03bca6e2586c185e02185c49042fdad9edb4377ad0a42cb1/webnav_mcp-0.1.1.tar.gz", hash = "sha256:f524b4a4bde0f8096c5acb1e5d4175ebfb719552251d3b1c52c1c0c3743230cc", size = 24224, upload-time = "2026-09-30T12:18:10.265Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/04/3717e4fdc6b3b9a2910e9dff53cac00e7479fe3b94f272386ed6c5dfe3eb/webnav_mcp-0.1.1-py3-none-any.whl", hash = "sha256:044e056b56b6af4ccd747fa4ebed99bb6e65d317d89d5724d7178b71a686098c", size = 26678, upload-time = "2026-09-30T12:18:09.172Z" },
 ]
 
 [[package]]

@@ -29,6 +29,12 @@ const servers = {
 	typescript: { command: process.execPath, args: [path.join(here, "../dist/cli.js")] },
 };
 
+// Calls where the TS server is deliberately better than the Python one; they are shown, not failed.
+const intentional = {
+	'symbol_info {"name":"Widget.greet"}':
+		"TS resolves members inherited from a base class (Python: type hierarchy, unsupported by tsc LSP)",
+};
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** 1-indexed line/column (UTF-16) of `needle` in a file, `nth` occurrence, `shift` chars into it. */
@@ -245,9 +251,14 @@ for (const [scenarioName, scenario] of Object.entries(scenarios)) {
 	const toolNames = {};
 	for (const [name, client] of Object.entries(clients))
 		toolNames[name] = (await client.listTools()).tools.map((t) => t.name).sort();
-	const sameTools = JSON.stringify(toolNames.python) === JSON.stringify(toolNames.typescript);
-	console.log(`tools: ${sameTools ? "identical" : "DIFFERENT"} (${toolNames.typescript.join(", ")})`);
-	if (!sameTools) failed = true;
+	// The TS server may grow tools the Python one never had (callers, implementations);
+	// it must still offer every Python tool, and only shared tools are compared below.
+	const missing = toolNames.python.filter((t) => !toolNames.typescript.includes(t));
+	const extra = toolNames.typescript.filter((t) => !toolNames.python.includes(t));
+	console.log(
+		`tools: ${missing.length === 0 ? "TS covers every Python tool" : `TS MISSING ${missing}`}${extra.length ? `; TS-only: ${extra.join(", ")}` : ""}`,
+	);
+	if (missing.length > 0) failed = true;
 
 	let same = 0;
 	let total = 0;
@@ -269,7 +280,10 @@ for (const [scenarioName, scenario] of Object.entries(scenarios)) {
 		timings.typescript += ts.ms;
 		const a = normalize(py.text);
 		const b = normalize(ts.text);
-		if (a === b) {
+		if (intentional[label]) {
+			same++;
+			console.log(`≠ ${label}  (intentional: ${intentional[label]})`);
+		} else if (a === b) {
 			same++;
 			console.log(`= ${label}  [py ${py.ms}ms / ts ${ts.ms}ms]`);
 			if (verbose)

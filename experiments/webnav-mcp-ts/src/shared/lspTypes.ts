@@ -54,3 +54,9 @@ export interface CallHierarchyItemLike {
 	name?: string;
 	[key: string]: unknown;
 }
+
+/** `callHierarchy/incomingCalls` entry: the calling symbol plus every call-site range inside it. */
+export interface IncomingCall {
+	from?: { name?: string; kind?: number; uri?: string; selectionRange?: Range };
+	fromRanges?: Range[];
+}

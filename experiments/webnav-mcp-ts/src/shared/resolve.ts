@@ -5,7 +5,9 @@
  * tools take a name instead of a hand-computed position.
  */
 
+import path from "node:path";
 import { isToolError, ToolInputError } from "./errors.js";
+import { isExcluded } from "./exclude.js";
 import {
 	filterWorkspaceSymbols,
 	isHierarchicalDocumentSymbols,
@@ -14,11 +16,13 @@ import {
 	rankWorkspaceSymbols,
 	symbolKindLabel,
 	toSymbolTree,
+	uriToPath,
 	uriToRelative,
 	workspaceSymbolPosition,
 } from "./format.js";
 import type { LspClient } from "./lspClient.js";
-import type { CallHierarchyItemLike, LspSymbol, SymbolNode } from "./lspTypes.js";
+import type { LspLocation, LspSymbol, SymbolNode } from "./lspTypes.js";
+import { LINE_BREAK_RE, readTextStrict } from "./text.js";
 
 // SymbolKind values that are class members: a candidate with one of these gets
 // qualified as `Class.member` in an ambiguity listing.
@@ -83,23 +87,6 @@ function findNamedNode(symbols: LspSymbol[], name: string, line: number): LspSym
 		}
 	}
 	return found[0];
-}
-
-/** `memberName` directly under a node named `containerName` (nested classes too). */
-function findMemberNode(symbols: LspSymbol[], containerName: string, memberName: string): LspSymbol | undefined {
-	for (const node of symbols) {
-		if (String(node.name) === containerName) {
-			const child = (node.children ?? []).find((c) => String(c.name) === memberName);
-			if (child) {
-				return child;
-			}
-		}
-		const found = findMemberNode(node.children ?? [], containerName, memberName);
-		if (found) {
-			return found;
-		}
-	}
-	return undefined;
 }
 
 function resolvedFromHierarchicalNode(memberName: string, node: LspSymbol, uri: string): ResolvedSymbol {
@@ -317,12 +304,116 @@ async function resolveDotted(
 }
 
 // Guards against pathological (or cyclic) hierarchies; real class graphs are far smaller.
-const MAX_SUPERTYPES_VISITED = 64;
+const MAX_CLASSES_VISITED = 64;
+
+interface ClassRef {
+	uri: string;
+	name: string;
+	/** 0-based line of the class name, to tell same-named classes apart. */
+	line: number;
+}
 
 /**
- * `Class.member` where `member` is inherited. Walks `typeHierarchy/supertypes`
- * breadth-first and returns the first supertype that declares `member`
- * directly; `undefined` when the server doesn't support type hierarchy.
+ * Names in the `extends`/`implements` clauses of a declaration, with their offsets in `text`.
+ * `text` starts at the declaration's name; the clause list ends at the first `{`.
+ * Generic arguments (`Base<T>`) are skipped, `a.B` yields `B`, and call expressions
+ * (`extends mixin(Base)`) are ignored because there is no class to follow.
+ */
+export function heritageNames(text: string): { name: string; offset: number }[] {
+	const end = text.indexOf("{");
+	const header = end === -1 ? text : text.slice(0, end);
+	const found: { name: string; offset: number }[] = [];
+	let inHeritage = false;
+	let depth = 0;
+	let candidate: { name: string; offset: number } | undefined;
+	const flush = (): void => {
+		if (candidate) {
+			found.push(candidate);
+		}
+		candidate = undefined;
+	};
+	for (const match of header.matchAll(/[A-Za-z_$][\w$]*|[<>(),.]/g)) {
+		const token = match[0];
+		const offset = match.index ?? 0;
+		if (token === "<" || token === "(") {
+			if (token === "(" && depth === 0) {
+				candidate = undefined; // `extends mixin(Base)`
+			}
+			depth++;
+		} else if (token === ">" || token === ")") {
+			depth = Math.max(0, depth - 1);
+		} else if (depth > 0) {
+			// inside type arguments or call arguments
+		} else if (token === ",") {
+			flush();
+		} else if (token === ".") {
+			// qualified name: the last segment replaces the previous one
+		} else if (token === "extends" || token === "implements") {
+			flush();
+			inHeritage = true;
+		} else if (inHeritage) {
+			candidate = { name: token, offset };
+		}
+	}
+	flush();
+	return found;
+}
+
+function offsetToPosition(text: string, offset: number): { line: number; character: number } {
+	const before = text.slice(0, offset);
+	const line = before.split("\n").length - 1;
+	return { line, character: offset - (before.lastIndexOf("\n") + 1) };
+}
+
+/** Where each class named in `node`'s `extends`/`implements` clauses is declared. */
+async function heritageTargets(
+	client: LspClient,
+	workspaceRoot: string,
+	relPath: string,
+	node: LspSymbol,
+): Promise<ClassRef[]> {
+	const sel = (node.selectionRange ?? node.range)?.start;
+	if (!sel) {
+		return [];
+	}
+	const lines = readTextStrict(path.resolve(workspaceRoot, relPath)).split(LINE_BREAK_RE);
+	const startOffset = lines.slice(0, sel.line ?? 0).reduce((sum, l) => sum + l.length + 1, 0) + (sel.character ?? 0);
+	const source = lines.join("\n");
+	const text = source.slice(startOffset, startOffset + 2000);
+	const targets: ClassRef[] = [];
+	for (const { name, offset } of heritageNames(text)) {
+		const at = offsetToPosition(text, offset);
+		const line = (sel.line ?? 0) + at.line;
+		const character = at.line === 0 ? (sel.character ?? 0) + at.character : at.character;
+		let locations: LspLocation[];
+		try {
+			locations = await client.definition(relPath, line + 1, character + 1);
+		} catch (error) {
+			if (!isToolError(error)) {
+				throw error;
+			}
+			continue;
+		}
+		for (const loc of locations) {
+			const uri = loc.uri ?? loc.targetUri ?? "";
+			const rng = loc.targetSelectionRange ?? loc.range ?? loc.targetRange;
+			const abs = uriToPath(uri);
+			// Vendored/library bases (`extends HTMLElement`) have no source worth walking.
+			if (!uri || isExcluded(abs, workspaceRoot) || abs.endsWith(".d.ts")) {
+				continue;
+			}
+			targets.push({ uri, name, line: rng?.start?.line ?? 0 });
+		}
+	}
+	return targets;
+}
+
+/**
+ * `Class.member` where `member` is inherited. Follows `extends`/`implements`
+ * clauses breadth-first (resolving each named base with `textDocument/definition`,
+ * across files) and returns the first base that declares `member` directly.
+ * TypeScript 7's language server has no type hierarchy request, so the
+ * clauses are read from the source instead.
  */
 async function resolveInherited(
 	client: LspClient,
@@ -330,52 +421,46 @@ async function resolveInherited(
 	container: ResolvedSymbol,
 	memberName: string,
 ): Promise<ResolvedSymbol | undefined> {
-	const relPath = uriToRelative(container.uri, workspaceRoot);
-	let queue: CallHierarchyItemLike[];
-	try {
-		queue = [...(await client.prepareTypeHierarchy(relPath, container.line + 1, container.column + 1))];
-	} catch (error) {
-		if (!isToolError(error)) {
-			throw error;
-		}
-		return undefined;
-	}
-	const seen = new Set<string>();
-	while (queue.length > 0 && seen.size < MAX_SUPERTYPES_VISITED) {
-		const item = queue.shift() as CallHierarchyItemLike;
-		let supers: CallHierarchyItemLike[];
+	const queue: ClassRef[] = [{ uri: container.uri, name: container.name, line: container.line }];
+	const seen = new Set<string>([`${container.uri}\0${container.name}\0${container.line}`]);
+	while (queue.length > 0 && seen.size <= MAX_CLASSES_VISITED) {
+		const current = queue.shift() as ClassRef;
+		const relPath = uriToRelative(current.uri, workspaceRoot);
+		let members: LspSymbol[];
+		let bases: ClassRef[];
 		try {
-			supers = await client.supertypes(item);
+			members = await client.documentSymbol(relPath);
+			const node = isHierarchicalDocumentSymbols(members)
+				? findNamedNode(members, current.name, current.line)
+				: undefined;
+			bases = node ? await heritageTargets(client, workspaceRoot, relPath, node) : [];
 		} catch (error) {
 			if (!isToolError(error)) {
 				throw error;
 			}
 			continue;
 		}
-		for (const sup of supers) {
-			const uri = String(sup.uri ?? "");
-			const name = String(sup.name ?? "");
-			const key = `${uri}\0${name}`;
+		for (const base of bases) {
+			const key = `${base.uri}\0${base.name}\0${base.line}`;
 			if (seen.has(key)) {
 				continue;
 			}
 			seen.add(key);
-			queue.push(sup);
-			let members: LspSymbol[];
+			queue.push(base);
 			try {
-				members = await client.documentSymbol(uriToRelative(uri, workspaceRoot));
+				const baseMembers = await client.documentSymbol(uriToRelative(base.uri, workspaceRoot));
+				if (!isHierarchicalDocumentSymbols(baseMembers)) {
+					continue;
+				}
+				const baseNode = findNamedNode(baseMembers, base.name, base.line);
+				const member = (baseNode?.children ?? []).find((c) => String(c.name) === memberName);
+				if (member) {
+					return resolvedFromHierarchicalNode(memberName, member, base.uri);
+				}
 			} catch (error) {
 				if (!isToolError(error)) {
 					throw error;
 				}
-				continue; // e.g. a stdlib/vendored base the server reports by a non-file URI
-			}
-			if (!isHierarchicalDocumentSymbols(members)) {
-				continue;
-			}
-			const node = findMemberNode(members, name, memberName);
-			if (node) {
-				return resolvedFromHierarchicalNode(memberName, node, uri);
 			}
 		}
 	}

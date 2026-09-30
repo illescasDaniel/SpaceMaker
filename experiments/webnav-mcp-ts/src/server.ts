@@ -137,6 +137,37 @@ export function createServer(version: string): { server: McpServer; webnav: Webn
 	);
 
 	server.registerTool(
+		"callers",
+		{
+			description:
+				'Who calls this function? Example: `callers(name="renderSidebar")`.\n\n' +
+				"Narrower than references, since it leaves out imports and type-only usages " +
+				"and only lists actual call sites, each with the calling function and its " +
+				"call-site lines. `name` resolves the same way as symbol_info (dotted " +
+				"`Class.method` accepted, inherited members included; pass `file_path` to " +
+				"disambiguate a common name). `query` is accepted as an alias for `name`. JS/TS only.",
+			inputSchema: { name: z.string().optional(), query: z.string().optional(), file_path: z.string().optional() },
+		},
+		async ({ name, query, file_path }) => text(await webnav.callers({ name, query, filePath: file_path })),
+	);
+
+	server.registerTool(
+		"implementations",
+		{
+			description:
+				'Who implements or extends this? Example: `implementations(name="Shape")`.\n\n' +
+				"For an interface or class, lists the classes that implement or extend it " +
+				"(transitively); for an interface or abstract method (`Shape.area`), lists the " +
+				"methods that implement it. Backed by the language server's " +
+				"`textDocument/implementation`, so it follows the type checker, not naming. " +
+				"`name` resolves like symbol_info (pass `file_path` to disambiguate); `query` is " +
+				"accepted as an alias. JS/TS only.",
+			inputSchema: { name: z.string().optional(), query: z.string().optional(), file_path: z.string().optional() },
+		},
+		async ({ name, query, file_path }) => text(await webnav.implementations({ name, query, filePath: file_path })),
+	);
+
+	server.registerTool(
 		"outline",
 		{
 			description:

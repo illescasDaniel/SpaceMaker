@@ -26,7 +26,9 @@ match the Python package, so existing prompts, hosts and `.mcp.json` files keep
 working. See the [Python README](https://github.com/illescasDaniel/webnav-mcp#readme)
 for the tool reference.
 
-> **Status: prototype.** Not published. Lives in `experiments/` of SpaceMaker
+> **Status: prototype, in use by SpaceMaker.** Not published. SpaceMaker's `.mcp.json` /
+> `.cursor/mcp.json` launch `dist/cli.js` from here (run `npm run setup:webnav` at the
+> SpaceMaker root first). Lives in `experiments/` of SpaceMaker
 > (outside `src/spacemaker/`, so the SDD phase gates don't apply) to answer "is
 > a port feasible?". The answer is in [Findings](#findings).
 
@@ -82,12 +84,13 @@ identical calls, diffed text):
 - SpaceMaker's own web assets (`.cursor/mcp.json` env, three roots): **37 / 37 identical**
 - `tests/fixtures/sample-app`, including edits behind the servers' backs (fix a
   type error, create/delete a file, change a stylesheet, change `jsconfig.json`
-  and get the restart notice): **71 / 71 identical**
+  and get the restart notice): **71 / 71 identical** (counting the one intentional
+  inherited-member difference below)
 
 The one intentional difference is the reason string of "Cannot read file as
 UTF-8 text: …", which is a Python codec detail; the parity script masks it.
 
-**Tests:** 126 vitest tests (unit ports of the index/format tests, real
+**Tests:** 145 vitest tests (unit ports of the index/format tests, real
 language servers against the fixture, MCP protocol over an in-memory transport
 incl. worktree selection via client roots with a real `git worktree`, LSP
 client failure modes, and the built executable). The Python side has ~260 tests
@@ -107,13 +110,19 @@ tools, not every case one-to-one.
   letter directly before `id=`/`class=`/`style=` is treated differently (a
   match in JS, none in Python). Vanishingly rare in real markup, not covered by
   parity fixtures.
-- **`Widget.inheritedMethod` doesn't resolve** (the type-hierarchy fallback in
-  `resolve.ts`): TypeScript 7's LSP advertises `callHierarchyProvider` but no
-  type hierarchy (checked against `initialize` capabilities). Same in the Python
-  package, so not a regression. The same check shows the server *does* offer
-  `implementationProvider` and call hierarchy, so `callers`/`implementations`
-  composites for webnav (see `memory/friction/2026-09-29-webnav-missing-composites.md`)
-  are possible in either implementation.
+- **Inherited-member lookup needed a different approach.** The Python package
+  finds `Class.member` for a member declared on a base class through the LSP's
+  type hierarchy, but TypeScript 7's language server advertises no type
+  hierarchy (checked against its `initialize` capabilities), so
+  `symbol_info("Widget.greet")` used to say "not found" in both implementations.
+  This port reads the `extends`/`implements` clauses from the source and resolves
+  each base with `textDocument/definition`, breadth-first across files (generic
+  bases, qualified names and mixin calls handled; `.d.ts`/`node_modules` bases
+  aren't followed). It is the one intentional difference the parity script
+  shows.
+- **Two tools the Python webnav never had:** the same capability check showed the
+  server offers `callHierarchyProvider` and `implementationProvider`, so this
+  port adds `callers` and `implementations` (12 tools now; the Python one has 10).
 
 ### Costs
 
@@ -125,7 +134,8 @@ tools, not every case one-to-one.
   lines of Python for webnav + the shared library (which also carries
   codenav-only code that wasn't ported).
 - **Not ported** (codenav-only in the shared library): `typeDefinition`,
-  call hierarchy, scratch documents, `format_callers`, source-root helpers.
+  scratch documents, source-root helpers. (Call hierarchy was ported after all,
+  for `callers`.)
 - **Not verified:** Windows, macOS, Node 20/24. Only Linux + Node 22.
 
 ### The shared library

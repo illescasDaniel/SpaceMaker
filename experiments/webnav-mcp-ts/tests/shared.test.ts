@@ -16,6 +16,7 @@ import * as fmt from "../src/shared/format.js";
 import type { LspSymbol } from "../src/shared/lspTypes.js";
 import { NoticeBoard } from "../src/shared/notices.js";
 import { resolveNameQuery } from "../src/shared/params.js";
+import { heritageNames } from "../src/shared/resolve.js";
 import { readTextStrict } from "../src/shared/text.js";
 import { WorkspaceSelector } from "../src/shared/workspace.js";
 import { makeTree } from "./helpers.js";
@@ -395,5 +396,42 @@ describe("workspace selection", () => {
 			throw new Error("no roots");
 		});
 		expect(chosen.root).toBe(selector.base);
+	});
+});
+
+describe("heritage clauses", () => {
+	const names = (text: string): string[] => heritageNames(text).map((h) => h.name);
+
+	it("given extends and implements, when parsed, then every base is listed in order with its offset", () => {
+		const text = "Widget extends Base implements A, B {\n}";
+		expect(heritageNames(text)).toEqual([
+			{ name: "Base", offset: text.indexOf("Base") },
+			{ name: "A", offset: text.indexOf("A,") },
+			{ name: "B", offset: text.indexOf("B {") },
+		]);
+	});
+
+	it("given generics, when parsed, then type arguments and constraints are not mistaken for bases", () => {
+		expect(names("Box<T extends Item> extends Base<Map<string, Item>> implements Sized<T> {")).toEqual([
+			"Base",
+			"Sized",
+		]);
+	});
+
+	it("given a qualified name, when parsed, then the last segment is the base", () => {
+		expect(names("A extends ns.sub.Base {")).toEqual(["Base"]);
+	});
+
+	it("given a mixin call, when parsed, then it is skipped since there is no class to follow", () => {
+		expect(names("A extends mixin(Base, Other) {")).toEqual([]);
+	});
+
+	it("given an interface extending several, when parsed, then all are listed; a class without heritage has none", () => {
+		expect(names("Shape extends A, B {")).toEqual(["A", "B"]);
+		expect(names("Plain {\n\tmethod() {}\n}")).toEqual([]);
+	});
+
+	it("given braces after the header, when parsed, then the body's words are ignored", () => {
+		expect(names("A extends B { x = 1; extends = 2; }")).toEqual(["B"]);
 	});
 });

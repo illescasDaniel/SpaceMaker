@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ToolInputError } from "./errors.js";
-import type { LspDiagnostic, LspLocation, LspSymbol, Range, SymbolNode } from "./lspTypes.js";
+import type { IncomingCall, LspDiagnostic, LspLocation, LspSymbol, Range, SymbolNode } from "./lspTypes.js";
 import { escapeRegExp, readTextStrict, splitLines } from "./text.js";
 
 // LSP SymbolKind
@@ -612,4 +612,63 @@ export function formatOutline(
 	};
 	walk(toSymbolTree(symbols), 0);
 	return lines.join("\n");
+}
+
+/**
+ * `callHierarchy/incomingCalls` results as `caller  [Kind]  (path:line) calls at L.., L..`:
+ * the caller's own position plus every call-site line within it, so an agent sees who
+ * calls a function without imports/type-only usages mixed in (unlike `references`).
+ */
+export function formatCallers(incoming: IncomingCall[], workspaceRoot: string): string {
+	if (incoming.length === 0) {
+		return "No callers found.";
+	}
+	return incoming
+		.map((call) => {
+			const from = call.from ?? {};
+			const callerLine = (from.selectionRange?.start?.line ?? 0) + 1;
+			const sites = [...new Set((call.fromRanges ?? []).map((r) => (r.start?.line ?? 0) + 1))].sort((a, b) => a - b);
+			const callSites = sites.length > 0 ? sites.map((n) => `L${n}`).join(", ") : `L${callerLine}`;
+			const rel = uriToRelative(from.uri ?? "", workspaceRoot);
+			return `${from.name || "?"}  [${symbolKindLabel(from.kind)}]  (${rel}:${callerLine}) calls at ${callSites}`;
+		})
+		.join("\n");
+}
+
+/**
+ * The symbol whose name sits at a 0-based position, qualified by its enclosing
+ * classes/interfaces (`Square.area`). Falls back to the innermost symbol whose
+ * range contains the position.
+ */
+export function symbolAt(
+	symbols: LspSymbol[],
+	line: number,
+	character: number,
+): { label: string; kind: number | undefined } | undefined {
+	const walk = (nodes: LspSymbol[], owners: string[]): { label: string; kind: number | undefined } | undefined => {
+		for (const node of nodes) {
+			const start = node.selectionRange?.start ?? node.range?.start;
+			const inRange =
+				node.range?.start !== undefined &&
+				node.range.end !== undefined &&
+				(node.range.start.line ?? 0) <= line &&
+				line <= (node.range.end.line ?? 0);
+			if (!inRange) {
+				continue;
+			}
+			const nested = owners.concat(node.kind === 5 || node.kind === 11 ? [node.name ?? "?"] : []);
+			const inner = walk(node.children ?? [], nested);
+			if (inner) {
+				return inner;
+			}
+			if (start && (start.line ?? 0) === line && (start.character ?? 0) === character) {
+				return { label: [...owners, node.name ?? "?"].join("."), kind: node.kind };
+			}
+		}
+		return undefined;
+	};
+	if (isHierarchicalDocumentSymbols(symbols)) {
+		return walk(symbols, []);
+	}
+	return undefined;
 }

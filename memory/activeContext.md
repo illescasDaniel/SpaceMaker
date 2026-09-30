@@ -2,7 +2,7 @@ _Last updated: 2026-09-30 (webnav TypeScript port prototype on `claude/webnav-ty
 
 ## Branch
 
-`claude/webnav-typescript-port`: prototype of webnav in TypeScript (`experiments/webnav-mcp-ts/`), awaiting a go/no-go. Otherwise primary checkout `main`. Worktree `faak` / `cursor/094eb8f7` still on disk.
+`claude/webnav-typescript-port`: webnav in TypeScript (`experiments/webnav-mcp-ts/`) is now what `.mcp.json`/`.cursor/mcp.json` launch; run `npm run setup:webnav` once. Not publishing yet. Otherwise primary checkout `main`. Worktree `faak` / `cursor/094eb8f7` still on disk.
 
 ## Current focus
 
