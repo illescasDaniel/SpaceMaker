@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -166,6 +167,18 @@ def test_given_pending_request_when_server_exits_then_request_fails_fast(tmp_pat
 		await task
 
 	asyncio.run(_run())
+
+
+def test_given_server_dies_at_startup_when_start_then_error_quotes_its_stderr(tmp_path):
+	# given — a "language server" that prints why it can't run, then exits
+	script = "import sys; sys.stderr.write('Failed to spawn: ty\\n'); sys.exit(2)"
+	client = LspClient(workspace_root=tmp_path, command=[sys.executable, "-c", script], language_id="python")
+	# when
+	with pytest.raises(LanguageServerExitedError) as caught:
+		asyncio.run(client.start())
+	# then — the agent sees the cause, not just "exited"
+	assert "language server exited" in str(caught.value)
+	assert "Failed to spawn: ty" in str(caught.value)
 
 
 def test_given_never_started_when_is_alive_then_false(tmp_path):

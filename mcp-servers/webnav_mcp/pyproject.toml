@@ -5,11 +5,33 @@ description = "MCP server exposing JS/HTML/CSS language-server features plus a w
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["mcp", "model-context-protocol", "lsp", "typescript", "javascript", "css", "html", "code-navigation", "ai-agents"]
+classifiers = [
+	"Development Status :: 4 - Beta",
+	"Intended Audience :: Developers",
+	"Operating System :: OS Independent",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3 :: Only",
+	"Programming Language :: Python :: 3.11",
+	"Programming Language :: Python :: 3.12",
+	"Programming Language :: Python :: 3.13",
+	"Programming Language :: Python :: 3.14",
+	"Topic :: Software Development",
+]
 authors = [{ name = "Daniel Illescas Romero", email = "contact@daniel-ir.eu" }]
 dependencies = [
 	"mcp>=2.2.0",
-	"mcp-nav-shared",
+	"mcp-nav-shared>=0.1.0,<0.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/illescasDaniel/SpaceMaker/tree/main/mcp-servers/webnav_mcp"
+Repository = "https://github.com/illescasDaniel/SpaceMaker"
+Issues = "https://github.com/illescasDaniel/SpaceMaker/issues"
+
+[project.scripts]
+webnav-mcp = "webnav_mcp.server:main"
 
 [tool.uv.sources]
 mcp-nav-shared = { workspace = true }

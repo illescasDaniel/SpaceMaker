@@ -688,9 +688,27 @@ def format_selector(
 _CSS_TOKEN_UNDER_CURSOR_RE = re.compile(r"(--[a-zA-Z0-9_-]+|[.#][a-zA-Z_-][a-zA-Z0-9_-]*)")
 
 
+def _attr_token_at(line_text: str, idx: int) -> str | None:
+	"""`#name`/`.name` for a cursor on a word inside an HTML `id="..."`/`class="..."`
+	value, where the markup spells the selector without its `#`/`.`."""
+	for regex, prefix in ((_ID_ATTR_RE, "#"), (_CLASS_ATTR_RE, ".")):
+		for attr in regex.finditer(line_text):
+			if not attr.start(2) <= idx < attr.end(2):
+				continue
+			for word in re.finditer(r"\S+", attr.group(2)):
+				if attr.start(2) + word.start() <= idx < attr.start(2) + word.end():
+					return prefix + word.group()
+			return None
+	return None
+
+
 def token_at_position(line_text: str, column: int) -> str | None:
-	"""The `--var`, `#id` or `.class` token containing a 1-indexed `column`, if any."""
+	"""The `--var`, `#id` or `.class` token containing a 1-indexed `column`, if any,
+	including a bare name inside an HTML `id`/`class` attribute value."""
 	idx = column - 1
+	attr_token = _attr_token_at(line_text, idx)
+	if attr_token is not None:
+		return attr_token
 	for match in _CSS_TOKEN_UNDER_CURSOR_RE.finditer(line_text):
 		if match.start() <= idx < match.end():
 			return match.group(1)

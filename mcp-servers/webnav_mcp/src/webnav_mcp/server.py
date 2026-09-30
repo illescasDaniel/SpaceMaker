@@ -428,10 +428,11 @@ async def definition(file_path: str, line: int, column: int, ctx: Context | None
 	`line` and `column` are 1-indexed. `column` is a UTF-16 character offset
 	on the line (not a visual/display column): a leading tab counts as one
 	character. On a `--custom-property`/`#id`/`.class` token in a `.css`/
-	`.html` file, answers from the cross-file index (see css_var/selector)
+	`.html` file (or a name inside an HTML `id="..."`/`class="..."` value),
+	answers from the cross-file index (see css_var/selector)
 	instead of the single-file language server: for `definition`, just the
-	definition(s) in the file's own root (production vs. wireframes are
-	separate roots); for `references`, that root's definitions and usages.
+	definition(s) in the file's own root (each `WEBNAV_MCP_ROOTS` root
+	is separate); for `references`, that root's definitions and usages.
 	"""
 	await _use_workspace(ctx)
 	try:
@@ -457,9 +458,10 @@ async def references(
 	`line` and `column` are 1-indexed. `column` is a UTF-16 character offset
 	on the line (not a visual/display column): a leading tab counts as one
 	character. On a `--custom-property`/`#id`/`.class` token in a `.css`/
-	`.html` file, answers from the cross-file index (see css_var/selector)
+	`.html` file (or a name inside an HTML `id="..."`/`class="..."` value),
+	answers from the cross-file index (see css_var/selector)
 	instead of the single-file language server, limited to the file's own root
-	(production vs. wireframes are separate roots) unless it has no hits there.
+	(each `WEBNAV_MCP_ROOTS` root is separate) unless it has no hits there.
 	"""
 	await _use_workspace(ctx)
 	try:
@@ -493,14 +495,14 @@ async def search_symbol(
 	`name` is accepted as an alias for `query`. Narrow broad queries with
 	`kind` (SymbolKind labels, comma-separated: `class`, `function,method`,
 	`interface`, ...) and `path` (workspace-relative prefix such as `src/`,
-	or a glob such as `src/**/*.py`). Production code ranks before tests.
+	or a glob such as `src/**/*.ts`). Production code ranks before tests.
 	Loose fuzzy hits whose names don't contain the query are summarised as a
 	count when real matches exist; pass `fuzzy=true` to list them too.
 	"""
 	await _use_workspace(ctx)
 	try:
 		kinds = parse_kind_filter(kind)
-		query = resolve_name_query(preferred="query", example="renderGalleryItemStage", query=query, name=name)
+		query = resolve_name_query(preferred="query", example="renderSidebar", query=query, name=name)
 		client = await _get_ts_client()
 		symbols = await client.workspace_symbol(query)
 	except TOOL_ERRORS as exc:
@@ -528,7 +530,7 @@ async def symbol_info(
 	include_references: bool = True,
 	ctx: Context | None = None,
 ) -> str:
-	"""What is X and where is it used? Example: `symbol_info(name="renderGalleryItemStage")`.
+	"""What is X and where is it used? Example: `symbol_info(name="renderSidebar")`.
 
 	One-call summary for a JS/TS name: header, hover text, definition, and
 	references grouped by file — the usual first lookup instead of chaining
@@ -538,7 +540,7 @@ async def symbol_info(
 	"""
 	await _use_workspace(ctx)
 	try:
-		name = resolve_name_query(preferred="name", example="renderGalleryItemStage", name=name, query=query)
+		name = resolve_name_query(preferred="name", example="renderSidebar", name=name, query=query)
 		client = await _get_ts_client()
 		resolved = await resolve_symbol(client, WORKSPACE_ROOT, name, file_path=file_path)
 		rel_path = uri_to_relative(resolved.uri, WORKSPACE_ROOT)
@@ -568,7 +570,7 @@ async def symbol_info(
 @mcp.tool()
 @_notices.tool
 async def outline(file_path: str, detailed: bool = False, ctx: Context | None = None) -> str:
-	"""What's in this file? Example: `outline(file_path="web/src/gallery-item.ts")`.
+	"""What's in this file? Example: `outline(file_path="src/app.ts")`.
 
 	Indented outline (functions, classes, interfaces, with `:start-end` line
 	spans) of a JS/TS file in source order, so you can navigate without reading
@@ -644,7 +646,7 @@ async def css_var(name: str | None = None, query: str | None = None, ctx: Contex
 @mcp.tool()
 @_notices.tool
 async def selector(name: str | None = None, query: str | None = None, ctx: Context | None = None) -> str:
-	"""Who uses this `#id` or `.class`? Example: `selector(name=".gallery-item-media")`.
+	"""Who uses this `#id` or `.class`? Example: `selector(name=".card-title")`.
 
 	Looks up the selector across the whole workspace.
 
@@ -667,12 +669,17 @@ async def selector(name: str | None = None, query: str | None = None, ctx: Conte
 	"""
 	await _use_workspace(ctx)
 	try:
-		name = resolve_name_query(preferred="name", example=".gallery-item-media", name=name, query=query)
+		name = resolve_name_query(preferred="name", example=".card-title", name=name, query=query)
 		indexes = _indexes()
 	except TOOL_ERRORS as exc:
 		return format_tool_error(exc)
 	return web_index.format_selector(indexes, name, generated=_GENERATED_RELATIVE)
 
 
-if __name__ == "__main__":
+def main() -> None:
+	"""Console entry point: serve over stdio."""
 	mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+	main()

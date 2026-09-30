@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import re
+from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,6 +41,12 @@ _NULL_REPLY_METHODS = {
 	"workspace/inlayHint/refresh",
 	"workspace/codeLens/refresh",
 }
+
+
+# Last stderr lines kept to explain why a language server exited.
+_STDERR_TAIL_LINES = 10
+# Max seconds to wait, once stdout closes, for a dying server's last stderr lines.
+_STDERR_FLUSH_TIMEOUT = 0.5
 
 
 # LSP `ContentModified` (-32801) and `ServerCancelled` (-32802): both mean "ask again".
@@ -135,6 +142,7 @@ class LspClient:
 	_refresh_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
 	_reader_task: asyncio.Task | None = field(default=None, init=False)
 	_stderr_task: asyncio.Task | None = field(default=None, init=False)
+	_stderr_tail: deque[str] = field(default_factory=lambda: deque(maxlen=_STDERR_TAIL_LINES), init=False)
 	_started: bool = field(default=False, init=False)
 
 	@property
@@ -150,6 +158,7 @@ class LspClient:
 	async def start(self) -> None:
 		if self._started:
 			return
+		self._stderr_tail.clear()
 		self._proc = await asyncio.create_subprocess_exec(
 			*self.command,
 			cwd=str(self.workspace_root),
@@ -219,6 +228,10 @@ class LspClient:
 		try:
 			await self._read_messages()
 		finally:
+			if self._stderr_task is not None and not self._stderr_task.done():
+				# stdout closing usually means the process died; its last words are on stderr.
+				with contextlib.suppress(asyncio.TimeoutError, asyncio.CancelledError):
+					await asyncio.wait_for(asyncio.shield(self._stderr_task), _STDERR_FLUSH_TIMEOUT)
 			self._fail_pending()
 
 	def _fail_pending(self) -> None:
@@ -226,7 +239,13 @@ class LspClient:
 		pending, self._pending = self._pending, {}
 		for fut in pending.values():
 			if not fut.done():
-				fut.set_exception(LanguageServerExitedError(f"language server exited: {' '.join(self.command)}"))
+				fut.set_exception(LanguageServerExitedError(self._exit_message()))
+
+	def _exit_message(self) -> str:
+		message = f"language server exited: {' '.join(self.command)}"
+		if self._stderr_tail:
+			message += "\nIts last stderr output:\n" + "\n".join(self._stderr_tail)
+		return message
 
 	async def _read_messages(self) -> None:
 		proc = self._running_proc
@@ -255,8 +274,11 @@ class LspClient:
 		proc = self._running_proc
 		if proc.stderr is None:
 			raise NotStartedError("language server subprocess has no stderr pipe")
-		async for _line in proc.stderr:
-			pass  # the language server's own stderr logging isn't surfaced; nothing to act on here
+		async for line in proc.stderr:
+			# Only kept to explain an exit (see `_exit_message`); routine logging isn't surfaced.
+			text = line.decode(errors="replace").rstrip()
+			if text:
+				self._stderr_tail.append(text)
 
 	def _reply_to_server_request(self, msg: dict[str, Any]) -> None:
 		"""Answer a server->client request so the server never waits on us

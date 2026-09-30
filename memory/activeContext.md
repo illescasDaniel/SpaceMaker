@@ -1,32 +1,16 @@
-_Last updated: 2026-09-29 (MCP follow-ups verified live, PR opened; branch `claude/mcp-followups`)_
-
-## Branch
-
-`feature/mcp-improvements` (from `main`; contains everything from the former `worktree-review-custom-mcp-tools`). Check this branch out in the **primary** checkout so the MCP servers run the new code (they always run from the primary's `.venv`/source).
+_Last updated: 2026-09-30 (MCP PyPI readiness pass; branch `claude/mcp-tools-pypi-review-727d33`)_
 
 ## Current focus
 
-Finish and verify the MCP tooling work, then merge to `main`.
+Getting `mcp-nav-shared`, `codenav-mcp` and `webnav-mcp` ready to publish to PyPI. Review and fixes are done (see `progress.md` 2026-09-30); `task checks` green (699).
 
-Done and tested (609 tests, `uv run task checks` green):
-- Review round 2 fixes for codenav/webnav (see `progress.md`).
-- Worktree support: `WorkspaceSelector` (pinned env > client `roots/list` in same repo > `CLAUDE_PROJECT_DIR`/cwd), `workspace` tool on both servers, `.mcp.json` no longer pins the workspace env. Rationale + limits: `decisions.md` 2026-09-29 "MCP servers pick the workspace per request".
+Touched: `mcp-servers/*/pyproject.toml` + `README.md`, `codenav_mcp/ty_command.py` (+ new `tests/test_ty_command.py`), `mcp_nav_shared/lsp_client.py` (stderr tail), `webnav_mcp/web_index.py` (HTML attribute tokens), both `server.py` (`main()`, generic examples), `mcp_nav_shared/params.py`, `mcp_nav_shared/py.typed`, `docs/agent-tooling.md` (Publishing to PyPI).
 
-## Next steps (pick up here)
+## Next steps
 
-1. Primary checkout: `git switch feature/mcp-improvements`, then restart the MCP servers (they only pick up code on restart).
-2. Verify the new code is live: `implementations` schema now has `file_path`; call the `workspace` tool of codenav and webnav (should report the primary path, source `CLAUDE_PROJECT_DIR`).
-3. Worktree verification: DONE (desktop app answers roots/list). Optionally repeat in Cursor (pinned via `${workspaceFolder}`).
-4. Optional cleanups noticed: none blocking. A tool call racing a workspace switch can fail once (documented).
-5. Merge `feature/mcp-improvements` into `main`; .
-
-## MCP evaluation + fixes (2026-09-29)
-
-Branch `claude/mcp-evaluation-report` (from `main` 3e42762): report `docs/reports/2026-09-29-mcp-evaluation.md` (before/after), all 7 findings fixed in 5b0ff55 and confirmed live after an MCP restart; the two follow-up friction entries (refresh cost, probe path) fixed in f48308b; gate green (651 tests). Next: restart the MCP servers again to load f48308b; decide PR/merge. `search_symbol` fuzzy-filler friction fixed (restart MCPs to load it).
-
-## MCP follow-ups (branch `claude/mcp-followups`)
-
-Done, gate-green (693 tests, Biome + tsc) and confirmed live through codenav: `hover` names a type's definition, out-of-range line gives a range error, editing `pyproject.toml` restarts ty with a note. PR opened against `main` (not yet merged). Next: merge the PR, restart the MCP servers in the primary checkout. `selector` deliberately untouched. The evaluation report (`docs/reports/2026-09-29-mcp-evaluation.md`) is the source for a planned blog post about the MCPs.
+1. Merge this branch; restart the MCP servers in the primary checkout.
+2. Publish (user, needs a PyPI token): `uv build --package mcp-nav-shared`, then `codenav-mcp`, `webnav-mcp` into a scratch `dist/`; `uv publish` with the shared package first. Consider TestPyPI first.
+3. After publishing, check `uvx codenav-mcp` / `uvx webnav-mcp` from PyPI in a non-uv project.
 
 ## Older open items
 

@@ -81,8 +81,8 @@ rather than an error or a SpaceMaker-shaped assumption.
 
 `mcp-servers/` is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
 (`[tool.uv.workspace]` in the root `pyproject.toml`), not just a folder of
-scripts — each server is its own installable package, so either can be
-released standalone later without restructuring:
+scripts — each server is its own installable package, published
+standalone to PyPI (see below):
 
 - [`mcp-servers/mcp-nav-shared/`](../mcp-servers/mcp-nav-shared/README.md) →
   distribution `mcp-nav-shared`, import name `mcp_nav_shared`. No runtime
@@ -108,6 +108,28 @@ all three editable into the one shared venv — this is what lets
 / `python -m webnav_mcp.server` (proper package imports, no `sys.path`
 hacks) and lets each package's `tests/` run standalone from its own
 directory as well as from the repo root.
+
+## Publishing to PyPI
+
+The three packages are published separately as `mcp-nav-shared`,
+`codenav-mcp` and `webnav-mcp`. Each wheel ships its `LICENSE`
+(`license-files`) and a console script (`codenav-mcp` / `webnav-mcp`,
+i.e. `server:main`), so end users run `uvx codenav-mcp` with no checkout. The
+package READMEs become the PyPI pages, so they use absolute GitHub/PyPI links
+only (relative links 404 on PyPI).
+
+- **Versioning:** the servers pin `mcp-nav-shared>=X.Y.0,<X.(Y+1)` (0.x: any
+  minor may break the shared API). A shared change that a server needs means
+  bumping `mcp-nav-shared`'s minor, publishing it first, then raising the
+  servers' pin. `tool.uv.sources` keeps local development on the workspace
+  copy regardless of the pin.
+- **Build and check:** `uv build --package mcp-nav-shared` (then
+  `codenav-mcp`, `webnav-mcp`) into a scratch `dist/`. Before uploading,
+  install the wheels into a clean venv *outside* this repo and drive both
+  servers over stdio against a throwaway project. In-repo runs hide
+  environment bugs: codenav once only worked because SpaceMaker's own
+  `.venv/bin/ty` was found first.
+- **Upload:** `uv publish` from that `dist/`, shared package first.
 
 ## Why no MCP prompts/resources
 
@@ -271,8 +293,10 @@ The generic JSON-RPC/LSP wire protocol (subprocess framing, request/
 response dispatch, document sync) lives in
 `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/lsp_client.py` as `LspClient`, shared with
 `webnav` below. Only the `ty`-specific launch command
-(`mcp-servers/codenav_mcp/src/codenav_mcp/ty_command.py`) and languageId are
-codenav's own. Location formatting (`path:line:col` headers + snippets)
+(`mcp-servers/codenav_mcp/src/codenav_mcp/ty_command.py`: the workspace's
+`.venv` ty, then the `ty` installed with codenav via `ty.find_ty_bin()`, then
+`PATH`, then `uvx ty server`) and languageId are codenav's own. If a language
+server dies, the tool error quotes its last stderr lines. Location formatting (`path:line:col` headers + snippets)
 lives in `mcp-servers/mcp-nav-shared/src/mcp_nav_shared/format.py`.
 
 `references` (both servers) uses `format_references()`: at or under
