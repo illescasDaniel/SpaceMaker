@@ -28,7 +28,7 @@ spacemaker = "spacemaker.desktop:main"
 
 [dependency-groups]
 dev = [
-	"codenav-mcp>=0.1.0",
+	"codenav-mcp>=0.1.1",
 	"mkdocs>=1.6.1",
 	"mkdocs-material>=9.7.7",
 	"pyinstaller>=6.19",
@@ -40,7 +40,7 @@ dev = [
 	"ruff>=0.15",
 	"taskipy>=1.14",
 	"ty>=0.0.75",
-	"webnav-mcp>=0.1.0",
+	"webnav-mcp>=0.1.1",
 ]
 
 [build-system]

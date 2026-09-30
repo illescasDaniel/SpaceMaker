@@ -2,7 +2,7 @@
 
 SpaceMaker runs these **external programs** on your computer for extract and convert. Official portable builds **download pinned versions** into your user data folder on first launch. If a download fails, install the tool yourself (package manager or vendor site) and ensure it is on your `PATH`.
 
-Machine-readable manifest: [packaging/third-party-manifest.yaml](../../packaging/third-party-manifest.yaml). Download pins: [packaging/tool-catalog.json](../../packaging/tool-catalog.json).
+Machine-readable manifest: [packaging/third-party-manifest.yaml](https://github.com/illescasDaniel/SpaceMaker/blob/main/packaging/third-party-manifest.yaml). Download pins: [packaging/tool-catalog.json](https://github.com/illescasDaniel/SpaceMaker/blob/main/packaging/tool-catalog.json).
 
 | Tool | Purpose in SpaceMaker | Project home |
 |------|------------------------|--------------|
@@ -37,7 +37,7 @@ SpaceMaker’s own license is in the repository [LICENSE](../../LICENSE) file (M
 
 ## Updates to downloaded tools
 
-Version pins live in [packaging/tool-catalog.json](../../packaging/tool-catalog.json). Security updates may ship in patch releases without changing this document’s structure.
+Version pins live in [packaging/tool-catalog.json](https://github.com/illescasDaniel/SpaceMaker/blob/main/packaging/tool-catalog.json). Security updates may ship in patch releases without changing this document’s structure.
 
 ## Removing downloads
 

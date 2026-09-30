@@ -21,7 +21,7 @@ GamesLibrary has no wireframe folder. SpaceMaker requires `wireframes/*.html` **
 
 ## Conversion policy (summary)
 
-Authoritative compression flags (historical shell reference): [convert_all_1_1.sh](../reference/convert_all_1_1.sh). **App runtime** uses GPU-only video encode or move-as-is (see [convert-media](../../specs/convert-media/SPEC.md)). Behavior:
+Authoritative compression flags (historical shell reference): [convert_all_1_1.sh](../reference/convert_all_1_1.sh). **App runtime** uses GPU-only video encode or move-as-is (see [convert-media](https://github.com/illescasDaniel/SpaceMaker/blob/main/specs/convert-media/SPEC.md)). Behavior:
 
 **Move as-is (no re-encode)** from `originals/` → `processed/`:
 
@@ -67,14 +67,14 @@ Local FastAPI + static UI in pywebview; no cloud dependency. **Home hub** is the
 
 - **Photo backup** (Home tile): centered Easy layout, auto Wi‑Fi receive, convert-as-received (`ui_mode=easy` internally). **Theme:** all web shells follow OS light/dark (`static/theme.css`).
 - **USB photo backup** tile opens the three-step wizard (`ui_mode=advanced` internally). Wi‑Fi default; cable modes **ADB (cable)** and **iPhone (USB)** (Linux AFC) with info (ⓘ) for setup steps.
-- **USB file transfer** tile: cable-only **ADB / iPhone USB (AFC)** copy or move of **any** files into `documents_directory()/SpaceMaker/` (same root as Receive files). **Add files…** / **Add folder…** use **adbfs** (ADB) or **ifuse** (AFC). Destination strips Android user-storage prefixes (`sdcard`, `storage/emulated/0`, `storage/self/primary`). No convert, no gallery, no `originals/`. Spec: [specs/usb-file-transfer/SPEC.md](../../specs/usb-file-transfer/SPEC.md).
+- **USB file transfer** tile: cable-only **ADB / iPhone USB (AFC)** copy or move of **any** files into `documents_directory()/SpaceMaker/` (same root as Receive files). **Add files…** / **Add folder…** use **adbfs** (ADB) or **ifuse** (AFC). Destination strips Android user-storage prefixes (`sdcard`, `storage/emulated/0`, `storage/self/primary`). No convert, no gallery, no `originals/`. Spec: [specs/usb-file-transfer/SPEC.md](https://github.com/illescasDaniel/SpaceMaker/blob/main/specs/usb-file-transfer/SPEC.md).
 - Hexagonal: `DeviceRepository` port; adapters `AdbDeviceRepository`, `AfcDeviceRepository` (adbutils on all OSes for ADB).
 - **iPhone USB:** **AfcDeviceRepository** on Linux — `idevice_*` + `ifuse` on `PATH`; **usbmuxd** (Arch: udev starts it on plug-in, not `systemctl enable`).
 - **ADB:** **adbutils** + managed or `PATH` `adb` per OS/CPU; USB transfer Add mounts via **adbfs** on PATH (e.g. `adbfs-rootless-git`).
 - **Convert:** managed or `PATH` ffmpeg, ffprobe, magick, avifenc, exiftool — see `packaging/tool-catalog.json`.
 - **Legal:** ship privacy, disclaimer, third-party notice in portable binary + in-app About (`specs/legal/SPEC.md`).
 - **Move** from device: prefer ADB; AFC move may be unsupported per file.
-- Spec: [specs/extract-media/SPEC.md](../../specs/extract-media/SPEC.md).
+- Spec: [specs/extract-media/SPEC.md](https://github.com/illescasDaniel/SpaceMaker/blob/main/specs/extract-media/SPEC.md).
 - **Not in product:** MTP / libmtp / GVFS.
 
 ## Testing

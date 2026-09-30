@@ -56,12 +56,12 @@ diagnostics from 1.7–2.5 s to 1.1–2.0 s, because `npm ci` meant no `npx` dow
 
 | Server | Severity | Issue |
 |---|---|---|
-| ~~mcp-nav-shared~~ | ~~slow~~ | ~~The refresh walk costs ~20 ms per call~~ — fixed in f48308b: the cost came from nested worktrees under `.claude/worktrees/` (walked and reported to the server) plus a `resolve()` per file; now ~2.3 ms with or without a nested worktree ([friction](../../memory/friction/2026-09-29-refresh-adds-20ms-per-call.md)) |
-| ~~codenav~~ | ~~confusing~~ | ~~Probe document path hard-coded `mcp-servers/.codenav_probe.py`~~ — fixed in f48308b: now `<root>/.codenav_probe.py` as documented; `implementations` results unchanged ([friction](../../memory/friction/2026-09-29-probe-path-hardcoded-mcp-servers.md)) |
-| ~~codenav~~ | ~~minor~~ | ~~`search_symbol` pads the cap with ty's fuzzy subsequence matches~~ — fixed in dc82e49: hidden behind a count unless `fuzzy=true` ([friction](../../memory/friction/2026-09-29-search-symbol-fuzzy-filler.md)) |
-| ~~both~~ | ~~limitation~~ | ~~Config that alters resolution (`pyproject.toml`, `tsconfig.json`) needed a manual restart~~ — fixed on `claude/mcp-followups`: the server restarts itself and says so ([friction](../../memory/friction/2026-09-29-config-change-needs-mcp-restart.md)) |
-| both | limitation | The MCP servers attached to a running Claude session keep the code they started with. A stdio server can't reload itself, so since `claude/mcp-followups` every result carries a `restart the MCP servers` line while the server's code is stale ([friction](../../memory/friction/2026-09-29-mcp-old-code-after-fix-is-silent.md)) |
-| ~~codenav~~ | ~~minor~~ | ~~`hover` is thin (a variable shows only its type name)~~ — fixed on `claude/mcp-followups` ([friction](../../memory/friction/2026-09-29-codenav-hover-bare-type-and-silent-bad-position.md)) |
+| ~~mcp-nav-shared~~ | ~~slow~~ | ~~The refresh walk costs ~20 ms per call~~ — fixed in f48308b: the cost came from nested worktrees under `.claude/worktrees/` (walked and reported to the server) plus a `resolve()` per file; now ~2.3 ms with or without a nested worktree ([friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-refresh-adds-20ms-per-call.md)) |
+| ~~codenav~~ | ~~confusing~~ | ~~Probe document path hard-coded `mcp-servers/.codenav_probe.py`~~ — fixed in f48308b: now `<root>/.codenav_probe.py` as documented; `implementations` results unchanged ([friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-probe-path-hardcoded-mcp-servers.md)) |
+| ~~codenav~~ | ~~minor~~ | ~~`search_symbol` pads the cap with ty's fuzzy subsequence matches~~ — fixed in dc82e49: hidden behind a count unless `fuzzy=true` ([friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-search-symbol-fuzzy-filler.md)) |
+| ~~both~~ | ~~limitation~~ | ~~Config that alters resolution (`pyproject.toml`, `tsconfig.json`) needed a manual restart~~ — fixed on `claude/mcp-followups`: the server restarts itself and says so ([friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-config-change-needs-mcp-restart.md)) |
+| both | limitation | The MCP servers attached to a running Claude session keep the code they started with. A stdio server can't reload itself, so since `claude/mcp-followups` every result carries a `restart the MCP servers` line while the server's code is stale ([friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-mcp-old-code-after-fix-is-silent.md)) |
+| ~~codenav~~ | ~~minor~~ | ~~`hover` is thin (a variable shows only its type name)~~ — fixed on `claude/mcp-followups` ([friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-codenav-hover-bare-type-and-silent-bad-position.md)) |
 | webnav | minor | `selector` is regex-grade: template literals and selectors built from several variables aren't resolved (documented). Deliberately not fixed: no such selector exists in `web/src` today; revisit when a real miss shows up in the friction log |
 
 ### Follow-up round (branch `claude/mcp-followups`)
@@ -178,7 +178,7 @@ once per session. The only cold outliers come from starting a language server
 
 **Weaknesses**
 - 🐞 **Stale after disk edits** (high severity; see
-  [friction](../../memory/friction/2026-09-29-codenav-stale-after-disk-edits.md)):
+  [friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-codenav-stale-after-disk-edits.md)):
   - New files and edits to files codenav hasn't opened are invisible to
     `callers`/`references`/`search_symbol`.
   - Deleted or reverted code keeps showing up as ghost callers, for example
@@ -235,11 +235,11 @@ trusting `callers`/`references`**, until the freshness bug is fixed.
 
 **Weaknesses**
 - 🐞 **Stale after edits to existing TS files** (see
-  [friction](../../memory/friction/2026-09-29-webnav-stale-open-ts-files.md)). All files are opened
+  [friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-webnav-stale-open-ts-files.md)). All files are opened
   eagerly at startup, and tsserver then ignores the disk for open files. Same root cause as codenav.
 - 🐞 **`selector` misses TS generic calls** such as `querySelector<HTMLElement>(".x")`: 6 sites in
   `web/src`, and the regex is at `web_index.py:58`. See
-  [friction](../../memory/friction/2026-09-29-selector-misses-ts-generic-querySelector.md).
+  [friction](https://github.com/illescasDaniel/SpaceMaker/blob/main/memory/friction/2026-09-29-selector-misses-ts-generic-querySelector.md).
 - `outline` is sorted **alphabetically, not by line**, and lists every local const, object-literal
   key and anonymous callback (4 KB for 520 lines). It's the weakest tool in either server.
 - `definition` on a `var(--x)` in CSS returns the full `css_var` dump for *all* roots, including

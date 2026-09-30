@@ -20,7 +20,7 @@ gate — ruff + ty + pytest).
 
 Every test name follows `test_given_<state>_when_<action>_then_<outcome>`,
 with matching `# given` / `# when` / `# then` comment sections in the body.
-Real example, from [tests/unit/test_convert_media.py](../tests/unit/test_convert_media.py):
+Real example, from [tests/unit/test_convert_media.py](https://github.com/illescasDaniel/SpaceMaker/blob/main/tests/unit/test_convert_media.py):
 
 ```python
 def test_given_avif_in_originals_when_convert_then_moves_to_converted():

@@ -393,16 +393,16 @@ wheels = [
 
 [[package]]
 name = "codenav-mcp"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mcp" },
     { name = "mcp-nav-shared" },
     { name = "ty" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/56/81e91b00d2beb87fea730e889aebc55be45e70edaf719ba6ed5ded280e56/codenav_mcp-0.1.0.tar.gz", hash = "sha256:e083ad6cc764fbba55fbbaf3a1d0551a14e99ad026ed02873ff30552a2b6b73f", size = 15744, upload-time = "2026-09-30T12:01:57.032Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/21/bf7b75fdcb7b390d102f38bb56bd1bdb6ee00ce9da494f404bd0fc13805b/codenav_mcp-0.1.1.tar.gz", hash = "sha256:764c87e4afb27c5404baacc5b7339af6cdd1a054ba35eb0f72df20ec3bee02c3", size = 16371, upload-time = "2026-09-30T12:18:06.679Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b7/c6/cac0f92d3df58266ed0c85bc922ebb654239d64e69be6ed0e58f5ee54215/codenav_mcp-0.1.0-py3-none-any.whl", hash = "sha256:34af0c77687f71160c9a3865d2a10b2b5530a9f2b48a568409239b9a780f0411", size = 17410, upload-time = "2026-09-30T12:01:53.391Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/b3/de7da6da4be88a2051d30f5a976a6178e66df74c44f0704b03fd6ebc9dd3/codenav_mcp-0.1.1-py3-none-any.whl", hash = "sha256:6fe264bd584e740e2a5f50000df9b238b1947e17a4d8a24df57007fc3ad91631", size = 17377, upload-time = "2026-09-30T12:18:05.576Z" },
 ]
 
 [[package]]
@@ -902,11 +902,11 @@ wheels = [
 
 [[package]]
 name = "mcp-nav-shared"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3c/1c/49a8a12411a73ca6e9e176af816df66844b5438109c1dd884f0753237fd7/mcp_nav_shared-0.1.0.tar.gz", hash = "sha256:9d29f7a4df0b4b97934b8b48100f47d7b4425f28246c27d67d864e4e58e6510b", size = 27769, upload-time = "2026-09-30T12:01:56.191Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/88/59da9ffc2bf16a8051e6b6fc6d4d27854c7baa69e9bdbb0d2ac348634956/mcp_nav_shared-0.1.1.tar.gz", hash = "sha256:32544d4612ec0de7697526a36d315457002983973fc33e75eae5abec1423ce63", size = 28420, upload-time = "2026-09-30T12:18:03.187Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/1c/2258ba4cbea6c450b3ebb8c0a4712f3d5c0fc47bef213e9ac213fabb366a/mcp_nav_shared-0.1.0-py3-none-any.whl", hash = "sha256:fe47290e40e3d17ebd15a7d63414f6392a9a8792b2eef195defc2f0897d5fdeb", size = 32254, upload-time = "2026-09-30T12:01:52.295Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/67/6fcbbaeb6ab8da35e463e46e33f2a0f5bcc2b9dedb6b9658a651333f79ea/mcp_nav_shared-0.1.1-py3-none-any.whl", hash = "sha256:6067def1ba615c481b9630d67699014b94f432761e2bc117e25c43e8cd7c30e0", size = 32222, upload-time = "2026-09-30T12:18:01.023Z" },
 ]
 
 [[package]]
@@ -2061,7 +2061,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "codenav-mcp", specifier = ">=0.1.0" },
+    { name = "codenav-mcp", specifier = ">=0.1.1" },
     { name = "mkdocs", specifier = ">=1.6.1" },
     { name = "mkdocs-material", specifier = ">=9.7.7" },
     { name = "pyinstaller", specifier = ">=6.19" },
@@ -2073,7 +2073,7 @@ dev = [
     { name = "ruff", specifier = ">=0.15" },
     { name = "taskipy", specifier = ">=1.14" },
     { name = "ty", specifier = ">=0.0.75" },
-    { name = "webnav-mcp", specifier = ">=0.1.0" },
+    { name = "webnav-mcp", specifier = ">=0.1.1" },
 ]
 
 [[package]]
@@ -2277,15 +2277,15 @@ wheels = [
 
 [[package]]
 name = "webnav-mcp"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mcp" },
     { name = "mcp-nav-shared" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a8/78/b7d08ffb3f39fe858874709a3fd73ac9803d89f6c5479f918f4c55c2d7e0/webnav_mcp-0.1.0.tar.gz", hash = "sha256:c261ad237717ddc4b941be3c4ed5f24b103ca5a17c50f519cf018e797fd6e5bc", size = 23619, upload-time = "2026-09-30T12:01:57.706Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/6c/8488082420de03bca6e2586c185e02185c49042fdad9edb4377ad0a42cb1/webnav_mcp-0.1.1.tar.gz", hash = "sha256:f524b4a4bde0f8096c5acb1e5d4175ebfb719552251d3b1c52c1c0c3743230cc", size = 24224, upload-time = "2026-09-30T12:18:10.265Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/6f/d5039780d8ea41cbb924aa68f685c4ca47240486b906d23174e75ff88b33/webnav_mcp-0.1.0-py3-none-any.whl", hash = "sha256:1bf6bb6bc8e69090742e840a1476daa72b848275faa427a88e297e89329339fd", size = 26708, upload-time = "2026-09-30T12:01:54.776Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/04/3717e4fdc6b3b9a2910e9dff53cac00e7479fe3b94f272386ed6c5dfe3eb/webnav_mcp-0.1.1-py3-none-any.whl", hash = "sha256:044e056b56b6af4ccd747fa4ebed99bb6e65d317d89d5724d7178b71a686098c", size = 26678, upload-time = "2026-09-30T12:18:09.172Z" },
 ]
 
 [[package]]
