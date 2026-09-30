@@ -1759,6 +1759,11 @@
 			cursor: pointer;
 		}
 
+		.wf-demo button[aria-pressed="true"] {
+			outline: 2px solid var(--accent);
+			outline-offset: 1px;
+		}
+
 		.transfer-save-actions {
 			display: flex;
 			flex-wrap: wrap;
@@ -1785,21 +1790,132 @@
 		.components-lead {
 			color: var(--muted);
 			font-size: 0.9rem;
-			margin: 0 0 1.25rem;
+			margin: 0 0 1rem;
+		}
+
+		/* Stepped setup: PM → bulk install → status chip → collapsible details */
+		.components-step {
+			margin: 0 0 1rem;
+			padding: 0.75rem 0.85rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--surface);
+		}
+
+		.components-step[hidden] {
+			display: none;
+		}
+
+		.components-step-title {
+			margin: 0 0 0.35rem;
+			font-size: 0.85rem;
+			font-weight: 650;
+		}
+
+		.components-step-body {
+			margin: 0;
+			font-size: 0.82rem;
+			color: var(--muted);
+			line-height: 1.35;
+		}
+
+		.tool-install-cmd-row {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 0.4rem;
+		}
+
+		.components-step-body + .tool-install-cmd-row {
+			margin-top: 0.5rem;
+		}
+
+		.components-status-block {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 0.65rem 1rem;
+			margin: 0 0 0.75rem;
+		}
+
+		.components-status-chip {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 5.5rem;
+			padding: 0.35rem 0.75rem;
+			border-radius: 6px;
+			font-size: 0.8rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+
+		.components-status-chip.ok {
+			background: color-mix(in srgb, var(--success) 18%, transparent);
+			color: var(--success);
+		}
+
+		.components-status-chip.warning {
+			background: var(--warn-bg);
+			color: var(--warn);
+		}
+
+		.components-status-chip.missing {
+			background: color-mix(in srgb, var(--error) 16%, transparent);
+			color: var(--error);
+		}
+
+		.components-status-summary {
+			margin: 0;
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+
+		.components-details {
+			margin: 0 0 0.5rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 0 0.65rem 0.35rem;
+		}
+
+		.components-details > summary {
+			cursor: pointer;
+			list-style: none;
+			padding: 0.55rem 0.2rem;
+			font-size: 0.85rem;
+			font-weight: 650;
+			user-select: none;
+		}
+
+		.components-details > summary::-webkit-details-marker {
+			display: none;
+		}
+
+		.components-details > summary::before {
+			content: "▸ ";
+			color: var(--muted);
+		}
+
+		.components-details[open] > summary::before {
+			content: "▾ ";
+		}
+
+		.tool-block {
+			padding: 0.35rem 0;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.tool-block:last-child {
+			border-bottom: none;
 		}
 
 		.tool-row {
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			gap: 1rem;
-			padding: 0.65rem 0;
-			border-bottom: 1px solid var(--border);
-			font-size: 0.9rem;
-		}
-
-		.tool-row:last-child {
-			border-bottom: none;
+			gap: 0.75rem;
+			font-size: 0.82rem;
 		}
 
 		.tool-name {
@@ -1808,16 +1924,48 @@
 
 		.tool-status {
 			color: var(--muted);
-			font-size: 0.85rem;
+			font-size: 0.78rem;
 			text-align: right;
 		}
 
-		.tool-status.ready { color: #2f9e44; }
-		.tool-status.path { color: var(--warn); }
-		.tool-status.fail { color: #e03131; }
+		/* Managed + PATH both green; missing/failed red */
+		.tool-status.ready,
+		.tool-status.path { color: var(--success); }
+		.tool-status.fail { color: var(--error); }
+
+		.tool-install-hint {
+			margin: 0.2rem 0 0;
+			font-size: 0.72rem;
+			color: var(--muted);
+		}
+
+		.tool-install-hint-label {
+			display: block;
+			margin-bottom: 0.15rem;
+		}
+
+		.tool-install-hint code,
+		.components-step code {
+			display: inline-block;
+			background: var(--surface2);
+			padding: 0.22rem 0.4rem;
+			border-radius: 4px;
+			font-size: 0.72rem;
+			word-break: break-all;
+			white-space: pre-wrap;
+			flex: 1 1 12rem;
+			min-width: 0;
+		}
+
+		.tool-install-copy {
+			margin-top: 0;
+			padding: 0.28rem 0.55rem;
+			font-size: 0.72rem;
+			flex: 0 0 auto;
+		}
 
 		.components-actions {
-			margin-top: 1.5rem;
+			margin-top: 1.25rem;
 			display: flex;
 			flex-wrap: wrap;
 			gap: 0.75rem;
@@ -1855,34 +2003,73 @@
 
 	<div class="app-main">
 
-	<!-- FIRST-RUN / COMPONENTS -->
+	<!-- FIRST-RUN / COMPONENTS — stepped: PM → bulk install → status → Details; wf-demo swaps OS + state -->
 	<section id="view-components" class="screen" aria-label="Required components">
 		<div class="components-screen">
 			<h2>Setting up components</h2>
-			<p class="components-lead">SpaceMaker downloads pinned versions of FFmpeg, ImageMagick, and other tools into your user data folder. If a download fails, install that tool yourself — the app will use your system copy when available.</p>
-			<p class="folder-hint"><strong>Linux — iPhone USB backup:</strong> install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro; unlock the iPhone and tap <strong>Trust</strong> when prompted.</p>
-			<div class="tool-row">
-				<span class="tool-name">ffmpeg / ffprobe</span>
-				<span class="tool-status ready">Ready (downloaded)</span>
+			<p class="components-lead">Tools download when possible. Install anything still missing below — status refreshes every few seconds. Continue reloads PATH.</p>
+			<p class="folder-hint" id="components-iphone-packages" hidden><strong>iPhone USB backup:</strong> install <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> from your distro; unlock the iPhone and tap <strong>Trust</strong> when prompted.</p>
+
+			<div class="components-step" id="components-pm-step" hidden>
+				<p class="components-step-title">1. Install package manager</p>
+				<p class="components-step-body">Missing package manager — download with this command in a system terminal:</p>
+				<div class="tool-install-cmd-row">
+					<code id="components-pm-command"></code>
+					<button type="button" class="btn btn-secondary tool-install-copy" id="btn-components-pm-copy">Copy</button>
+				</div>
 			</div>
-			<div class="tool-row">
-				<span class="tool-name">magick (ImageMagick)</span>
-				<span class="tool-status">Downloading…</span>
+
+			<div class="components-step" id="components-bulk-step" hidden>
+				<p class="components-step-title" id="components-bulk-step-title">2. Install missing tools</p>
+				<p class="components-step-body">Download all missing tools using:</p>
+				<div class="tool-install-cmd-row">
+					<code id="components-bulk-command"></code>
+					<button type="button" class="btn btn-secondary tool-install-copy" id="btn-components-bulk-copy">Copy</button>
+				</div>
 			</div>
-			<div class="tool-row">
-				<span class="tool-name">exiftool</span>
-				<span class="tool-status path">Using system install</span>
+
+			<div class="components-status-block" aria-live="polite">
+				<span class="components-status-chip missing" id="components-status-chip">Missing</span>
+				<p class="components-status-summary" id="components-status-summary">0 ready · 0 system · 0 missing</p>
 			</div>
-			<div class="tool-row">
-				<span class="tool-name">adb</span>
-				<span class="tool-status ready">Ready (downloaded)</span>
-			</div>
+
+			<details class="components-details" id="components-details">
+				<summary>Details</summary>
+				<div id="components-tool-list"></div>
+			</details>
+
 			<div class="components-actions">
 				<button type="button" class="btn btn-primary" id="btn-components-continue">Continue</button>
 				<button type="button" class="btn btn-secondary" id="btn-components-retry">Retry downloads</button>
 			</div>
+
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Production: poll <code>GET /api/tools/status</code> ~every 3s while this screen is active; stop on leave.
+				Continue → re-run host PATH prepend + allow PATH fallback, then dismiss.
+				Live PATH rows show green before Continue; convert still gated until Continue.
+				<code>summary_status</code> ok|missing (warning reserved/unused); optional <code>package_manager_command</code> / <code>install_all_command</code>.
+				OK when every required tool resolves (managed <em>or</em> system PATH); MISSING only when something is unresolved.
+			</aside>
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				Step 1 appears only when the OS package manager binary is not found.
+				Step 2 appears only when ≥1 tool is missing and a bulk formula exists.
+				Details is collapsed when status is OK (including mixed managed + system); expanded only for MISSING.
+				Demo buttons below cycle OS flavors and status states.
+			</aside>
+
 			<div class="wf-demo">
 				<button type="button" id="btn-wireframe-show-components">Show components screen</button>
+				<button type="button" id="btn-wf-components-macos" aria-pressed="true">Demo: macOS missing</button>
+				<button type="button" id="btn-wf-components-macos-nobrew" aria-pressed="false">Demo: macOS no brew</button>
+				<button type="button" id="btn-wf-components-macos-mixed" aria-pressed="false">Demo: macOS mixed OK</button>
+				<button type="button" id="btn-wf-components-macos-ok" aria-pressed="false">Demo: macOS all managed</button>
+				<button type="button" id="btn-wf-components-linux-apt" aria-pressed="false">Demo: Linux apt</button>
+				<button type="button" id="btn-wf-components-linux-dnf" aria-pressed="false">Demo: Linux dnf</button>
+				<button type="button" id="btn-wf-components-linux-pacman" aria-pressed="false">Demo: Linux pacman</button>
+				<button type="button" id="btn-wf-components-windows" aria-pressed="false">Demo: Windows</button>
+				<p class="folder-hint" id="wf-components-os-label" style="margin-top:0.5rem;">Showing macOS: missing brew tools + bulk install; Details open.</p>
 			</div>
 		</div>
 	</section>
@@ -2709,7 +2896,7 @@
 			<p><strong>Folder:</strong></p>
 			<p class="legal-tools-dir">~/.local/share/spacemaker/tools</p>
 			<div class="tool-row"><span class="tool-name">ffmpeg / ffprobe</span><span class="tool-status ready">Ready (downloaded)</span></div>
-			<div class="tool-row"><span class="tool-name">magick (ImageMagick)</span><span class="tool-status resolution-missing">Not downloaded yet</span></div>
+			<div class="tool-row"><span class="tool-name">magick (ImageMagick)</span><span class="tool-status fail">Not downloaded yet</span></div>
 			<p>
 				<button type="button" class="btn btn-secondary" id="btn-settings-delete-tools">Delete downloaded components</button>
 				<button type="button" class="btn btn-ghost" id="btn-settings-retry-downloads">Retry downloads</button>
@@ -3046,6 +3233,236 @@
 		document.getElementById('btn-wireframe-show-components').addEventListener('click', function () {
 			showView('components');
 		});
+		(function () {
+			var list = document.getElementById('components-tool-list');
+			var iphone = document.getElementById('components-iphone-packages');
+			var label = document.getElementById('wf-components-os-label');
+			var pmStep = document.getElementById('components-pm-step');
+			var pmCommand = document.getElementById('components-pm-command');
+			var bulkStep = document.getElementById('components-bulk-step');
+			var bulkTitle = document.getElementById('components-bulk-step-title');
+			var bulkCommand = document.getElementById('components-bulk-command');
+			var chip = document.getElementById('components-status-chip');
+			var summary = document.getElementById('components-status-summary');
+			var details = document.getElementById('components-details');
+			var osButtons = {
+				macos: document.getElementById('btn-wf-components-macos'),
+				'macos-nobrew': document.getElementById('btn-wf-components-macos-nobrew'),
+				'macos-mixed': document.getElementById('btn-wf-components-macos-mixed'),
+				'macos-ok': document.getElementById('btn-wf-components-macos-ok'),
+				'linux-apt': document.getElementById('btn-wf-components-linux-apt'),
+				'linux-dnf': document.getElementById('btn-wf-components-linux-dnf'),
+				'linux-pacman': document.getElementById('btn-wf-components-linux-pacman'),
+				windows: document.getElementById('btn-wf-components-windows'),
+			};
+			function bindCopy(btnId, codeEl) {
+				var btn = document.getElementById(btnId);
+				if (!btn || !codeEl) {
+					return;
+				}
+				btn.addEventListener('click', function () {
+					btn.textContent = 'Copied';
+					window.setTimeout(function () {
+						btn.textContent = 'Copy';
+					}, 1500);
+				});
+			}
+			bindCopy('btn-components-pm-copy', pmCommand);
+			bindCopy('btn-components-bulk-copy', bulkCommand);
+
+			function linuxMissingAvif(command, bulk) {
+				return {
+					iphone: true,
+					packageManagerCommand: null,
+					installAllCommand: bulk,
+					summaryStatus: 'missing',
+					summaryLine: '4 ready · 0 system · 1 missing',
+					tools: [
+						{ name: 'ffmpeg / ffprobe', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'magick (ImageMagick)', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'exiftool', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'adb', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'avifenc (libavif)', status: 'fail', text: 'Download failed (HTTP 404)', command: command },
+					],
+				};
+			}
+			var demos = {
+				macos: {
+					label: 'macOS missing: brew present; bulk + per-tool Homebrew; Details open; chip MISSING. No idevice_*/ifuse rows (AFC is Linux-only).',
+					iphone: false,
+					packageManagerCommand: null,
+					installAllCommand: 'brew install ffmpeg imagemagick exiftool',
+					summaryStatus: 'missing',
+					summaryLine: '2 ready · 0 system · 3 missing',
+					tools: [
+						{ name: 'ffmpeg / ffprobe', status: 'fail', text: 'No portable download for this OS', command: 'brew install ffmpeg' },
+						{ name: 'magick (ImageMagick)', status: 'fail', text: 'No portable download for this OS', command: 'brew install imagemagick' },
+						{ name: 'exiftool', status: 'fail', text: 'No portable download for this OS', command: 'brew install exiftool' },
+						{ name: 'adb', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'avifenc (libavif)', status: 'ready', text: 'Ready (downloaded)' },
+					],
+				},
+				'macos-nobrew': {
+					label: 'macOS no brew: step 1 shows Homebrew install; bulk install still listed; chip MISSING. No AFC tools.',
+					iphone: false,
+					packageManagerCommand: '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+					installAllCommand: 'brew install ffmpeg imagemagick exiftool',
+					summaryStatus: 'missing',
+					summaryLine: '2 ready · 0 system · 3 missing',
+					tools: [
+						{ name: 'ffmpeg / ffprobe', status: 'fail', text: 'No portable download for this OS', command: 'brew install ffmpeg' },
+						{ name: 'magick (ImageMagick)', status: 'fail', text: 'No portable download for this OS', command: 'brew install imagemagick' },
+						{ name: 'exiftool', status: 'fail', text: 'No portable download for this OS', command: 'brew install exiftool' },
+						{ name: 'adb', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'avifenc (libavif)', status: 'ready', text: 'Ready (downloaded)' },
+					],
+				},
+				'macos-mixed': {
+					label: 'macOS mixed OK: all tools found (managed + system PATH, both green); chip OK; Details collapsed; no install steps. No AFC tools.',
+					iphone: false,
+					packageManagerCommand: null,
+					installAllCommand: null,
+					summaryStatus: 'ok',
+					summaryLine: '2 ready · 3 system · 0 missing',
+					tools: [
+						{ name: 'ffmpeg / ffprobe', status: 'path', text: 'Using system install' },
+						{ name: 'magick (ImageMagick)', status: 'path', text: 'Using system install' },
+						{ name: 'exiftool', status: 'path', text: 'Using system install' },
+						{ name: 'adb', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'avifenc (libavif)', status: 'ready', text: 'Ready (downloaded)' },
+					],
+				},
+				'macos-ok': {
+					label: 'macOS all managed: every tool downloaded; Details collapsed; no install steps. No AFC tools.',
+					iphone: false,
+					packageManagerCommand: null,
+					installAllCommand: null,
+					summaryStatus: 'ok',
+					summaryLine: '5 ready · 0 system · 0 missing',
+					tools: [
+						{ name: 'ffmpeg / ffprobe', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'magick (ImageMagick)', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'exiftool', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'adb', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'avifenc (libavif)', status: 'ready', text: 'Ready (downloaded)' },
+					],
+				},
+				'linux-apt': Object.assign(
+					{ label: 'Linux apt: iPhone banner; bulk apt for missing avifenc; chip MISSING.' },
+					linuxMissingAvif('sudo apt install libavif-bin', 'sudo apt install libavif-bin'),
+				),
+				'linux-dnf': Object.assign(
+					{ label: 'Linux dnf: iPhone banner; bulk dnf for missing avifenc; chip MISSING.' },
+					linuxMissingAvif('sudo dnf install libavif', 'sudo dnf install libavif'),
+				),
+				'linux-pacman': Object.assign(
+					{ label: 'Linux pacman: iPhone banner; bulk pacman for missing avifenc; chip MISSING.' },
+					linuxMissingAvif('sudo pacman -S libavif', 'sudo pacman -S libavif'),
+				),
+				windows: {
+					label: 'Windows: winget multi-line bulk for missing magick + exiftool; chip MISSING. No idevice_*/ifuse (AFC Linux-only).',
+					iphone: false,
+					packageManagerCommand: null,
+					installAllCommand: 'winget install -e --id ImageMagick.ImageMagick\nwinget install -e --id OliverBetz.ExifTool',
+					summaryStatus: 'missing',
+					summaryLine: '3 ready · 0 system · 2 missing',
+					tools: [
+						{ name: 'ffmpeg / ffprobe', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'magick (ImageMagick)', status: 'fail', text: 'No portable download for this OS', command: 'winget install -e --id ImageMagick.ImageMagick' },
+						{ name: 'exiftool', status: 'fail', text: 'Download failed', command: 'winget install -e --id OliverBetz.ExifTool' },
+						{ name: 'adb', status: 'ready', text: 'Ready (downloaded)' },
+						{ name: 'avifenc (libavif)', status: 'ready', text: 'Ready (downloaded)' },
+					],
+				},
+			};
+
+			function renderCmdRow(hintParent, command) {
+				var hint = document.createElement('div');
+				hint.className = 'tool-install-hint';
+				var hintLabel = document.createElement('span');
+				hintLabel.className = 'tool-install-hint-label';
+				hintLabel.textContent = 'Install:';
+				var cmdRow = document.createElement('div');
+				cmdRow.className = 'tool-install-cmd-row';
+				var code = document.createElement('code');
+				code.textContent = command;
+				var copyBtn = document.createElement('button');
+				copyBtn.type = 'button';
+				copyBtn.className = 'btn btn-secondary tool-install-copy';
+				copyBtn.textContent = 'Copy';
+				copyBtn.addEventListener('click', function () {
+					copyBtn.textContent = 'Copied';
+					window.setTimeout(function () {
+						copyBtn.textContent = 'Copy';
+					}, 1500);
+				});
+				cmdRow.appendChild(code);
+				cmdRow.appendChild(copyBtn);
+				hint.appendChild(hintLabel);
+				hint.appendChild(cmdRow);
+				hintParent.appendChild(hint);
+			}
+
+			function renderComponentsOs(os) {
+				var demo = demos[os];
+				if (!demo || !list) {
+					return;
+				}
+				iphone.hidden = !demo.iphone;
+				label.textContent = demo.label;
+				Object.keys(osButtons).forEach(function (key) {
+					if (osButtons[key]) {
+						osButtons[key].setAttribute('aria-pressed', key === os ? 'true' : 'false');
+					}
+				});
+
+				var hasPm = !!demo.packageManagerCommand;
+				pmStep.hidden = !hasPm;
+				if (hasPm) {
+					pmCommand.textContent = demo.packageManagerCommand;
+				}
+
+				var hasBulk = !!demo.installAllCommand;
+				bulkStep.hidden = !hasBulk;
+				if (hasBulk) {
+					bulkTitle.textContent = hasPm ? '2. Install missing tools' : '1. Install missing tools';
+					bulkCommand.textContent = demo.installAllCommand;
+				}
+
+				chip.className = 'components-status-chip ' + demo.summaryStatus;
+				chip.textContent = demo.summaryStatus === 'ok' ? 'OK' : demo.summaryStatus === 'warning' ? 'Warning' : 'Missing';
+				summary.textContent = demo.summaryLine;
+				details.open = demo.summaryStatus !== 'ok';
+
+				list.replaceChildren();
+				demo.tools.forEach(function (tool) {
+					var block = document.createElement('div');
+					block.className = 'tool-block';
+					var row = document.createElement('div');
+					row.className = 'tool-row';
+					var name = document.createElement('span');
+					name.className = 'tool-name';
+					name.textContent = tool.name;
+					var status = document.createElement('span');
+					status.className = 'tool-status ' + tool.status;
+					status.textContent = tool.text;
+					row.appendChild(name);
+					row.appendChild(status);
+					block.appendChild(row);
+					if (tool.command) {
+						renderCmdRow(block, tool.command);
+					}
+					list.appendChild(block);
+				});
+			}
+			Object.keys(osButtons).forEach(function (key) {
+				osButtons[key].addEventListener('click', function () {
+					renderComponentsOs(key);
+					showView('components');
+				});
+			});
+			renderComponentsOs('macos');
+		})();
 		document.getElementById('btn-components-continue').addEventListener('click', function () {
 			showView('home');
 		});

@@ -4,7 +4,10 @@ import pytest
 
 from spacemaker.bootstrap.bundled_tools import (
 	BundledTool,
+	_tool_from_host_path_dirs,
 	_windows_magick_from_common_install_dirs,
+	components_tools,
+	ensure_host_tool_path_dirs,
 	resolve_tool_path,
 )
 
@@ -125,3 +128,108 @@ def test_given_windows_magick_dirs_when_newest_first_then_picks_latest_version(t
 	chosen = _windows_magick_from_common_install_dirs(roots=(program_files,))
 	assert chosen is not None
 	assert chosen.parent.name == "ImageMagick-7.1.2-Q16-HDRI"
+
+
+def test_given_host_bin_dir_missing_from_path_when_ensure_then_prepends(tmp_path: Path) -> None:
+	# given
+	brew_bin = tmp_path / "opt" / "homebrew" / "bin"
+	brew_bin.mkdir(parents=True)
+	env = {"PATH": "/usr/bin:/bin"}
+	# when
+	added = ensure_host_tool_path_dirs(environ=env, extra_dirs=(brew_bin,))
+	# then
+	assert added == [str(brew_bin)]
+	assert env["PATH"].startswith(f"{brew_bin}:")
+
+
+def test_given_host_bin_already_on_path_when_ensure_then_no_duplicate(tmp_path: Path) -> None:
+	# given
+	brew_bin = tmp_path / "opt" / "homebrew" / "bin"
+	brew_bin.mkdir(parents=True)
+	env = {"PATH": f"{brew_bin}:/usr/bin"}
+	# when
+	added = ensure_host_tool_path_dirs(environ=env, extra_dirs=(brew_bin,))
+	# then
+	assert added == []
+	assert env["PATH"] == f"{brew_bin}:/usr/bin"
+
+
+def test_given_brew_style_bin_when_which_misses_then_resolve_uses_host_dir(
+	tmp_path: Path,
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	# given
+	root = tmp_path / "tools"
+	root.mkdir()
+	brew_bin = tmp_path / "homebrew" / "bin"
+	brew_bin.mkdir(parents=True)
+	ffmpeg = brew_bin / "ffmpeg"
+	ffmpeg.write_text("stub")
+	ffmpeg.chmod(0o755)
+	monkeypatch.setattr(
+		"spacemaker.bootstrap.bundled_tools.host_tool_path_dirs",
+		lambda: [brew_bin],
+	)
+	# when
+	path = resolve_tool_path(
+		BundledTool.FFMPEG,
+		bundle_root_path=root,
+		platform_is_windows=False,
+		which=lambda _: None,
+		allow_path_fallback=True,
+	)
+	# then
+	assert path == ffmpeg
+
+
+def test_given_host_bin_when_probe_then_returns_executable(tmp_path: Path) -> None:
+	# given
+	brew_bin = tmp_path / "bin"
+	brew_bin.mkdir()
+	magick = brew_bin / "magick"
+	magick.write_text("stub")
+	magick.chmod(0o755)
+	# when
+	found = _tool_from_host_path_dirs(
+		BundledTool.MAGICK,
+		platform_is_windows=False,
+		dirs=(brew_bin,),
+	)
+	# then
+	assert found == magick
+
+
+def test_given_macos_when_components_tools_then_omits_afc():
+	# given
+	platform = "darwin"
+	# when
+	tools = components_tools(platform=platform)
+	# then
+	ids = {tool.value for tool in tools}
+	assert "ifuse" not in ids
+	assert "idevice_id" not in ids
+	assert "ffmpeg" in ids
+	assert "adb" in ids
+
+
+def test_given_windows_when_components_tools_then_omits_afc():
+	# given
+	platform = "win32"
+	# when
+	tools = components_tools(platform=platform)
+	# then
+	ids = {tool.value for tool in tools}
+	assert "ifuse" not in ids
+	assert "idevicepair" not in ids
+
+
+def test_given_linux_when_components_tools_then_includes_afc():
+	# given
+	platform = "linux"
+	# when
+	tools = components_tools(platform=platform)
+	# then
+	ids = {tool.value for tool in tools}
+	assert ids == {tool.value for tool in BundledTool}
+	assert "ifuse" in ids
+	assert "ideviceinfo" in ids

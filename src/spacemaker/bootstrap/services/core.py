@@ -42,7 +42,12 @@ from spacemaker.application.transfer_session import (
 	StageTransferItem,
 )
 from spacemaker.application.transfer_usb_files import TransferUsbFiles
-from spacemaker.bootstrap.bundled_tools import BundledTool, resolve_tool_path, tools_install_root
+from spacemaker.bootstrap.bundled_tools import (
+	BundledTool,
+	ensure_host_tool_path_dirs,
+	resolve_tool_path,
+	tools_install_root,
+)
 from spacemaker.bootstrap.paths import (
 	default_documents_receive_root,
 	default_library_root,
@@ -78,6 +83,7 @@ class WebSocketLike(Protocol):
 
 class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 	def __init__(self, *, port: int = 8765, bind_host: str = "0.0.0.0") -> None:
+		ensure_host_tool_path_dirs()
 		self.port = port
 		self.bind_host = bind_host
 		self.session = AppSession(library_root=normalize_library_root(default_library_root()))

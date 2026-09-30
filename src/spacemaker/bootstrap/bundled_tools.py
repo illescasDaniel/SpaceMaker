@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, MutableMapping
 from enum import StrEnum
 from pathlib import Path
 
@@ -21,6 +21,25 @@ class BundledTool(StrEnum):
 	IDEVICE_PAIR = "idevicepair"
 	IDEVICE_INFO = "ideviceinfo"
 	IFUSE = "ifuse"
+
+
+# iPhone USB / AFC — Linux-only on Components (extract-media / usb-file-transfer).
+_AFC_COMPONENTS_TOOLS = frozenset(
+	{
+		BundledTool.IDEVICE_ID,
+		BundledTool.IDEVICE_PAIR,
+		BundledTool.IDEVICE_INFO,
+		BundledTool.IFUSE,
+	},
+)
+
+
+def components_tools(*, platform: str | None = None) -> tuple[BundledTool, ...]:
+	"""Tools shown on Components for this OS (AFC tools are Linux-only)."""
+	plat = platform if platform is not None else sys.platform
+	if plat.startswith("linux"):
+		return tuple(BundledTool)
+	return tuple(tool for tool in BundledTool if tool not in _AFC_COMPONENTS_TOOLS)
 
 
 def is_frozen() -> bool:
@@ -53,6 +72,68 @@ def bundled_tool_path(tool: BundledTool, *, root: Path, platform_is_windows: boo
 
 def _executable_file(path: Path) -> bool:
 	return path.is_file()
+
+
+def host_tool_path_dirs() -> list[Path]:
+	"""Package-manager bin dirs that GUI / Dock launches often omit from PATH.
+
+	macOS apps started outside a login shell typically lack Homebrew
+	(``/opt/homebrew/bin`` on Apple Silicon, ``/usr/local/bin`` on Intel).
+	Linux desktop entries often miss ``~/.local/bin``.
+	"""
+	candidates: list[Path] = []
+	if sys.platform == "darwin":
+		candidates.extend(
+			(
+				Path("/opt/homebrew/bin"),
+				Path("/opt/homebrew/sbin"),
+				Path("/usr/local/bin"),
+				Path("/usr/local/sbin"),
+			),
+		)
+	elif sys.platform.startswith("linux"):
+		candidates.append(Path.home() / ".local" / "bin")
+	return [path for path in candidates if path.is_dir()]
+
+
+def ensure_host_tool_path_dirs(
+	*,
+	environ: MutableMapping[str, str] | None = None,
+	extra_dirs: tuple[Path, ...] | None = None,
+) -> list[str]:
+	"""Prepend existing host tool dirs to ``PATH``; return dirs that were added."""
+	env = os.environ if environ is None else environ
+	current = env.get("PATH", "")
+	parts = [part for part in current.split(os.pathsep) if part]
+	seen = {str(Path(part)) for part in parts}
+	dirs = list(extra_dirs) if extra_dirs is not None else host_tool_path_dirs()
+	prepend: list[str] = []
+	for directory in dirs:
+		if not directory.is_dir():
+			continue
+		key = str(directory)
+		if key in seen or key in prepend:
+			continue
+		prepend.append(key)
+	if prepend:
+		env["PATH"] = os.pathsep.join([*prepend, *parts]) if parts else os.pathsep.join(prepend)
+	return prepend
+
+
+def _tool_from_host_path_dirs(
+	tool: BundledTool,
+	*,
+	platform_is_windows: bool,
+	dirs: tuple[Path, ...] | None = None,
+) -> Path | None:
+	"""Fall back to well-known package-manager bins when ``which`` misses them."""
+	name = f"{tool.value}.exe" if platform_is_windows else tool.value
+	search = dirs if dirs is not None else tuple(host_tool_path_dirs())
+	for directory in search:
+		candidate = directory / name
+		if _executable_file(candidate):
+			return candidate
+	return None
 
 
 def _windows_magick_from_common_install_dirs(
@@ -114,6 +195,9 @@ def resolve_tool_path(
 			windows_magick = _windows_magick_from_common_install_dirs()
 			if windows_magick is not None:
 				return windows_magick
+		host_hit = _tool_from_host_path_dirs(tool, platform_is_windows=platform_is_windows)
+		if host_hit is not None:
+			return host_hit
 	raise FileNotFoundError(
 		f"Tool not found: {tool.value} (not in {root} and not on PATH). Use Components setup or install manually.",
 	)

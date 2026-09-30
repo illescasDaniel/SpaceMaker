@@ -22,6 +22,7 @@ from spacemaker.adapters.inbound.qt_webengine_shutdown import (
 	finalize_qt_after_webview,
 	install_qt_webengine_shutdown_fix,
 )
+from spacemaker.bootstrap.bundled_tools import ensure_host_tool_path_dirs
 from spacemaker.bootstrap.event_loop import uvicorn_loop_for_platform
 from spacemaker.bootstrap.logging_setup import configure_logging
 from spacemaker.bootstrap.paths import (
@@ -87,6 +88,7 @@ def _shutdown_services(services_holder: list[AppServices | None]) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+	ensure_host_tool_path_dirs()
 	configure_logging()
 	parser = argparse.ArgumentParser(prog="spacemaker")
 	parser.add_argument("--port", type=int, default=8765)

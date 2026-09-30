@@ -159,9 +159,9 @@ def test_given_fresh_app_when_get_tools_status_then_lists_tools() -> None:
 	body = response.json()
 	assert body["tools_dir"]
 	assert isinstance(body["tools"], list)
-	from spacemaker.bootstrap.bundled_tools import BundledTool
+	from spacemaker.bootstrap.bundled_tools import components_tools
 
-	assert len(body["tools"]) == len(BundledTool)
+	assert len(body["tools"]) == len(components_tools())
 
 
 def test_given_fresh_app_when_websocket_connects_then_receives_state() -> None:

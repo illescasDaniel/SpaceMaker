@@ -153,36 +153,177 @@
 		.components-lead {
 			color: var(--muted);
 			font-size: 0.9rem;
-			margin: 0 0 1.25rem;
+			margin: 0 0 1rem;
 		}
+
+		.components-step {
+			margin: 0 0 1rem;
+			padding: 0.75rem 0.85rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--surface);
+		}
+
+		.components-step[hidden] {
+			display: none;
+		}
+
+		.components-step-title {
+			margin: 0 0 0.35rem;
+			font-size: 0.85rem;
+			font-weight: 650;
+		}
+
+		.components-step-body {
+			margin: 0;
+			font-size: 0.82rem;
+			color: var(--muted);
+			line-height: 1.35;
+		}
+
+		.components-step-body + .tool-install-cmd-row {
+			margin-top: 0.5rem;
+		}
+
+		.components-status-block {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 0.65rem 1rem;
+			margin: 0 0 0.75rem;
+		}
+
+		.components-status-chip {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 5.5rem;
+			padding: 0.35rem 0.75rem;
+			border-radius: 6px;
+			font-size: 0.8rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+
+		.components-status-chip.ok {
+			background: color-mix(in srgb, var(--success) 18%, transparent);
+			color: var(--success);
+		}
+
+		.components-status-chip.warning {
+			background: var(--warn-bg);
+			color: var(--warn);
+		}
+
+		.components-status-chip.missing {
+			background: color-mix(in srgb, var(--error) 16%, transparent);
+			color: var(--error);
+		}
+
+		.components-status-summary {
+			margin: 0;
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+
+		.components-details {
+			margin: 0 0 0.5rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 0 0.65rem 0.35rem;
+		}
+
+		.components-details > summary {
+			cursor: pointer;
+			list-style: none;
+			padding: 0.55rem 0.2rem;
+			font-size: 0.85rem;
+			font-weight: 650;
+			user-select: none;
+		}
+
+		.components-details > summary::-webkit-details-marker {
+			display: none;
+		}
+
+		.components-details > summary::before {
+			content: "▸ ";
+			color: var(--muted);
+		}
+
+		.components-details[open] > summary::before {
+			content: "▾ ";
+		}
+
+		.tool-block {
+			padding: 0.35rem 0;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.tool-block:last-child { border-bottom: none; }
 
 		.tool-row {
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			gap: 1rem;
-			padding: 0.65rem 0;
-			border-bottom: 1px solid var(--border);
-			font-size: 0.9rem;
+			gap: 0.75rem;
+			font-size: 0.82rem;
 		}
-
-		.tool-row:last-child { border-bottom: none; }
 
 		.tool-name { font-weight: 600; }
 
 		.tool-status {
 			color: var(--muted);
-			font-size: 0.85rem;
+			font-size: 0.78rem;
 			text-align: right;
 			max-width: 14rem;
 		}
 
-		.tool-status.resolution-managed { color: var(--success); }
-		.tool-status.resolution-path { color: var(--warn); }
+		.tool-status.resolution-managed,
+		.tool-status.resolution-path { color: var(--success); }
 		.tool-status.resolution-missing { color: var(--error); }
 
+		.tool-install-hint {
+			margin: 0.2rem 0 0;
+			font-size: 0.72rem;
+			color: var(--muted);
+		}
+
+		.tool-install-hint-label {
+			display: block;
+			margin-bottom: 0.15rem;
+		}
+
+		.tool-install-cmd-row {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 0.4rem;
+		}
+
+		.tool-install-hint code,
+		.components-step code {
+			display: inline-block;
+			background: var(--surface2);
+			padding: 0.22rem 0.4rem;
+			border-radius: 4px;
+			font-size: 0.72rem;
+			word-break: break-all;
+			white-space: pre-wrap;
+			flex: 1 1 12rem;
+			min-width: 0;
+		}
+
+		.tool-install-copy {
+			margin-top: 0;
+			padding: 0.28rem 0.55rem;
+			font-size: 0.72rem;
+			flex: 0 0 auto;
+		}
+
 		.components-actions {
-			margin-top: 1.5rem;
+			margin-top: 1.25rem;
 			display: flex;
 			flex-wrap: wrap;
 			gap: 0.75rem;

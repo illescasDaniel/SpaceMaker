@@ -8,7 +8,6 @@ import sys
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import TypedDict, cast
 
 import httpx
 
@@ -17,15 +16,6 @@ from spacemaker.bootstrap.bundled_tools import BundledTool, bundled_tool_path
 from spacemaker.bootstrap.paths import managed_tools_dir
 from spacemaker.bootstrap.platform import platform_catalog_key
 from spacemaker.ports.outbound.tool_installer import ToolInstallResult
-
-
-class _PypiUrlItem(TypedDict, total=False):
-	packagetype: str
-	url: str
-
-
-class _PypiProjectMeta(TypedDict, total=False):
-	urls: list[_PypiUrlItem]
 
 
 class CatalogToolInstaller:
@@ -82,8 +72,6 @@ class CatalogToolInstaller:
 				return self._install_archive(tool_id, entry, kind="tar")
 			if strategy == "file":
 				return self._install_file(tool_id, entry)
-			if strategy == "static_ffmpeg_wheel":
-				return self._install_static_ffmpeg_wheel(entry)
 			return ToolInstallResult(tool_id=tool_id, ok=False, message=f"Unknown strategy: {strategy}")
 		except Exception as exc:
 			return ToolInstallResult(tool_id=tool_id, ok=False, message=str(exc) or exc.__class__.__name__)
@@ -199,47 +187,6 @@ class CatalogToolInstaller:
 		base_matches = [name for name in members if name.rsplit("/", 1)[-1] == basename]
 		if len(base_matches) == 1:
 			return members[base_matches[0]]
-		return None
-
-	def _install_static_ffmpeg_wheel(self, entry: CatalogEntry) -> ToolInstallResult:
-		version = str(entry.get("version", ""))
-		if not version:
-			return ToolInstallResult(tool_id="ffmpeg", ok=False, message="Missing wheel version")
-		meta_url = f"https://pypi.org/pypi/static-ffmpeg/{version}/json"
-		response = httpx.get(meta_url, timeout=120.0, follow_redirects=True)
-		response.raise_for_status()
-		meta = cast(_PypiProjectMeta, response.json())
-		wheel_url = self._pick_wheel_url(meta)
-		if not wheel_url:
-			return ToolInstallResult(tool_id="ffmpeg", ok=False, message="No compatible static-ffmpeg wheel")
-		data = self._download_bytes(wheel_url)
-		with zipfile.ZipFile(io.BytesIO(data)) as archive:
-			ffmpeg_member = self._find_wheel_member(archive, "ffmpeg")
-			ffprobe_member = self._find_wheel_member(archive, "ffprobe")
-			if not ffmpeg_member or not ffprobe_member:
-				return ToolInstallResult(tool_id="ffmpeg", ok=False, message="Wheel missing ffmpeg/ffprobe")
-			ffmpeg_bytes = archive.read(ffmpeg_member)
-			ffprobe_bytes = archive.read(ffprobe_member)
-		ffmpeg_dest = bundled_tool_path(BundledTool.FFMPEG, root=self._dest, platform_is_windows=self._windows)
-		ffprobe_dest = bundled_tool_path(BundledTool.FFPROBE, root=self._dest, platform_is_windows=self._windows)
-		ffmpeg_dest.write_bytes(ffmpeg_bytes)
-		ffprobe_dest.write_bytes(ffprobe_bytes)
-		self._make_executable(ffmpeg_dest)
-		self._make_executable(ffprobe_dest)
-		return ToolInstallResult(tool_id="ffmpeg", ok=True)
-
-	def _pick_wheel_url(self, meta: _PypiProjectMeta) -> str | None:
-		urls = meta.get("urls", [])
-		for item in urls:
-			if isinstance(item, dict) and item.get("packagetype") == "bdist_wheel":
-				return str(item.get("url", ""))
-		return None
-
-	def _find_wheel_member(self, archive: zipfile.ZipFile, name: str) -> str | None:
-		for member in archive.namelist():
-			base = member.rsplit("/", 1)[-1]
-			if base == name or base == f"{name}.exe":
-				return member
 		return None
 
 	def _download_bytes(self, url: str) -> bytes:

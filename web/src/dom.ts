@@ -21,6 +21,36 @@ export function errorMessage(err: unknown, fallback: string): string {
 	return err instanceof Error && err.message ? err.message : fallback;
 }
 
+/** Copy text for desktop shells where selection may be unavailable. */
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+	if (!text) {
+		return false;
+	}
+	try {
+		if (navigator.clipboard?.writeText) {
+			await navigator.clipboard.writeText(text);
+			return true;
+		}
+	} catch {
+		/* fall through */
+	}
+	const area = document.createElement("textarea");
+	area.value = text;
+	area.setAttribute("readonly", "");
+	area.style.position = "fixed";
+	area.style.left = "-9999px";
+	document.body.appendChild(area);
+	area.select();
+	let ok = false;
+	try {
+		ok = document.execCommand("copy");
+	} catch {
+		ok = false;
+	}
+	area.remove();
+	return ok;
+}
+
 export function isAbsolutePath(path: string): boolean {
 	if (!path) {
 		return false;

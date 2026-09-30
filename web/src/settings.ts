@@ -1,9 +1,13 @@
-import { apiSend } from "./api.ts";
-import { errorMessage, onClick, showFormBanner } from "./dom.ts";
+import { apiGet, apiSend } from "./api.ts";
+import { COMPONENTS_POLL_MS, detailsExpandedForSummary, shouldRunComponentsPoll } from "./components-setup.ts";
+import { copyTextToClipboard, errorMessage, onClick, showFormBanner } from "./dom.ts";
 import { loadGallery } from "./gallery-timeline.ts";
 import { applyState, showView } from "./shell.ts";
 import { S } from "./state.ts";
 import type { AppSnapshot, ManagedToolsStatus, ToolStatusRow } from "./types.ts";
+
+let componentsPollTimer: ReturnType<typeof setInterval> | null = null;
+let componentsPollInFlight = false;
 
 function toolsBlockMainApp(next: AppSnapshot | null | undefined): boolean {
 	return !!next?.tools_setup_pending;
@@ -35,12 +39,29 @@ function toolStatusText(tool: ToolStatusRow): string {
 		return "Ready (downloaded)";
 	}
 	if (tool.resolution === "path") {
-		return "Using system install (you chose Continue)";
+		return "Using system install";
 	}
 	if (tool.phase === "failed") {
 		return tool.message || "Download failed";
 	}
 	return tool.message || "Not downloaded yet";
+}
+function bindCopyButton(btn: HTMLElement | null, getCommand: () => string): void {
+	if (!(btn instanceof HTMLButtonElement)) {
+		return;
+	}
+	btn.addEventListener("click", () => {
+		const command = getCommand();
+		if (!command) {
+			return;
+		}
+		void copyTextToClipboard(command).then((ok) => {
+			btn.textContent = ok ? "Copied" : "Copy failed";
+			window.setTimeout(() => {
+				btn.textContent = "Copy";
+			}, 1500);
+		});
+	});
 }
 function fillToolStatusList(container: HTMLElement | null, tools: ToolStatusRow[] | undefined): void {
 	if (!container || !tools) {
@@ -48,6 +69,8 @@ function fillToolStatusList(container: HTMLElement | null, tools: ToolStatusRow[
 	}
 	container.innerHTML = "";
 	tools.forEach((tool) => {
+		const block = document.createElement("div");
+		block.className = "tool-block";
 		const row = document.createElement("div");
 		row.className = "tool-row";
 		const name = document.createElement("span");
@@ -58,36 +81,87 @@ function fillToolStatusList(container: HTMLElement | null, tools: ToolStatusRow[
 		status.textContent = toolStatusText(tool);
 		row.appendChild(name);
 		row.appendChild(status);
-		container.appendChild(row);
+		block.appendChild(row);
+		if (tool.install_command) {
+			const hint = document.createElement("div");
+			hint.className = "tool-install-hint";
+			const label = document.createElement("span");
+			label.className = "tool-install-hint-label";
+			label.textContent = "Install:";
+			const cmdRow = document.createElement("div");
+			cmdRow.className = "tool-install-cmd-row";
+			const code = document.createElement("code");
+			code.textContent = tool.install_command;
+			const copyBtn = document.createElement("button");
+			copyBtn.type = "button";
+			copyBtn.className = "btn btn-secondary tool-install-copy";
+			copyBtn.textContent = "Copy";
+			copyBtn.setAttribute("aria-label", `Copy install command for ${toolDisplayName(tool.tool_id)}`);
+			const command = tool.install_command;
+			copyBtn.addEventListener("click", () => {
+				void copyTextToClipboard(command).then((ok) => {
+					copyBtn.textContent = ok ? "Copied" : "Copy failed";
+					window.setTimeout(() => {
+						copyBtn.textContent = "Copy";
+					}, 1500);
+				});
+			});
+			cmdRow.appendChild(code);
+			cmdRow.appendChild(copyBtn);
+			hint.appendChild(label);
+			hint.appendChild(cmdRow);
+			block.appendChild(hint);
+		}
+		container.appendChild(block);
 	});
 }
-function renderComponentsSetupHint(managedTools: ManagedToolsStatus | undefined): void {
-	const el = document.getElementById("components-setup-hint");
+function renderIphoneUsbHint(managedTools: ManagedToolsStatus | undefined): void {
+	const el = document.getElementById("components-iphone-packages");
 	if (!el) {
 		return;
 	}
-	const hint = managedTools?.setup_hint;
-	if (!hint?.command) {
-		el.hidden = true;
-		el.textContent = "";
-		return;
+	el.hidden = !managedTools?.show_iphone_usb_hint;
+}
+function renderComponentsSteppedChrome(managedTools: ManagedToolsStatus): void {
+	const pmStep = document.getElementById("components-pm-step");
+	const pmCommand = document.getElementById("components-pm-command");
+	const bulkStep = document.getElementById("components-bulk-step");
+	const bulkTitle = document.getElementById("components-bulk-step-title");
+	const bulkCommand = document.getElementById("components-bulk-command");
+	const chip = document.getElementById("components-status-chip");
+	const summary = document.getElementById("components-status-summary");
+	const details = document.getElementById("components-details");
+
+	const pmCmd = managedTools.package_manager_command || "";
+	if (pmStep) {
+		pmStep.hidden = !pmCmd;
 	}
-	el.hidden = false;
-	el.replaceChildren();
-	if (hint.title) {
-		const title = document.createElement("strong");
-		title.textContent = hint.title;
-		el.appendChild(title);
-		el.appendChild(document.createElement("br"));
+	if (pmCommand && pmCmd) {
+		pmCommand.textContent = pmCmd;
 	}
-	if (hint.detail) {
-		const detail = document.createElement("span");
-		detail.textContent = hint.detail + " ";
-		el.appendChild(detail);
+
+	const bulkCmd = managedTools.install_all_command || "";
+	if (bulkStep) {
+		bulkStep.hidden = !bulkCmd;
 	}
-	const code = document.createElement("code");
-	code.textContent = hint.command;
-	el.appendChild(code);
+	if (bulkTitle) {
+		bulkTitle.textContent = pmCmd ? "2. Install missing tools" : "1. Install missing tools";
+	}
+	if (bulkCommand && bulkCmd) {
+		bulkCommand.textContent = bulkCmd;
+	}
+
+	const status = managedTools.summary_status || "missing";
+	if (chip) {
+		chip.className = "components-status-chip " + status;
+		chip.textContent = status === "ok" ? "OK" : status === "warning" ? "Warning" : "Missing";
+	}
+	if (summary) {
+		summary.textContent = managedTools.summary_line || "";
+	}
+	if (details instanceof HTMLDetailsElement) {
+		details.open = managedTools.details_expanded ?? detailsExpandedForSummary(status);
+	}
 }
 function renderComponentsList(managedTools: ManagedToolsStatus | undefined): void {
 	if (!managedTools?.tools) {
@@ -95,10 +169,48 @@ function renderComponentsList(managedTools: ManagedToolsStatus | undefined): voi
 	}
 	fillToolStatusList(document.getElementById("components-tool-list"), managedTools.tools);
 	fillToolStatusList(document.getElementById("settings-tool-list"), managedTools.tools);
-	renderComponentsSetupHint(managedTools);
+	renderIphoneUsbHint(managedTools);
+	renderComponentsSteppedChrome(managedTools);
 	const settingsDir = document.getElementById("settings-managed-tools-dir");
 	if (settingsDir && managedTools.tools_dir) {
 		settingsDir.textContent = managedTools.tools_dir;
+	}
+}
+function stopComponentsPoll(): void {
+	if (componentsPollTimer !== null) {
+		clearInterval(componentsPollTimer);
+		componentsPollTimer = null;
+	}
+}
+function pollComponentsStatusOnce(): void {
+	if (currentViewId() !== "view-components" || componentsPollInFlight) {
+		return;
+	}
+	componentsPollInFlight = true;
+	apiGet<ManagedToolsStatus>("/api/tools/status")
+		.then((payload) => {
+			renderComponentsList(payload);
+			if (S.state) {
+				S.state.managed_tools = payload;
+				S.state.tools_setup_pending = payload.setup_pending;
+			}
+		})
+		.catch(() => {
+			/* keep last good snapshot */
+		})
+		.finally(() => {
+			componentsPollInFlight = false;
+		});
+}
+function startComponentsPoll(): void {
+	stopComponentsPoll();
+	componentsPollTimer = setInterval(pollComponentsStatusOnce, COMPONENTS_POLL_MS);
+}
+function syncComponentsPollForView(): void {
+	if (shouldRunComponentsPoll(currentViewId())) {
+		startComponentsPoll();
+	} else {
+		stopComponentsPoll();
 	}
 }
 function shouldPromptComponentsSetup(next: AppSnapshot | null | undefined): boolean {
@@ -113,11 +225,13 @@ function shouldPromptComponentsSetup(next: AppSnapshot | null | undefined): bool
 }
 function maybeShowComponentsScreen(next: AppSnapshot): void {
 	if (!shouldPromptComponentsSetup(next)) {
+		syncComponentsPollForView();
 		return;
 	}
 	const viewId = currentViewId();
 	if (viewId === "view-settings" || viewId === "view-settings-tools" || viewId === "view-legal") {
 		renderComponentsList(next.managed_tools);
+		syncComponentsPollForView();
 		return;
 	}
 	renderComponentsList(next.managed_tools);
@@ -126,6 +240,7 @@ function maybeShowComponentsScreen(next: AppSnapshot): void {
 	if (continueBtn instanceof HTMLButtonElement) {
 		continueBtn.disabled = false;
 	}
+	startComponentsPoll();
 }
 function runComponentsEnsure(): Promise<ManagedToolsStatus> {
 	return apiSend<ManagedToolsStatus>("POST", "/api/tools/ensure").then((payload) => {
@@ -134,6 +249,12 @@ function runComponentsEnsure(): Promise<ManagedToolsStatus> {
 	});
 }
 function bindSettingsDesktop(): void {
+	bindCopyButton(document.getElementById("btn-components-pm-copy"), () => {
+		return document.getElementById("components-pm-command")?.textContent || "";
+	});
+	bindCopyButton(document.getElementById("btn-components-bulk-copy"), () => {
+		return document.getElementById("components-bulk-command")?.textContent || "";
+	});
 	function showSettingsFeedback(message: string): void {
 		const feedback = document.getElementById("settings-feedback");
 		if (!feedback) {
@@ -199,17 +320,22 @@ function bindSettingsDesktop(): void {
 			renderComponentsList(S.state.managed_tools);
 		}
 		showView("settings-tools");
+		stopComponentsPoll();
 	});
 	onClick("btn-settings-legal", () => {
 		showView("legal");
+		stopComponentsPoll();
 	});
 	onClick("btn-settings-tools-back", () => {
 		showView("settings");
+		stopComponentsPoll();
 	});
 	document.getElementById("btn-legal-back")?.addEventListener("click", () => {
 		showView("settings");
+		stopComponentsPoll();
 	});
 	onClick("btn-components-continue", () => {
+		stopComponentsPoll();
 		apiSend<ManagedToolsStatus>("POST", "/api/tools/components-continue")
 			.then((payload) => {
 				sessionStorage.setItem(S.COMPONENTS_DISMISS_KEY, "1");
@@ -222,6 +348,7 @@ function bindSettingsDesktop(): void {
 			})
 			.catch((err: unknown) => {
 				showFormBanner(errorMessage(err, "Could not continue setup."));
+				syncComponentsPollForView();
 			});
 	});
 	onClick("btn-components-retry", () => {
@@ -243,6 +370,7 @@ function bindSettingsDesktop(): void {
 			.then(() => {
 				if (S.state && toolsBlockMainApp(S.state)) {
 					showView("components", { skipHistory: true });
+					startComponentsPoll();
 				}
 			})
 			.catch((err: unknown) => {
@@ -262,9 +390,12 @@ export {
 	fillToolStatusList,
 	maybeShowComponentsScreen,
 	renderComponentsList,
-	renderComponentsSetupHint,
+	renderIphoneUsbHint,
 	runComponentsEnsure,
 	shouldPromptComponentsSetup,
+	startComponentsPoll,
+	stopComponentsPoll,
+	syncComponentsPollForView,
 	toolDisplayName,
 	toolStatusText,
 	toolsBlockMainApp,

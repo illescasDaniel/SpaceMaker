@@ -22,7 +22,13 @@ import {
 import { bindHomeDesktop } from "./home-bind.js";
 import { updateConvertUi, updateExtractButtons, updateExtractUi, updateVisualizeUi, updateWarnings } from "./jobs.js";
 import { bindLanDesktop, updateReceiveUi, updateSendUi, updateTransferUi } from "./lan.js";
-import { bindSettingsDesktop, maybeShowComponentsScreen, renderComponentsList, toolsBlockMainApp } from "./settings.js";
+import {
+	bindSettingsDesktop,
+	maybeShowComponentsScreen,
+	renderComponentsList,
+	syncComponentsPollForView,
+	toolsBlockMainApp,
+} from "./settings.js";
 import { bootDesktopSession } from "./shell-boot.js";
 import { bindDesktopChrome } from "./shell-chrome.js";
 import { S } from "./state.js";
@@ -176,6 +182,7 @@ function showView(viewId, options) {
 	});
 	document.getElementById("view-" + resolved)?.classList.add("active");
 	syncGalleryPhoneHelpVisibility(resolved);
+	syncComponentsPollForView();
 	if (isMainHubView(resolved) || resolved === "gallery" || resolved === "gallery-item") {
 		document.querySelectorAll(".view-tabs button").forEach((b) => {
 			const tab = b.getAttribute("data-view");

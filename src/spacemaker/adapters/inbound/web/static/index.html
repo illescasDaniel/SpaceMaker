@@ -40,10 +40,37 @@
 	<section id="view-components" class="screen" aria-label="Required components">
 		<div class="components-screen">
 			<h2>Setting up components</h2>
-			<p class="components-lead">SpaceMaker downloads pinned FFmpeg, ExifTool, adb, avifenc, and other tools into a folder on your computer and uses those copies first. Stay on this screen until downloads finish. Continue only if a download failed and you already installed that tool on your system (see the hint below on Windows for ImageMagick).</p>
-			<p class="folder-hint" id="components-iphone-packages"><strong>Linux — iPhone USB backup:</strong> install distro packages <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> (provides <code>idevice_id</code>, <code>idevicepair</code>, <code>ideviceinfo</code>, and <code>ifuse</code> on your <code>PATH</code>). Plug in the iPhone to start <code>usbmuxd</code>; unlock and tap <strong>Trust</strong> on the phone.</p>
-			<div id="components-tool-list"></div>
-			<p class="folder-hint" id="components-setup-hint" hidden></p>
+			<p class="components-lead">Tools download when possible. Install anything still missing below — status refreshes every few seconds. Continue reloads PATH.</p>
+			<p class="folder-hint" id="components-iphone-packages" hidden><strong>iPhone USB backup:</strong> install distro packages <code>usbmuxd</code>, <code>libimobiledevice</code>, and <code>ifuse</code> (provides <code>idevice_id</code>, <code>idevicepair</code>, <code>ideviceinfo</code>, and <code>ifuse</code> on your <code>PATH</code>). Plug in the iPhone to start <code>usbmuxd</code>; unlock and tap <strong>Trust</strong> on the phone.</p>
+
+			<div class="components-step" id="components-pm-step" hidden>
+				<p class="components-step-title">1. Install package manager</p>
+				<p class="components-step-body">Missing package manager — download with this command in a system terminal:</p>
+				<div class="tool-install-cmd-row">
+					<code id="components-pm-command"></code>
+					<button type="button" class="btn btn-secondary tool-install-copy" id="btn-components-pm-copy">Copy</button>
+				</div>
+			</div>
+
+			<div class="components-step" id="components-bulk-step" hidden>
+				<p class="components-step-title" id="components-bulk-step-title">2. Install missing tools</p>
+				<p class="components-step-body">Download all missing tools using:</p>
+				<div class="tool-install-cmd-row">
+					<code id="components-bulk-command"></code>
+					<button type="button" class="btn btn-secondary tool-install-copy" id="btn-components-bulk-copy">Copy</button>
+				</div>
+			</div>
+
+			<div class="components-status-block" aria-live="polite">
+				<span class="components-status-chip missing" id="components-status-chip">Missing</span>
+				<p class="components-status-summary" id="components-status-summary">0 ready · 0 system · 0 missing</p>
+			</div>
+
+			<details class="components-details" id="components-details">
+				<summary>Details</summary>
+				<div id="components-tool-list"></div>
+			</details>
+
 			<div class="components-actions">
 				<button type="button" class="btn btn-primary" id="btn-components-continue">Continue</button>
 				<button type="button" class="btn btn-secondary" id="btn-components-retry">Retry downloads</button>

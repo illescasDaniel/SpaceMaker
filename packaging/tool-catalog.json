@@ -80,8 +80,6 @@
 				"url": "https://dl.google.com/android/repository/platform-tools_r35.0.2-darwin.zip",
 				"files": { "adb": "platform-tools/adb" }
 			},
-			"ffmpeg": { "strategy": "static_ffmpeg_wheel", "version": "2.13" },
-			"ffprobe": { "companion_of": "ffmpeg" },
 			"avifenc": {
 				"strategy": "zip",
 				"url": "https://github.com/AOMediaCodec/libavif/releases/download/v1.4.2/macOS-artifacts.zip",
@@ -94,8 +92,6 @@
 				"url": "https://dl.google.com/android/repository/platform-tools_r35.0.2-darwin.zip",
 				"files": { "adb": "platform-tools/adb" }
 			},
-			"ffmpeg": { "strategy": "static_ffmpeg_wheel", "version": "2.13" },
-			"ffprobe": { "companion_of": "ffmpeg" },
 			"avifenc": {
 				"strategy": "zip",
 				"url": "https://github.com/AOMediaCodec/libavif/releases/download/v1.4.2/macOS-artifacts.zip",

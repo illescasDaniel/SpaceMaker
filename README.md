@@ -82,9 +82,12 @@ In-app: **About & Legal** in the footer.
 
 ```bash
 uv run task sync-dev          # install Python + dev dependencies
+npm ci                        # clean install from package-lock.json (Biome, TypeScript, webnav LSPs)
 uv run task spacemaker        # desktop (pywebview + local server)
 uv run task spacemaker-server # API/UI in browser only (no file picker)
 ```
+
+After editing `web/src/*.ts`, rebuild the static JS with `npm run build:web`.
 
 Contributor tool resolution: set **`SPACEMAKER_DEV=1`**, or override the managed folder with **`SPACEMAKER_TOOLS_DIR`**. See [tools/README.md](tools/README.md).
 

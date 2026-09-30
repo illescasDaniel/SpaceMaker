@@ -143,13 +143,7 @@ export interface ToolStatusRow {
 	resolution: string;
 	path: string;
 	message: string;
-}
-
-/** Windows-only winget install hint from `spacemaker.bootstrap.platform_setup_hints.components_setup_hint`. */
-export interface ComponentsSetupHint {
-	title: string;
-	detail: string;
-	command: string;
+	install_command?: string | null;
 }
 
 export interface ManagedToolsStatus {
@@ -157,8 +151,13 @@ export interface ManagedToolsStatus {
 	all_ready: boolean;
 	downloads_pending: boolean;
 	setup_pending: boolean;
+	show_iphone_usb_hint?: boolean;
+	summary_status?: "ok" | "warning" | "missing";
+	summary_line?: string;
+	details_expanded?: boolean;
+	package_manager_command?: string | null;
+	install_all_command?: string | null;
 	tools: ToolStatusRow[];
-	setup_hint?: ComponentsSetupHint;
 }
 
 /** Per-`LibraryFolder` file counts (`spacemaker.domain.library.LibraryFolder`: originals/processed/error/invalid). */

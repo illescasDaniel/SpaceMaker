@@ -101,3 +101,89 @@ def test_given_continue_marker_on_disk_when_new_service_then_setup_not_pending(t
 	first.allow_path_fallback()
 	second = ManagedToolsService(installer, dest_dir=dest)
 	assert second.setup_pending() is False
+
+
+def test_given_path_ffmpeg_before_continue_when_snapshot_then_path_green_convert_gated(
+	tmp_path: Path,
+	monkeypatch,
+):
+	# given
+	dest = tmp_path / "managed"
+	dest.mkdir()
+	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(dest))
+	system_ffmpeg = tmp_path / "bin" / "ffmpeg"
+	system_ffmpeg.parent.mkdir()
+	system_ffmpeg.write_text("stub")
+	system_ffmpeg.chmod(0o755)
+	monkeypatch.setattr(
+		"spacemaker.bootstrap.bundled_tools.shutil.which",
+		lambda name: str(system_ffmpeg) if name == "ffmpeg" else None,
+	)
+	service = ManagedToolsService(FakeInstaller(entries=set()), dest_dir=dest)
+	# when
+	ffmpeg = next(item for item in service.snapshot() if item.tool_id == "ffmpeg")
+	# then
+	assert ffmpeg.resolution == ToolResolution.PATH
+	assert service.permit_path_fallback(BundledTool.FFMPEG) is False
+	assert service.setup_pending() is True
+
+
+def test_given_path_only_tools_when_status_then_summary_ok_details_collapsed(tmp_path: Path, monkeypatch):
+	# given — every BundledTool resolves via PATH
+	dest = tmp_path / "managed"
+	dest.mkdir()
+	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(dest))
+	bins = tmp_path / "bin"
+	bins.mkdir()
+	for tool in BundledTool:
+		exe = bins / tool.value
+		exe.write_text("stub")
+		exe.chmod(0o755)
+	monkeypatch.setattr(
+		"spacemaker.bootstrap.bundled_tools.shutil.which",
+		lambda name: str(bins / name) if (bins / name).is_file() else None,
+	)
+	service = ManagedToolsService(FakeInstaller(entries=set()), dest_dir=dest)
+	# when
+	payload = service.status_dict()
+	# then
+	assert payload["summary_status"] == "ok"
+	assert payload["setup_pending"] is True
+	assert payload["details_expanded"] is False
+	assert payload["install_all_command"] is None
+
+
+def test_given_all_managed_when_status_then_summary_ok_setup_not_pending(tmp_path: Path, monkeypatch):
+	# given
+	dest = tmp_path / "managed"
+	dest.mkdir()
+	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(dest))
+	for tool in BundledTool:
+		path = bundled_tool_path(tool, root=dest, platform_is_windows=False)
+		path.write_text("stub")
+		path.chmod(0o755)
+	service = ManagedToolsService(FakeInstaller(entries=set()), dest_dir=dest)
+	# when
+	payload = service.status_dict()
+	# then
+	assert payload["summary_status"] == "ok"
+	assert payload["setup_pending"] is False
+	assert payload["details_expanded"] is False
+
+
+def test_given_continue_when_called_then_ensures_host_path_dirs(tmp_path: Path, monkeypatch):
+	# given
+	dest = tmp_path / "managed"
+	dest.mkdir()
+	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(dest))
+	called: list[bool] = []
+	monkeypatch.setattr(
+		"spacemaker.bootstrap.services.managed_tools.ensure_host_tool_path_dirs",
+		lambda: called.append(True),
+	)
+	service = ManagedToolsService(FakeInstaller(entries=set()), dest_dir=dest)
+	# when
+	service.allow_path_fallback()
+	# then
+	assert called == [True]
+	assert service.setup_pending() is False

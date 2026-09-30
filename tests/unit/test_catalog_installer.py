@@ -58,33 +58,3 @@ def test_given_zip_flatten_when_install_then_places_exiftool_tree(tmp_path: Path
 	assert result.ok is True
 	assert (tmp_path / "exiftool.exe").is_file()
 	assert (tmp_path / "exiftool_files" / "readme.txt").is_file()
-
-
-def test_given_failed_ffmpeg_on_windows_when_hint_then_includes_gyan_winget(monkeypatch):
-	from spacemaker.bootstrap import platform_setup_hints
-
-	monkeypatch.setattr(platform_setup_hints.sys, "platform", "win32")
-	hint = platform_setup_hints.components_setup_hint(
-		tools=[
-			{"tool_id": "ffmpeg", "phase": "failed", "resolution": "missing"},
-			{"tool_id": "magick", "phase": "idle", "resolution": "missing"},
-		],
-	)
-	assert hint is not None
-	assert "Gyan.FFmpeg" in hint["command"]
-	assert "ImageMagick.ImageMagick" in hint["command"]
-
-
-def test_given_managed_ffmpeg_when_hint_then_omits_gyan(monkeypatch):
-	from spacemaker.bootstrap import platform_setup_hints
-
-	monkeypatch.setattr(platform_setup_hints.sys, "platform", "win32")
-	hint = platform_setup_hints.components_setup_hint(
-		tools=[
-			{"tool_id": "ffmpeg", "phase": "ready", "resolution": "managed"},
-			{"tool_id": "magick", "phase": "idle", "resolution": "missing"},
-		],
-	)
-	assert hint is not None
-	assert "Gyan.FFmpeg" not in hint["command"]
-	assert "ImageMagick.ImageMagick" in hint["command"]

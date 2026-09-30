@@ -2,6 +2,36 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-09-30 — Components chip OK when all tools resolve (incl. PATH)
+
+- **Context:** Aggregate chip showed WARNING whenever any tool was system PATH-only, even with 0 missing and all-green rows; Details stayed expanded. Users read that as an error.
+- **Decision:** `summarize_tool_resolutions` returns OK when every resolution is managed or PATH; MISSING only when any is unresolved. Keep `ToolsSummaryStatus.WARNING` in the enum for legacy clients but do not emit it. `setup_pending` no longer keys off the chip — it stays true until Continue when any tool is PATH (or missing / downloads pending), so convert PATH fallback remains gated. No new ports. Lead copy + Details default follow chip OK (UI Phase 4).
+- **Rationale:** Matches approved wireframe/spec; managed vs system stays visible in the summary counts line without a scary chip; Continue trust gate must not depend on WARNING.
+
+## 2026-09-30 — Components omits AFC tools on macOS/Windows
+
+- **Context:** Components recommended `brew install ifuse` on macOS even though iPhone USB/AFC is Linux-only; Homebrew often has no ifuse bottle on current macOS.
+- **Decision:** `components_tools(platform=…)` filters `idevice_*` / `ifuse` out of Components status, ensure, downloads_pending, and chip counts on non-Linux. Drop those keys from `_MACOS_FORMULAS` / `_MACOS_PACKAGES`. `BundledTool` enum unchanged for Linux adapters.
+- **Rationale:** Matches extract-media Linux-only AFC scope; stops false MISSING / dead brew hints on Mac/Windows.
+
+## 2026-09-30 — Components stepped layout + live PATH before Continue
+
+- **Context:** After brew install hints, Components still looked “broken” until Continue, and PATH rows were amber; users install tools while the screen is open.
+- **Decision:** Status always probes host PATH for display (`resolution=path` green). Convert stays gated until Continue. Aggregate `summary_status` ok|warning|missing; optional PM + bulk install commands; Details `details_expanded`; UI polls ~3s while Components active. Continue calls `ensure_host_tool_path_dirs` then allows PATH fallback.
+- **Rationale:** Matches approved wireframe/spec; keeps first-run trust gate without hiding brew tools that are already installed.
+
+## 2026-09-30 — Prepend Homebrew / host package-manager bins to PATH
+
+- **Context:** Components could not resolve brew-installed `ffmpeg`/`magick`/`exiftool` after install. macOS GUI launches (and some IDE-spawned processes) get a minimal PATH without `/opt/homebrew/bin` or `/usr/local/bin`. Same class of gap as Windows ImageMagick under Program Files. Separately, PATH fallback remains gated until Components **Continue** (`components_setup_complete`); user’s marker was absent.
+- **Decision:** `ensure_host_tool_path_dirs()` at `desktop.main` and `AppServices` start prepends existing well-known dirs (macOS Homebrew bin/sbin, Linux `~/.local/bin`). `resolve_tool_path` also probes those dirs when `which` misses. Continue gate unchanged.
+- **Rationale:** Mutating PATH covers `shutil.which` and PATH-only deps (adbfs, idevice_*); probe covers resolve even if PATH was reset. Avoids shelling out to `brew --prefix`.
+
+## 2026-09-30 — Components: per-tool install_command (OS/distro), drop screen setup_hint
+
+- **Context:** macOS Components failed on broken `static_ffmpeg_wheel`; users need system install one-liners under each failed/missing tool, OS-gated (brew / winget / apt|dnf|pacman|paru|yay), including adb after download failure and PATH-only CLIs. Spec approved.
+- **Decision:** (1) Domain `ManagedToolStatus.install_command: str | None` — display-only; set only when `resolution` is missing (or phase failed) and a formula exists. (2) No new ports — formula map + Linux `/etc/os-release` (+ PATH probes for paru/yay/apt-get/dnf/pacman) live in `bootstrap/platform_setup_hints.py`; `ManagedToolsService.status_dict` attaches `install_command` per tool row and stops emitting screen-level `setup_hint`. (3) Catalog: remove macOS `static_ffmpeg_wheel`; delete unused wheel installer if nothing else uses it. (4) Web UI renders `.tool-install-hint` under each row; hide `#components-iphone-packages` unless Linux. (5) App never invokes package managers.
+- **Rationale:** Same trust model as today’s winget hint, but per-tool and multi-OS; domain carries the field so API/snapshot stay typed without a package-manager port.
+
 ## 2026-09-29 — MCP follow-up review fixes
 
 - **Context:** Review of 072fae3 found: hover lost its text if `typeDefinition` failed; the bare-type regex matched prose and enriched every `str`; restart left in-flight requests to time out; probe cache survived a client rebuild; `touch` on a config restarted the server; stale-code check ran every call.
