@@ -1,0 +1,56 @@
+/** The slice of LSP 3.17 payloads the tools read. Everything is optional: servers vary. */
+
+export interface Position {
+	line?: number;
+	character?: number;
+}
+
+export interface Range {
+	start?: Position;
+	end?: Position;
+}
+
+/** `Location` or `LocationLink`. */
+export interface LspLocation {
+	uri?: string;
+	range?: Range;
+	targetUri?: string;
+	targetRange?: Range;
+	targetSelectionRange?: Range;
+}
+
+/** `SymbolInformation`/`WorkspaceSymbol` (has `location`) or `DocumentSymbol` (has `range`). */
+export interface LspSymbol {
+	name?: string;
+	kind?: number;
+	location?: { uri?: string; range?: Range };
+	range?: Range;
+	selectionRange?: Range;
+	children?: LspSymbol[];
+}
+
+export interface LspDiagnostic {
+	range?: Range;
+	severity?: number;
+	code?: string | number | null;
+	message?: string;
+}
+
+export interface LspHover {
+	contents?: unknown;
+}
+
+/** Normalised symbol tree node (0-based lines). */
+export interface SymbolNode {
+	name: string;
+	kind: number | undefined;
+	startLine: number;
+	endLine: number;
+	children: SymbolNode[];
+}
+
+export interface CallHierarchyItemLike {
+	uri?: string;
+	name?: string;
+	[key: string]: unknown;
+}

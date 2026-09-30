@@ -1,0 +1,37 @@
+{
+	"name": "webnav-mcp",
+	"version": "0.0.0-prototype.0",
+	"description": "MCP server exposing JS/TS/HTML/CSS language-server features plus a workspace-wide CSS custom-property/selector index. TypeScript port of the Python webnav-mcp.",
+	"type": "module",
+	"license": "MIT",
+	"bin": {
+		"webnav-mcp": "dist/cli.js"
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">=20"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"lint": "biome check .",
+		"check": "npm run lint && npm run typecheck && npm test",
+		"pretest": "npm run build",
+		"test": "vitest run",
+		"parity": "node scripts/parity.mjs"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.31.0",
+		"typescript": "^7.0.2",
+		"vscode-jsonrpc": "^9.0.3",
+		"vscode-langservers-extracted": "^4.10.0",
+		"zod": "^4.6.5"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.14",
+		"@types/node": "^22.0.0",
+		"vitest": "^5.0.3"
+	}
+}

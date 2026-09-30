@@ -1,8 +1,8 @@
-_Last updated: 2026-09-30 (0.1.1 published; docs-build clean)_
+_Last updated: 2026-09-30 (webnav TypeScript port prototype on `claude/webnav-typescript-port`)_
 
 ## Branch
 
-Primary checkout `main`. Worktree `faak` / `cursor/094eb8f7` still on disk.
+`claude/webnav-typescript-port`: prototype of webnav in TypeScript (`experiments/webnav-mcp-ts/`), awaiting a go/no-go. Otherwise primary checkout `main`. Worktree `faak` / `cursor/094eb8f7` still on disk.
 
 ## Current focus
 
