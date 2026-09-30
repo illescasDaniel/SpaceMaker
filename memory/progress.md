@@ -4,6 +4,7 @@ Open items only. Finished work: `memory/archive.md`.
 
 ## SpaceMaker app
 
+- [x] **TypeScript 7 + webnav native tsc LSP** (2026-09-30) — CLI on `typescript@^7`; webnav launches `tsc --lsp --stdio` with package-local tooling for standalone; dropped `typescript-language-server`. Smoke + lang_command tests green; live Cursor webnav MCP verified after restart.
 - [x] **Components UX polish** (2026-09-30) — OK chip when all resolve (incl. PATH); short lead; Details collapsed when OK; `setup_pending` decoupled from chip (PATH still needs Continue). Code-grader **PASS**. `task checks` green (731).
 - [x] **Components: omit AFC tools on macOS/Windows** (2026-09-30) — `components_tools()` filters `idevice_*`/`ifuse` from Components on non-Linux; brew formulas dropped. Code-grader **PASS**. `task checks` green (729).
 - [x] **Components layout + live PATH detection** (2026-09-30) — Stepped Components (PM → bulk → OK/WARNING/MISSING → Details); live PATH green before Continue; 3s poll; Continue re-PATH; code-grader **PASS**; `task checks` green (723).

@@ -4,11 +4,11 @@ workspace-wide CSS custom-property/selector index (css_var, selector) as
 MCP tools.
 
 Multiplexes three Node-based language servers behind one MCP tool set,
-routed by file extension: `typescript-language-server` for `.js`/`.mjs`/
-`.cjs` (via `allowJs`) and `.ts`/`.mts`/`.cts` (sent with the `typescript`
-languageId), and `vscode-html-language-
-server`/`vscode-css-language-server` (from `vscode-langservers-extracted`)
-for `.html`/`.css`. Mirrors codenav_mcp's shape and its shared
+routed by file extension: TypeScript 7's native `tsc --lsp --stdio` for
+`.js`/`.mjs`/`.cjs` (via `allowJs`) and `.ts`/`.mts`/`.cts` (sent with the
+`typescript` languageId), and `vscode-html-language-server` /
+`vscode-css-language-server` (from `vscode-langservers-extracted`) for
+`.html`/`.css`. Mirrors codenav_mcp's shape and its shared
 `mcp_nav_shared.lsp_client.LspClient`; see docs/agent-tooling.md for details.
 
 Run standalone for manual testing:
@@ -113,7 +113,7 @@ mcp = MCPServer(
 	name="webnav",
 	instructions=(
 		"Code navigation for this project's JS/TS/HTML/CSS, backed by "
-		"typescript-language-server (JS/TS) and vscode-langservers-extracted "
+		"TypeScript 7 native tsc LSP (JS/TS) and vscode-langservers-extracted "
 		"(HTML/CSS). Prefer this over grepping for symbol definitions/usages. "
 		"Start with symbol_info (what is X) or outline (what's in this file) for "
 		"JS/TS; search_symbol is JS/TS-only (the HTML/CSS language servers don't "
@@ -131,7 +131,7 @@ logger = logging.getLogger(__name__)
 
 _JS_EXTENSIONS = {".js", ".mjs", ".cjs"}
 _TS_EXTENSIONS = {".ts", ".mts", ".cts"}
-# Everything the one typescript-language-server instance serves.
+# Everything the one TypeScript language-server instance serves.
 _SCRIPT_EXTENSIONS = _JS_EXTENSIONS | _TS_EXTENSIONS | {".jsx", ".tsx"}
 _SCRIPT_LANGUAGE_IDS = {
 	**dict.fromkeys(_JS_EXTENSIONS, "javascript"),
@@ -139,7 +139,7 @@ _SCRIPT_LANGUAGE_IDS = {
 	".jsx": "javascriptreact",
 	".tsx": "typescriptreact",
 }
-# typescript-language-server reads these once at startup; a change restarts it.
+# The TS language server reads these once at startup; a change restarts it.
 _TS_CONFIG_NAMES = frozenset({"tsconfig.json", "jsconfig.json", "package.json"})
 
 _notices = NoticeBoard("webnav", package_source_dirs(mcp_nav_shared, webnav_mcp))
@@ -244,10 +244,10 @@ def _js_files_fallback(workspace_root: Path) -> list[Path]:
 
 
 async def _open_project_files(client: LspClient) -> None:
-	# tsserver's workspace/symbol only searches files it has opened, so
-	# eagerly open the whole JS project here rather than leaving the
-	# first search_symbol call (agents' typical first lookup) to miss
-	# every file it hasn't happened to hover/define/reference first.
+	# workspace/symbol is most reliable when project files have been opened;
+	# eagerly open the JS/TS project here rather than leaving the first
+	# search_symbol call (agents' typical first lookup) to miss files that
+	# haven't happened to hover/define/reference first.
 	include_globs = _js_include_globs(WORKSPACE_ROOT)
 	if include_globs:
 		open_paths = [path for glob in include_globs for path in WORKSPACE_ROOT.glob(glob)]

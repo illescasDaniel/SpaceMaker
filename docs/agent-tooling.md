@@ -12,7 +12,7 @@ aimed at standalone consumers; SpaceMaker-specific wiring stays here.
 | Server | Language surface | Backend | Start here | This repo's roots |
 |--------|------------------|---------|------------|-------------------|
 | [`codenav`](../mcp-servers/codenav_mcp/README.md) | Python (`.py`/`.pyi`) | `ty` language server | `symbol_info`, `outline`, `callers`, `implementations` | `CODENAV_MCP_SOURCE_ROOT=src` |
-| [`webnav`](../mcp-servers/webnav_mcp/README.md) | JS / TS / HTML / CSS | `typescript-language-server` + vscode HTML/CSS servers | `symbol_info`, `outline`, `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
+| [`webnav`](../mcp-servers/webnav_mcp/README.md) | JS / TS / HTML / CSS | TypeScript 7 `tsc --lsp --stdio` + vscode HTML/CSS servers | `symbol_info`, `outline`, `css_var`, `selector`; then position tools | `WEBNAV_MCP_ROOTS` → `web/src` + `static/` + `wireframes/` |
 
 Shared helpers: [`mcp-nav-shared`](../mcp-servers/mcp-nav-shared/README.md).
 
@@ -413,7 +413,7 @@ tests importing `mcp_nav_shared` / `codenav_mcp` / `webnav_mcp` resolve (clean `
 check`, and codenav `references` include test usages).
 `diagnostics` falls back to the push `publishDiagnostics` cache when pull
 diagnostics are unsupported or empty (common for HTML/CSS servers, and always
-the case for `typescript-language-server`, which has no pull support). In that
+the case for some older servers with no pull support). In that
 push-only case `LspClient.diagnostics` awaits the first `publishDiagnostics`
 after the document was last synced (up to `PUSH_DIAGNOSTICS_TIMEOUT`, 5 s)
 rather than answering from a stale or empty cache — before this, the first
@@ -435,36 +435,35 @@ project's JS/TS/HTML/CSS (`symbol_info`, `outline`, `search_symbol`,
 Node-based language servers behind one MCP tool set, routed by file
 extension:
 
-- `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` → `typescript-language-server` (shell sources in
+- `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` → TypeScript 7 native LSP via
+  `tsc --lsp --stdio` (shell sources in
   `web/src/` via strict `web/tsconfig.json`; the emitted `static/js/*.js` is
   build output and is excluded from navigation via `WEBNAV_MCP_EXCLUDE`)
 - `.html` → `vscode-html-language-server`
 - `.css` → `vscode-css-language-server`
 
-Both come from the `vscode-langservers-extracted` npm package. `npm ci`
-(already required for Biome) pulls all three binaries into `node_modules/
-.bin/`; `mcp-servers/webnav_mcp/src/webnav_mcp/lang_command.py` resolves them there first,
-falling back to `PATH` and then `npx` — same fallback chain as codenav's ty
-resolver. On Windows it prefers the `.cmd` launcher under `.bin/` (the
-extensionless npm shim is a POSIX script that `CreateProcess` rejects with
-WinError 193); `npx` is resolved via `shutil.which` for the same reason.
+HTML/CSS binaries come from `vscode-langservers-extracted`. SpaceMaker's root
+`npm ci` (Node ≥ 18) installs `typescript@^7` for `tsc` check/emit and the
+HTML/CSS servers. webnav also owns a package-local install under
+`mcp-servers/webnav_mcp/` (`npm ci` there) so standalone launch does not depend
+on the host project's `node_modules`. `lang_command.py` resolves
+`tsc` / HTML / CSS in order: navigated workspace → webnav package → `PATH` →
+`npx` (`npx -p typescript@7 tsc --lsp --stdio` for JS/TS). On Windows it
+prefers the `.cmd` launcher under `.bin/` (the extensionless npm shim is a
+POSIX script that `CreateProcess` rejects with WinError 193); `npx` is
+resolved via `shutil.which` for the same reason.
 
-**Gotcha:** `typescript-language-server` needs `typescript` as a peer
-dependency it does not bundle — it resolves TS from the workspace's own
-`node_modules`, not from wherever the server binary itself came from. In a
-workspace with no local `typescript` install, `npx --yes
-typescript-language-server` alone starts the process but then fails at LSP
-`initialize` with "Could not find a valid TypeScript installation". The
-`npx` fallback therefore pulls in `-p typescript@5` alongside the server
-binary itself — pinned to the 5.x line, since an unpinned `-p typescript`
-can resolve the 7.x native-compiler preview, which ships a different
-package layout (no `lib/tsserverlibrary.js`) and breaks resolution the same
-way.
+**Gotcha:** TypeScript 7 no longer ships classic `tsserver.js`. webnav must
+launch the native binary (`tsc --lsp --stdio`), never
+`typescript-language-server`. A workspace still on TypeScript 5/6 is skipped
+for the local `tsc` shim; webnav then uses its own `typescript@7` install or
+the `npx` fallback so independent launch still works.
 
 `outline` lists top-level declarations in source order and leaves out the
 locals, callbacks and object-literal keys inside functions/variables
-(`detailed=true` brings them back) — tsserver returns siblings alphabetically
-with every local, which made the raw tree ~4 KB for a 500-line file.
+(`detailed=true` brings them back) — the language server may return siblings
+alphabetically with every local, which made the raw tree ~4 KB for a 500-line
+file.
 
 `search_symbol` only covers JS/TS: the HTML/CSS language servers don't
 implement a useful `workspace/symbol`, and webnav does **not** reimplement
@@ -652,7 +651,9 @@ The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-
   with `docs/ARCHITECTURE.md` on this Windows filesystem and briefly
   overwrote it — recovered from git history and merged. Watch for this with
   any new doc filename differing only by case.
-- webnav needs a full `npm ci` so `typescript-language-server` /
-  `vscode-*-language-server` exist under `node_modules/.bin/`. A partial
-  install (Biome only) forces the `npx` fallback, which also fails under
-  bare `CreateProcess` unless `npx` is resolved to `npx.cmd`.
+- webnav needs TypeScript 7 `tsc` plus `vscode-*-language-server` under a
+  resolvable `node_modules/.bin/` (SpaceMaker root `npm ci`, and/or
+  `npm ci` in `mcp-servers/webnav_mcp/` for standalone). A partial install
+  forces the `npx` fallback, which also fails under bare `CreateProcess`
+  unless `npx` is resolved to `npx.cmd`. Node ≥ 18 is required for the
+  TypeScript 7 npm shim.

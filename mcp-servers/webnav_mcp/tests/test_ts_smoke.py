@@ -1,30 +1,38 @@
-"""Live smoke: the real typescript-language-server serving `.ts` files.
+"""Live smoke: TypeScript 7 native LSP (`tsc --lsp --stdio`) serving `.ts` files.
 
-Skipped when the server binary isn't installed locally (`npm ci`). Marked
-integration like codenav's ty smoke so fast unit runs can exclude it.
+Skipped when no TypeScript 7 `tsc` is resolvable (`npm ci` at repo root or under
+`mcp-servers/webnav_mcp`). Marked integration like codenav's ty smoke so fast
+unit runs can exclude it.
 """
 
 from __future__ import annotations
 
 import asyncio
-import shutil
 from pathlib import Path
 
 import pytest
 from mcp_nav_shared.lsp_client import LspClient
-from webnav_mcp.lang_command import resolve_ts_command
+from webnav_mcp.lang_command import _is_typescript7_tsc, resolve_ts_command
 from webnav_mcp.server import _SCRIPT_LANGUAGE_IDS
 
 
 pytestmark = pytest.mark.integration
 
-# tests/test_ts_smoke.py -> webnav_mcp -> mcp-servers -> repo root (node_modules lives there).
+# tests/test_ts_smoke.py -> webnav_mcp -> mcp-servers -> repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
-_TS_SERVER_AVAILABLE = (
-	(_REPO_ROOT / "node_modules" / ".bin" / "typescript-language-server").is_file()
-	and (_REPO_ROOT / "node_modules" / "typescript").is_dir()
-) or shutil.which("typescript-language-server") is not None
+
+def _ts7_available() -> bool:
+	cmd = resolve_ts_command(_REPO_ROOT)
+	# npx fallback always counts as available; local/PATH only when it's TS7.
+	base = Path(cmd[0]).name.lower()
+	if base in {"npx", "npx.cmd"}:
+		return True
+	bin_path = Path(cmd[0])
+	return bin_path.is_file() and _is_typescript7_tsc(bin_path) and "--lsp" in cmd
+
+
+_TS_SERVER_AVAILABLE = _ts7_available()
 
 
 def _client(workspace: Path) -> LspClient:
@@ -36,9 +44,9 @@ def _client(workspace: Path) -> LspClient:
 	)
 
 
-@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="typescript-language-server not installed (npm ci)")
+@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="TypeScript 7 tsc not installed (npm ci)")
 def test_given_ts_type_error_when_diagnostics_then_first_call_reports_it(tmp_path):
-	# given — tsserver has no pull diagnostics; the push must be awaited, not skipped
+	# given — native LSP supports pull diagnostics; LspClient uses that path
 	bad = tmp_path / "bad.ts"
 	bad.write_text('export const n: number = "str";\n', encoding="utf-8")
 	good = tmp_path / "good.ts"
@@ -60,7 +68,7 @@ def test_given_ts_type_error_when_diagnostics_then_first_call_reports_it(tmp_pat
 	asyncio.run(_run())
 
 
-@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="typescript-language-server not installed (npm ci)")
+@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="TypeScript 7 tsc not installed (npm ci)")
 def test_given_edited_ts_file_when_diagnostics_then_reflects_new_content(tmp_path):
 	# given
 	src = tmp_path / "edit.ts"
@@ -82,7 +90,7 @@ def test_given_edited_ts_file_when_diagnostics_then_reflects_new_content(tmp_pat
 	asyncio.run(_run())
 
 
-@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="typescript-language-server not installed (npm ci)")
+@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="TypeScript 7 tsc not installed (npm ci)")
 def test_given_ts_files_when_hover_and_references_then_typed_and_cross_file(tmp_path):
 	# given
 	lib = tmp_path / "lib.ts"
@@ -107,7 +115,7 @@ def test_given_ts_files_when_hover_and_references_then_typed_and_cross_file(tmp_
 	asyncio.run(_run())
 
 
-@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="typescript-language-server not installed (npm ci)")
+@pytest.mark.skipif(not _TS_SERVER_AVAILABLE, reason="TypeScript 7 tsc not installed (npm ci)")
 def test_given_tsconfig_edited_when_refresh_then_server_restarts_and_uses_new_options(tmp_path):
 	# given — `null` is assignable to `string` until `strict` is switched on
 	tsconfig = tmp_path / "tsconfig.json"

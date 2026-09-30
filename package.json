@@ -1,6 +1,9 @@
 {
 	"name": "spacemaker-web",
 	"private": true,
+	"engines": {
+		"node": ">=18"
+	},
 	"scripts": {
 		"build:web": "tsc -p web/tsconfig.json && biome check --write src/spacemaker/adapters/inbound/web/static/js",
 		"check": "biome check . && tsc -p web/tsconfig.json --noEmit",
@@ -10,8 +13,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.0.0",
 		"@fortawesome/fontawesome-free": "^6.7.2",
-		"typescript": "^5.7.0",
-		"typescript-language-server": "^4.3.0",
+		"typescript": "^7.0.2",
 		"vscode-langservers-extracted": "^4.10.0"
 	}
 }

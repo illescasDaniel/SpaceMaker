@@ -7,7 +7,7 @@ single-file language servers can't provide. It's the front-end counterpart to
 
 ## Quick start
 
-You need [uv](https://docs.astral.sh/uv/) (or `pipx`) and Node.js with `npx`:
+You need [uv](https://docs.astral.sh/uv/) (or `pipx`) and Node.js ≥ 18:
 
 ```bash
 uvx webnav-mcp
@@ -42,18 +42,21 @@ Requests are routed to three Node language servers by file extension:
 
 | Extension | Backend |
 |-----------|---------|
-| `.js` / `.mjs` / `.cjs` / `.jsx` / `.ts` / `.mts` / `.cts` / `.tsx` | `typescript-language-server` (JS via `allowJs` / `jsconfig.json`) |
+| `.js` / `.mjs` / `.cjs` / `.jsx` / `.ts` / `.mts` / `.cts` / `.tsx` | TypeScript 7 native LSP: `tsc --lsp --stdio` (JS via `allowJs` / `jsconfig.json`) |
 | `.html` | `vscode-html-language-server` |
 | `.css` | `vscode-css-language-server` |
 
-Each binary is looked up in the project's `node_modules/.bin/`, then on
-`PATH`. If neither has it, webnav falls back to `npx --yes`, which downloads it
-on first use (the TypeScript fallback also pulls in `typescript@5`, a peer
-dependency the server doesn't bundle). To skip the download, install them in
-your project:
+**Resolution order** for `tsc` / HTML / CSS binaries: navigated project's
+`node_modules/.bin/` → webnav's own package-local install (see Development) →
+`PATH` → `npx --yes` (JS/TS: `npx -p typescript@7 tsc --lsp --stdio`). webnav
+does **not** use `typescript-language-server` — TypeScript 7 no longer ships
+classic `tsserver.js`.
+
+To skip downloads, install in the project (or under this package for
+standalone):
 
 ```bash
-npm install --save-dev typescript typescript-language-server vscode-langservers-extracted
+npm install --save-dev typescript@^7 vscode-langservers-extracted
 ```
 
 ## Tools
@@ -104,7 +107,7 @@ tab counts as one character).
 ## Requirements
 
 - Python ≥ 3.11
-- Node.js (for the language servers; see above)
+- Node.js ≥ 18 (for TypeScript 7's `tsc` shim and the HTML/CSS servers)
 - Installed automatically: [`mcp`](https://pypi.org/project/mcp/),
   [`mcp-nav-shared`](https://pypi.org/project/mcp-nav-shared/)
 
@@ -117,7 +120,9 @@ tab counts as one character).
 
 Developed in the [SpaceMaker](https://github.com/illescasDaniel/SpaceMaker)
 repository as a uv workspace member (`mcp-servers/webnav_mcp`). From a
-checkout: `uv sync --group dev`, then `uv run webnav-mcp`.
+checkout: `uv sync --group dev`, then `npm ci` in this directory (owns
+`typescript@^7` + `vscode-langservers-extracted` for standalone launch), then
+`uv run webnav-mcp`.
 
 ## License
 

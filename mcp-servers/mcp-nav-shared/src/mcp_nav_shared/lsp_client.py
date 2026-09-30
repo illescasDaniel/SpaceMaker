@@ -118,7 +118,7 @@ class LspClient:
 	# Told (in words) about anything the agent should know, e.g. a config-triggered restart.
 	on_notice: Callable[[str], None] | None = None
 	# Per-suffix override of `language_id` for servers that handle several
-	# languages (e.g. typescript-language-server: `.ts` -> "typescript").
+	# languages (e.g. typescript-go / tsc LSP: `.ts` -> "typescript").
 	language_ids: dict[str, str] = field(default_factory=dict)
 	_proc: asyncio.subprocess.Process | None = field(default=None, init=False)
 	_next_id: int = field(default=0, init=False)
@@ -126,8 +126,8 @@ class LspClient:
 	_diagnostics: dict[str, list[dict[str, Any]]] = field(default_factory=dict, init=False)
 	_open_files: dict[str, OpenFile] = field(default_factory=dict, init=False)
 	# uri -> event set by the first publishDiagnostics after the document was
-	# last synced; lets push-only servers (typescript-language-server has no
-	# pull support) be awaited instead of answered from a stale/empty cache.
+	# last synced; lets push-only servers (no pull diagnostics) be awaited
+	# instead of answered from a stale/empty cache.
 	_diag_events: dict[str, asyncio.Event] = field(default_factory=dict, init=False)
 	# uri -> (document version, documentSymbol result). documentSymbol depends
 	# only on the one file's text, and `ensure_open` bumps the version exactly
