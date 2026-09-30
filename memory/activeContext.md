@@ -1,20 +1,20 @@
-_Last updated: 2026-09-30 (TS7 committed; applying worktree to main)_
+_Last updated: 2026-09-30 (TS7 applied onto main)_
 
 ## Branch
 
-Worktree `faak` (`cursor/094eb8f7`) — TypeScript 7 + webnav native `tsc` LSP.
+Primary checkout `main` @ `e79112d` (ahead of `origin/main` by 1). Worktree `faak` / `cursor/094eb8f7` still on disk.
 
 ## Current focus
 
-`/save-changes` (no push) then `/apply-worktree` into primary checkout `main`.
+TypeScript 7 + webnav native `tsc` LSP landed on `main` via `/apply-worktree`. Gate green.
 
 ## Just changed
 
-- Root `typescript@^7`, dropped `typescript-language-server`; webnav owns package-local `tsc` LSP tooling.
-- Live webnav MCP verified after restart (`symbol_info`/`hover`/`diagnostics`/`outline`/`search_symbol` on TS7).
+- Fast-forward merge of `cursor/094eb8f7` → `main` (`e79112d`).
+- `npm ci` (root + `mcp-servers/webnav_mcp`); `uv run task checks` green (742).
 
 ## Next steps
 
-1. Merge `cursor/094eb8f7` into primary `main` checkout; run `uv run task checks`.
-2. Restart webnav MCP on primary after apply if needed.
-3. Optional later: publish MCP packages (PyPI token); `/delete-worktree` when done with `faak`.
+1. Push `main` when ready (`git push`; skipped by `/save-changes` request).
+2. Restart webnav MCP if the primary session still has the old launcher loaded.
+3. Optional: publish MCP packages (PyPI token); `/delete-worktree` for `faak` when finished with it.
