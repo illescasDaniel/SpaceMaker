@@ -22,13 +22,13 @@ def resolve_name_query(
 
 		resolve_name_query(
 			preferred="name",
-			example="JobsMixin.start_convert",
+			example="UserService.create_user",
 			name=name,
 			query=query,
 		)
 		resolve_name_query(
 			preferred="query",
-			example="start_convert",
+			example="create_user",
 			query=query,
 			name=name,
 		)

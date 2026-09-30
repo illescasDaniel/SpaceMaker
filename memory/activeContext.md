@@ -1,18 +1,27 @@
-_Last updated: 2026-09-30 (saved Components work)_
+_Last updated: 2026-09-30 (MCP PyPI readiness merged into local `main`, not pushed)_
 
 ## Branch
 
-`main` (primary checkout) — Components setup work committed.
+`main` (primary checkout). Contains the Components UX work (`2d519d6`) and the merged `claude/mcp-tools-pypi-review-727d33` (MCP PyPI readiness pass). **Not pushed**: test first.
 
 ## Current focus
 
-None in-flight. Components UX polish + AFC omit + layout/PATH/hints landed.
+1. Test the merged MCP servers: restart them from this checkout (they run the primary's source), then exercise codenav/webnav, especially webnav `references`/`definition` on a name inside an HTML `id="…"`/`class="…"`, and a codenav tool error path.
+2. Components smoke: restart the app → Components shows OK (not WARNING) when all tools resolve/system, Details collapsed, shorter lead; no ifuse/idevice on macOS.
 
-## Just changed (this commit)
+## Just changed
 
-Components screen: OK chip when all tools resolve (managed or PATH); short lead; Details collapsed when OK; `setup_pending` still requires Continue for PATH-only. Also includes stepped layout, live PATH, Homebrew PATH prepend, per-tool install hints, and Linux-only AFC on Components.
+- MCP packages (see `progress.md` / `decisions.md` 2026-09-30): codenav finds its bundled `ty`; language-server exit errors quote stderr; console scripts, LICENSE in wheels, PyPI metadata, rewritten READMEs, generic tool examples, `docs/agent-tooling.md` "Publishing to PyPI".
+- Components UX polish work from `2d519d6` (see `progress.md`).
 
 ## Next steps
 
-1. Smoke: restart app → Components — OK (not WARNING) when all green/system, Details collapsed, shorter lead; no ifuse/idevice on macOS.
-2. Optional: open a PR if this should leave `main` via review first (already on `main` locally).
+1. After testing, push `main`.
+2. Publish (needs your PyPI token): `uv build --package mcp-nav-shared`, then `codenav-mcp`, `webnav-mcp` into a scratch `dist/`; `uv publish` the shared package first. Consider TestPyPI first. Then check `uvx codenav-mcp` / `uvx webnav-mcp` in a non-uv project.
+
+## Older open items
+
+- Trial `code-grader` on the next real SDD feature.
+- Exercise the `npm ci` fallback in `copy-venv.sh` next time a branch changes `package-lock.json`.
+- Real-app check of the gallery delete animation on the user's library.
+- Older open items in `progress.md` (ADB Browse slowness; Easy mode import; native pywebview hardware smoke).

@@ -198,6 +198,36 @@ def test_given_column_on_class_selector_when_token_at_position_then_returns_clas
 	assert found == ".gallery-item-thumb"
 
 
+def test_given_column_in_html_class_attr_when_token_at_position_then_returns_that_class():
+	# given — the bare word in markup is what an agent points at, not a `.card` token
+	line = '<div id="main" class="card wide">'
+	col = line.index("wide") + 2
+	# when
+	found = web_index.token_at_position(line, col)
+	# then
+	assert found == ".wide"
+
+
+def test_given_column_in_html_id_attr_when_token_at_position_then_returns_id():
+	# given
+	line = '<div id="main" class="card">'
+	col = line.index("main") + 1
+	# when
+	found = web_index.token_at_position(line, col)
+	# then
+	assert found == "#main"
+
+
+def test_given_column_on_space_between_classes_when_token_at_position_then_none():
+	# given
+	line = '<div class="card wide">'
+	col = line.index(" wide") + 1
+	# when
+	found = web_index.token_at_position(line, col)
+	# then
+	assert found is None
+
+
 def test_given_column_outside_any_token_when_token_at_position_then_none():
 	# given
 	line = "body { margin: 0; }"

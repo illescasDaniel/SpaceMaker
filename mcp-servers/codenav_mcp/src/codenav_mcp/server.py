@@ -3,7 +3,7 @@ definition, references, workspace symbol search, diagnostics) as MCP tools.
 
 Named "codenav" (not "ty") since ty is Astral's name for the underlying
 type checker/language server this wraps — the MCP server itself is a
-thin, project-specific tool built on top of it.
+thin tool built on top of it.
 
 Built specifically for ty rather than as a generic LSP bridge: see
 docs/agent-tooling.md for why (mcp-language-server's name-based
@@ -341,7 +341,7 @@ async def search_symbol(
 	await _use_workspace(ctx)
 	try:
 		kinds = parse_kind_filter(kind)
-		query = resolve_name_query(preferred="query", example="start_convert", query=query, name=name)
+		query = resolve_name_query(preferred="query", example="create_user", query=query, name=name)
 		client = await get_client()
 		symbols = await client.workspace_symbol(query)
 	except TOOL_ERRORS as exc:
@@ -378,7 +378,7 @@ async def symbol_info(
 	include_references: bool = True,
 	ctx: Context | None = None,
 ) -> str:
-	"""What is X and where is it used? Example: `symbol_info(name="JobsMixin.start_convert")`.
+	"""What is X and where is it used? Example: `symbol_info(name="UserService.create_user")`.
 
 	One-call summary for a name: header, hover text, definition, and
 	references grouped by file — the usual first lookup instead of chaining search_symbol → hover →
@@ -393,7 +393,7 @@ async def symbol_info(
 	"""
 	await _use_workspace(ctx)
 	try:
-		name = resolve_name_query(preferred="name", example="JobsMixin.start_convert", name=name, query=query)
+		name = resolve_name_query(preferred="name", example="UserService.create_user", name=name, query=query)
 		client = await get_client()
 		resolved = await resolve_symbol(client, WORKSPACE_ROOT, name, file_path=file_path)
 		rel_path = uri_to_relative(resolved.uri, WORKSPACE_ROOT)
@@ -419,7 +419,7 @@ async def symbol_info(
 @mcp.tool()
 @_notices.tool
 async def outline(file_path: str, ctx: Context | None = None) -> str:
-	"""What's in this file? Example: `outline(file_path="src/spacemaker/bootstrap/services/jobs.py")`.
+	"""What's in this file? Example: `outline(file_path="src/app/services.py")`.
 
 	Indented outline (classes, methods, functions, with line numbers) of a
 	Python file, so you can navigate a large file without reading it in full.
@@ -444,7 +444,7 @@ async def callers(
 	file_path: str | None = None,
 	ctx: Context | None = None,
 ) -> str:
-	"""Who calls this function? Example: `callers(name="start_convert")`.
+	"""Who calls this function? Example: `callers(name="create_user")`.
 
 	Narrower than references, since it
 	leaves out imports and type-only usages and only lists actual call sites.
@@ -455,7 +455,7 @@ async def callers(
 	"""
 	await _use_workspace(ctx)
 	try:
-		name = resolve_name_query(preferred="name", example="start_convert", name=name, query=query)
+		name = resolve_name_query(preferred="name", example="create_user", name=name, query=query)
 		client = await get_client()
 		resolved = await resolve_symbol(client, WORKSPACE_ROOT, name, file_path=file_path)
 		rel_path = uri_to_relative(resolved.uri, WORKSPACE_ROOT)
@@ -897,5 +897,10 @@ async def implementations(
 	return "\n".join(lines)
 
 
-if __name__ == "__main__":
+def main() -> None:
+	"""Console entry point: serve over stdio."""
 	mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+	main()
