@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-01 — macOS primary artifact is DMG with SpaceMaker.app
+
+- **Context:** Packaging SPEC already listed `SpaceMaker.app` or onefile; Linux ships AppImage. User asked for a `.dmg` with `.app` (binary + icon) for macOS distribution.
+- **Decision:** (1) Primary macOS release = `SpaceMaker-<version>-<arch>.dmg` via `scripts/packaging/build_macos_dmg.sh` / `uv run task build-macos-dmg`. (2) PyInstaller on darwin: onedir `EXE` + `COLLECT` + `BUNDLE` (`eu.daniel-ir.spacemaker`, `.icns` from `iconutil`). Windows stays onefile. (3) Ad-hoc `codesign -s -` only; Developer ID / notarization / universal2 / GitHub Actions macos release stay out of scope. (4) `build_installer` on Darwin delegates to the DMG script.
+- **Rationale:** Matches common macOS distribution (drag to Applications) and parallels the Linux AppImage flow; ad-hoc sign avoids the worst local Gatekeeper friction without an Apple developer account.
+
 ## 2026-09-30 — SpaceMaker consumes the published `webnav-ts-mcp`; Python `webnav-mcp` 0.1.2
 
 - **Context:** `webnav-ts-mcp` 0.1.0 is on npm (https://www.npmjs.com/package/webnav-ts-mcp) and on GitHub (`illescasDaniel/webnav-ts-mcp`, tag `v0.1.0`). The Python `webnav-mcp` had an uncommitted `outline` fix.

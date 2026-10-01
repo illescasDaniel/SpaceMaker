@@ -72,7 +72,7 @@ When no portable catalog entry exists for a platform, skip download and rely on 
 |----|-------------------|----------|
 | **Windows** | x64 | `SpaceMaker.exe` (onefile) |
 | **Linux** | x64, arm64 | `SpaceMaker-<version>-<arch>.AppImage` (pruned AppDir); optional PyInstaller onefile for dev |
-| **macOS** | arm64, x64 | `SpaceMaker.app` or onefile binary |
+| **macOS** | arm64, x64 | `SpaceMaker-<version>-<arch>.dmg` (contains `SpaceMaker.app`); optional PyInstaller onefile for dev |
 
 ## Runtime resolution
 
@@ -95,9 +95,19 @@ When no portable catalog entry exists for a platform, skip download and rely on 
 - CI: GitHub Actions on version tags `v*` only (`.github/workflows/appimage.yml`).
 - Post-prune smoke: offscreen WebEngine load + `--server-only` HTTP.
 
-## PyInstaller (optional / Windows / macOS)
+## macOS DMG (release)
 
-- Onefile spec embeds `docs/legal/`, app icon, and static UI when used.
+- Build: `scripts/packaging/build_macos_dmg.sh` → PyInstaller **onedir** + `BUNDLE` → `SpaceMaker.app`, then `hdiutil` DMG.
+- App icon: `packaging/assets/spacemaker.icns` generated at build time from the master PNG via `.iconset` + `iconutil`.
+- Bundle id: `eu.daniel-ir.spacemaker`. Embeds `docs/legal/`, tool catalog, PNG icon, and static UI (same datas as the Windows onefile).
+- Ad-hoc codesign only (`codesign --force --deep -s -`); **no** Developer ID signing or notarization (out of scope v1).
+- Output: `dist/SpaceMaker-<version>-<arch>.dmg` + `SHA256SUMS` (native arch of the build machine — not universal2).
+- Post-build smoke: `--help` and `--server-only` HTTP against `SpaceMaker.app/Contents/MacOS/SpaceMaker`.
+
+## PyInstaller (Windows / optional macOS onefile)
+
+- Windows primary artifact remains onefile `SpaceMaker.exe`.
+- Spec embeds `docs/legal/`, app icon, and static UI when used.
 - Does **not** bundle the `tools/` CLI tree.
 - [packaging/README.md](../../packaging/README.md) documents matrix build commands.
 
@@ -380,13 +390,21 @@ Only show the PM step when the probe fails **and** a known display command exist
 
 ### Scenario: Portable exe has no bundled CLIs
 
-- **Given** a built onefile artifact
+- **Given** a built onefile or macOS `.app` artifact
 - **When** the payload is inspected
-- **Then** adb, ffmpeg, and magick are not embedded next to the exe
+- **Then** adb, ffmpeg, and magick are not embedded next to the exe / inside the app bundle as managed CLIs
+
+### Scenario: macOS DMG contains SpaceMaker.app with icon
+
+- **Given** a built `SpaceMaker-<version>-<arch>.dmg`
+- **When** the DMG is mounted
+- **Then** it contains `SpaceMaker.app`
+- **And** the app has a Finder/Dock icon (`.icns` in `Contents/Resources`)
+- **And** the executable is at `Contents/MacOS/SpaceMaker`
 
 ### Scenario: Legal files in artifact
 
-- **Given** any release binary
+- **Given** any release binary (including frozen `_MEIPASS` inside `SpaceMaker.app`)
 - **When** legal paths are resolved at runtime
 - **Then** privacy, disclaimer, and third-party notice markdown are available
 
@@ -413,6 +431,7 @@ Only show the PM step when the probe fails **and** a known display command exist
 | Unit | `test_third_party_manifest.py` — manifest ↔ enum |
 | Unit | `test_legal_docs_present.py` — required markdown exists |
 | Unit | `test_linux_appimage_packaging.py` — AppDir script contracts (no full AppImage in CI) |
+| Unit | `test_macos_dmg_packaging.py` — DMG script / PyInstaller BUNDLE contracts (no full DMG build in CI) |
 | Unit | `test_components_ui_contract.py` — poll interval + Details expand helpers wired in `web/src` |
 | Integration / UI | Components poll start/stop; stepped chrome visibility; Continue dismiss |
 

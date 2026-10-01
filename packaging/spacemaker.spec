@@ -1,12 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller onefile spec — app + legal + static UI; no CLI tools."""
+"""PyInstaller spec — app + legal + static UI; no CLI tools.
+
+Windows: onefile SpaceMaker.exe.
+macOS: onedir + BUNDLE → SpaceMaker.app (packaged into a DMG by build_macos_dmg.sh).
+"""
 
 import sys
+import tomllib
 from pathlib import Path
 
 repo = Path(SPECPATH).resolve().parent
 src = repo / "src"
-icon = repo / "packaging" / "assets" / "spacemaker-icon.png"
+icon_png = repo / "packaging" / "assets" / "spacemaker-icon.png"
+icon_icns = repo / "packaging" / "assets" / "spacemaker.icns"
+_version = tomllib.load((repo / "pyproject.toml").open("rb"))["project"]["version"]
 
 block_cipher = None
 
@@ -49,25 +56,77 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-exe = EXE(
-	pyz,
-	a.scripts,
-	a.binaries,
-	a.zipfiles,
-	a.datas,
-	[],
-	name="SpaceMaker",
-	debug=False,
-	bootloader_ignore_signals=False,
-	strip=False,
-	upx=False,
-	upx_exclude=[],
-	runtime_tmpdir=None,
-	console=False if sys.platform == "darwin" else True,
-	disable_windowed_traceback=False,
-	argv_emulation=False,
-	target_arch=None,
-	codesign_identity=None,
-	entitlements_file=None,
-	icon=str(icon) if icon.is_file() else None,
-)
+_is_macos = sys.platform == "darwin"
+_exe_icon = None
+if _is_macos and icon_icns.is_file():
+	_exe_icon = str(icon_icns)
+elif icon_png.is_file():
+	_exe_icon = str(icon_png)
+
+if _is_macos:
+	exe = EXE(
+		pyz,
+		a.scripts,
+		[],
+		exclude_binaries=True,
+		name="SpaceMaker",
+		debug=False,
+		bootloader_ignore_signals=False,
+		strip=False,
+		upx=False,
+		console=False,
+		disable_windowed_traceback=False,
+		argv_emulation=False,
+		target_arch=None,
+		codesign_identity=None,
+		entitlements_file=None,
+		icon=_exe_icon,
+	)
+	coll = COLLECT(
+		exe,
+		a.binaries,
+		a.zipfiles,
+		a.datas,
+		strip=False,
+		upx=False,
+		upx_exclude=[],
+		name="SpaceMaker",
+	)
+	app = BUNDLE(
+		coll,
+		name="SpaceMaker.app",
+		icon=_exe_icon,
+		bundle_identifier="eu.daniel-ir.spacemaker",
+		info_plist={
+			"CFBundleName": "SpaceMaker",
+			"CFBundleDisplayName": "SpaceMaker",
+			"CFBundlePackageType": "APPL",
+			"CFBundleShortVersionString": _version,
+			"CFBundleVersion": _version,
+			"NSHighResolutionCapable": True,
+			"LSMinimumSystemVersion": "11.0",
+		},
+	)
+else:
+	exe = EXE(
+		pyz,
+		a.scripts,
+		a.binaries,
+		a.zipfiles,
+		a.datas,
+		[],
+		name="SpaceMaker",
+		debug=False,
+		bootloader_ignore_signals=False,
+		strip=False,
+		upx=False,
+		upx_exclude=[],
+		runtime_tmpdir=None,
+		console=True,
+		disable_windowed_traceback=False,
+		argv_emulation=False,
+		target_arch=None,
+		codesign_identity=None,
+		entitlements_file=None,
+		icon=_exe_icon,
+	)

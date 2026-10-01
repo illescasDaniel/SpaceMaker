@@ -7,6 +7,8 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+# Generated on macOS by sync_brand_icons.py / DMG build
+packaging/assets/spacemaker.icns
 node_modules/
 .spacemaker-quality-gate.lock
 

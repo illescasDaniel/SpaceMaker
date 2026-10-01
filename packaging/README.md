@@ -8,7 +8,8 @@ Refresh the README Home screenshot: `uv run task readme-screenshot` (writes [doc
 
 - [uv](https://docs.astral.sh/uv/)
 - Linux AppImage: `curl`, network on first build for pinned `appimagetool`
-- Windows/macOS onefile: PyInstaller (`uv sync --group dev`)
+- Windows onefile / macOS DMG: PyInstaller (`uv sync --group dev`)
+- macOS DMG: `iconutil`, `hdiutil`, `codesign` (Xcode CLT)
 
 ## Linux (primary): AppImage
 
@@ -39,29 +40,51 @@ Details: [linux-appimage/](linux-appimage/) (`build-appdir.sh`, `prune_pyqt6.sh`
 
 Reference sizes (x86_64, WebEngine floor): AppDir ~675 MB unpacked → AppImage ~225 MB (zstd‑19) as of v1.0.0.
 
-## Windows / macOS: PyInstaller onefile
+## macOS (primary): DMG with SpaceMaker.app
 
-Uses the OS's native pywebview backend (WebView2 on Windows, WKWebView on macOS) — no Qt bundled; PyQt6/qtpy are Linux-only dependencies.
+PyInstaller onedir + `BUNDLE` (native WKWebView / pywebview `cocoa` — no Qt), then a UDZO DMG with an Applications symlink:
+
+```bash
+uv run task build-macos-dmg
+```
+
+Outputs (gitignored under `dist/`):
+
+| File | Role |
+|------|------|
+| `SpaceMaker-<version>-arm64.dmg` or `…-x86_64.dmg` | Drag-to-Applications disk image |
+| `SpaceMaker.app` | App bundle (also left in `dist/` for local smoke) |
+| `SHA256SUMS` | SHA-256 of the DMG |
+
+Native arch of the build machine only (not universal2). Ad-hoc codesign is applied (`codesign -s -`); Developer ID signing and notarization are out of scope for v1.
+
+**Gatekeeper:** first open of an unsigned download may need **Right-click → Open**, or clear the quarantine flag after you trust the build (`xattr -cr /Applications/SpaceMaker.app`).
+
+`uv run task build-installer` on Darwin runs the same DMG build.
+
+## Windows: PyInstaller onefile
+
+Uses WebView2 (`edgechromium`) — no Qt bundled; PyQt6/qtpy are Linux-only dependencies.
 
 ```bash
 uv sync --group dev
 uv run pyinstaller packaging/spacemaker.spec --noconfirm
 ```
 
-Artifact: `dist/SpaceMaker` or `SpaceMaker.exe`.
+Artifact: `dist/SpaceMaker.exe`. Or `uv run task build-installer` on Windows.
 
 ## Icons
 
-Regenerate PNG icons from the master source:
+Regenerate PNG icons from the master source (and `.icns` on macOS):
 
 ```bash
 uv run python scripts/packaging/sync_brand_icons.py
 ```
 
-Master artwork: [assets/spacemaker-icon-source.png](assets/spacemaker-icon-source.png).
+Master artwork: [assets/spacemaker-icon-source.png](assets/spacemaker-icon-source.png). App icon PNG: [assets/spacemaker-icon.png](assets/spacemaker-icon.png). macOS builds also write `assets/spacemaker.icns` at build time (not committed).
 
 ## Pins
 
 Download URLs and versions: [tool-catalog.json](tool-catalog.json).
 
-Legal markdown is bundled from `docs/legal/`. App icon: [assets/spacemaker-icon.png](assets/spacemaker-icon.png).
+Legal markdown is bundled from `docs/legal/`.

@@ -1,17 +1,26 @@
 #!/usr/bin/env bash
-# Portable release build → dist/ (gitignored). Linux: pruned AppDir; other OS: PyInstaller onefile.
+# Portable release build → dist/ (gitignored).
+# Linux: pruned AppDir; macOS: DMG with SpaceMaker.app; Windows: PyInstaller onefile.
 
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${repo}"
 
-if [[ "$(uname -s)" == "Linux" ]]; then
+os="$(uname -s)"
+
+if [[ "${os}" == "Linux" ]]; then
 	echo "Linux: building pruned AppDir (use build-appimage to pack)…"
 	APPDIR="${repo}/dist/spacemaker-linux.AppDir"
 	export APPDIR
 	bash "${repo}/packaging/linux-appimage/build-appdir.sh"
 	echo "OK: ${APPDIR} ($(du -sh "${APPDIR}" | cut -f1))"
+	exit 0
+fi
+
+if [[ "${os}" == "Darwin" ]]; then
+	echo "macOS: building SpaceMaker.app + DMG…"
+	bash "${repo}/scripts/packaging/build_macos_dmg.sh"
 	exit 0
 fi
 
@@ -25,8 +34,14 @@ echo "Building onefile artifact in dist/…"
 uv run pyinstaller packaging/spacemaker.spec --noconfirm
 
 artifact="${repo}/dist/SpaceMaker"
-if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "CYGWIN"* || "$(uname -s)" == "MSYS"* ]]; then
+if [[ "${os}" == MINGW* || "${os}" == CYGWIN* || "${os}" == MSYS* ]]; then
 	artifact="${repo}/dist/SpaceMaker.exe"
+fi
+if [[ ! -f "${artifact}" ]]; then
+	# Windows Git Bash / native
+	if [[ -f "${repo}/dist/SpaceMaker.exe" ]]; then
+		artifact="${repo}/dist/SpaceMaker.exe"
+	fi
 fi
 if [[ ! -f "${artifact}" ]]; then
 	echo "error: expected artifact missing: ${artifact}" >&2
