@@ -24,3 +24,6 @@ site/
 # Local dev tool symlinks (see tools/README.md); release CI ships real binaries.
 tools/*
 !tools/README.md
+
+# macOS
+.DS_Store
