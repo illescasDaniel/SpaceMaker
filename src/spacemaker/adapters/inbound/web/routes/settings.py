@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from spacemaker.adapters.inbound.web.client_access import require_loopback
 from spacemaker.adapters.inbound.web.media_paths import _LEGAL, _session_library_root
 from spacemaker.adapters.inbound.web.models import LibraryOpenFolderBody, ModuleEnterBody, SettingsBody
-from spacemaker.adapters.inbound.web.qr_svg import encode_qr_svg
+from spacemaker.adapters.inbound.web.qr_svg import qr_svg_response
 from spacemaker.adapters.outbound.host.open_paths import reveal_in_file_manager
 from spacemaker.bootstrap.firewall import probe_gallery_port
 from spacemaker.bootstrap.lan import lan_ip
@@ -37,7 +37,7 @@ def build_settings_router(services: AppServices) -> APIRouter:
 	@router.get("/api/server-info")
 	def server_info() -> dict[str, object]:
 		host = lan_ip()
-		gallery_url = f"http://{host}:{services.port}/gallery"
+		gallery_url = services.with_lan_login(f"http://{host}:{services.port}/gallery")
 		lan_listening = services.bind_host in {"0.0.0.0", "::"}  # noqa: S104
 		firewall = probe_gallery_port(services.port, bind_host=services.bind_host)
 		return {
@@ -58,8 +58,8 @@ def build_settings_router(services: AppServices) -> APIRouter:
 
 	@router.get("/api/gallery/qr.svg")
 	def gallery_qr() -> Response:
-		gallery_url = f"http://{lan_ip()}:{services.port}/gallery"
-		return Response(content=encode_qr_svg(gallery_url), media_type="image/svg+xml")
+		gallery_url = services.with_lan_login(f"http://{lan_ip()}:{services.port}/gallery")
+		return qr_svg_response(gallery_url)
 
 	@router.get("/api/defaults")
 	def defaults(request: Request) -> dict[str, str]:

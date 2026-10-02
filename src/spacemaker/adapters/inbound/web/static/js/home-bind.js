@@ -11,11 +11,13 @@ import {
 	pushSettingsDetached,
 	updateExtractButtons,
 } from "./jobs.js";
+import { bindPasscodeDock } from "./passcode.js";
 import { applyState, showView } from "./shell.js";
 import { S } from "./state.js";
 
 function bindHomeDesktop() {
 	bindGalleryUi();
+	bindPasscodeDock();
 	document.getElementById("btn-lan-firewall-info")?.addEventListener("click", (ev) => {
 		const panel = document.getElementById("lan-firewall-info-panel");
 		if (!panel) {

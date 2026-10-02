@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpaceMaker — Unlock</title>
+	<link rel="icon" href="/favicon.ico">
+	<link rel="stylesheet" href="/static/unlock.css">
+</head>
+<body>
+	<main class="page">
+		<h1 class="logo">Space<span>Maker</span></h1>
+		<p class="sub">This SpaceMaker is protected. Enter the passcode shown on the computer.</p>
+		<form class="card" id="unlock-form" autocomplete="off">
+			<label for="passcode">Passcode</label>
+			<input id="passcode" type="password" autocomplete="off" autocapitalize="off" enterkeyhint="go">
+			<p class="msg" id="msg" role="alert"></p>
+			<button type="submit" class="btn" id="btn-unlock">Unlock</button>
+			<p class="hint">Tip: scanning the QR code on the computer signs you in without typing.</p>
+		</form>
+	</main>
+	<script type="module" src="/static/js/unlock.js"></script>
+</body>
+</html>

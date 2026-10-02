@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, Response
 from spacemaker.adapters.inbound.web.client_access import require_loopback
 from spacemaker.adapters.inbound.web.media_paths import _attachment_named
 from spacemaker.adapters.inbound.web.models import ShareSelectionBody, TransferAddBody, TransferSaveBody
-from spacemaker.adapters.inbound.web.qr_svg import encode_qr_svg
+from spacemaker.adapters.inbound.web.qr_svg import qr_svg_response
 from spacemaker.application.file_share_manifest import EmptyShareSelectionError
 from spacemaker.application.transfer_session import EmptyTransferFolderError
 from spacemaker.bootstrap.services import AppServices
@@ -61,7 +61,7 @@ def build_lan_router(services: AppServices) -> APIRouter:
 		page_url = services._receive_files_snapshot()["page_url"]
 		if not page_url:
 			raise HTTPException(status_code=404, detail="receive session not active")
-		return Response(content=encode_qr_svg(str(page_url)), media_type="image/svg+xml")
+		return qr_svg_response(str(page_url))
 
 	@router.get("/api/share/qr.svg")
 	def share_qr(request: Request, t: str = "") -> Response:
@@ -71,7 +71,7 @@ def build_lan_router(services: AppServices) -> APIRouter:
 		page_url = services._file_share_snapshot()["page_url"]
 		if not page_url:
 			raise HTTPException(status_code=404, detail="share session not active")
-		return Response(content=encode_qr_svg(str(page_url)), media_type="image/svg+xml")
+		return qr_svg_response(str(page_url))
 
 	@router.get("/api/transfer/qr.svg")
 	def transfer_qr(request: Request, t: str = "") -> Response:
@@ -81,7 +81,7 @@ def build_lan_router(services: AppServices) -> APIRouter:
 		page_url = services._transfer_files_snapshot()["page_url"]
 		if not page_url:
 			raise HTTPException(status_code=404, detail="transfer session not active")
-		return Response(content=encode_qr_svg(str(page_url)), media_type="image/svg+xml")
+		return qr_svg_response(str(page_url))
 
 	@router.get("/api/receive/session")
 	def receive_session_status(t: str = "") -> dict[str, object]:

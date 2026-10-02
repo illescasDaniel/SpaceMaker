@@ -24,6 +24,7 @@ Striped dashed boxes = wireframe-only. If it isn’t labeled Tip / Review only /
 | [phone-receive.html](phone-receive.html) | Phone web page: any file upload (Receive files QR) |
 | [phone-share.html](phone-share.html) | Phone web page: download list (Send files QR) |
 | [phone-transfer.html](phone-transfer.html) | Phone web page: shared temporary upload + download (Transfer files QR) |
+| [phone-unlock.html](phone-unlock.html) | Phone web page: passcode prompt when the network passcode is set |
 
 Open in any browser:
 

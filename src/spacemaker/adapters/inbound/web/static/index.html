@@ -140,6 +140,31 @@
 				</button>
 			</div>
 		</div>
+		<fieldset class="passcode-dock" id="passcode-dock" data-state="open" aria-label="Network passcode">
+			<div class="info-panel" id="passcode-info-panel" aria-hidden="true">
+				Other devices on your Wi-Fi must enter this passcode to open the Gallery, upload, download or delete. This computer never asks. Scanning a SpaceMaker QR code signs a phone in automatically. The passcode is remembered between launches (only a hash is stored); changing or clearing it signs every device out.
+				<h4>Not encryption</h4>
+				It keeps casual visitors out; it does not encrypt your files or the Wi-Fi traffic.
+			</div>
+			<div class="label-row">
+				<span class="passcode-title">
+					<svg class="passcode-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+					Network passcode
+				</span>
+				<button type="button" class="info-btn" id="btn-passcode-info" title="About the network passcode" aria-expanded="false" aria-controls="passcode-info-panel">i</button>
+			</div>
+			<div class="passcode-field" data-when="open">
+				<input type="password" id="passcode-input" placeholder="Choose a passcode" autocomplete="off" aria-label="Network passcode">
+				<button type="button" class="btn btn-primary" id="btn-passcode-set">Set</button>
+			</div>
+			<p class="passcode-status" id="passcode-open-status" data-when="open">Not set — anyone on your Wi-Fi can open the Gallery.</p>
+			<div class="passcode-field" data-when="active">
+				<input type="password" value="••••••••" readonly aria-label="Network passcode (active, hidden)">
+				<button type="button" class="btn btn-secondary" id="btn-passcode-change">Change</button>
+				<button type="button" class="btn btn-ghost" id="btn-passcode-clear">Clear</button>
+			</div>
+			<p class="passcode-status" data-when="active">Active — remembered; other devices need it.</p>
+		</fieldset>
 	</section>
 
 	<section id="view-easy" class="screen" aria-label="Photo backup">

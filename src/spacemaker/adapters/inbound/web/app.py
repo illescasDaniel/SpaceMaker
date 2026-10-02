@@ -10,6 +10,7 @@ from starlette.responses import Response
 from spacemaker import __version__ as app_version
 from spacemaker.adapters.inbound.web.client_access import is_loopback_client_host
 from spacemaker.adapters.inbound.web.media_paths import _STATIC
+from spacemaker.adapters.inbound.web.passcode_guard import passcode_challenge
 from spacemaker.adapters.inbound.web.routes import register_routes
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.bootstrap.ui_shell import (
@@ -29,6 +30,18 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	app = FastAPI(title="SpaceMaker", version=app_version, lifespan=lifespan)
 	app.state.services = services
 	app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+
+	# Registered first = innermost, so the unlock page still passes through the shell
+	# middleware below and gets the same CSP / no-store headers as the pages it replaces.
+	@app.middleware("http")
+	async def network_passcode_guard(
+		request: Request,
+		call_next: Callable[[Request], Awaitable[Response]],
+	) -> Response:
+		challenge = passcode_challenge(request, services.network_passcode)
+		if challenge is not None:
+			return challenge
+		return await call_next(request)
 
 	@app.middleware("http")
 	async def no_cache_shell_assets(

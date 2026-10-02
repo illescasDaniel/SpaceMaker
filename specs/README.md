@@ -16,6 +16,7 @@ Source of truth for behavior. Wireframes: [wireframes/app.html](../wireframes/ap
 | [gallery/SPEC.md](gallery/SPEC.md) | Timeline/calendar, `processed/` only, LAN + QR |
 | [packaging/SPEC.md](packaging/SPEC.md) | AppImage (Linux), managed CLI downloads per OS/arch |
 | [legal/SPEC.md](legal/SPEC.md) | Privacy, disclaimer, third-party notice in release + UI |
+| [network-passcode/SPEC.md](network-passcode/SPEC.md) | Optional LAN passcode, phone unlock page, QR token sign-in, lockout |
 | [ui-motion/SPEC.md](ui-motion/SPEC.md) | Shared motion vocabulary, screen/hover/press/list transitions, reduced-motion |
 
 **Design decisions:** new/changed specs carry a `## Design decisions` section (success criteria, failure handling, performance & resource budget, trust boundary) agreed with the user first — see [spec-driven-development.md](../docs/playbooks/spec-driven-development.md). Existing specs adopt it when next touched.

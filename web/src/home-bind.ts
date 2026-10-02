@@ -11,12 +11,14 @@ import {
 	pushSettingsDetached,
 	updateExtractButtons,
 } from "./jobs.ts";
+import { bindPasscodeDock } from "./passcode.ts";
 import { applyState, showView } from "./shell.ts";
 import { S } from "./state.ts";
 import type { AppSnapshot } from "./types.ts";
 
 function bindHomeDesktop(): void {
 	bindGalleryUi();
+	bindPasscodeDock();
 	document.getElementById("btn-lan-firewall-info")?.addEventListener("click", (ev) => {
 		const panel = document.getElementById("lan-firewall-info-panel");
 		if (!panel) {

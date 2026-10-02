@@ -163,6 +163,11 @@ def user_preferences_path(*, tools_dir: Path | None = None) -> Path:
 	return spacemaker_data_dir(tools_dir=tools_dir) / "preferences.json"
 
 
+def network_passcode_path(*, tools_dir: Path | None = None) -> Path:
+	"""Salted passcode hash + token secret; separate from preferences so Clear preferences never disables it."""
+	return spacemaker_data_dir(tools_dir=tools_dir) / "network_passcode.json"
+
+
 def components_setup_complete_marker(*, tools_dir: Path | None = None) -> Path:
 	return spacemaker_data_dir(tools_dir=tools_dir) / "components_setup_complete"
 

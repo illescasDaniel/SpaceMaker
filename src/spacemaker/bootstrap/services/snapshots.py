@@ -138,7 +138,7 @@ class SnapshotMixin:
 		if not active:
 			return {"active": False, "upload_url": "", "qr_url": ""}
 		host = lan_ip()
-		upload_url = f"http://{host}:{self.port}/upload?t={token}"
+		upload_url = self.with_lan_login(f"http://{host}:{self.port}/upload?t={token}")
 		return {
 			"active": True,
 			"upload_url": upload_url,
@@ -157,7 +157,7 @@ class SnapshotMixin:
 		if not active:
 			return {"active": False, "page_url": "", "qr_url": ""}
 		host = lan_ip()
-		page_url = f"http://{host}:{self.port}/receive?t={token}"
+		page_url = self.with_lan_login(f"http://{host}:{self.port}/receive?t={token}")
 		return {
 			"active": True,
 			"page_url": page_url,
@@ -174,7 +174,7 @@ class SnapshotMixin:
 		if not active:
 			return {"active": False, "page_url": "", "qr_url": "", "file_count": 0}
 		host = lan_ip()
-		page_url = f"http://{host}:{self.port}/share?t={token}"
+		page_url = self.with_lan_login(f"http://{host}:{self.port}/share?t={token}")
 		return {
 			"active": True,
 			"page_url": page_url,
@@ -194,7 +194,7 @@ class SnapshotMixin:
 		if not active:
 			return {"active": False, "page_url": "", "qr_url": "", "item_count": 0, "items": []}
 		host = lan_ip()
-		page_url = f"http://{host}:{self.port}/transfer?t={token}"
+		page_url = self.with_lan_login(f"http://{host}:{self.port}/transfer?t={token}")
 		return {
 			"active": True,
 			"page_url": page_url,

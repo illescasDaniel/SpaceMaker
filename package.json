@@ -2,18 +2,22 @@
 	"name": "spacemaker-web",
 	"private": true,
 	"engines": {
-		"node": ">=18"
+		"node": ">=20"
 	},
 	"scripts": {
 		"build:web": "tsc -p web/tsconfig.json && biome check --write src/spacemaker/adapters/inbound/web/static/js",
-		"check": "biome check . && tsc -p web/tsconfig.json --noEmit",
+		"check": "biome check . && tsc -p web/tsconfig.json --noEmit && tsc -p web/tsconfig.test.json --noEmit && npm run test:web",
 		"check:biome": "biome check .",
-		"format": "biome check --write ."
+		"format": "biome check --write .",
+		"test:web": "vitest run --config web/vitest.config.mts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.0.0",
 		"@fortawesome/fontawesome-free": "^6.7.2",
+		"@types/node": "^26.6.4",
+		"jsdom": "^30.1.1",
 		"typescript": "^7.0.2",
+		"vitest": "^5.0.3",
 		"vscode-langservers-extracted": "^4.10.0"
 	}
 }

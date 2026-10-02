@@ -2,6 +2,18 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-02 — JS unit tests: vitest + jsdom, unlock assets externalized
+
+- **Context:** the repo had zero JS tests; the passcode dock/unlock/auth-guard logic is security-relevant UI.
+- **Decision:** `web/tests/*.test.ts` run by vitest (jsdom) via `npm run test:web`, part of `npm run check` and the quality gate. Unlock page CSS/JS and the auth guard are real files (`static/unlock.css`, `web/src/unlock.ts`, `web/src/auth-guard.ts`); the passcode middleware exempts exactly `/api/unlock`, `/favicon.ico`, `/static/unlock.css`, `/static/js/unlock.js`.
+- **Rationale:** matches the approved spec's exempt list, keeps everything in conventional folders, and makes the logic testable by injecting `fetch`/`location`.
+
+## 2026-10-02 — Network passcode is access control, not AES encryption
+
+- **Context:** user wanted a passcode to stop LAN devices deleting gallery items / calling endpoints, initially imagined as AES encryption of all data.
+- **Decision:** salted-scrypt passcode + HMAC login cookie, one inbound middleware, QR URLs carry a random token in the `#k=` fragment; record stored in its own `network_passcode.json` (0600) so Clear preferences / Reset library never disable it. No data or transport encryption.
+- **Rationale:** phones load `http://<lan-ip>`, which is not a secure context (no WebCrypto); ffmpeg/avifenc/thumbnails need plaintext files. Access control fixes the stated problem; TLS/at-rest encryption stay future work.
+
 ## 2026-10-02 — Correction: as-is move duplicates require byte-identical content
 
 - **Context:** the entry below says "same size = duplicate"; that was too weak and could drop a different file.

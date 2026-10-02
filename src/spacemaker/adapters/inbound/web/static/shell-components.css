@@ -662,3 +662,48 @@
 			justify-content: center;
 		}
 
+
+		/* Network passcode dock (Home only): floats bottom-left of the window. */
+		.passcode-dock {
+			position: fixed;
+			left: 1rem;
+			bottom: 1rem;
+			width: 16.5rem;
+			z-index: 20;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 0.65rem 0.75rem;
+			margin: 0;
+			min-width: 0;
+			box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+		}
+		.passcode-dock .label-row { margin-bottom: 0.4rem; }
+		.passcode-title { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 600; }
+		.passcode-lock { width: 1rem; height: 1rem; color: var(--muted); }
+		.passcode-dock[data-state="active"] .passcode-lock { color: var(--success); }
+		.passcode-field { display: flex; gap: 0.35rem; }
+		.passcode-field input {
+			flex: 1;
+			min-width: 0;
+			font: inherit;
+			font-size: 0.85rem;
+			padding: 0.4rem 0.55rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--bg);
+			color: var(--text);
+		}
+		.passcode-field .btn { padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+		.passcode-status { margin: 0.4rem 0 0; font-size: 0.75rem; color: var(--warn); }
+		.passcode-status.error { color: var(--error); }
+		.passcode-dock[data-state="active"] .passcode-status { color: var(--success); }
+		.passcode-dock .info-panel { margin: 0 0 0.5rem; }
+		.passcode-dock [data-when] { display: none; }
+		.passcode-dock[data-state="open"] [data-when="open"],
+		.passcode-dock[data-state="active"] [data-when="active"] { display: block; }
+		.passcode-dock[data-state="open"] .passcode-field[data-when="open"],
+		.passcode-dock[data-state="active"] .passcode-field[data-when="active"] { display: flex; }
+		@media (max-width: 640px) {
+			.passcode-dock { left: 0.5rem; right: 0.5rem; width: auto; }
+		}

@@ -18,6 +18,9 @@ from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaP
 from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.adapters.outbound.preferences.json_store import JsonUserPreferences
+from spacemaker.adapters.outbound.preferences.passcode_store import JsonPasscodeStore
+from spacemaker.adapters.outbound.security.monotonic_clock import MonotonicClock
+from spacemaker.adapters.outbound.security.scrypt_crypto import ScryptPasscodeCrypto
 from spacemaker.adapters.outbound.tools.catalog_installer import CatalogToolInstaller
 from spacemaker.adapters.outbound.tools.compression_capability import ManagedCompressionTools
 from spacemaker.application.clear_browser_cache import ClearBrowserCache
@@ -32,6 +35,7 @@ from spacemaker.application.file_share_manifest import (
 )
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.application.get_gallery_item import GetGalleryItem
+from spacemaker.application.network_passcode import NetworkPasscode
 from spacemaker.application.promote_originals import PromoteOriginalsToProcessed
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
@@ -51,6 +55,7 @@ from spacemaker.bootstrap.bundled_tools import (
 from spacemaker.bootstrap.paths import (
 	default_documents_receive_root,
 	default_library_root,
+	network_passcode_path,
 	normalize_library_root,
 	user_preferences_path,
 )
@@ -82,6 +87,9 @@ class WebSocketLike(Protocol):
 
 
 class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
+	# None only for test doubles that skip __init__; the web middleware treats None as 'no passcode'.
+	network_passcode: NetworkPasscode | None = None
+
 	def __init__(self, *, port: int = 8765, bind_host: str = "0.0.0.0") -> None:
 		ensure_host_tool_path_dirs()
 		self.port = port
@@ -93,6 +101,12 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 			dest_dir=tools_install_root(),
 		)
 		self.user_preferences = JsonUserPreferences(user_preferences_path())
+		self.network_passcode = NetworkPasscode(
+			JsonPasscodeStore(network_passcode_path()),
+			ScryptPasscodeCrypto(),
+			MonotonicClock(),
+		)
+		self.network_passcode.load()
 		self.compression_tools = ManagedCompressionTools(self.managed_tools)
 		self.runner = ToolRunner(path_fallback_allowed=self.managed_tools.permit_path_fallback)
 		self.probe = SubprocessMediaProbe(self.runner)
@@ -229,6 +243,12 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 	def unregister_ws(self, ws: WebSocketLike) -> None:
 		with self._ws_lock:
 			self._ws_clients.discard(ws)
+
+	def with_lan_login(self, url: str) -> str:
+		"""Append the QR sign-in token fragment to a phone URL while a passcode is set."""
+		passcode = self.network_passcode
+		token = passcode.qr_token() if passcode is not None else None
+		return f"{url}#k={token}" if token else url
 
 	def broadcast(self, payload: dict[str, object]) -> None:
 		loop = self._event_loop

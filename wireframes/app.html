@@ -1013,6 +1013,56 @@
 
 		.info-panel h4:first-child { margin-top: 0; }
 
+		/* LAN passcode dock (Home only): floats bottom-left of the window. */
+		.passcode-dock {
+			position: fixed;
+			left: 1rem;
+			bottom: 1rem;
+			width: 16.5rem;
+			z-index: 20;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 0.65rem 0.75rem;
+			margin: 0;
+			min-width: 0;
+			box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+		}
+		.passcode-dock .label-row { margin-bottom: 0.4rem; }
+		.passcode-title {
+			display: flex;
+			align-items: center;
+			gap: 0.4rem;
+			font-size: 0.85rem;
+			font-weight: 600;
+		}
+		.passcode-lock { width: 1rem; height: 1rem; color: var(--muted); }
+		.passcode-dock[data-state="active"] .passcode-lock { color: var(--success); }
+		.passcode-field { display: flex; gap: 0.35rem; }
+		.passcode-field input {
+			flex: 1;
+			min-width: 0;
+			font: inherit;
+			font-size: 0.85rem;
+			padding: 0.4rem 0.55rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--bg);
+			color: var(--text);
+		}
+		.passcode-field .btn { padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+		.passcode-status { margin: 0.4rem 0 0; font-size: 0.75rem; color: var(--warn); }
+		.passcode-dock[data-state="active"] .passcode-status { color: var(--success); }
+		.passcode-dock .info-panel { margin: 0 0 0.5rem; }
+		.passcode-dock [data-when] { display: none; }
+		.passcode-dock[data-state="open"] [data-when="open"],
+		.passcode-dock[data-state="active"] [data-when="active"] { display: block; }
+		.passcode-dock[data-state="open"] .passcode-field[data-when="open"],
+		.passcode-dock[data-state="active"] .passcode-field[data-when="active"] { display: flex; }
+		@media (max-width: 640px) {
+			.passcode-dock { left: 0.5rem; right: 0.5rem; width: auto; }
+		}
+
 		.connection-toggle button {
 			flex: 1;
 			font: inherit;
@@ -2134,6 +2184,63 @@
 					<span class="module-tile-title">Transfer files</span>
 				</button>
 			</div>
+			<!-- LAN passcode dock: lives inside #view-home so it only shows on Home. -->
+			<fieldset class="passcode-dock" id="passcode-dock" data-state="open" aria-label="Network passcode">
+				<div class="info-panel" id="passcode-info-panel" aria-hidden="true">
+					Other devices on your Wi-Fi must enter this passcode to open the Gallery, upload, download or delete. This computer never asks. Scanning a SpaceMaker QR code signs a phone in automatically. The passcode is remembered between launches (only a hash is stored); changing or clearing it signs every device out.
+					<h4>Not encryption</h4>
+					It keeps casual visitors out; it does not encrypt your files or the Wi-Fi traffic.
+				</div>
+				<div class="label-row">
+					<span class="passcode-title">
+						<svg class="passcode-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+						Network passcode
+					</span>
+					<button type="button" class="info-btn" id="btn-passcode-info" title="About the network passcode" aria-expanded="false" aria-controls="passcode-info-panel">i</button>
+				</div>
+				<div class="passcode-field" data-when="open">
+					<input type="password" id="passcode-input" placeholder="Choose a passcode" autocomplete="off" aria-label="Network passcode">
+					<button type="button" class="btn btn-primary" id="btn-passcode-set">Set</button>
+				</div>
+				<p class="passcode-status" data-when="open">Not set — anyone on your Wi-Fi can open the Gallery.</p>
+				<div class="passcode-field" data-when="active">
+					<input type="password" value="••••••••" readonly aria-label="Network passcode (active, hidden)">
+					<button type="button" class="btn btn-secondary" id="btn-passcode-change">Change</button>
+					<button type="button" class="btn btn-ghost" id="btn-passcode-clear">Clear</button>
+				</div>
+				<p class="passcode-status" data-when="active">Active — remembered; other devices need it.</p>
+			</fieldset>
+			<script>
+				(function () {
+					const dock = document.getElementById('passcode-dock');
+					const info = document.getElementById('passcode-info-panel');
+					const infoBtn = document.getElementById('btn-passcode-info');
+					infoBtn.addEventListener('click', () => {
+						const open = !info.classList.contains('visible');
+						info.classList.toggle('visible', open);
+						info.setAttribute('aria-hidden', String(!open));
+						infoBtn.setAttribute('aria-expanded', String(open));
+					});
+					document.getElementById('btn-passcode-set').addEventListener('click', () => {
+						if (document.getElementById('passcode-input').value.trim()) dock.dataset.state = 'active';
+					});
+					document.getElementById('btn-passcode-clear').addEventListener('click', () => {
+						dock.dataset.state = 'open';
+						document.getElementById('passcode-input').value = '';
+					});
+					document.getElementById('btn-passcode-change').addEventListener('click', () => {
+						dock.dataset.state = 'open';
+						const i = document.getElementById('passcode-input');
+						i.value = '';
+						i.placeholder = 'New passcode';
+						i.focus();
+					});
+				})();
+			</script>
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				Bottom-left dock on Home only. Type any text and press <strong>Set</strong> to see the Active state (the passcode is never shown again — only a hash is kept); <strong>Change</strong> asks for a new one, <strong>Clear</strong> returns to Open. Click <strong>i</strong> for the help panel (opens above the field). The phone side is in <code>phone-unlock.html</code>.
+			</aside>
 			<aside class="wf-note" data-for="agent">
 				<span class="wf-note-badge">Agent note</span>
 				Home: 3-column grid, tiles <code>aspect-ratio: 4 / 3</code> at ~8.75rem wide (icon 3rem / title 0.92rem unchanged). Vertically+horizontally center <code>#view-home</code>. Default desktop window <code>1152×864</code> (4:3, +20% from 960×720) in <code>window_geometry.py</code>. Header is sticky; only <code>.app-main</code> scrolls. Tabs: Home | Gallery | Settings (no floating footer). Do not copy <code>.wf-note</code>, <code>.wf-demo</code>, or the top banner into production <code>static/</code>.

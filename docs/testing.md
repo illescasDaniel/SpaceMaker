@@ -95,8 +95,13 @@ unrelated work.
 uv run task sync-dev
 uv run task checks
 uv run task checks -- --fix
-npm ci && npm run check   # Biome for wireframes / static JS
+npm ci && npm run check   # Biome + tsc + vitest for wireframes / static JS / web/src
+npm run test:web          # JS unit tests only (vitest + jsdom, web/tests/*.test.ts)
 ```
 
 Python: **ruff** (lint + format, tabs), **ty** (types), **pytest**. Web:
-**Biome**.
+**Biome** + `tsc` + **vitest** (jsdom). JS tests live in `web/tests/`, import the
+TypeScript in `web/src/` directly (no build step), stub `fetch` and `location`, and follow
+the same `given … when … then` naming. Modules that touch the DOM should export a
+`bind…(env)`/`install…(win)` function so tests can inject fakes instead of globals.
+Built `static/js/` is generated: run `npm run build:web` after editing `web/src/`.

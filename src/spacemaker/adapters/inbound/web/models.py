@@ -8,6 +8,15 @@ from spacemaker.domain.library import TransferMode
 from spacemaker.domain.ui_mode import UiMode
 
 
+class PasscodeBody(BaseModel):
+	passcode: str
+
+
+class UnlockBody(BaseModel):
+	passcode: str | None = None
+	token: str | None = None
+
+
 class GalleryExportBody(BaseModel):
 	relative_path: str
 	format: str

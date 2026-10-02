@@ -1,0 +1,30 @@
+:root {
+	--bg: #f7f8fa; --surface: #ffffff; --border: #dde2ea; --text: #1a2332; --muted: #5c6b82;
+	--accent: #228be6; --accent-dim: #1c7ed6; --warn: #e67700; --error: #e03131; --radius: 12px;
+	--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1); --dur-fast: 120ms; --dur-base: 200ms;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #0f1419; --surface: #1a2332; --border: #3d4f6f; --text: #e8eef7; --muted: #8b9cb3;
+		--accent: #4dabf7; --accent-dim: #228be6; --warn: #fcc419; --error: #ff6b6b;
+	}
+}
+@media (prefers-reduced-motion: reduce) { :root { --dur-fast: 0.001ms; --dur-base: 0.001ms; } }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+.page { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+.logo { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.35rem; }
+.logo span { color: var(--accent); }
+.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+.card label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; }
+.card input { width: 100%; font: inherit; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+.card input:disabled { opacity: 0.5; }
+.btn { width: 100%; margin-top: 0.75rem; font: inherit; font-weight: 600; border: none; border-radius: 8px; padding: 0.65rem; background: var(--accent-dim); color: #fff; cursor: pointer; transition: transform var(--dur-fast) var(--ease-standard), opacity var(--dur-base) var(--ease-standard); }
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.msg { margin: 0.6rem 0 0; font-size: 0.85rem; min-height: 1.3em; }
+.msg.error { color: var(--error); }
+.msg.wait { color: var(--warn); }
+.hint { margin: 0.9rem 0 0; font-size: 0.8rem; color: var(--muted); }

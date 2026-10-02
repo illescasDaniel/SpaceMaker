@@ -10,7 +10,7 @@ from fastapi.responses import Response
 
 from spacemaker.adapters.inbound.web.client_access import require_loopback
 from spacemaker.adapters.inbound.web.media_paths import _session_library_root
-from spacemaker.adapters.inbound.web.qr_svg import encode_qr_svg
+from spacemaker.adapters.inbound.web.qr_svg import qr_svg_response
 from spacemaker.bootstrap.lan import lan_ip
 from spacemaker.bootstrap.paths import is_absolute_library_path
 from spacemaker.bootstrap.services import AppServices
@@ -25,8 +25,8 @@ def build_extract_router(services: AppServices) -> APIRouter:
 		require_loopback(request)
 		if not services.wifi_token_valid(t):
 			raise HTTPException(status_code=404, detail="upload session not active")
-		upload_url = f"http://{lan_ip()}:{services.port}/upload?t={t}"
-		return Response(content=encode_qr_svg(upload_url), media_type="image/svg+xml")
+		upload_url = services.with_lan_login(f"http://{lan_ip()}:{services.port}/upload?t={t}")
+		return qr_svg_response(upload_url)
 
 	@router.get("/api/upload/session")
 	def upload_session_status(t: str = "") -> dict[str, object]:
