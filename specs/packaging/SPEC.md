@@ -92,7 +92,7 @@ When no portable catalog entry exists for a platform, skip download and rely on 
 - Build: `packaging/linux-appimage/build-appdir.sh` → relocatable venv under `usr/`, then [`prune_pyqt6.sh`](../../packaging/linux-appimage/prune_pyqt6.sh) (drops unused Qt modules; **keeps Qt WebEngine** for pywebview).
 - Bundle metadata under `usr/share/spacemaker/` (`docs/legal/`, `packaging/tool-catalog.json`, app icon).
 - Pack with pinned `appimagetool`, squashfs **zstd compression level 19**; `SHA256SUMS` in `dist/`.
-- CI: GitHub Actions on version tags `v*` only (`.github/workflows/appimage.yml`).
+- CI: GitHub Actions on version tags `v*` only (`.github/workflows/release.yml`). One workflow builds all desktop targets — Linux AppImage (`ubuntu-latest`), Windows `SpaceMaker.exe` (`windows-latest`, `build_installer.sh` under Git Bash), macOS DMG on arm64 (`macos-15`) and x86_64 (`macos-15-intel`) — then attaches every artifact plus one combined `SHA256SUMS` to the GitHub Release. Linux arm64 is not built in CI yet.
 - Post-prune smoke: offscreen WebEngine load + `--server-only` HTTP.
 
 ## macOS DMG (release)

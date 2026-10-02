@@ -26,7 +26,7 @@ Outputs (gitignored under `dist/`):
 | `SpaceMaker-<version>-<arch>.AppImage` | Double-clickable release |
 | `SHA256SUMS` | SHA-256 of the AppImage |
 
-Tagged releases (`v*`) build via [`.github/workflows/appimage.yml`](../.github/workflows/appimage.yml) and attach assets to the GitHub Release.
+Tagged releases (`v*`) build the Linux AppImage, Windows `SpaceMaker.exe` and macOS DMGs (arm64 + x86_64) via [`.github/workflows/release.yml`](../.github/workflows/appimage.yml) and attach them, with a combined `SHA256SUMS`, to the GitHub Release.
 
 AppDir only (no squashfs pack):
 

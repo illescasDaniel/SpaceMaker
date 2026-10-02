@@ -16,6 +16,10 @@ Network passcode feature is complete and committed (`1e7132e`, `0bc8298`); await
 - First JS tests: vitest + jsdom in `web/tests/` (`npm run test:web`, part of `npm run check`). Info button fixed (`.info-panel.visible`), dock Active copy is now "Active".
 - Earlier: pre-1.0 review fixes and `convert-media` spec amendments (see `progress.md`).
 
+## Release 1.0.1 (2026-10-02)
+
+`appimage.yml` → `release.yml` (Linux AppImage + Windows exe + macOS arm64/x86_64 DMGs, combined `SHA256SUMS`); version bumped to 1.0.1. Windows/macOS CI jobs unverified until a `workflow_dispatch` dry run passes; then tag `v1.0.1`.
+
 ## Next steps
 
 1. User reviews the passcode feature (click the dock info button in the real app).

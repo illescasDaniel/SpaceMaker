@@ -40,9 +40,13 @@ Details: [specs/packaging/SPEC.md](specs/packaging/SPEC.md), [tools/README.md](t
 
 ## Getting started
 
+### Download
+
+Grab the build for your OS from **GitHub Releases**: Linux `SpaceMaker-*-x86_64.AppImage`, Windows `SpaceMaker.exe`, macOS `SpaceMaker-*-arm64.dmg` (Apple Silicon) or `-x86_64.dmg` (Intel). Builds are unsigned: Windows SmartScreen and macOS Gatekeeper will warn on first launch (macOS: right-click → Open).
+
 ### Linux (AppImage)
 
-1. Download the latest **`SpaceMaker-*-*.AppImage`** and **`SHA256SUMS`** from this repository’s **GitHub Releases** page (CI publishes on version tags `v*` — see [`.github/workflows/appimage.yml`](.github/workflows/appimage.yml)).
+1. Download the latest **`SpaceMaker-*-*.AppImage`** and **`SHA256SUMS`** from this repository’s **GitHub Releases** page (CI publishes all platforms on version tags `v*` — see [`.github/workflows/release.yml`](.github/workflows/appimage.yml)).
 2. Verify the checksum, then `chmod +x SpaceMaker-*.AppImage` and run it.
 3. Complete **Setting up components** on first launch (downloads into your data folder), or install tools yourself and choose **Continue**.
 4. Pick a module on **Home** and follow on-screen QR / wizard steps.

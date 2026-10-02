@@ -45,12 +45,16 @@ def test_given_build_appimage_script_when_reading_then_uses_pinned_tool_and_zstd
 
 
 def test_given_release_workflow_when_reading_then_runs_on_tags_only():
-	workflow = _REPO / ".github" / "workflows" / "appimage.yml"
+	workflow = _REPO / ".github" / "workflows" / "release.yml"
 	assert workflow.is_file()
 	text = workflow.read_text(encoding="utf-8")
 	assert 'tags: ["v*"]' in text
 	assert "softprops/action-gh-release" in text
 	assert "build-appimage" in text or "build_appimage" in text
+	assert "windows-latest" in text
+	assert "build_installer.sh" in text
+	assert "build-macos-dmg" in text
+	assert "macos-15-intel" in text
 
 
 def test_given_bundle_env_when_resolving_repo_root_then_uses_share_tree(tmp_path: Path):
