@@ -117,7 +117,7 @@ def test_given_passcode_when_phone_requests_unlock_assets_then_not_challenged(
 	# when
 	response = phone.get(path)
 	# then
-	assert response.status_code != 401
+	assert response.status_code == 200
 
 
 @pytest.mark.parametrize("path", ["/static/js/passcode.js", "/static/index.html", "/static/unlock.css/../index.html"])

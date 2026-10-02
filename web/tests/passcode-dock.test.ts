@@ -8,7 +8,7 @@ import { S } from "../src/state.ts";
 
 const DOCK_HTML = `
 <fieldset id="passcode-dock" data-state="open">
-	<div id="passcode-info-panel" hidden></div>
+	<div class="info-panel" id="passcode-info-panel" aria-hidden="true"></div>
 	<button type="button" id="btn-passcode-info" aria-expanded="false"></button>
 	<input type="password" id="passcode-input" placeholder="Choose a passcode">
 	<button type="button" id="btn-passcode-set"></button>
@@ -139,7 +139,11 @@ describe("passcode dock", () => {
 	it("given the info button when clicked then the panel toggles", async () => {
 		await mountDock();
 		byId("btn-passcode-info").click();
-		expect(byId("passcode-info-panel").hasAttribute("hidden")).toBe(false);
+		expect(byId("passcode-info-panel").classList.contains("visible")).toBe(true);
+		expect(byId("passcode-info-panel").getAttribute("aria-hidden")).toBe("false");
 		expect(byId("btn-passcode-info").getAttribute("aria-expanded")).toBe("true");
+		byId("btn-passcode-info").click();
+		expect(byId("passcode-info-panel").classList.contains("visible")).toBe(false);
+		expect(byId("btn-passcode-info").getAttribute("aria-expanded")).toBe("false");
 	});
 });

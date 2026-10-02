@@ -54,7 +54,7 @@
 
 - Dock: fixed bottom-left, 16.5 rem wide; full width on windows ≤ 640 px; Home only. Title with lock icon and **i** button; help panel opens above the field.
 - **Open state:** password input "Choose a passcode", **Set**, warning line "Not set — anyone on your Wi-Fi can open the Gallery."
-- **Active state:** read-only `••••••••`, **Change** (returns to input with placeholder "New passcode"), **Clear**; line "Active — remembered; other devices need it." The passcode is never shown again.
+- **Active state:** read-only `••••••••`, **Change** (returns to input with placeholder "New passcode"), **Clear**; line "Active" The passcode is never shown again.
 - Info panel states: other devices must enter it; this computer never asks; QR scan signs in; remembered between launches (hash only), change/clear signs everyone out; **Not encryption** note.
 - Phone unlock page: SpaceMaker logo, passcode field, **Unlock**, QR tip; states idle / wrong passcode / locked out (input and button disabled). After success the phone returns to the page it asked for.
 - Same motion vocabulary as [ui-motion](../ui-motion/SPEC.md); no new animation.

@@ -1,5 +1,5 @@
 import { apiGet, apiSend } from "./api.ts";
-import { bindDisclosure, errorMessage } from "./dom.ts";
+import { errorMessage } from "./dom.ts";
 import { loadServerInfo } from "./gallery-timeline.ts";
 import { S } from "./state.ts";
 
@@ -69,8 +69,22 @@ export function loadPasscodeStatus(): void {
 		.catch(() => undefined);
 }
 
+/** The dock's info panel is shown by the shared `.info-panel.visible` CSS, not the `hidden` attribute. */
+function bindInfoPanel(): void {
+	const button = document.getElementById("btn-passcode-info");
+	const panel = document.getElementById("passcode-info-panel");
+	button?.addEventListener("click", () => {
+		if (!panel) {
+			return;
+		}
+		const open = panel.classList.toggle("visible");
+		panel.setAttribute("aria-hidden", open ? "false" : "true");
+		button.setAttribute("aria-expanded", open ? "true" : "false");
+	});
+}
+
 export function bindPasscodeDock(): void {
-	bindDisclosure("btn-passcode-info", "passcode-info-panel");
+	bindInfoPanel();
 	const submit = (): void => {
 		const field = input();
 		if (!field) {
