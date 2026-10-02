@@ -28,5 +28,9 @@ def test_given_mount_dir_with_device_files_when_remove_then_files_are_kept(tmp_p
 
 
 def test_given_missing_dir_when_remove_then_no_error(tmp_path: Path) -> None:
-	# given / when / then
-	remove_empty_mount_dir(tmp_path / "nope")
+	# given
+	missing = tmp_path / "nope"
+	# when
+	remove_empty_mount_dir(missing)
+	# then
+	assert not missing.exists()

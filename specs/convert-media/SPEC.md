@@ -15,7 +15,7 @@ Added retroactively during the 2026-10 pre-1.0 review (this spec predates the se
 
 - **Success criteria:** every file in `originals/` ends in exactly one of `processed/` (encoded or moved as-is), `error/` or `invalid/`; an original is deleted only after its output exists and validates (or after being filed as-is). Re-running convert on the same library never loses a file and never leaves two copies of the same encode.
 - **Failure handling:** encode failures retry once, then the source moves to `error/`; unreadable inputs go to `invalid/`. Output is written to a staging dir and renamed, so a crash leaves no partial file in `processed/`. A name clash never overwrites: byte-identical files collapse to one, otherwise the newcomer gets a unique name.
-- **Perf / resource budget:** one file encoded at a time per convert job; staging and duplicate checks stream in 1 MiB chunks (no whole-file reads); the duplicate check compares only against the plain-named output.
+- **Performance / resource budget:** one file encoded at a time per convert job; staging and duplicate checks stream in 1 MiB chunks (no whole-file reads); the duplicate check compares only against the plain-named output.
 - **Trust boundary:** inputs are untrusted file names and bytes from phones; relative paths are validated (no `..`, no absolute or drive-qualified paths) before any filesystem access.
 
 ## Triggers & routing
@@ -163,7 +163,7 @@ If existing output invalid: delete and re-encode.
 
 **Duplicate collapse:** encoding is deterministic for the same source and settings, so when a collision-named output (`{stem}_{ext}.*`) turns out byte-identical to the plain-named output (e.g. a run interrupted after the encode, before the source was removed), the new output is discarded and the source removed. Outputs from a different encoder version may differ and then remain as two files (harmless).
 
-Moving a source as-is into `processed/`, `error/` or `invalid/` MUST never overwrite a different file: an identical-size file with the same name counts as the same file (source dropped); otherwise the source is stored as `{name} (2).{ext}`, `(3)`, ….
+Moving a source as-is into `processed/`, `error/` or `invalid/` MUST never overwrite a different file: a byte-identical file with the same name counts as the same file (source dropped); otherwise the source is stored as `{name} (2).{ext}`, `(3)`, ….
 
 Files already in `error/` or `invalid/` are not reprocessed until user moves them back to `originals/` (out of scope: auto-requeue).
 
@@ -254,9 +254,31 @@ Files already in `error/` or `invalid/` are not reprocessed until user moves the
 - **Then** `doc.pdf` is in `invalid/`
 - **And** it is not in `originals/`
 
+### Scenario: Same-stem sources get distinct outputs
+
+- **Given** `photo.jpg` already converted to `processed/photo.avif`
+- **And** `photo.png` in `originals/`
+- **When** convert runs
+- **Then** the PNG is encoded to `processed/photo_png.avif`
+- **And** `processed/photo.avif` is untouched
+
+### Scenario: Duplicate output collapses
+
+- **Given** an interrupted run left `processed/photo_png.avif` byte-identical to `processed/photo.avif`, source still in `originals/`
+- **When** convert runs and the new encode matches `photo.avif`
+- **Then** the new output is discarded
+- **And** the source is removed from `originals/`
+
+### Scenario: Move never overwrites a different file
+
+- **Given** `processed/web.avif` exists with different content than `originals/web.avif`
+- **When** convert moves the source as-is
+- **Then** it is stored as `processed/web (2).avif`
+- **And** the existing file is untouched
+
 ### Scenario: Skip valid existing output
 
-- **Given** valid `{stem}.avif` already in `processed/` and source still in `originals/`
+- **Given** the source's own planned output (`{stem}.avif`, or `{stem}_{ext}.avif` when the plain name belongs to another source) already valid in `processed/` and source still in `originals/`
 - **When** convert runs
 - **Then** encode is skipped
 - **And** source is removed from `originals/`

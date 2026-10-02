@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-02 — Correction: as-is move duplicates require byte-identical content
+
+- **Context:** the entry below says "same size = duplicate"; that was too weak and could drop a different file.
+- **Decision:** `_move_to_folder` drops the source only if `files_have_same_content` (size + 1 MiB chunk compare); otherwise `name (2).ext`. Same for the post-encode duplicate collapse.
+- **Rationale:** never lose data on a size coincidence.
+
 ## 2026-10-02 — Pre-1.0 bug-fix pass: collision naming and mount safety
 
 - **Context:** review before 1.0 found same-stem sources (png/jpg/heic, mov/mp4) sharing one planned output, so "skip existing output" deleted an original that was never encoded; RAW could overwrite a JPEG's AVIF. Separately, `shutil.rmtree` on a failed-unmount FUSE mount would delete real phone files.

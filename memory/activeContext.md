@@ -1,4 +1,4 @@
-_Last updated: 2026-10-02 (pre-1.0 bug-fix pass complete, gate green: 463 tests)_
+_Last updated: 2026-10-02 (grader round 1 fixed, gate green: 464 tests)_
 
 ## Branch
 

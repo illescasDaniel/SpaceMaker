@@ -13,7 +13,10 @@ from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMe
 from spacemaker.adapters.outbound.media.tool_runner import ToolExecutionError
 
 
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="uses a POSIX shell script as fake ffmpeg")
+pytestmark = [
+	pytest.mark.integration,
+	pytest.mark.skipif(sys.platform == "win32", reason="uses a POSIX shell script as fake ffmpeg"),
+]
 
 
 def _converter_with_fake_ffmpeg(tmp_path: Path, monkeypatch, script_body: str) -> SubprocessMediaConverter:

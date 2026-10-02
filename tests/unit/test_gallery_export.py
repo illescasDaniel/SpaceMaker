@@ -101,12 +101,12 @@ def test_given_fresh_cache_when_export_jpeg_then_reuses_without_reencode(tmp_pat
 
 
 def test_given_windows_drive_path_when_gallery_path_checked_then_unsafe():
-	# given / when / then
-	from spacemaker.domain.gallery_export import is_safe_gallery_relative_path
-
-	assert is_safe_gallery_relative_path("C:/Windows/evil.jpg") is False
-	assert is_safe_gallery_relative_path("C:evil.jpg") is False
-	assert is_safe_gallery_relative_path("2025/a.avif") is True
+	# given
+	paths = ["C:/Windows/evil.jpg", "C:evil.jpg", "2025/a.avif"]
+	# when
+	results = [is_safe_gallery_relative_path(path) for path in paths]
+	# then
+	assert results == [False, False, True]
 
 
 def test_given_encode_fails_midway_when_export_jpeg_then_no_cache_file_or_partial_left(tmp_path) -> None:

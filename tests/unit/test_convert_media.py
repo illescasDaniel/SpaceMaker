@@ -426,3 +426,26 @@ def test_given_same_size_but_different_content_in_processed_when_move_then_sourc
 	assert fs.files[existing] == 22
 	assert fs.files[renamed] == 22
 	assert src not in fs.files
+
+
+def test_given_valid_existing_output_when_convert_then_encode_skipped_and_source_removed():
+	# given
+	fs = FakeFileSystem()
+	library = "/lib"
+	src = _paths(fs, library, LibraryFolder.ORIGINALS, "a.png")
+	other = _paths(fs, library, LibraryFolder.PROCESSED, "a.avif")
+	dest = _paths(fs, library, LibraryFolder.PROCESSED, "a_png.avif")
+	fs.files[src] = 100
+	fs.files[other] = 70
+	fs.files[dest] = 30
+	probe = FakeMediaProbe()
+	probe.readable_images.add(src)
+	probe.valid_images.add(dest)
+	converter = FakeMediaConverter()
+	converter.bind_filesystem(fs)
+	# when
+	ConvertMedia(fs, converter, probe).run(library)
+	# then
+	assert converter.encoded_images == []
+	assert fs.files[dest] == 30
+	assert src not in fs.files
