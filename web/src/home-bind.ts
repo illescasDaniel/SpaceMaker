@@ -3,7 +3,14 @@ import { bindDisclosure, errorMessage, onClick, showFormBanner } from "./dom.ts"
 import { bindGalleryUi } from "./gallery.ts";
 import { closeGalleryPhonePopup, toggleGalleryPhonePopup } from "./gallery-item.ts";
 import { selectedConnectionMethod, syncConnectionButtons, validateStep1Form } from "./home.ts";
-import { canStartConvert, extractIsActive, loadDevices, pushSettings, updateExtractButtons } from "./jobs.ts";
+import {
+	canStartConvert,
+	extractIsActive,
+	loadDevices,
+	pushSettings,
+	pushSettingsDetached,
+	updateExtractButtons,
+} from "./jobs.ts";
 import { applyState, showView } from "./shell.ts";
 import { S } from "./state.ts";
 import type { AppSnapshot } from "./types.ts";
@@ -44,7 +51,7 @@ function bindHomeDesktop(): void {
 			if (easyCompressCheckbox.disabled) {
 				return;
 			}
-			pushSettings();
+			pushSettingsDetached();
 		});
 	}
 	function switchConnectionMethod(method: string): Promise<unknown> {
@@ -77,7 +84,7 @@ function bindHomeDesktop(): void {
 		}
 		chipCopy.classList.add("selected");
 		chipMove?.classList.remove("selected");
-		pushSettings();
+		pushSettingsDetached();
 	});
 	chipMove?.addEventListener("click", () => {
 		if (chipMove instanceof HTMLButtonElement && chipMove.disabled) {
@@ -85,7 +92,7 @@ function bindHomeDesktop(): void {
 		}
 		chipMove.classList.add("selected");
 		chipCopy?.classList.remove("selected");
-		pushSettings();
+		pushSettingsDetached();
 	});
 	const libraryInput = document.getElementById("input-library-root");
 	libraryInput?.addEventListener("input", () => {
@@ -96,11 +103,11 @@ function bindHomeDesktop(): void {
 	});
 	libraryInput?.addEventListener("change", () => {
 		validateStep1Form(true);
-		pushSettings();
+		pushSettingsDetached();
 	});
 	document.getElementById("select-device")?.addEventListener("change", () => {
 		validateStep1Form(true);
-		pushSettings();
+		pushSettingsDetached();
 	});
 	document.getElementById("btn-browse-library")?.addEventListener("click", () => {
 		const lib = document.getElementById("input-library-root");
@@ -127,7 +134,7 @@ function bindHomeDesktop(): void {
 	});
 	document.querySelectorAll("#folder-picker input").forEach((box) => {
 		box.addEventListener("change", () => {
-			pushSettings();
+			pushSettingsDetached();
 		});
 	});
 	document.getElementById("btn-start-extract")?.addEventListener("click", () => {

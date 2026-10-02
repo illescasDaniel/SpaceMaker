@@ -8,6 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from spacemaker.adapters.outbound.device.mount_dirs import remove_empty_mount_dir
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
 from spacemaker.domain.library_paths import SKIPPED_LIBRARY_DIR_NAMES, skip_media_path
@@ -175,7 +176,7 @@ class AfcDeviceRepository:
 			self._unmount_path(mount_dir)
 			raise RuntimeError("ifuse timed out — unlock iPhone and tap Trust") from exc
 		if result.returncode != 0:
-			shutil.rmtree(mount_dir, ignore_errors=True)
+			remove_empty_mount_dir(mount_dir)
 			detail = (result.stderr or result.stdout or "").strip()
 			raise RuntimeError(detail or "ifuse failed — unlock iPhone and tap Trust")
 		self._live_mounts[device_id] = mount_dir
@@ -261,7 +262,7 @@ class AfcDeviceRepository:
 				check=False,
 			)
 			break
-		shutil.rmtree(mount, ignore_errors=True)
+		remove_empty_mount_dir(mount)
 
 	def __del__(self) -> None:
 		if self._test_mounts is not None:

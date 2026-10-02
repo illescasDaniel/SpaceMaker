@@ -198,7 +198,10 @@ function showGalleryTimelineMessage(message: string): void {
 		host.innerHTML = '<p class="status-line">' + message + "</p>";
 	}
 }
+/** Bumped by every `loadGallery()`; a page response from an older load must not touch the new timeline. */
+let galleryLoadGeneration = 0;
 function fetchGalleryTimelinePage(): void {
+	const generation = galleryLoadGeneration;
 	const isFirstPage = S.galleryMonthBlocks.length === 0;
 	let url = "/api/gallery/timeline?limit=" + S.GALLERY_PAGE_LIMIT;
 	if (S.galleryLoadingMore) {
@@ -210,6 +213,9 @@ function fetchGalleryTimelinePage(): void {
 	S.galleryLoadingMore = true;
 	setGalleryLoadingMoreVisible(true);
 	function failLoad(): void {
+		if (generation !== galleryLoadGeneration) {
+			return;
+		}
 		S.galleryLoadingMore = false;
 		setGalleryLoadingMoreVisible(false);
 		S.galleryHasMore = false;
@@ -220,6 +226,9 @@ function fetchGalleryTimelinePage(): void {
 	}
 	apiSend<GalleryTimelinePage>("GET", url)
 		.then((payload) => {
+			if (generation !== galleryLoadGeneration) {
+				return;
+			}
 			const items = payload.items || [];
 			S.galleryLoadingMore = false;
 			setGalleryLoadingMoreVisible(false);
@@ -319,6 +328,7 @@ function loadGallery(): void {
 		S.galleryIntersectionObserver.disconnect();
 		S.galleryIntersectionObserver = null;
 	}
+	galleryLoadGeneration += 1;
 	S.galleryMonthBlocks = [];
 	S.galleryNextCursor = null;
 	S.galleryHasMore = true;

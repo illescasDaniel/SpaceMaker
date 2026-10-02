@@ -1,5 +1,5 @@
 import { apiSend } from "./api.js";
-import { errorMessage, onClick } from "./dom.js";
+import { encodePathSegments, errorMessage, onClick } from "./dom.js";
 import { shiftGalleryItem, startFriendlyExport, triggerFileDownload } from "./gallery-item.js";
 import { loadCalendarMonth, loadGallery, removeGalleryItem, shiftCalendarMonth } from "./gallery-timeline.js";
 import { showView } from "./shell.js";
@@ -46,7 +46,7 @@ function bindGalleryUi() {
 		if (!S.galleryItemPath) {
 			return;
 		}
-		triggerFileDownload("/media/" + encodeURI(S.galleryItemPath) + "?download=1");
+		triggerFileDownload("/media/" + encodePathSegments(S.galleryItemPath) + "?download=1");
 	});
 	onClick("btn-gallery-open", () => {
 		if (!S.galleryItemPath) {

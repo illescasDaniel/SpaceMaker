@@ -1,5 +1,5 @@
-import { apiSend } from "./api.ts";
-import { isDesktopShell } from "./dom.ts";
+import { apiGet, apiSend } from "./api.ts";
+import { encodePathSegments, isDesktopShell } from "./dom.ts";
 import { showView } from "./shell.ts";
 import { S } from "./state.ts";
 import type {
@@ -19,10 +19,10 @@ function prefetchGalleryMedia(relativePath: string | null | undefined): void {
 		return;
 	}
 	const thumb = new Image();
-	thumb.src = "/thumbs/" + encodeURI(relativePath);
+	thumb.src = "/thumbs/" + encodePathSegments(relativePath);
 	if (!pathLooksLikeVideo(relativePath)) {
 		const full = new Image();
-		full.src = "/media/" + encodeURI(relativePath);
+		full.src = "/media/" + encodePathSegments(relativePath);
 	}
 }
 function setStageLoading(stage: HTMLElement | null, direction?: "prev" | "next"): void {
@@ -59,7 +59,7 @@ function setStageLoading(stage: HTMLElement | null, direction?: "prev" | "next")
 	thumb.className = "gallery-item-thumb";
 	thumb.alt = "";
 	thumb.setAttribute("aria-hidden", "true");
-	thumb.src = "/thumbs/" + encodeURI(S.galleryItemPath || "");
+	thumb.src = "/thumbs/" + encodePathSegments(S.galleryItemPath || "");
 	const loading = document.createElement("p");
 	loading.className = "gallery-item-loading";
 	loading.setAttribute("aria-live", "polite");
@@ -71,7 +71,7 @@ function setStageLoading(stage: HTMLElement | null, direction?: "prev" | "next")
 		const early = document.createElement("img");
 		early.className = "gallery-item-full";
 		early.alt = "";
-		early.src = "/media/" + encodeURI(S.galleryItemPath || "");
+		early.src = "/media/" + encodePathSegments(S.galleryItemPath || "");
 		media.appendChild(early);
 	}
 	stage.appendChild(media);
@@ -144,7 +144,7 @@ function renderGalleryItemStage(stage: HTMLElement | null, payload: GalleryItemD
 	}
 	const thumb = media.querySelector<HTMLElement>(".gallery-item-thumb");
 	const loadingEl = media.querySelector<HTMLElement>(".gallery-item-loading");
-	const mediaUrl = "/media/" + encodeURI(payload.relative_path);
+	const mediaUrl = "/media/" + encodePathSegments(payload.relative_path);
 	const label = meta.filename || payload.relative_path;
 	const earlyFull = media.querySelector<HTMLElement>(".gallery-item-full");
 	let full: HTMLImageElement | HTMLVideoElement | undefined;
@@ -274,7 +274,7 @@ function shiftGalleryItem(delta: number): void {
 	S.galleryItemPath = target;
 	S.galleryItemNeighbors = { prev: null, next: null };
 	updateGalleryItemNav();
-	const itemPath = "/gallery/item/" + encodeURI(S.galleryItemPath);
+	const itemPath = "/gallery/item/" + encodePathSegments(S.galleryItemPath);
 	if (location.pathname !== itemPath) {
 		history.pushState({ view: "gallery-item", path: S.galleryItemPath }, "", itemPath);
 	}
@@ -294,7 +294,7 @@ function appendThumbCell(grid: Element, item: GalleryItem): void {
 	const img = document.createElement("img");
 	cell.type = "button";
 	cell.className = "thumb thumb-link";
-	img.src = "/thumbs/" + encodeURI(item.relative_path);
+	img.src = "/thumbs/" + encodePathSegments(item.relative_path);
 	img.alt = item.relative_path;
 	img.loading = "lazy";
 	cell.appendChild(img);
@@ -377,7 +377,13 @@ function triggerFileDownload(url: string): void {
 	a.click();
 	a.remove();
 }
+let lastDeliveredExportUrl = "";
 function deliverFriendlyExport(downloadUrl: string): void {
+	// WS push (desktop) and HTTP poll (phones) can both report "done"; download once.
+	if (downloadUrl === lastDeliveredExportUrl) {
+		return;
+	}
+	lastDeliveredExportUrl = downloadUrl;
 	setGalleryExportProgress(100, "Download starting…");
 	triggerFileDownload(downloadUrl);
 	setTimeout(hideGalleryExportAlert, 1500);
@@ -411,7 +417,43 @@ function applyGalleryExport(exp: GalleryExportJob | null | undefined): void {
 		}
 	}
 }
+const EXPORT_POLL_MS = 700;
+let exportPollToken = 0;
+function pollGalleryExport(jobId: string, relativePath: string, token: number): void {
+	setTimeout(() => {
+		if (token !== exportPollToken || S.galleryItemPath !== relativePath) {
+			return;
+		}
+		apiGet<GalleryExportJob>("/api/gallery/export/" + encodeURIComponent(jobId))
+			.then((job) => {
+				if (token !== exportPollToken) {
+					return;
+				}
+				applyGalleryExport(job);
+				if (job.phase === "running") {
+					pollGalleryExport(jobId, relativePath, token);
+				}
+			})
+			.catch((pollErr: unknown) => {
+				if (token !== exportPollToken) {
+					return;
+				}
+				applyGalleryExport({
+					job_id: jobId,
+					relative_path: relativePath,
+					format: "",
+					phase: "error",
+					percent: 0,
+					download_url: "",
+					error: pollErr instanceof Error ? pollErr.message : "Export failed.",
+					skipped_encode: false,
+				});
+			});
+	}, EXPORT_POLL_MS);
+}
 function startFriendlyExport(): void {
+	exportPollToken += 1;
+	const token = exportPollToken;
 	const fmt = S.galleryItemKind === "video" ? "h264_aac" : "jpeg";
 	const alertEl = document.getElementById("gallery-export-alert");
 	hideGalleryExportAlert();
@@ -420,7 +462,15 @@ function startFriendlyExport(): void {
 		alertEl.hidden = false;
 	}
 	apiSend<GalleryExportJob>("POST", "/api/gallery/export", { relative_path: S.galleryItemPath, format: fmt })
-		.then(applyGalleryExport)
+		.then((job) => {
+			if (token !== exportPollToken) {
+				return;
+			}
+			applyGalleryExport(job);
+			if (job.phase === "running" && job.job_id) {
+				pollGalleryExport(job.job_id, job.relative_path, token);
+			}
+		})
 		.catch((exportErr: unknown) => {
 			const message = exportErr instanceof Error ? exportErr.message : "Export failed.";
 			applyGalleryExport({
@@ -446,8 +496,13 @@ function loadGalleryItemDetail(direction?: "prev" | "next"): void {
 	hideGalleryExportAlert();
 	setStageLoading(stage, direction);
 	updateGalleryItemNav();
-	apiSend<GalleryItemDetail>("GET", "/api/gallery/item?path=" + encodeURIComponent(S.galleryItemPath))
+	// Rapid prev/next: only the response for the item currently shown may render.
+	const requestedPath = S.galleryItemPath;
+	apiSend<GalleryItemDetail>("GET", "/api/gallery/item?path=" + encodeURIComponent(requestedPath))
 		.then((payload) => {
+			if (S.galleryItemPath !== requestedPath) {
+				return;
+			}
 			const meta = payload.metadata;
 			S.galleryItemKind = payload.kind === "video" ? "video" : "image";
 			if (title) {
@@ -466,7 +521,6 @@ function loadGalleryItemDetail(direction?: "prev" | "next"): void {
 			}
 			if (metaHost) {
 				const rows: [string, string][] = [
-					["On disk", payload.absolute_path || "—"],
 					["Captured", formatCaptured(meta.captured_at || payload.captured_at)],
 					[
 						"Camera",
@@ -477,6 +531,10 @@ function loadGalleryItemDetail(direction?: "prev" | "next"): void {
 					["Dimensions", meta.width && meta.height ? meta.width + " × " + meta.height : "—"],
 					["File size", formatFileSize(meta.file_size_bytes)],
 				];
+				if (payload.absolute_path) {
+					// Empty for LAN phones: the host path is only shared with the desktop app.
+					rows.unshift(["On disk", payload.absolute_path]);
+				}
 				if (payload.kind === "video") {
 					rows.push(["Duration", formatDuration(meta.duration_seconds)]);
 				}
@@ -500,6 +558,9 @@ function loadGalleryItemDetail(direction?: "prev" | "next"): void {
 			updateGalleryItemNav();
 		})
 		.catch(() => {
+			if (S.galleryItemPath !== requestedPath) {
+				return;
+			}
 			setStageMessage(stage, "Could not load this item.");
 			updateGalleryItemNav();
 		});

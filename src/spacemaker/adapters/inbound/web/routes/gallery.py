@@ -5,9 +5,10 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from spacemaker.adapters.inbound.web.client_access import require_loopback
+from spacemaker.adapters.inbound.web.client_access import is_loopback_client_host, require_loopback
 from spacemaker.adapters.inbound.web.media_paths import (
 	_attachment_filename,
+	_content_disposition,
 	_resolve_processed_file,
 	_session_library_root,
 )
@@ -48,7 +49,7 @@ def build_gallery_router(services: AppServices) -> APIRouter:
 		return {"year": year, "month": month, "days_with_media": days}
 
 	@router.get("/api/gallery/item")
-	async def gallery_item_detail(path: str) -> dict[str, object]:
+	async def gallery_item_detail(request: Request, path: str) -> dict[str, object]:
 		root = _session_library_root(services)
 		if not root:
 			raise HTTPException(status_code=404, detail="library not configured")
@@ -64,7 +65,10 @@ def build_gallery_router(services: AppServices) -> APIRouter:
 			raise HTTPException(status_code=404, detail="not found")
 		return {
 			"relative_path": detail.item.relative_path,
-			"absolute_path": detail.absolute_path,
+			# The host filesystem path is only meaningful (and only disclosed) to the desktop app.
+			"absolute_path": detail.absolute_path
+			if is_loopback_client_host(request.client.host if request.client else None)
+			else "",
 			"captured_at": detail.item.captured_at.isoformat(),
 			"kind": detail.item.kind.value,
 			"preview_in_browser": detail.preview_in_browser,
@@ -118,6 +122,14 @@ def build_gallery_router(services: AppServices) -> APIRouter:
 		job = services.start_gallery_export(root, body.relative_path, export_format)
 		return job.to_dict()
 
+	@router.get("/api/gallery/export/{job_id}")
+	def gallery_export_status(job_id: str) -> dict[str, object]:
+		# HTTP status poll: LAN phones cannot use the loopback-only /ws push.
+		job = services.get_export_job(job_id)
+		if job is None:
+			raise HTTPException(status_code=404, detail="unknown job")
+		return job.to_dict()
+
 	@router.get("/api/gallery/export/{job_id}/file")
 	def gallery_export_file(job_id: str, inline: int = 0) -> FileResponse:
 		job = services.get_export_job(job_id)
@@ -128,9 +140,8 @@ def build_gallery_router(services: AppServices) -> APIRouter:
 		path = Path(job.download_path)
 		if not path.is_file():
 			raise HTTPException(status_code=404, detail="export file missing")
-		name = path.name.replace('"', "")
 		if inline:
-			disposition = f'inline; filename="{name}"'
+			disposition = _content_disposition("inline", path.name)
 		else:
 			disposition = _attachment_filename(path)
 		return FileResponse(path, headers={"Content-Disposition": disposition})

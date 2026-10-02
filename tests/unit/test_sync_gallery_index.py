@@ -243,3 +243,32 @@ async def test_given_legacy_hash_export_when_removed_sync_then_legacy_swept():
 	await sync.run(library)
 	# then
 	assert legacy not in fs.files
+
+
+@pytest.mark.asyncio
+async def test_given_one_file_vanishes_during_scan_when_run_then_other_files_still_indexed():
+	# given
+	library = "/lib"
+	good = _converted_path(library, "good.avif")
+	bad = _converted_path(library, "bad.avif")
+	fs = FakeFileSystem()
+	fs.files[good] = 10
+	fs.mtimes[good] = 100.0
+	fs.files[bad] = 10
+	fs.mtimes[bad] = 100.0
+	original_stat = fs.file_stat
+
+	def flaky_stat(path: str):
+		if path == bad:
+			raise FileNotFoundError(path)
+		return original_stat(path)
+
+	fs.file_stat = flaky_stat  # type: ignore[method-assign]
+	probe = FakeMediaProbe(captured_at_map={good: datetime(2025, 9, 4)})
+	probe.bind_filesystem(fs)
+	index = FakeGalleryIndex()
+	# when
+	await SyncGalleryIndex(fs, probe, index).run(library)
+	# then
+	assert await index.get(library, "good.avif") is not None
+	assert await index.get(library, "bad.avif") is None

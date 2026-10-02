@@ -1,5 +1,5 @@
 import { apiSend } from "./api.js";
-import { errorMessage, isDesktopShell, isMobileGalleryShell, showFormBanner } from "./dom.js";
+import { encodePathSegments, errorMessage, isDesktopShell, isMobileGalleryShell, showFormBanner } from "./dom.js";
 import { bindGalleryUi } from "./gallery.js";
 import {
 	applyGalleryExport,
@@ -75,7 +75,13 @@ function syncActiveModuleView(next) {
 		return;
 	}
 	const currentId = active.id.replace(/^view-/, "");
-	if (currentId === "gallery" || currentId === "gallery-item" || currentId === "settings" || currentId === "legal") {
+	if (
+		currentId === "gallery" ||
+		currentId === "gallery-item" ||
+		currentId === "settings" ||
+		currentId === "settings-tools" ||
+		currentId === "legal"
+	) {
 		return;
 	}
 	const target = !next.active_module || next.active_module === "home" ? "home" : moduleToViewId(next.active_module);
@@ -196,7 +202,7 @@ function showView(viewId, options) {
 		}
 		if (!opts.skipHistory) {
 			if (resolved === "gallery-item" && S.galleryItemPath) {
-				const itemPath = "/gallery/item/" + encodeURI(S.galleryItemPath);
+				const itemPath = "/gallery/item/" + encodePathSegments(S.galleryItemPath);
 				if (location.pathname !== itemPath) {
 					history.pushState({ view: "gallery-item", path: S.galleryItemPath }, "", itemPath);
 				}

@@ -110,6 +110,8 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self.export_friendly = ExportFriendlyMedia(self.filesystem, self.converter, self.probe)
 		self.thumbnails = SubprocessThumbnailGenerator(self.runner)
 		self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spacemaker-job")
+		# Friendly exports get their own worker so a long extract + convert can't starve a download.
+		self._export_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="spacemaker-export")
 		self._device_repos: dict[ConnectionMethod, DeviceRepositoryPort] = {}
 		self._export_jobs: dict[str, GalleryExportJob] = {}
 		self._export_lock = threading.Lock()
@@ -300,6 +302,7 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self.release_device_mounts()
 		self._clear_transfer_session()
 		self._executor.shutdown(wait=False, cancel_futures=True)
+		self._export_executor.shutdown(wait=False, cancel_futures=True)
 
 	def compress_media_preference(self) -> CompressMediaPreference:
 		return resolve_compress_media_preference(

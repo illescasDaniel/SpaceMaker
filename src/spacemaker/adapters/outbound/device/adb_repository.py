@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,7 @@ from pathlib import Path
 
 from adbutils import AdbClient, AdbDevice
 
+from spacemaker.adapters.outbound.device.mount_dirs import remove_empty_mount_dir
 from spacemaker.domain.library_paths import skip_media_path
 from spacemaker.domain.media import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from spacemaker.domain.transfer_folders import TransferFolder, existing_transfer_folders_from_dir_names
@@ -93,7 +95,7 @@ class AdbDeviceRepository:
 		allowed = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 		found: set[str] = set()
 		for root in _MEDIA_ROOTS:
-			output = self._shell_text(device, f"find {root} -type f 2>/dev/null || true")
+			output = self._shell_text(device, f"find {shlex.quote(root)} -type f 2>/dev/null || true")
 			for line in output.splitlines():
 				path = line.strip()
 				if not path or "." not in path or skip_media_path(path):
@@ -107,7 +109,7 @@ class AdbDeviceRepository:
 		device = self._client.device(device_id)
 		found: set[str] = set()
 		for root in _FILE_ROOTS:
-			output = self._shell_text(device, f"find {root} -type f 2>/dev/null || true")
+			output = self._shell_text(device, f"find {shlex.quote(root)} -type f 2>/dev/null || true")
 			for line in output.splitlines():
 				path = line.strip()
 				if not path or skip_media_path(path):
@@ -129,8 +131,8 @@ class AdbDeviceRepository:
 			for abs_path in self._absolute_extra_candidates(relative, preferred):
 				kind = self._shell_text(
 					device,
-					f'if [ -f "{abs_path}" ]; then echo file; '
-					f'elif [ -d "{abs_path}" ]; then echo dir; else echo missing; fi',
+					f"if [ -f {shlex.quote(abs_path)} ]; then echo file; "
+					f"elif [ -d {shlex.quote(abs_path)} ]; then echo dir; else echo missing; fi",
 				).strip()
 				if kind == "file":
 					if not skip_media_path(abs_path):
@@ -139,7 +141,7 @@ class AdbDeviceRepository:
 				if kind == "dir":
 					output = self._shell_text(
 						device,
-						f'find "{abs_path}" -type f 2>/dev/null || true',
+						f"find {shlex.quote(abs_path)} -type f 2>/dev/null || true",
 					)
 					for line in output.splitlines():
 						path = line.strip()
@@ -249,7 +251,7 @@ class AdbDeviceRepository:
 			self._unmount_path(mount_dir)
 			mount_dir = Path(tempfile.mkdtemp(prefix=_ORPHAN_MOUNT_PREFIX))
 		if not mounted:
-			shutil.rmtree(mount_dir, ignore_errors=True)
+			remove_empty_mount_dir(mount_dir)
 			return None
 		self._live_mounts[device_id] = mount_dir
 		if used_subdir:
@@ -276,7 +278,7 @@ class AdbDeviceRepository:
 		names: set[str] = set()
 		for paths in _SHELL_PRESET_PATHS.values():
 			for path in paths:
-				output = self._shell_text(device, f"test -d {path} && echo yes || true")
+				output = self._shell_text(device, f"test -d {shlex.quote(path)} && echo yes || true")
 				if "yes" in output:
 					names.add(Path(path).name)
 					break
@@ -284,7 +286,9 @@ class AdbDeviceRepository:
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		device = self._client.device(device_id)
-		output = self._shell_text(device, f"stat -c %s {device_path} 2>/dev/null || wc -c < {device_path}")
+		output = self._shell_text(
+			device, f"stat -c %s {shlex.quote(device_path)} 2>/dev/null || wc -c < {shlex.quote(device_path)}"
+		)
 		text = output.strip().splitlines()[-1].strip() if output.strip() else ""
 		try:
 			return int(text)
@@ -298,7 +302,7 @@ class AdbDeviceRepository:
 
 	def delete_device_file(self, device_id: str, device_path: str) -> None:
 		device = self._client.device(device_id)
-		device.shell(f"rm -f {device_path}")
+		device.shell(f"rm -f {shlex.quote(device_path)}")
 
 	def release_mounts(self) -> None:
 		if self._test_mounts is not None:
@@ -324,7 +328,7 @@ class AdbDeviceRepository:
 					timeout=5.0,
 				)
 			break
-		shutil.rmtree(mount, ignore_errors=True)
+		remove_empty_mount_dir(mount)
 
 	def __del__(self) -> None:
 		with_context = getattr(self, "_test_mounts", None)

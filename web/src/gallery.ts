@@ -1,5 +1,5 @@
 import { apiSend } from "./api.ts";
-import { errorMessage, onClick } from "./dom.ts";
+import { encodePathSegments, errorMessage, onClick } from "./dom.ts";
 import { shiftGalleryItem, startFriendlyExport, triggerFileDownload } from "./gallery-item.ts";
 import { loadCalendarMonth, loadGallery, removeGalleryItem, shiftCalendarMonth } from "./gallery-timeline.ts";
 import { showView } from "./shell.ts";
@@ -46,7 +46,7 @@ function bindGalleryUi(): void {
 		if (!S.galleryItemPath) {
 			return;
 		}
-		triggerFileDownload("/media/" + encodeURI(S.galleryItemPath) + "?download=1");
+		triggerFileDownload("/media/" + encodePathSegments(S.galleryItemPath) + "?download=1");
 	});
 	onClick("btn-gallery-open", () => {
 		if (!S.galleryItemPath) {

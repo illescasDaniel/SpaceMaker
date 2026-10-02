@@ -85,62 +85,59 @@ def build_settings_router(services: AppServices) -> APIRouter:
 			before = services.compress_media_preference().enabled
 			after = services.set_compress_media(body.compress_media)
 			compress_changed = after.enabled != before
+		job_active = False
 		with services.session._lock:
 			if body.ui_mode is not None:
 				services.session.ui_mode = body.ui_mode
-			if services.session.extract_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
-				if compress_changed:
-					services.maybe_start_convert_drain()
-				services.push_state()
-				return services.enriched_snapshot()
-			if services.session.usb_transfer_phase in {JobPhase.RUNNING, JobPhase.PAUSED}:
-				if compress_changed:
-					services.maybe_start_convert_drain()
-				services.push_state()
-				return services.enriched_snapshot()
-			library_root = normalize_library_root(body.library_root)
-			if library_root and not is_absolute_library_path(library_root):
-				raise HTTPException(status_code=400, detail="library_root must be an absolute path")
-			previous_method = services.session.connection_method
-			services.session.library_root = library_root
-			services.session.connection_method = body.connection_method
-			if body.connection_method is ConnectionMethod.WIFI:
-				services.session.transfer_mode = TransferMode.COPY
-			else:
-				services.session.transfer_mode = body.transfer_mode
-			if body.connection_method is not previous_method:
-				services.release_device_mounts()
-				services.session.device_id = ""
-				services.session.device_label = ""
-				services.session.transfer_extra_paths = []
-				if services.session.active_module is AppModule.USB_FILE_TRANSFER and body.transfer_folders is None:
-					services.session.transfer_folders = sorted(
-						f.value for f in default_transfer_folders(body.connection_method)
-					)
-			device_id = body.device_id.strip()
-			if body.connection_method is ConnectionMethod.WIFI:
-				services.session.device_id = ""
-				services.session.device_label = ""
-			else:
-				try:
-					repo = services.devices_for(body.connection_method)
-					known = {d.device_id: d.label for d in repo.list_devices()}
-				except (FileNotFoundError, RuntimeError, ValueError):
-					known = {}
-				if device_id and device_id in known:
-					services.session.device_id = device_id
-					services.session.device_label = known[device_id]
+			job_active = services.session.extract_phase in {
+				JobPhase.RUNNING,
+				JobPhase.PAUSED,
+			} or services.session.usb_transfer_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+			if not job_active:
+				library_root = normalize_library_root(body.library_root)
+				if library_root and not is_absolute_library_path(library_root):
+					raise HTTPException(status_code=400, detail="library_root must be an absolute path")
+				previous_method = services.session.connection_method
+				services.session.library_root = library_root
+				services.session.connection_method = body.connection_method
+				if body.connection_method is ConnectionMethod.WIFI:
+					services.session.transfer_mode = TransferMode.COPY
 				else:
+					services.session.transfer_mode = body.transfer_mode
+				if body.connection_method is not previous_method:
+					services.release_device_mounts()
 					services.session.device_id = ""
 					services.session.device_label = ""
-			if body.source_folders is not None:
-				services.session.source_folders = [f.lower() for f in body.source_folders]
-			if body.transfer_folders is not None:
-				services.session.transfer_folders = [f.lower() for f in body.transfer_folders]
-			if body.transfer_extra_paths is not None:
-				services.session.transfer_extra_paths = merge_extra_paths([], body.transfer_extra_paths)
-			if services.session.library_root:
-				services.filesystem.ensure_library_folders(services.session.library_root)
+					services.session.transfer_extra_paths = []
+					if services.session.active_module is AppModule.USB_FILE_TRANSFER and body.transfer_folders is None:
+						services.session.transfer_folders = sorted(
+							f.value for f in default_transfer_folders(body.connection_method)
+						)
+				device_id = body.device_id.strip()
+				if body.connection_method is ConnectionMethod.WIFI:
+					services.session.device_id = ""
+					services.session.device_label = ""
+				else:
+					try:
+						repo = services.devices_for(body.connection_method)
+						known = {d.device_id: d.label for d in repo.list_devices()}
+					except (FileNotFoundError, RuntimeError, ValueError):
+						known = {}
+					if device_id and device_id in known:
+						services.session.device_id = device_id
+						services.session.device_label = known[device_id]
+					else:
+						services.session.device_id = ""
+						services.session.device_label = ""
+				if body.source_folders is not None:
+					services.session.source_folders = [f.lower() for f in body.source_folders]
+				if body.transfer_folders is not None:
+					services.session.transfer_folders = [f.lower() for f in body.transfer_folders]
+				if body.transfer_extra_paths is not None:
+					services.session.transfer_extra_paths = merge_extra_paths([], body.transfer_extra_paths)
+				if services.session.library_root:
+					services.filesystem.ensure_library_folders(services.session.library_root)
+		# Never call push_state()/maybe_start_convert_drain() while holding the (non-reentrant) session lock.
 		if compress_changed:
 			services.maybe_start_convert_drain()
 		services.push_state()

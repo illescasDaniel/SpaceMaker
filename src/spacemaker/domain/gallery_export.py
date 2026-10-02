@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from pathlib import PurePosixPath
+from pathlib import PurePosixPath, PureWindowsPath
 
 from spacemaker.domain.media import JPEG_EXTENSIONS, normalize_extension
 from spacemaker.domain.web_compat import VideoProbe, is_web_compatible_video
@@ -21,6 +21,9 @@ class ExportJobPhase(StrEnum):
 
 def is_safe_gallery_relative_path(relative: str) -> bool:
 	if not relative or relative.startswith("/") or relative.startswith("\\"):
+		return False
+	if PureWindowsPath(relative).drive:
+		# `C:\x` or `C:x`: on Windows a drive-qualified right-hand side replaces the base path.
 		return False
 	normalized = relative.replace("\\", "/")
 	parts = PurePosixPath(normalized).parts

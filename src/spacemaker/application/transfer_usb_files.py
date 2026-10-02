@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from spacemaker.application.verified_move import delete_device_file_after_verified_pull
 from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.library import JobProgress, TransferMode
 from spacemaker.domain.library_paths import skip_media_path
@@ -72,7 +73,7 @@ class TransferUsbFiles:
 			self._filesystem.ensure_parent_directory(dest)
 			self._devices.pull_file(device_id, device_path, dest)
 			if mode is TransferMode.MOVE:
-				self._devices.delete_device_file(device_id, device_path)
+				delete_device_file_after_verified_pull(self._devices, self._filesystem, device_id, device_path, dest)
 			completed += 1
 			self._emit(on_progress, completed, total)
 			if control is not None:

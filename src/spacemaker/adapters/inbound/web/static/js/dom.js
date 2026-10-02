@@ -106,3 +106,7 @@ export function setQrImage(img, qrUrl, cacheKey) {
 	S.lastQrSrcByElementId[key] = qrUrl;
 	img.src = qrUrl;
 }
+/** Percent-encode each path segment (keeps `/`, but escapes `#`, `?`, `%` that `encodeURI` leaves alone). */
+export function encodePathSegments(path) {
+	return path.split("/").map(encodeURIComponent).join("/");
+}

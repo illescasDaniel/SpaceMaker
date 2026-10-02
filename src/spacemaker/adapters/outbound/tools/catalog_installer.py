@@ -105,6 +105,8 @@ class CatalogToolInstaller:
 			if not relative or relative.endswith("/"):
 				continue
 			dest = self._dest.joinpath(*relative.split("/"))
+			if not self._is_inside_dest(dest):
+				return ToolInstallResult(tool_id=tool_id, ok=False, message=f"Unsafe archive path: {name}")
 			dest.parent.mkdir(parents=True, exist_ok=True)
 			dest.write_bytes(payload)
 			if not self._windows:
@@ -156,6 +158,13 @@ class CatalogToolInstaller:
 		if written == 0:
 			return ToolInstallResult(tool_id=tool_id, ok=False, message="Archive extracted nothing")
 		return ToolInstallResult(tool_id=tool_id, ok=True)
+
+	def _is_inside_dest(self, path: Path) -> bool:
+		try:
+			path.resolve().relative_to(self._dest.resolve())
+		except ValueError:
+			return False
+		return True
 
 	def _archive_members(self, data: bytes, kind: str) -> dict[str, bytes]:
 		out: dict[str, bytes] = {}

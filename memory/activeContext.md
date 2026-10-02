@@ -1,19 +1,21 @@
-_Last updated: 2026-10-01 (macOS DMG packaging saved on `main`)_
+_Last updated: 2026-10-02 (pre-1.0 bug-fix pass complete, gate green: 463 tests)_
 
 ## Branch
 
-`main` (primary checkout).
+`claude/pre-release-code-review-024950` (worktree). Base: `main`.
 
 ## Current focus
 
-macOS DMG packaging shipped and user-confirmed working (Finder/Dock icon + app launch).
+Pre-1.0 code review fixes are done (list in `progress.md`). Next TODO: optional LAN access key/token (not started).
 
 ## Just changed
 
-- Primary macOS artifact: `SpaceMaker-<version>-<arch>.dmg` with `SpaceMaker.app` (`uv run task build-macos-dmg`).
-- PyInstaller darwin onedir + BUNDLE; Windows onefile unchanged; ad-hoc codesign; `.icns` at build time.
+- Fixed all review + Cursor findings: settings deadlock, verified Move, same-stem collision naming + byte-identical duplicate collapse, non-overwriting moves, LAN export HTTP poll, gallery request guards, shlex-quoted ADB/AFC paths, `rmdir`-only mount cleanup, zip-slip guard, atomic export cache, ffmpeg stderr drain and µs progress fix.
+- `specs/convert-media/SPEC.md`: retroactive Design decisions section, Duplicate collapse and non-overwriting move rules (amendments awaiting user review).
+- New tests for all of the above (H.264 pipes, mount dirs, export poll, video collisions, content compare).
 
 ## Next steps
 
-1. Optional later: Developer ID signing / notarization + GitHub Actions `macos-*` release job.
-2. Still open: ADB Browse speed; Easy mode import review; confirm native pywebview on real Windows GUI (macOS cocoa confirmed 2026-10-01).
+1. User reviews spec amendments; optionally re-run `code-grader`.
+2. NEXT TODO: optional LAN access key/token (see `progress.md`).
+3. Still open (deliberately skipped): tool catalog sha256 pinning, ADB list-all-roots speed-up, LAN delete/export auth (belongs to token work).

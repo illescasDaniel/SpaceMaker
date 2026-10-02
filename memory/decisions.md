@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-02 — Pre-1.0 bug-fix pass: collision naming and mount safety
+
+- **Context:** review before 1.0 found same-stem sources (png/jpg/heic, mov/mp4) sharing one planned output, so "skip existing output" deleted an original that was never encoded; RAW could overwrite a JPEG's AVIF. Separately, `shutil.rmtree` on a failed-unmount FUSE mount would delete real phone files.
+- **Decision:** whenever the plain output name exists, any source extension uses `{stem}_{ext}.<out>` (RAW included); as-is moves never overwrite (same size = duplicate, else `name (2).ext`). Mount dirs are removed with `rmdir` only. Move mode deletes the device file only after local size == remote size.
+- **Rationale:** idempotency must only match the file's own planned output; destructive operations need a positive verification first.
+
 ## 2026-10-01 — macOS primary artifact is DMG with SpaceMaker.app
 
 - **Context:** Packaging SPEC already listed `SpaceMaker.app` or onefile; Linux ships AppImage. User asked for a `.dmg` with `.app` (binary + icon) for macOS distribution.

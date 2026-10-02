@@ -59,6 +59,21 @@ class LocalFileSystem:
 		self.ensure_parent_directory(destination)
 		shutil.copy2(source, destination)
 
+	def files_have_same_content(self, first: str, second: str) -> bool:
+		a, b = Path(first), Path(second)
+		try:
+			if a.stat().st_size != b.stat().st_size:
+				return False
+			with a.open("rb") as fa, b.open("rb") as fb:
+				while True:
+					chunk_a = fa.read(1024 * 1024)
+					if chunk_a != fb.read(1024 * 1024):
+						return False
+					if not chunk_a:
+						return True
+		except OSError:
+			return False
+
 	def ensure_parent_directory(self, file_path: str) -> None:
 		Path(file_path).parent.mkdir(parents=True, exist_ok=True)
 

@@ -58,3 +58,23 @@ def test_given_zip_flatten_when_install_then_places_exiftool_tree(tmp_path: Path
 	assert result.ok is True
 	assert (tmp_path / "exiftool.exe").is_file()
 	assert (tmp_path / "exiftool_files" / "readme.txt").is_file()
+
+
+def test_given_zip_flatten_with_path_traversal_when_install_then_rejects_and_writes_nothing_outside(tmp_path: Path):
+	# given
+	dest = tmp_path / "tools"
+	buf = io.BytesIO()
+	with zipfile.ZipFile(buf, "w") as archive:
+		archive.writestr("exiftool-13.59_64/../../evil.txt", b"pwned")
+	installer = CatalogToolInstaller(
+		repo_root=_REPO,
+		dest_dir=dest,
+		platform_key="win-x86_64",
+		platform_is_windows=True,
+	)
+	installer._download_bytes = lambda _url: buf.getvalue()  # type: ignore[method-assign]
+	# when
+	result = installer.install("exiftool")
+	# then
+	assert result.ok is False
+	assert not (tmp_path / "evil.txt").exists()

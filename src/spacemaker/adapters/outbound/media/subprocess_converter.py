@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import IO
 
 from spacemaker.adapters.outbound.media.ffmpeg_encoders import (
 	av1_encoder_ffmpeg_args,
@@ -236,12 +237,32 @@ class SubprocessMediaConverter:
 		cmd = [str(self._runner.path(BundledTool.FFMPEG)), *args]
 		if on_progress:
 			on_progress(10)
-		proc = subprocess.Popen(  # noqa: S603
-			cmd,
-			stdout=subprocess.PIPE,
-			stderr=subprocess.PIPE,
-			text=True,
-		)
+		# stderr goes to a temp file, not a pipe: with both piped, ffmpeg blocks on a full stderr
+		# buffer while we only drain stdout, deadlocking the export.
+		stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")  # noqa: SIM115
+		try:
+			proc = subprocess.Popen(  # noqa: S603
+				cmd,
+				stdout=subprocess.PIPE,
+				stderr=stderr_file,
+				text=True,
+			)
+			stderr = self._drain_h264_progress(proc, stderr_file, duration_ms, on_progress)
+		finally:
+			stderr_file.close()
+		if proc.returncode != 0:
+			result = subprocess.CompletedProcess(cmd, proc.returncode, "", stderr)
+			raise ToolExecutionError(BundledTool.FFMPEG, cmd, result)
+		if on_progress:
+			on_progress(100)
+
+	def _drain_h264_progress(
+		self,
+		proc: subprocess.Popen[str],
+		stderr_file: IO[str],
+		duration_ms: int,
+		on_progress: Callable[[int], None] | None,
+	) -> str:
 		last_percent = 10
 		if proc.stdout is not None:
 			for line in proc.stdout:
@@ -253,18 +274,15 @@ class SubprocessMediaConverter:
 				match = re.search(r"out_time_ms=(\d+)", line)
 				if not match:
 					continue
-				out_ms = int(match.group(1))
+				# ffmpeg's `out_time_ms` is actually microseconds (same value as `out_time_us`).
+				out_ms = int(match.group(1)) // 1000
 				percent = min(99, max(last_percent, int((out_ms / duration_ms) * 100)))
 				if percent > last_percent and on_progress is not None:
 					last_percent = percent
 					on_progress(percent)
-		stderr = proc.stderr.read() if proc.stderr is not None else ""
 		proc.wait()
-		if proc.returncode != 0:
-			result = subprocess.CompletedProcess(cmd, proc.returncode, "", stderr)
-			raise ToolExecutionError(BundledTool.FFMPEG, cmd, result)
-		if on_progress:
-			on_progress(100)
+		stderr_file.seek(0)
+		return stderr_file.read()
 
 	def _video_duration_ms(self, source_path: str) -> int:
 		try:

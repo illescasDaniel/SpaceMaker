@@ -8,6 +8,7 @@ from spacemaker.domain.conversion import (
 	image_avif_relative_path,
 	output_exceeds_rollback_threshold,
 	route_before_encode,
+	unique_relative_path,
 	video_av1_relative_path,
 )
 from spacemaker.domain.extract_control import ExtractJobControl
@@ -155,6 +156,12 @@ class ConvertMedia:
 			if self._filesystem.exists(staging):
 				self._filesystem.delete_file(staging)
 			return False
+		if self._duplicates_plain_output(library_root, relative, out_rel, staging):
+			# Same source encoded with the same settings is byte-identical: this file already exists
+			# under its plain name (e.g. an interrupted earlier run), so keep one copy.
+			self._filesystem.delete_file(staging)
+			self._filesystem.delete_file(source)
+			return True
 		source_size = self._filesystem.file_size(source)
 		output_size = self._filesystem.file_size(staging)
 		if output_exceeds_rollback_threshold(source_size, output_size):
@@ -182,18 +189,47 @@ class ConvertMedia:
 		ext = normalize_extension(relative)
 		if media_kind_for_extension(ext) is MediaKind.IMAGE:
 			stem_avif = image_avif_relative_path(relative, collision_avif_exists=False)
-			collision = self._filesystem.exists(
-				self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, stem_avif),
-			)
+			collision = self._processed_exists(library_root, stem_avif)
 			return image_avif_relative_path(relative, collision_avif_exists=collision)
 		encoder = self._converter.library_video_encoder()
 		if encoder is HardwareVideoEncoder.H264:
+			plain = video_h264_web_relative_path(relative)
+			return video_h264_web_relative_path(relative, collision_exists=self._processed_exists(library_root, plain))
+		plain = video_av1_relative_path(relative)
+		return video_av1_relative_path(relative, collision_exists=self._processed_exists(library_root, plain))
+
+	def _plain_output_relative(self, relative: str) -> str:
+		if media_kind_for_extension(normalize_extension(relative)) is MediaKind.IMAGE:
+			return image_avif_relative_path(relative, collision_avif_exists=False)
+		if self._converter.library_video_encoder() is HardwareVideoEncoder.H264:
 			return video_h264_web_relative_path(relative)
 		return video_av1_relative_path(relative)
 
+	def _duplicates_plain_output(self, library_root: str, relative: str, out_rel: str, staging: str) -> bool:
+		plain = self._plain_output_relative(relative)
+		if plain == out_rel:
+			return False
+		plain_path = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, plain)
+		return self._filesystem.exists(plain_path) and self._filesystem.files_have_same_content(staging, plain_path)
+
+	def _processed_exists(self, library_root: str, relative: str) -> bool:
+		return self._filesystem.exists(self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, relative))
+
 	def _move_to_folder(self, library_root: str, relative: str, folder: LibraryFolder) -> None:
 		source = self._filesystem.library_path(library_root, LibraryFolder.ORIGINALS, relative)
+		dest_relative = relative
 		dest = self._filesystem.library_path(library_root, folder, relative)
+		if self._filesystem.exists(dest):
+			if self._filesystem.files_have_same_content(source, dest):
+				# Byte-identical file already there (e.g. a re-upload): keep one copy.
+				self._filesystem.delete_file(source)
+				return
+			# A different file with the same name must never replace the one already filed.
+			dest_relative = unique_relative_path(
+				relative,
+				lambda rel: self._filesystem.exists(self._filesystem.library_path(library_root, folder, rel)),
+			)
+			dest = self._filesystem.library_path(library_root, folder, dest_relative)
 		self._filesystem.move_file(source, dest)
 
 	def _emit(

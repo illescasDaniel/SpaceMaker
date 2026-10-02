@@ -8,3 +8,10 @@ def test_given_dotdot_when_normalize_then_none():
 
 def test_given_relative_path_when_normalize_then_posix():
 	assert normalize_upload_relative_path("DCIM/Camera/a.jpg") == "DCIM/Camera/a.jpg"
+
+
+def test_given_windows_drive_path_when_checked_then_unsafe():
+	# given / when / then
+	assert is_safe_upload_relative_path("C:/Windows/evil.jpg") is False
+	assert is_safe_upload_relative_path("C:evil.jpg") is False
+	assert normalize_upload_relative_path("D:\\x\\a.jpg") is None

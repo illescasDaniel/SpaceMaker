@@ -347,6 +347,8 @@ function bindSettingsDesktop(): void {
 				showView("home");
 			})
 			.catch((err: unknown) => {
+				// Dismiss is set before applyState (so it doesn't bounce back); undo it if any step failed.
+				sessionStorage.removeItem(S.COMPONENTS_DISMISS_KEY);
 				showFormBanner(errorMessage(err, "Could not continue setup."));
 				syncComponentsPollForView();
 			});

@@ -20,6 +20,7 @@ class FakeFileSystem:
 	files: dict[str, int] = field(default_factory=dict)
 	mtimes: dict[str, float] = field(default_factory=dict)
 	dirs: set[str] = field(default_factory=set)
+	identical_pairs: set[frozenset[str]] = field(default_factory=set)
 
 	def ensure_library_folders(self, library_root: str) -> None:
 		for folder in LibraryFolder:
@@ -39,6 +40,9 @@ class FakeFileSystem:
 			raise FileNotFoundError(source)
 		self.ensure_parent_directory(destination)
 		self.files[destination] = self.files.pop(source)
+
+	def files_have_same_content(self, first: str, second: str) -> bool:
+		return frozenset({first, second}) in self.identical_pairs
 
 	def copy_file(self, source: str, destination: str) -> None:
 		self.ensure_parent_directory(destination)

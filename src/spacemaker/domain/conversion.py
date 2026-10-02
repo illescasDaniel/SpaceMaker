@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import PurePosixPath
 
 from spacemaker.domain.media import (
-	JPEG_EXTENSIONS,
 	SIZE_ROLLBACK_DENOMINATOR,
 	SIZE_ROLLBACK_NUMERATOR,
 	MediaKind,
@@ -43,16 +43,18 @@ def image_avif_relative_path(
 	parent, stem = relative_parent_stem(relative_source)
 	ext = normalize_extension(relative_source)
 	filename = f"{stem}.avif"
-	if collision_avif_exists and ext in JPEG_EXTENSIONS:
+	if collision_avif_exists and ext:
+		# Any sibling source (jpg/png/heic/dng/...) sharing the stem keeps its own output.
 		filename = f"{stem}_{ext}.avif"
 	if parent:
 		return f"{parent}/{filename}"
 	return filename
 
 
-def video_av1_relative_path(relative_source: str) -> str:
+def video_av1_relative_path(relative_source: str, *, collision_exists: bool = False) -> str:
 	parent, stem = relative_parent_stem(relative_source)
-	filename = f"{stem}.av1.mp4"
+	ext = normalize_extension(relative_source)
+	filename = f"{stem}_{ext}.av1.mp4" if collision_exists and ext else f"{stem}.av1.mp4"
 	if parent:
 		return f"{parent}/{filename}"
 	return filename
@@ -89,3 +91,17 @@ def output_exceeds_rollback_threshold(source_size: int, output_size: int) -> boo
 		return False
 	limit = source_size * SIZE_ROLLBACK_NUMERATOR // SIZE_ROLLBACK_DENOMINATOR
 	return output_size > limit
+
+
+def unique_relative_path(relative_path: str, exists: Callable[[str], bool]) -> str:
+	"""First free name for a relative path: ``a.jpg`` -> ``a (2).jpg`` -> ``a (3).jpg``."""
+	if not exists(relative_path):
+		return relative_path
+	parts = PurePosixPath(relative_path)
+	parent = "" if str(parts.parent) == "." else f"{parts.parent}/"
+	n = 2
+	while True:
+		candidate = f"{parent}{parts.stem} ({n}){parts.suffix}"
+		if not exists(candidate):
+			return candidate
+		n += 1

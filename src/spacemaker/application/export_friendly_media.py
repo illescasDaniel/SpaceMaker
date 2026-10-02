@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -75,16 +77,23 @@ class ExportFriendlyMedia:
 			return ExportResult(download_path=str(dest.resolve()), skipped_encode=False)
 
 		dest.parent.mkdir(parents=True, exist_ok=True)
+		# Encode beside the cache entry and rename on success: a failed/interrupted export must never
+		# leave a half-written file that the "non-empty and newer than source" check would serve.
+		staging = dest.with_name(f".{uuid.uuid4().hex}.partial{dest.suffix}")
 		if on_progress:
 			on_progress(5)
-		if export_format is ExportFormat.JPEG:
-			self._converter.encode_image_to_jpeg(str(source_path), str(dest))
-			if on_progress:
-				on_progress(100)
-		else:
-			self._converter.encode_video_to_h264_aac(
-				str(source_path),
-				str(dest),
-				on_progress=on_progress,
-			)
+		try:
+			if export_format is ExportFormat.JPEG:
+				self._converter.encode_image_to_jpeg(str(source_path), str(staging))
+				if on_progress:
+					on_progress(100)
+			else:
+				self._converter.encode_video_to_h264_aac(
+					str(source_path),
+					str(staging),
+					on_progress=on_progress,
+				)
+			os.replace(staging, dest)
+		finally:
+			staging.unlink(missing_ok=True)
 		return ExportResult(download_path=str(dest.resolve()), skipped_encode=False)

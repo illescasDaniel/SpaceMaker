@@ -15,6 +15,7 @@ from spacemaker.application.file_share_manifest import EmptyShareSelectionError
 from spacemaker.application.transfer_session import EmptyTransferFolderError
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.domain.transfer_session import TransferOrigin
+from spacemaker.domain.upload_paths import is_safe_upload_relative_path
 
 
 def build_lan_router(services: AppServices) -> APIRouter:
@@ -220,7 +221,7 @@ def build_lan_router(services: AppServices) -> APIRouter:
 					parts = Path(rel).parts
 					if len(parts) > 1 and parts[0] == folder_name.strip():
 						rel = "/".join(parts[1:])
-					if not rel or rel in {".", ".."} or ".." in Path(rel).parts:
+					if not is_safe_upload_relative_path(rel):
 						raise HTTPException(status_code=400, detail="invalid folder path")
 					relative_files.append((rel, temp_path))
 				item = services.handle_transfer_upload_folder_files(

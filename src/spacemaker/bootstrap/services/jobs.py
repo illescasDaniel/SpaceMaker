@@ -58,7 +58,7 @@ class JobsMixin:
 		with self._export_lock:
 			self._export_jobs[job_id] = job
 		self.push_gallery_export(job)
-		self._executor.submit(self._run_gallery_export, library_root, job_id, relative_path, export_format)
+		self._export_executor.submit(self._run_gallery_export, library_root, job_id, relative_path, export_format)
 		return job
 
 	def _run_gallery_export(
@@ -327,8 +327,9 @@ class JobsMixin:
 
 	def _run_convert(self: AppServices, library_root: str, *, concurrent_with_extract: bool = False) -> None:
 		control = self._convert_control
-		self.run_coro(self.sync_gallery_index.run(library_root))
 		try:
+			# Inside the try: a failing sync must end the job as ERROR, not leave it RUNNING forever.
+			self.run_coro(self.sync_gallery_index.run(library_root))
 			use_case = self.convert_use_case()
 			cumulative_completed = 0
 
@@ -411,5 +412,8 @@ class JobsMixin:
 				self.session.last_error = str(exc)
 		finally:
 			self._convert_future = None
-		self.run_coro(self.sync_gallery_index.run(library_root))
+		try:
+			self.run_coro(self.sync_gallery_index.run(library_root))
+		except Exception:
+			logger.exception("Gallery index sync after convert failed")
 		self.push_state()

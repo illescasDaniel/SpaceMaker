@@ -3,7 +3,14 @@ import { bindDisclosure, errorMessage, onClick, showFormBanner } from "./dom.js"
 import { bindGalleryUi } from "./gallery.js";
 import { closeGalleryPhonePopup, toggleGalleryPhonePopup } from "./gallery-item.js";
 import { selectedConnectionMethod, syncConnectionButtons, validateStep1Form } from "./home.js";
-import { canStartConvert, extractIsActive, loadDevices, pushSettings, updateExtractButtons } from "./jobs.js";
+import {
+	canStartConvert,
+	extractIsActive,
+	loadDevices,
+	pushSettings,
+	pushSettingsDetached,
+	updateExtractButtons,
+} from "./jobs.js";
 import { applyState, showView } from "./shell.js";
 import { S } from "./state.js";
 
@@ -43,7 +50,7 @@ function bindHomeDesktop() {
 			if (easyCompressCheckbox.disabled) {
 				return;
 			}
-			pushSettings();
+			pushSettingsDetached();
 		});
 	}
 	function switchConnectionMethod(method) {
@@ -76,7 +83,7 @@ function bindHomeDesktop() {
 		}
 		chipCopy.classList.add("selected");
 		chipMove?.classList.remove("selected");
-		pushSettings();
+		pushSettingsDetached();
 	});
 	chipMove?.addEventListener("click", () => {
 		if (chipMove instanceof HTMLButtonElement && chipMove.disabled) {
@@ -84,7 +91,7 @@ function bindHomeDesktop() {
 		}
 		chipMove.classList.add("selected");
 		chipCopy?.classList.remove("selected");
-		pushSettings();
+		pushSettingsDetached();
 	});
 	const libraryInput = document.getElementById("input-library-root");
 	libraryInput?.addEventListener("input", () => {
@@ -95,11 +102,11 @@ function bindHomeDesktop() {
 	});
 	libraryInput?.addEventListener("change", () => {
 		validateStep1Form(true);
-		pushSettings();
+		pushSettingsDetached();
 	});
 	document.getElementById("select-device")?.addEventListener("change", () => {
 		validateStep1Form(true);
-		pushSettings();
+		pushSettingsDetached();
 	});
 	document.getElementById("btn-browse-library")?.addEventListener("click", () => {
 		const lib = document.getElementById("input-library-root");
@@ -126,7 +133,7 @@ function bindHomeDesktop() {
 	});
 	document.querySelectorAll("#folder-picker input").forEach((box) => {
 		box.addEventListener("change", () => {
-			pushSettings();
+			pushSettingsDetached();
 		});
 	});
 	document.getElementById("btn-start-extract")?.addEventListener("click", () => {

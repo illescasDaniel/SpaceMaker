@@ -3,6 +3,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import PurePosixPath
 
+from spacemaker.domain.media import normalize_extension
 from spacemaker.domain.web_compat import VideoProbe, is_web_compatible_video
 
 
@@ -33,9 +34,10 @@ def _relative_parent_stem(relative_path: str) -> tuple[str, str]:
 	return parent, stem
 
 
-def video_h264_web_relative_path(relative_source: str) -> str:
+def video_h264_web_relative_path(relative_source: str, *, collision_exists: bool = False) -> str:
 	parent, stem = _relative_parent_stem(relative_source)
-	filename = f"{stem}.h264.mp4"
+	ext = normalize_extension(relative_source)
+	filename = f"{stem}_{ext}.h264.mp4" if collision_exists and ext else f"{stem}.h264.mp4"
 	if parent:
 		return f"{parent}/{filename}"
 	return filename

@@ -290,6 +290,10 @@ function libraryRootForSave() {
 	}
 	return path;
 }
+/** Fire-and-forget save: `pushSettings` already shows the banner, so swallow its rejection. */
+function pushSettingsDetached() {
+	pushSettings().catch(() => undefined);
+}
 function pushSettings() {
 	const sel = document.getElementById("select-device");
 	const modeCopy = document.getElementById("chip-copy");
@@ -328,6 +332,7 @@ export {
 	libraryRootForSave,
 	loadDevices,
 	pushSettings,
+	pushSettingsDetached,
 	updateConvertUi,
 	updateExtractButtons,
 	updateExtractUi,

@@ -9,6 +9,15 @@
 - **Packaging:** Adapters invoke **bundled** `ffmpeg`, `ffprobe`, `magick`, `avifenc`, `exiftool` — [packaging/SPEC.md](../packaging/SPEC.md)
 - **UI:** [main-wizard](../main-wizard/SPEC.md) Step 2
 
+## Design decisions
+
+Added retroactively during the 2026-10 pre-1.0 review (this spec predates the section).
+
+- **Success criteria:** every file in `originals/` ends in exactly one of `processed/` (encoded or moved as-is), `error/` or `invalid/`; an original is deleted only after its output exists and validates (or after being filed as-is). Re-running convert on the same library never loses a file and never leaves two copies of the same encode.
+- **Failure handling:** encode failures retry once, then the source moves to `error/`; unreadable inputs go to `invalid/`. Output is written to a staging dir and renamed, so a crash leaves no partial file in `processed/`. A name clash never overwrites: byte-identical files collapse to one, otherwise the newcomer gets a unique name.
+- **Perf / resource budget:** one file encoded at a time per convert job; staging and duplicate checks stream in 1 MiB chunks (no whole-file reads); the duplicate check compares only against the plain-named output.
+- **Trust boundary:** inputs are untrusted file names and bytes from phones; relative paths are validated (no `..`, no absolute or drive-qualified paths) before any filesystem access.
+
 ## Triggers & routing
 
 - **Start (Advanced):** User clicks **Start convert** when enabled (see [main-wizard](../main-wizard/SPEC.md): enabled when `originals/` non-empty, including during extract; click **stops extract first** then converts).
@@ -95,11 +104,9 @@ Move from `originals/` to `processed/` with **same relative path and filename** 
 - **Validation:** output size > 0 and `magick identify` succeeds.
 - **Magick remains required** for gallery thumbs, friendly JPEG export, identify, and rasterizing formats `avifenc` cannot read — progressive encode does **not** remove ImageMagick as a project dependency.
 
-### RAW + JPEG same stem (collision)
+### Same-stem collision (any extensions)
 
-When `{stem}.avif` already exists and input is **jpeg/jpg**, output MUST be `{stem}_jpg.avif` or `{stem}_jpeg.avif` (lowercase ext token).
-
-When input is RAW and `{stem}.avif` exists from a prior JPEG conversion, RAW still produces/replaces `{stem}.avif` per RAW rules (JPEG collision file is separate).
+When `{stem}.avif` (or `{stem}.av1.mp4` / `{stem}.h264.mp4` for video) already exists in `processed/` and a *different* source with the same stem is converted, output MUST be `{stem}_{ext}.avif` (resp. `{stem}_{ext}.av1.mp4` / `{stem}_{ext}.h264.mp4`) with the lowercase source extension token (`jpg`, `png`, `heic`, `dng`, `mov`, …). This applies to RAW too: a RAW source never replaces another source's output.
 
 Both RAW and JPEG siblings must each produce a validated AVIF when both exist.
 
@@ -148,11 +155,15 @@ Move to `invalid/` when:
 
 ## Idempotency
 
-If target output already exists in `processed/`, size > 0, and validates:
+If the *planned* output (after collision naming above) already exists in `processed/`, size > 0, and validates:
 
 - Skip encode; remove source from `originals/` if still present (finish interrupted run).
 
 If existing output invalid: delete and re-encode.
+
+**Duplicate collapse:** encoding is deterministic for the same source and settings, so when a collision-named output (`{stem}_{ext}.*`) turns out byte-identical to the plain-named output (e.g. a run interrupted after the encode, before the source was removed), the new output is discarded and the source removed. Outputs from a different encoder version may differ and then remain as two files (harmless).
+
+Moving a source as-is into `processed/`, `error/` or `invalid/` MUST never overwrite a different file: an identical-size file with the same name counts as the same file (source dropped); otherwise the source is stored as `{name} (2).{ext}`, `(3)`, ….
 
 Files already in `error/` or `invalid/` are not reprocessed until user moves them back to `originals/` (out of scope: auto-requeue).
 

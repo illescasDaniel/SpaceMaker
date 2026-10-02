@@ -1,5 +1,5 @@
-import { apiSend } from "./api.js";
-import { isDesktopShell } from "./dom.js";
+import { apiGet, apiSend } from "./api.js";
+import { encodePathSegments, isDesktopShell } from "./dom.js";
 import { showView } from "./shell.js";
 import { S } from "./state.js";
 
@@ -11,10 +11,10 @@ function prefetchGalleryMedia(relativePath) {
 		return;
 	}
 	const thumb = new Image();
-	thumb.src = "/thumbs/" + encodeURI(relativePath);
+	thumb.src = "/thumbs/" + encodePathSegments(relativePath);
 	if (!pathLooksLikeVideo(relativePath)) {
 		const full = new Image();
-		full.src = "/media/" + encodeURI(relativePath);
+		full.src = "/media/" + encodePathSegments(relativePath);
 	}
 }
 function setStageLoading(stage, direction) {
@@ -51,7 +51,7 @@ function setStageLoading(stage, direction) {
 	thumb.className = "gallery-item-thumb";
 	thumb.alt = "";
 	thumb.setAttribute("aria-hidden", "true");
-	thumb.src = "/thumbs/" + encodeURI(S.galleryItemPath || "");
+	thumb.src = "/thumbs/" + encodePathSegments(S.galleryItemPath || "");
 	const loading = document.createElement("p");
 	loading.className = "gallery-item-loading";
 	loading.setAttribute("aria-live", "polite");
@@ -63,7 +63,7 @@ function setStageLoading(stage, direction) {
 		const early = document.createElement("img");
 		early.className = "gallery-item-full";
 		early.alt = "";
-		early.src = "/media/" + encodeURI(S.galleryItemPath || "");
+		early.src = "/media/" + encodePathSegments(S.galleryItemPath || "");
 		media.appendChild(early);
 	}
 	stage.appendChild(media);
@@ -130,7 +130,7 @@ function renderGalleryItemStage(stage, payload, meta) {
 	}
 	const thumb = media.querySelector(".gallery-item-thumb");
 	const loadingEl = media.querySelector(".gallery-item-loading");
-	const mediaUrl = "/media/" + encodeURI(payload.relative_path);
+	const mediaUrl = "/media/" + encodePathSegments(payload.relative_path);
 	const label = meta.filename || payload.relative_path;
 	const earlyFull = media.querySelector(".gallery-item-full");
 	let full;
@@ -257,7 +257,7 @@ function shiftGalleryItem(delta) {
 	S.galleryItemPath = target;
 	S.galleryItemNeighbors = { prev: null, next: null };
 	updateGalleryItemNav();
-	const itemPath = "/gallery/item/" + encodeURI(S.galleryItemPath);
+	const itemPath = "/gallery/item/" + encodePathSegments(S.galleryItemPath);
 	if (location.pathname !== itemPath) {
 		history.pushState({ view: "gallery-item", path: S.galleryItemPath }, "", itemPath);
 	}
@@ -277,7 +277,7 @@ function appendThumbCell(grid, item) {
 	const img = document.createElement("img");
 	cell.type = "button";
 	cell.className = "thumb thumb-link";
-	img.src = "/thumbs/" + encodeURI(item.relative_path);
+	img.src = "/thumbs/" + encodePathSegments(item.relative_path);
 	img.alt = item.relative_path;
 	img.loading = "lazy";
 	cell.appendChild(img);
@@ -360,7 +360,13 @@ function triggerFileDownload(url) {
 	a.click();
 	a.remove();
 }
+let lastDeliveredExportUrl = "";
 function deliverFriendlyExport(downloadUrl) {
+	// WS push (desktop) and HTTP poll (phones) can both report "done"; download once.
+	if (downloadUrl === lastDeliveredExportUrl) {
+		return;
+	}
+	lastDeliveredExportUrl = downloadUrl;
 	setGalleryExportProgress(100, "Download starting…");
 	triggerFileDownload(downloadUrl);
 	setTimeout(hideGalleryExportAlert, 1500);
@@ -394,7 +400,43 @@ function applyGalleryExport(exp) {
 		}
 	}
 }
+const EXPORT_POLL_MS = 700;
+let exportPollToken = 0;
+function pollGalleryExport(jobId, relativePath, token) {
+	setTimeout(() => {
+		if (token !== exportPollToken || S.galleryItemPath !== relativePath) {
+			return;
+		}
+		apiGet("/api/gallery/export/" + encodeURIComponent(jobId))
+			.then((job) => {
+				if (token !== exportPollToken) {
+					return;
+				}
+				applyGalleryExport(job);
+				if (job.phase === "running") {
+					pollGalleryExport(jobId, relativePath, token);
+				}
+			})
+			.catch((pollErr) => {
+				if (token !== exportPollToken) {
+					return;
+				}
+				applyGalleryExport({
+					job_id: jobId,
+					relative_path: relativePath,
+					format: "",
+					phase: "error",
+					percent: 0,
+					download_url: "",
+					error: pollErr instanceof Error ? pollErr.message : "Export failed.",
+					skipped_encode: false,
+				});
+			});
+	}, EXPORT_POLL_MS);
+}
 function startFriendlyExport() {
+	exportPollToken += 1;
+	const token = exportPollToken;
 	const fmt = S.galleryItemKind === "video" ? "h264_aac" : "jpeg";
 	const alertEl = document.getElementById("gallery-export-alert");
 	hideGalleryExportAlert();
@@ -403,7 +445,15 @@ function startFriendlyExport() {
 		alertEl.hidden = false;
 	}
 	apiSend("POST", "/api/gallery/export", { relative_path: S.galleryItemPath, format: fmt })
-		.then(applyGalleryExport)
+		.then((job) => {
+			if (token !== exportPollToken) {
+				return;
+			}
+			applyGalleryExport(job);
+			if (job.phase === "running" && job.job_id) {
+				pollGalleryExport(job.job_id, job.relative_path, token);
+			}
+		})
 		.catch((exportErr) => {
 			const message = exportErr instanceof Error ? exportErr.message : "Export failed.";
 			applyGalleryExport({
@@ -429,8 +479,13 @@ function loadGalleryItemDetail(direction) {
 	hideGalleryExportAlert();
 	setStageLoading(stage, direction);
 	updateGalleryItemNav();
-	apiSend("GET", "/api/gallery/item?path=" + encodeURIComponent(S.galleryItemPath))
+	// Rapid prev/next: only the response for the item currently shown may render.
+	const requestedPath = S.galleryItemPath;
+	apiSend("GET", "/api/gallery/item?path=" + encodeURIComponent(requestedPath))
 		.then((payload) => {
+			if (S.galleryItemPath !== requestedPath) {
+				return;
+			}
 			const meta = payload.metadata;
 			S.galleryItemKind = payload.kind === "video" ? "video" : "image";
 			if (title) {
@@ -449,7 +504,6 @@ function loadGalleryItemDetail(direction) {
 			}
 			if (metaHost) {
 				const rows = [
-					["On disk", payload.absolute_path || "—"],
 					["Captured", formatCaptured(meta.captured_at || payload.captured_at)],
 					[
 						"Camera",
@@ -460,6 +514,10 @@ function loadGalleryItemDetail(direction) {
 					["Dimensions", meta.width && meta.height ? meta.width + " × " + meta.height : "—"],
 					["File size", formatFileSize(meta.file_size_bytes)],
 				];
+				if (payload.absolute_path) {
+					// Empty for LAN phones: the host path is only shared with the desktop app.
+					rows.unshift(["On disk", payload.absolute_path]);
+				}
 				if (payload.kind === "video") {
 					rows.push(["Duration", formatDuration(meta.duration_seconds)]);
 				}
@@ -483,6 +541,9 @@ function loadGalleryItemDetail(direction) {
 			updateGalleryItemNav();
 		})
 		.catch(() => {
+			if (S.galleryItemPath !== requestedPath) {
+				return;
+			}
 			setStageMessage(stage, "Could not load this item.");
 			updateGalleryItemNav();
 		});

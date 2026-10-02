@@ -87,9 +87,9 @@ def test_given_extra_folder_when_list_extra_then_finds_under_sdcard(tmp_path: Pa
 	device = MagicMock()
 
 	def shell(cmd: str) -> str:
-		if ' -f "/sdcard/WhatsApp/Media"' in cmd and " -d " in cmd:
+		if " -f /sdcard/WhatsApp/Media " in cmd and " -d " in cmd:
 			return "dir\n"
-		if cmd.startswith('find "/sdcard/WhatsApp/Media"'):
+		if cmd.startswith("find /sdcard/WhatsApp/Media "):
 			return "/sdcard/WhatsApp/Media/a.jpg\n/sdcard/WhatsApp/Media/b.txt\n"
 		return "missing\n"
 
@@ -106,3 +106,19 @@ def test_given_extra_folder_when_list_extra_then_finds_under_sdcard(tmp_path: Pa
 		"/sdcard/WhatsApp/Media/a.jpg",
 		"/sdcard/WhatsApp/Media/b.txt",
 	]
+
+
+def test_given_hostile_device_path_when_delete_then_shell_command_is_quoted(tmp_path: Path) -> None:
+	# given
+	device = MagicMock()
+	client = MagicMock()
+	client.device.return_value = device
+	repo = AdbDeviceRepository(tmp_path / "adb")
+	repo._client = client
+	# when
+	repo.delete_device_file("serial", "/sdcard/DCIM/a b'; rm -rf /sdcard; echo '.jpg")
+	# then
+	command = device.shell.call_args.args[0]
+	import shlex
+
+	assert shlex.split(command) == ["rm", "-f", "/sdcard/DCIM/a b'; rm -rf /sdcard; echo '.jpg"]

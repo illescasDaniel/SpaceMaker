@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import pytest
 from tests.unit.fakes import FakeMediaConverter, FakeMediaProbe
 
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
@@ -97,3 +98,35 @@ def test_given_fresh_cache_when_export_jpeg_then_reuses_without_reencode(tmp_pat
 	assert converter.encoded_jpegs == []
 	assert result.skipped_encode is False
 	assert result.download_path == str(cache.resolve())
+
+
+def test_given_windows_drive_path_when_gallery_path_checked_then_unsafe():
+	# given / when / then
+	from spacemaker.domain.gallery_export import is_safe_gallery_relative_path
+
+	assert is_safe_gallery_relative_path("C:/Windows/evil.jpg") is False
+	assert is_safe_gallery_relative_path("C:evil.jpg") is False
+	assert is_safe_gallery_relative_path("2025/a.avif") is True
+
+
+def test_given_encode_fails_midway_when_export_jpeg_then_no_cache_file_or_partial_left(tmp_path) -> None:
+	# given
+	library = str(tmp_path / "lib")
+	fs = LocalFileSystem()
+	fs.ensure_library_folders(library)
+	source = fs.library_path(library, LibraryFolder.PROCESSED, "a.avif")
+	Path(source).write_bytes(b"x" * 100)
+
+	class _Crashing(FakeMediaConverter):
+		def encode_image_to_jpeg(self, source: str, destination: str) -> None:
+			Path(destination).write_bytes(b"half")
+			raise RuntimeError("magick crashed")
+
+	use_case = ExportFriendlyMedia(fs, _Crashing(), FakeMediaProbe())
+	cache = Path(export_cache_path(library, "a.avif", ExportFormat.JPEG))
+	# when
+	with pytest.raises(RuntimeError):
+		use_case.run(library, "a.avif", ExportFormat.JPEG)
+	# then
+	assert not cache.exists()
+	assert list(cache.parent.glob("*")) == []

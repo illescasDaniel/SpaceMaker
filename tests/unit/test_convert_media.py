@@ -1,5 +1,6 @@
 import logging
 
+import pytest
 from tests.unit.fakes import FakeFileSystem, FakeMediaConverter, FakeMediaProbe
 
 from spacemaker.application.convert_media import ConvertMedia
@@ -283,3 +284,145 @@ def test_given_encode_fails_when_convert_then_logs_warning_with_relative_path(ca
 		ConvertMedia(fs, converter, probe).run(library)
 	# then
 	assert any(rel in record.message for record in caplog.records)
+
+
+def test_given_png_and_existing_jpg_avif_when_convert_then_png_gets_own_output_and_jpg_output_kept():
+	# given
+	fs = FakeFileSystem()
+	library = "/lib"
+	png = _paths(fs, library, LibraryFolder.ORIGINALS, "photo.png")
+	existing = _paths(fs, library, LibraryFolder.PROCESSED, "photo.avif")
+	fs.files[png] = 500
+	fs.files[existing] = 70
+	out_rel = "photo_png.avif"
+	out = _paths(fs, library, LibraryFolder.PROCESSED, out_rel)
+	staging = convert_staging_path(library, out_rel)
+	probe = FakeMediaProbe()
+	probe.readable_images.add(png)
+	probe.valid_images.add(staging)
+	converter = FakeMediaConverter()
+	converter.bind_filesystem(fs)
+	converter.output_sizes[staging] = 40
+	# when
+	ConvertMedia(fs, converter, probe).run(library)
+	# then
+	assert fs.files[existing] == 70
+	assert fs.files[out] == 40
+	assert png not in fs.files
+
+
+def test_given_different_file_with_same_name_in_processed_when_move_then_neither_is_overwritten():
+	# given
+	fs = FakeFileSystem()
+	library = "/lib"
+	src = _paths(fs, library, LibraryFolder.ORIGINALS, "web.avif")
+	existing = _paths(fs, library, LibraryFolder.PROCESSED, "web.avif")
+	renamed = _paths(fs, library, LibraryFolder.PROCESSED, "web (2).avif")
+	fs.files[src] = 11
+	fs.files[existing] = 22
+	probe = FakeMediaProbe()
+	probe.valid_images.add(src)
+	# when
+	ConvertMedia(fs, FakeMediaConverter(), probe).run(library)
+	# then
+	assert fs.files[existing] == 22
+	assert fs.files[renamed] == 11
+	assert src not in fs.files
+
+
+def test_given_interrupted_run_with_own_output_present_when_convert_then_no_duplicate_and_source_removed():
+	# given
+	fs = FakeFileSystem()
+	library = "/lib"
+	src = _paths(fs, library, LibraryFolder.ORIGINALS, "a.jpg")
+	plain = _paths(fs, library, LibraryFolder.PROCESSED, "a.avif")
+	dup = _paths(fs, library, LibraryFolder.PROCESSED, "a_jpg.avif")
+	staging = convert_staging_path(library, "a_jpg.avif")
+	fs.files[src] = 500
+	fs.files[plain] = 40
+	fs.identical_pairs.add(frozenset({staging, plain}))
+	probe = FakeMediaProbe()
+	probe.readable_images.add(src)
+	probe.valid_images.add(staging)
+	converter = FakeMediaConverter()
+	converter.bind_filesystem(fs)
+	converter.output_sizes[staging] = 40
+	# when
+	ConvertMedia(fs, converter, probe).run(library)
+	# then
+	assert dup not in fs.files
+	assert staging not in fs.files
+	assert src not in fs.files
+	assert fs.files[plain] == 40
+
+
+@pytest.mark.parametrize(
+	("encoder", "plain", "collided"),
+	[
+		(HardwareVideoEncoder.AV1, "clip.av1.mp4", "clip_mov.av1.mp4"),
+		(HardwareVideoEncoder.H264, "clip.h264.mp4", "clip_mov.h264.mp4"),
+	],
+)
+def test_given_video_with_existing_output_of_other_source_when_convert_then_collision_named_output(
+	encoder, plain, collided
+):
+	# given
+	fs = FakeFileSystem()
+	library = "/lib"
+	src = _paths(fs, library, LibraryFolder.ORIGINALS, "clip.mov")
+	existing = _paths(fs, library, LibraryFolder.PROCESSED, plain)
+	out = _paths(fs, library, LibraryFolder.PROCESSED, collided)
+	staging = convert_staging_path(library, collided)
+	fs.files[src] = 5000
+	fs.files[existing] = 90
+	probe = FakeMediaProbe()
+	probe.videos[src] = VideoProbe("mov", "hevc", "aac", 5_000_000)
+	probe.valid_videos.add(staging)
+	converter = FakeMediaConverter(library_encoder=encoder)
+	converter.bind_filesystem(fs)
+	converter.output_sizes[staging] = 300
+	# when
+	ConvertMedia(fs, converter, probe).run(library)
+	# then
+	assert fs.files[existing] == 90
+	assert fs.files[out] == 300
+	assert src not in fs.files
+
+
+def test_given_identical_file_already_in_processed_when_move_then_source_dropped_without_copy():
+	# given
+	fs = FakeFileSystem()
+	library = "/lib"
+	src = _paths(fs, library, LibraryFolder.ORIGINALS, "web.avif")
+	existing = _paths(fs, library, LibraryFolder.PROCESSED, "web.avif")
+	duplicate_name = _paths(fs, library, LibraryFolder.PROCESSED, "web (2).avif")
+	fs.files[src] = 22
+	fs.files[existing] = 22
+	fs.identical_pairs.add(frozenset({src, existing}))
+	probe = FakeMediaProbe()
+	probe.valid_images.add(src)
+	# when
+	ConvertMedia(fs, FakeMediaConverter(), probe).run(library)
+	# then
+	assert src not in fs.files
+	assert fs.files[existing] == 22
+	assert duplicate_name not in fs.files
+
+
+def test_given_same_size_but_different_content_in_processed_when_move_then_source_is_kept_under_new_name():
+	# given
+	fs = FakeFileSystem()
+	library = "/lib"
+	src = _paths(fs, library, LibraryFolder.ORIGINALS, "web.avif")
+	existing = _paths(fs, library, LibraryFolder.PROCESSED, "web.avif")
+	renamed = _paths(fs, library, LibraryFolder.PROCESSED, "web (2).avif")
+	fs.files[src] = 22
+	fs.files[existing] = 22
+	probe = FakeMediaProbe()
+	probe.valid_images.add(src)
+	# when
+	ConvertMedia(fs, FakeMediaConverter(), probe).run(library)
+	# then
+	assert fs.files[existing] == 22
+	assert fs.files[renamed] == 22
+	assert src not in fs.files

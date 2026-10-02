@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 import contextlib
 import os
 import secrets
+import shutil
 import tempfile
 import uuid
 from pathlib import Path
@@ -135,6 +136,8 @@ class LanSessionMixin:
 		self.stop_active_lan_session()
 		if module is not AppModule.USB_FILE_TRANSFER:
 			self.stop_usb_transfer_and_wait(timeout_seconds=30.0)
+		# A running extract is reading through these mounts; end it before pulling them away.
+		self.stop_extract_and_wait(timeout_seconds=30.0)
 		self.release_device_mounts()
 		with self.session._lock:
 			self.session.active_module = module
@@ -174,6 +177,7 @@ class LanSessionMixin:
 	def leave_module_for_home(self: AppServices) -> None:
 		self.stop_active_lan_session()
 		self.stop_usb_transfer_and_wait(timeout_seconds=30.0)
+		self.stop_extract_and_wait(timeout_seconds=30.0)
 		self.release_device_mounts()
 		self._share_selection = []
 		with self.session._lock:
@@ -367,7 +371,7 @@ class LanSessionMixin:
 				os.close(fd)
 				temp_path = Path(temp_name)
 				try:
-					temp_path.write_bytes(path.read_bytes())
+					shutil.copyfile(path, temp_path)  # streamed; never hold a multi-GB video in memory
 					file_id = self._next_transfer_file_id()
 					with self._transfer_lock:
 						existing = list(self._transfer_items)
