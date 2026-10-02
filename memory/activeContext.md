@@ -1,23 +1,21 @@
-_Last updated: 2026-10-02 (grader round 1 fixed, gate green: 464 tests)_
+_Last updated: 2026-10-02 (network passcode committed, grader PASS, gate green)_
 
 ## Branch
 
-`claude/pre-release-code-review-024950` (worktree). Base: `main`.
+`main`. Pushed at end of this session.
 
 ## Current focus
 
-Pre-1.0 code review fixes are done (list in `progress.md`). Next TODO: optional LAN access key/token (not started).
+Network passcode feature is complete and committed (`1e7132e`, `0bc8298`); awaiting user review. Phase 5 grader PASS on the final state.
 
 ## Just changed
 
-- **Network passcode: implemented, gate green (514+ tests), code-grader PASS round 2.** Files: `domain/network_passcode.py`, `application/network_passcode.py`, `adapters/inbound/web/{passcode_guard.py,routes/passcode.py,static/unlock.html,static/auth-guard.js}`, `adapters/outbound/{preferences/passcode_store.py,security/}`, `web/src/passcode.ts`, Home dock. Awaiting user review/commit. Open nit: spec says unlock-page *assets* exempt; unlock.html is self-contained so only `/api/unlock` + `/favicon.ico` are exempt (reword spec if wanted).
-
-- Fixed all review + Cursor findings: settings deadlock, verified Move, same-stem collision naming + byte-identical duplicate collapse, non-overwriting moves, LAN export HTTP poll, gallery request guards, shlex-quoted ADB/AFC paths, `rmdir`-only mount cleanup, zip-slip guard, atomic export cache, ffmpeg stderr drain and µs progress fix.
-- `specs/convert-media/SPEC.md`: retroactive Design decisions section, Duplicate collapse and non-overwriting move rules (amendments awaiting user review).
-- New tests for all of the above (H.264 pipes, mount dirs, export poll, video collisions, content compare).
+- Unlock page CSS/JS externalized (`static/unlock.css`, `web/src/unlock.ts`); exempt paths are exactly `/api/unlock`, `/favicon.ico`, `/static/unlock.css`, `/static/js/unlock.js` (spec line updated, approved).
+- First JS tests: vitest + jsdom in `web/tests/` (`npm run test:web`, part of `npm run check`). Info button fixed (`.info-panel.visible`), dock Active copy is now "Active".
+- Earlier: pre-1.0 review fixes and `convert-media` spec amendments (see `progress.md`).
 
 ## Next steps
 
-1. User reviews spec amendments; optionally re-run `code-grader`.
-2. Review + commit network passcode work.
-3. Still open (deliberately skipped): tool catalog sha256 pinning, ADB list-all-roots speed-up, LAN delete/export auth (belongs to token work).
+1. User reviews the passcode feature (click the dock info button in the real app).
+2. Add JS tests for other `web/src` modules (start with `dom.ts`).
+3. Still open (deliberately skipped): tool catalog sha256 pinning, ADB list-all-roots speed-up, LAN delete/export auth beyond the passcode.
