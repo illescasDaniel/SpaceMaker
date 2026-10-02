@@ -84,6 +84,7 @@ if [[ -n "${APPIMAGETOOL_SHA256}" ]]; then
 fi
 
 out="${repo}/dist/SpaceMaker-${version}-${app_arch}.AppImage"
+mkdir -p "${repo}/dist"
 rm -f "${out}"
 echo "AppDir size before pack: $(du -sh "${APPDIR}" | cut -f1)"
 echo "Packing ${out} (squashfs zstd compression-level 19)…"
