@@ -1,5 +1,6 @@
 import { apiGet, apiSend } from "./api.ts";
 import { encodePathSegments, isDesktopShell } from "./dom.ts";
+import { appendLocation } from "./gps.ts";
 import { showView } from "./shell.ts";
 import { S } from "./state.ts";
 import type {
@@ -546,7 +547,11 @@ function loadGalleryItemDetail(direction?: "prev" | "next"): void {
 					const dt = document.createElement("dt");
 					const dd = document.createElement("dd");
 					dt.textContent = row[0];
-					dd.textContent = row[1];
+					if (row[0] === "Location") {
+						appendLocation(dd, row[1]);
+					} else {
+						dd.textContent = row[1];
+					}
 					if (row[0] === "On disk") {
 						dt.className = "gallery-disk-path";
 						dd.className = "gallery-disk-path";

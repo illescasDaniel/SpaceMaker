@@ -1,5 +1,6 @@
 import { apiGet, apiSend } from "./api.js";
 import { encodePathSegments, isDesktopShell } from "./dom.js";
+import { appendLocation } from "./gps.js";
 import { showView } from "./shell.js";
 import { S } from "./state.js";
 
@@ -529,7 +530,11 @@ function loadGalleryItemDetail(direction) {
 					const dt = document.createElement("dt");
 					const dd = document.createElement("dd");
 					dt.textContent = row[0];
-					dd.textContent = row[1];
+					if (row[0] === "Location") {
+						appendLocation(dd, row[1]);
+					} else {
+						dd.textContent = row[1];
+					}
 					if (row[0] === "On disk") {
 						dt.className = "gallery-disk-path";
 						dd.className = "gallery-disk-path";

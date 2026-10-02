@@ -432,6 +432,25 @@ body {
 
 .gallery-meta dt { margin: 0; color: var(--muted); }
 .gallery-meta dd { margin: 0; }
+.gallery-meta dd.gallery-meta-location {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.gallery-open-maps {
+	font-size: 0.8rem;
+	color: var(--accent);
+	text-decoration: none;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	padding: 0.1rem 0.6rem;
+	white-space: nowrap;
+}
+
+.gallery-open-maps:hover,
+.gallery-open-maps:focus-visible { text-decoration: underline; }
 
 .gallery-item-actions {
 	display: flex;

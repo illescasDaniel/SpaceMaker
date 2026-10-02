@@ -78,4 +78,5 @@ Open items only. Finished work: `memory/archive.md`.
 - [x] **macOS native pywebview (`cocoa`) GUI** (2026-10-01) — User confirmed packaged `SpaceMaker.app` opens a working window (Dock icon + app). Windows `edgechromium` still unconfirmed on real hardware.
 - [ ] Confirm on real Windows hardware that the native pywebview backend (`edgechromium`, see `decisions.md` 2026-09-24) opens a working window — macOS `cocoa` confirmed 2026-10-01 via packaged `.app`
 
+- [x] **Gallery Open in Maps button** (2026-10-02) — wireframe → spec (`specs/gallery-open-in-maps`) → arch → tests → impl; Google Maps link beside Location, desktop bridge `open_external_url`. Gate green; grader PASS (PARTIAL findings fixed).
 - [ ] JS test coverage gap: only `passcode.ts`, `unlock.ts`, `auth-guard.ts` have vitest tests; other `web/src/*` modules (gallery, home-bind, dom, …) are untested. Remember `npm run build:web` after editing `web/src/`.

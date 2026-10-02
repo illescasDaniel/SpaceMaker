@@ -10,6 +10,8 @@ Network passcode feature is complete and committed (`1e7132e`, `0bc8298`); await
 
 ## Just changed
 
+- Gallery item **Open in Maps ↗** button (spec `gallery-open-in-maps`), uncommitted: `web/src/gps.ts`, `domain/map_link.py`, `OpenMapLocation`, `DesktopApi.open_external_url`, tests in `web/tests/gps.test.ts` + `tests/unit/test_open_map_location.py`.
+
 - Unlock page CSS/JS externalized (`static/unlock.css`, `web/src/unlock.ts`); exempt paths are exactly `/api/unlock`, `/favicon.ico`, `/static/unlock.css`, `/static/js/unlock.js` (spec line updated, approved).
 - First JS tests: vitest + jsdom in `web/tests/` (`npm run test:web`, part of `npm run check`). Info button fixed (`.info-panel.visible`), dock Active copy is now "Active".
 - Earlier: pre-1.0 review fixes and `convert-media` spec amendments (see `progress.md`).

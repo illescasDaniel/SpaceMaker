@@ -17,6 +17,7 @@ export interface PywebviewApi {
 	choose_files?: (current: string) => Promise<string[] | null> | string[] | null;
 	choose_share_folder?: (current: string) => Promise<string | null> | string | null;
 	share_folder_file_count?: (folder: string) => Promise<number> | number;
+	open_external_url?: (url: string) => Promise<boolean> | boolean;
 }
 
 declare global {

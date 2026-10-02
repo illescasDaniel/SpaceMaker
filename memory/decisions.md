@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-02 — Open in Maps: desktop `js_api` bridge with server-side URL re-validation
+
+- **Context:** gallery item Location gets an "Open in Maps ↗" link (`specs/gallery-open-in-maps/SPEC.md`). GPS text is untrusted EXIF; pywebview may ignore `target=_blank`.
+- **Decision:** the web client parses GPS strictly (`web/src/gps.ts`) and builds a Google Maps URL from validated numbers; on desktop, `DesktopApi.open_external_url` → `OpenMapLocation` use case re-parses and rebuilds the URL (`domain/map_link.py`) before `webbrowser.open`. No index/API/probe change.
+- **Rationale:** keeps the Python side unchanged for data, and the bridge can never be used to open arbitrary URLs.
+
 ## 2026-10-02 — JS unit tests: vitest + jsdom, unlock assets externalized
 
 - **Context:** the repo had zero JS tests; the passcode dock/unlock/auth-guard logic is security-relevant UI.

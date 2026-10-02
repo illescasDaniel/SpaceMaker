@@ -4,11 +4,17 @@ from pathlib import Path
 
 import webview
 
+from spacemaker.adapters.outbound.host.webbrowser_opener import WebbrowserUrlOpener
 from spacemaker.application.file_share_manifest import count_shareable_files_in_root
+from spacemaker.application.open_map_location import OpenMapLocation
 from spacemaker.bootstrap.paths import default_library_root, normalize_library_root, pictures_directory
 
 
 class DesktopApi:
+	def open_external_url(self, url: str) -> bool:
+		"""Open a validated Google Maps point in the system browser (anything else is refused)."""
+		return OpenMapLocation(WebbrowserUrlOpener()).run(url)
+
 	def choose_files(self, current: str = "") -> list[str]:
 		windows = webview.windows
 		if not windows:
