@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "JEVMEM_SCOPE=project:spacemaker JEVMEM_ENV_FILE=/home/daniel/Projects/Code/Python/Jev-things/.env JEVMEM_DB=/home/daniel/.jevmem/spacemaker.db uv run --directory /home/daniel/Projects/Code/Python/Jev-things jevmem hook session-start",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "JEVMEM_SCOPE=project:spacemaker JEVMEM_ENV_FILE=/home/daniel/Projects/Code/Python/Jev-things/.env JEVMEM_DB=/home/daniel/.jevmem/spacemaker.db uv run --directory /home/daniel/Projects/Code/Python/Jev-things jevmem hook user-prompt",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
