@@ -21,6 +21,10 @@ Per-branch project state used as an AI agent memory bank. The folder is **tracke
 - `activeContext.md`: rewrite with the branch name, the new feature as current focus, no blockers, and only relevant next steps carried over.
 - You can do this manually or ask the AI agent — it follows `.cursor/skills/agent-memory/SKILL.md`.
 
+## Reuse in other projects
+
+This layout is published as a standalone, project-agnostic skill: [memory-bank](https://github.com/illescasDaniel/memory-bank).
+
 ## Out of scope for memory
 
 Do not track worktree cleanup or deletion in `progress.md` / `activeContext.md` — that is local per-developer hygiene and creates merge noise when committed. See `.cursor/skills/agent-memory/SKILL.md`.

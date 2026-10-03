@@ -41,7 +41,7 @@ Per-branch project state lives in `memory/` (git-tracked, so it follows the bran
 
 **What goes where** (memory bank vs jevmem vs this file): **current state** (focus, in-progress work, blockers, next steps) goes in `memory/activeContext.md` / `progress.md` and never in jevmem, where it would go stale silently; **dated facts that stay true** (decisions with reasons, bug causes, gotchas, preferences) go in jevmem via `memory_write` — a significant decision also gets its `decisions.md` entry (append-only, so the overlap never goes stale); **rules** go in this file, not in jevmem (they are always in context). See `.cursor/skills/jev-memory/SKILL.md`.
 
-Keep `activeContext.md` short — move finished threads to `memory/archive.md` rather than letting it accumulate. Never add worktree cleanup/deletion tasks to tracked memory (per-developer local hygiene, causes merge noise). Commit memory updates at milestones; don't leave the tree permanently dirty. Full protocol, branch-init steps, and merge guidance: `.cursor/skills/agent-memory/SKILL.md`.
+Keep `activeContext.md` short — move finished threads to `memory/archive.md` rather than letting it accumulate. Never add worktree cleanup/deletion tasks to tracked memory (per-developer local hygiene, causes merge noise). Commit memory updates at milestones; don't leave the tree permanently dirty. Full protocol, branch-init steps, and merge guidance: `.cursor/skills/agent-memory/SKILL.md`. The generic version of this memory bank is published as [memory-bank](https://github.com/illescasDaniel/memory-bank) (`npx skills add illescasDaniel/memory-bank`).
 
 ## Orient before editing
 
