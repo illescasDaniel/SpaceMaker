@@ -31,7 +31,7 @@ interpolation):
 | `.mcp.json` | Claude Code | `${CLAUDE_PROJECT_DIR:-.}` |
 | `.cursor/mcp.json` | Cursor | `${workspaceFolder}` |
 
-Both pin `uv run --directory …`; Cursor also pins the matching
+Both launch codenav with `uvx --from "codenav-mcp>=0.2.0,<0.3" codenav-mcp` (own isolated environment, not a project dependency) and webnav with `npx`; Cursor also pins the matching
 `CODENAV_MCP_WORKSPACE` / `WEBNAV_MCP_WORKSPACE` env vars. Cursor has been
 observed spawning project MCP stdio with cwd set to `$HOME`, so relative
 script paths alone fail there; Claude expands `${CLAUDE_PROJECT_DIR:-.}`
@@ -93,12 +93,12 @@ repositories under `~/Projects/Python/MCPs/`, one per PyPI distribution:
   `mcp-nav-shared>=X.Y.0,<X.(Y+1)` from PyPI.
 - [`webnav-mcp`](https://github.com/illescasDaniel/webnav-mcp): import name `webnav_mcp`. Same dependency.
 
-SpaceMaker consumes the **published** `codenav-mcp` as an ordinary dev
-dependency in the root `pyproject.toml` (no workspace, no `tool.uv.sources`),
-so `uv sync` installs it from PyPI and `.mcp.json`/`.cursor/mcp.json` launch it as
-`python -m codenav_mcp.server`. To try an unreleased change, run
-`uv pip install -e ~/Projects/Python/MCPs/codenav-mcp` into this repo's venv; the
-next `uv sync` restores the PyPI version.
+SpaceMaker consumes the **published** `codenav-mcp` through `uvx` (no dependency in
+`pyproject.toml`, no workspace, no `tool.uv.sources`); `.mcp.json`/`.cursor/mcp.json` pin
+the range `>=0.2.0,<0.3`. `ty` (bundled with `codenav-mcp`) still reads the project's own
+`.venv` to resolve imports. To try an unreleased change, point `--from` at a local checkout
+(`uvx --from ~/Projects/Code/MCPs/codenav-mcp codenav-mcp`; it needs `mcp-nav-shared` from
+the same family, so use `--with-editable` for it if it is unreleased).
 
 **`webnav` is different:** it is the npm package
 [`webnav-ts-mcp`](https://www.npmjs.com/package/webnav-ts-mcp), developed in its own repo
@@ -288,8 +288,7 @@ It's a purpose-built client, not a generic LSP bridge: `mcp-language-
 server`'s name-based `definition`/`references` tools were tried first and
 don't resolve symbols against `ty`, even though `ty`'s own `workspace/
 symbol` implementation answers those same queries correctly when asked
-directly over LSP. Run it standalone for manual testing with `uv run python
--m codenav_mcp.server`; point it at a different workspace via
+directly over LSP. Run it standalone for manual testing with `uvx codenav-mcp`; point it at a different workspace via
 the `CODENAV_MCP_WORKSPACE` env var (otherwise falls back as above).
 
 The generic JSON-RPC/LSP wire protocol (subprocess framing, request/

@@ -1,14 +1,11 @@
 {
 	"mcpServers": {
 		"codenav": {
-			"command": "uv",
+			"command": "uvx",
 			"args": [
-				"run",
-				"--directory",
-				"${workspaceFolder}",
-				"python",
-				"-m",
-				"codenav_mcp.server"
+				"--from",
+				"codenav-mcp>=0.2.0,<0.3",
+				"codenav-mcp"
 			],
 			"env": {
 				"CODENAV_MCP_WORKSPACE": "${workspaceFolder}",

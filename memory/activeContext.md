@@ -1,11 +1,11 @@
-_Last updated: 2026-10-04 (codenav 0.2.0 from PyPI verified)_
+_Last updated: 2026-10-04 (codenav via uvx verified)_
 
 ## Branch
 
-`worktree-codenav-local-write-tools-trial`. The codenav write tools (`edit`, `edit_symbol`, `rename_symbol`, `change_signature`, `move`, `quick_fix`, `verify_changes`, `apply_edit`, `undo_edit`) are now published as `codenav-mcp` 0.2.0 / `mcp-nav-shared` 0.2.0. `.mcp.json` runs codenav from the published dependency again (`uv run --directory`), `pyproject.toml` requires `codenav-mcp>=0.2.0`, `uv.lock` updated.
+`worktree-codenav-local-write-tools-trial`, merged to `main` after the final check. codenav now starts with `uvx --from "codenav-mcp>=0.2.0,<0.3" codenav-mcp` in `.mcp.json` and `.cursor/mcp.json` (own isolated env, no longer a dev dependency; `ty` still reads the project's `.venv`). Published `codenav-mcp` 0.2.1 adds `--help`/`--version`; the README got PyPI badges (no release for that).
 
 ## Current focus
 
-Trial finished: the published 0.2.0 server was driven over stdio from this repo (19 tools, create/edit-refused/rename/verify all fine); the trial log was deleted (findings live in the MCP repos). A running Claude/Cursor session needs an MCP restart to pick up 0.2.0.
+Verified live over `uvx` on 0.2.1 (symbol lookup, create/edit-refused/rename/outline). Docs updated in `docs/agent-tooling.md`.
 
-Next: land the branch on `main`; then the jevmem README known limitations (per-branch scope, instructions-file filter misses); untried codenav options (`include_overrides`, parameter rename, whole-module `move`).
+Next: fix the pre-existing docs-build warning (`ARCHITECTURE.md` links `../specs/network-passcode/SPEC.md`, outside `docs/`; use an absolute GitHub URL); codenav idea: skip gitignored paths (e.g. `site/`) in the rename mention scan; jevmem README known limitations.
