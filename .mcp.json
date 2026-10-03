@@ -31,17 +31,15 @@
 		},
 		"jevmem": {
 			"type": "stdio",
-			"command": "uv",
+			"command": "uvx",
 			"args": [
-				"run",
-				"--project",
-				"/home/daniel/Projects/Code/Python/Jev-things",
+				"--from",
+				"jevmem",
 				"jevmem-mcp"
 			],
 			"env": {
-				"JEVMEM_ENV_FILE": "/home/daniel/Projects/Code/Python/Jev-things/.env",
 				"JEVMEM_SCOPE": "project:spacemaker",
-				"JEVMEM_DB": "/home/daniel/.jevmem/spacemaker.db"
+				"JEVMEM_DB": "${HOME}/.jevmem/spacemaker.db"
 			}
 		}
 	}

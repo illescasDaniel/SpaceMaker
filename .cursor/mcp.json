@@ -27,6 +27,18 @@
 				"WEBNAV_MCP_ROOTS": "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes",
 				"WEBNAV_MCP_EXCLUDE": "src/spacemaker/adapters/inbound/web/static/js"
 			}
+		},
+		"jevmem": {
+			"command": "uvx",
+			"args": [
+				"--from",
+				"jevmem",
+				"jevmem-mcp"
+			],
+			"env": {
+				"JEVMEM_SCOPE": "project:spacemaker",
+				"JEVMEM_DB": "${HOME}/.jevmem/spacemaker.db"
+			}
 		}
 	}
 }
