@@ -27,6 +27,8 @@ Per-branch project state lives in `memory/` (git-tracked, so it follows the bran
 - **`activeContext.md`** — switching focus, hitting a blocker, or concluding work/a step (log modified files, current state, exact next step).
 - **`decisions.md`** — a significant technical/structural/dependency choice: append with context + decision + rationale.
 
+**What goes where:** these files hold *current state* (and the append-only decision log). jevmem (`memory_write`) holds *dated facts that stay true* — decisions with reasons, bug causes, gotchas, preferences — and must never hold current state such as next steps, which would go stale silently. Rules belong in `AGENTS.md`. When a step produces both, write the state here and the lasting fact to jevmem; a significant decision gets both a `decisions.md` entry and a one-fact jevmem note.
+
 **Never** add worktree cleanup/deletion tasks to tracked memory — that's per-developer local hygiene and creates merge noise.
 
 ## Keeping activeContext.md lean

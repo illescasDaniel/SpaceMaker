@@ -1,12 +1,14 @@
-_Last updated: 2026-10-02 (network passcode committed, grader PASS, gate green)_
+_Last updated: 2026-10-03 (jevmem trial: memory placement rule, auto recall default)_
 
 ## Branch
 
-`main`. Pushed at end of this session.
+`feature/jevmem-trial`. Trial wiring of jevmem from the local `~/Projects/Code/Python/Jev-things` checkout (`.mcp.json`, `.claude/settings.json` hooks, `.cursor/skills/jev-memory/`); the uncommitted `.mcp.json` codenav change and `memory/mcp-write-tools-trial.md` belong to the separate codenav write-tools trial.
 
 ## Current focus
 
-Network passcode feature is complete and committed (`1e7132e`, `0bc8298`); awaiting user review. Phase 5 grader PASS on the final state.
+jevmem trial. Done this session: fixed the MCP thread-bound SQLite bug (every tool could fail; `memory_pin` did), pinned notes 42/43/45, `auto` is the default recall mode, and the "what goes where" rule (state → this folder, dated facts → jevmem, rules → AGENTS.md) is in AGENTS.md, both memory skills and `decisions.md`. Jev-things changes are uncommitted.
+
+Next: restart the jevmem MCP server (picks up the thread fix and `auto`), then tackle the new jevmem README known limitations (per-branch scope, stale status notes, instructions-file filter misses, hidden MCP errors).
 
 ## Just changed
 

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "JEVMEM_SCOPE=project:spacemaker JEVMEM_ENV_FILE=/home/daniel/Projects/Code/Python/Jev-things/.env JEVMEM_DB=/home/daniel/.jevmem/spacemaker.db uv run --directory /home/daniel/Projects/Code/Python/Jev-things jevmem hook session-start",
+            "command": "JEVMEM_SCOPE=project:spacemaker JEVMEM_ENV_FILE=/home/daniel/Projects/Code/Python/Jev-things/.env JEVMEM_DB=/home/daniel/.jevmem/spacemaker.db uv run --project /home/daniel/Projects/Code/Python/Jev-things jevmem hook session-start",
             "timeout": 15
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "JEVMEM_SCOPE=project:spacemaker JEVMEM_ENV_FILE=/home/daniel/Projects/Code/Python/Jev-things/.env JEVMEM_DB=/home/daniel/.jevmem/spacemaker.db uv run --directory /home/daniel/Projects/Code/Python/Jev-things jevmem hook user-prompt",
+            "command": "JEVMEM_SCOPE=project:spacemaker JEVMEM_ENV_FILE=/home/daniel/Projects/Code/Python/Jev-things/.env JEVMEM_DB=/home/daniel/.jevmem/spacemaker.db uv run --project /home/daniel/Projects/Code/Python/Jev-things jevmem hook user-prompt",
             "timeout": 20
           }
         ]
