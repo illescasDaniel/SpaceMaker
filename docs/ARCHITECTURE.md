@@ -77,7 +77,7 @@ Composition root: `bootstrap/services/` package (`AppServices` + mixins for
 snapshots, LAN sessions, jobs, USB browse). Mixin methods annotate
 `self: AppServices` so the type checker sees the composed surface.
 
-**Network passcode:** optional LAN access control ([spec](../specs/network-passcode/SPEC.md)). One middleware (`adapters/inbound/web/passcode_guard.py`) challenges every non-loopback request with 401 while a passcode is set; `application/network_passcode.py` owns the scrypt record (`network_passcode.json`, separate from preferences), HMAC-derived login cookie / QR token and per-IP lockout. Not encryption.
+**Network passcode:** optional LAN access control ([spec](https://github.com/illescasDaniel/SpaceMaker/blob/main/specs/network-passcode/SPEC.md)). One middleware (`adapters/inbound/web/passcode_guard.py`) challenges every non-loopback request with 401 while a passcode is set; `application/network_passcode.py` owns the scrypt record (`network_passcode.json`, separate from preferences), HMAC-derived login cookie / QR token and per-IP lockout. Not encryption.
 
 **HTTP transport:** plain HTTP on uvicorn (loopback desktop + LAN QR). No
 HTTP/3 / QUIC / TLS — certs are a poor fit for this deployment model.

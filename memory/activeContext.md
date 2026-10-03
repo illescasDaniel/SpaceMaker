@@ -1,4 +1,4 @@
-_Last updated: 2026-10-04 (codenav via uvx verified)_
+_Last updated: 2026-10-04 (docs-build warning fixed)_
 
 ## Branch
 
@@ -6,6 +6,6 @@ _Last updated: 2026-10-04 (codenav via uvx verified)_
 
 ## Current focus
 
-Verified live over `uvx` on 0.2.1 (symbol lookup, create/edit-refused/rename/outline). Docs updated in `docs/agent-tooling.md`.
+Verified live over `uvx` on 0.2.1 (symbol lookup, create/edit-refused/rename/outline). Docs updated in `docs/agent-tooling.md`. Fixed the `ARCHITECTURE.md` link warning; `mkdocs build --strict` is clean.
 
-Next: fix the pre-existing docs-build warning (`ARCHITECTURE.md` links `../specs/network-passcode/SPEC.md`, outside `docs/`; use an absolute GitHub URL); codenav idea: skip gitignored paths (e.g. `site/`) in the rename mention scan; jevmem README known limitations.
+Next: codenav idea: skip gitignored paths (e.g. `site/`) in the rename mention scan; jevmem README known limitations.
