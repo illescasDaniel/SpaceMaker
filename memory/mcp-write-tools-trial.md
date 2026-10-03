@@ -59,3 +59,15 @@ Reason: overlapping tools (check_edit vs replace_symbol/insert_symbol, move_symb
 - Old implementations kept as private `_edit_text`, `_replace_symbol`, `_insert_symbol`, `_safe_delete`, `_move_symbol`, `_move_module`; `edit_tools.py` is the new front. Old names are no longer registered (test asserts they are absent).
 - Tests: 188 pass (incl. live ty). Pre-existing, environment-only, NOT caused by this: `test_ty_live::..._callers_then_answers_track_the_disk` (local ty lacks `prepareCallHierarchy`) and `test_write_edge_live::..._concurrent_calls...` hangs on the untouched baseline too. Live tests only run with `.venv/bin/ty` in the repo; I symlinked the uv tool's ty there (git-ignored).
 - To verify after restart: tool list shows 9 write tools with the new names; try edit/edit_symbol/move on real SpaceMaker code during the feature.
+
+## Round 3 — verification of the 9-tool surface after restart (2026-10-04)
+
+Exercised on throwaway modules `src/spacemaker/_scratch_*.py` (deleted afterwards); workspace resolved correctly to the worktree.
+
+- [good] `edit(new_text=...)` creates files; `edit` with a type error is refused with the diagnostic, a diff and a preview id (`apply_edit` then force-writes it and reports the remaining error).
+- [good] `rename_symbol(name="Cart.total")` renamed across 2 files; it listed 56 unlinked `total` hits (strings/comments/docs, other symbols) without touching them.
+- [good] `edit_symbol` replace (tabs kept), insert `position="into"` a class (blank lines OK), delete of a used symbol refused with the call site listed.
+- [good] `change_signature(add=[{default, value}])` updated the def and both call sites; `move(name, to_file)` created the file and rewrote the importer; `quick_fix` re-added a deleted import (2 diagnostics fixed); `verify_changes` listed exactly the 2 errors I introduced.
+- [good] `apply=false` → diff + id, file untouched; `apply_edit(id)` writes; a preview made stale by a later edit is refused ("changed since the preview was made"); `undo_edit` reverted the latest edit.
+- [neutral] Not exercised: `include_overrides`, `rename_symbol(parameter=)` after consolidation, `move` of a whole module, `max_new_errors` > 0.
+- Test note: `uv run pytest` in `codenav-mcp` still cannot resolve (`mcp-nav-shared>=0.2.0` unpublished); use the `--no-project --with-editable` form above.
