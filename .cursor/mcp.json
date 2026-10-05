@@ -29,7 +29,7 @@
 			"command": "uvx",
 			"args": [
 				"--from",
-				"jevmem",
+				"jevmem>=0.3.0,<0.4",
 				"jevmem-mcp"
 			],
 			"env": {
