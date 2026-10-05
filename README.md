@@ -134,6 +134,7 @@ Uses an isolated temp profile and offscreen Qt WebEngine (same 1200×900 viewpor
   - jevmem stores notes for decisions with their reason, bug causes and fixes, gotchas and explicit preferences, written as facts with dates
   - Rules go in [AGENTS.md](AGENTS.md). That file is always loaded, so a rule there is never missed; a rule in jevmem would only appear if recall happened to surface it
   - Current state (focus, next steps) goes in [memory/](memory/README.md) (`activeContext.md`, `progress.md`). jevmem rejects notes that read like work status, since they go stale silently
+- [`smart-commit-guard`](https://github.com/illescasDaniel/smart-commit-guard) — pre-commit + CI secret scan (tracked `.githooks/pre-commit`; activate once per clone with `git config core.hooksPath .githooks`)
 - Deep reference: [docs/agent-tooling.md](docs/agent-tooling.md); when to use them: [AGENTS.md](AGENTS.md) "Orient before editing"
 
 ## License

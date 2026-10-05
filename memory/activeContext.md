@@ -1,15 +1,19 @@
-_Last updated: 2026-10-05 (smart-commit-guard adopted, uncommitted)_
+_Last updated: 2026-10-05 (README smart-commit-guard link)_
 
 ## Branch
 
-`main`. webnav now starts with `npx --yes webnav-ts-mcp@^0.2.0` in `.mcp.json` and `.cursor/mcp.json` (0.2.0 adds the write tools `edit`, `edit_symbol`, `rename_symbol`, `move`, `quick_fix`, `verify_changes`, `apply_edit`, `undo_edit`, plus a queue so concurrent writes no longer race). codenav still runs from `uvx` (`codenav-mcp>=0.2.0,<0.3`).
+`main`. webnav starts with `npx --yes webnav-ts-mcp@^0.2.0`; codenav via `uvx` (`codenav-mcp>=0.2.0,<0.3`); jevmem pinned `>=0.3.0,<0.4`.
 
 ## Current focus
 
-Secret gate: `smart-commit-guard` 0.1.0 wired into SpaceMaker (`.githooks/pre-commit`, `core.hooksPath=.githooks` set locally, `.github/workflows/secret-scan.yml`, docs, decisions entry). Verified through real git. Uncommitted: review, commit, push, then confirm the workflow's first CI run.
+Secret gate is on `main` (commit `a51af8e`): tracked `.githooks/pre-commit`, CI workflow, docs. README now links [`smart-commit-guard`](https://github.com/illescasDaniel/smart-commit-guard) under Development tooling.
 
-Previous: jevmem 0.3.0 (local and third-party decision models) was tested from the local checkout against hosted Jev and ollaya `jevk5:4b`, released to PyPI, and pinned as `jevmem>=0.3.0,<0.4` in `.mcp.json` and `.cursor/mcp.json`. Re-tested over MCP on the real DB (stats, recall, list) after the restart. ollaya was stopped afterwards. jev-mem repo: README PyPI badge added, GitHub releases v0.3.0 and v0.2.0 created.
+## Just changed
 
-Verified 0.2.0 live over `npx` in a Claude Code session: concurrent renames and edits on one file plus parallel reads, then `undo_edit` back to a clean tree. A per-project `webnav` override in `~/.claude.json` (local scope, pointing at the local checkout) had to be removed with `claude mcp remove webnav -s local` so `.mcp.json` takes effect; the first `npx` start downloads about 180 MB.
+- `README.md` — short reference + repo link for the pre-commit/CI secret scan.
 
-Next: none pending for this thread (jevmem local-model MCP path is only CLI-verified on the published package). Ideas still open: codenav skipping gitignored paths (e.g. `site/`) in the rename mention scan; jevmem README known limitations.
+## Next steps
+
+- Confirm the first real `secret-scan.yml` CI run on a PR/push.
+- Optional (upstream): add the `uvx` install + CI example to the smart-commit-guard README.
+- Ideas still open: codenav skipping gitignored paths (e.g. `site/`) in the rename mention scan; jevmem README known limitations.
