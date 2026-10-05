@@ -103,7 +103,7 @@ the same family, so use `--with-editable` for it if it is unreleased).
 **`webnav` is different:** it is the npm package
 [`webnav-ts-mcp`](https://www.npmjs.com/package/webnav-ts-mcp), developed in its own repo
 (`~/Projects/Code/Python/MCPs/webnav-ts-mcp`), and both host configs launch the published
-version with `npx --yes webnav-ts-mcp@^0.1.1` (the Python `webnav-mcp` dependency was dropped from
+version with `npx --yes webnav-ts-mcp@^0.2.0` (the Python `webnav-mcp` dependency was dropped from
 `pyproject.toml`). The first start downloads the package and its language servers
 (about 180 MB) into npm's cache; later starts reuse it. To try an unreleased change, temporarily point a
 config at `node ~/Projects/Code/Python/MCPs/webnav-ts-mcp/bin/launch.mjs`, which installs and builds

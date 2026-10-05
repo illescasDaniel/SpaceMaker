@@ -16,7 +16,7 @@
 			"command": "npx",
 			"args": [
 				"--yes",
-				"webnav-ts-mcp@^0.1.1"
+				"webnav-ts-mcp@^0.2.0"
 			],
 			"env": {
 				"WEBNAV_MCP_ROOTS": "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes",
