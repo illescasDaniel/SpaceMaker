@@ -80,7 +80,7 @@ In a linked worktree (any `git worktree list` entry after the first), `.venv`/`n
 
 ## Quality gate
 
-Requires [uv](https://docs.astral.sh/uv/). Python: **ruff**, **ty**, **pytest** via `uv run task checks` ([scripts/quality/checks.py](scripts/quality/checks.py), mirrored by [checks.sh](scripts/quality/checks.sh)). Web JS/HTML/TS: **Biome** + `tsc` via `npm ci && npm run check` (also run by the quality gate).
+Requires [uv](https://docs.astral.sh/uv/). Python: **ruff**, **ty**, **pytest** via `uv run task checks` ([scripts/quality/checks.py](scripts/quality/checks.py), mirrored by [checks.sh](scripts/quality/checks.sh)). Web JS/HTML/TS: **Biome** + `tsc` via `npm ci && npm run check` (also run by the quality gate). The gate ends with a dependency audit (`pip-audit` on the locked deps + `npm audit --audit-level=high`; needs network, skip offline with `--skip-audit`); Dependabot (`.github/dependabot.yml`) opens weekly update PRs.
 
 ## Rules — Cursor vs Claude Code
 

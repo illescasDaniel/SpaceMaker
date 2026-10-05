@@ -2,6 +2,18 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-05 — Dependency audit in the quality gate, plus Dependabot
+
+- **Context:** SpaceMaker had no vulnerability audit and no automated dependency updates; srxy already had `pip-audit` in its gate and a Dependabot config.
+- **Decision:** `scripts/quality/checks.py` (and the `checks.sh` mirror via `audit.sh`) end with `uvx pip-audit` on `uv export --frozen --no-emit-project --all-groups --no-hashes` plus `npm audit --audit-level=high`; `--skip-audit` for offline runs. `.github/dependabot.yml` covers `uv`, `npm` and `github-actions` with weekly grouped PRs.
+- **Rationale:** exporting the lock and auditing the file needs no extra dev dependency and no lockfile churn, and does not depend on what is installed locally. The first run found 0 vulnerabilities. Rejected for now: a cached audit result like srxy's (a 7-day `.gate-cache`), to keep the first version simple.
+
+## 2026-10-05 — Secret gate: `smart-commit-guard` via a tracked `.githooks/pre-commit` plus a CI scan
+
+- **Context:** nothing stopped a key, password or `.env` from being committed. A first package name, `secret-guard`, was rejected by PyPI as too similar to existing projects, so the package is `smart-commit-guard` 0.1.0 (own repo, standalone: not part of jevmem, no MCP, CLI only).
+- **Decision:** `.githooks/pre-commit` (tracked, activated per clone with `git config core.hooksPath .githooks`, `.gitattributes` keeps LF) runs `uvx --from 'smart-commit-guard>=0.1,<0.2' ... scan --staged`; `.github/workflows/secret-scan.yml` runs the same rules without a model on pull requests and pushes. The model is the local ollaya `jevk5:4b` and only judges ambiguous candidates; if it is down they warn and rule hits still block. `SKIP_SECRET_GUARD=1` bypasses the hook once and is logged; CI ignores it.
+- **Rationale:** rules catch the obvious cases for free; the small model removes the placeholder-versus-real false positives regex cannot. The uvx pin avoids stale cache, as with the MCP packages. A whole-tree scan of SpaceMaker has 0 blocks and ~27 model-less warnings, all test fixtures.
+
 ## 2026-10-05 — jevmem pinned to `jevmem>=0.3.0,<0.4`
 
 - **Context:** the MCP configs ran `uvx --from jevmem` unpinned, so uvx's cache could keep serving an old release after a new one was published.

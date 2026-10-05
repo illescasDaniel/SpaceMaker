@@ -1,4 +1,4 @@
-_Last updated: 2026-10-05 (jevmem 0.3.0 adopted)_
+_Last updated: 2026-10-05 (smart-commit-guard adopted, uncommitted)_
 
 ## Branch
 
@@ -6,7 +6,9 @@ _Last updated: 2026-10-05 (jevmem 0.3.0 adopted)_
 
 ## Current focus
 
-jevmem 0.3.0 (local and third-party decision models) was tested from the local checkout against hosted Jev and ollaya `jevk5:4b`, released to PyPI, and pinned as `jevmem>=0.3.0,<0.4` in `.mcp.json` and `.cursor/mcp.json`. Re-tested over MCP on the real DB (stats, recall, list) after the restart. ollaya was stopped afterwards. jev-mem repo: README PyPI badge added, GitHub releases v0.3.0 and v0.2.0 created.
+Secret gate: `smart-commit-guard` 0.1.0 wired into SpaceMaker (`.githooks/pre-commit`, `core.hooksPath=.githooks` set locally, `.github/workflows/secret-scan.yml`, docs, decisions entry). Verified through real git. Uncommitted: review, commit, push, then confirm the workflow's first CI run.
+
+Previous: jevmem 0.3.0 (local and third-party decision models) was tested from the local checkout against hosted Jev and ollaya `jevk5:4b`, released to PyPI, and pinned as `jevmem>=0.3.0,<0.4` in `.mcp.json` and `.cursor/mcp.json`. Re-tested over MCP on the real DB (stats, recall, list) after the restart. ollaya was stopped afterwards. jev-mem repo: README PyPI badge added, GitHub releases v0.3.0 and v0.2.0 created.
 
 Verified 0.2.0 live over `npx` in a Claude Code session: concurrent renames and edits on one file plus parallel reads, then `undo_edit` back to a clean tree. A per-project `webnav` override in `~/.claude.json` (local scope, pointing at the local checkout) had to be removed with `claude mcp remove webnav -s local` so `.mcp.json` takes effect; the first `npx` start downloads about 180 MB.
 

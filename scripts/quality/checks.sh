@@ -9,12 +9,14 @@ source "${quality_dir}/internal/lib.sh"
 FIX=false
 QUIET=false
 SKIP_WEB=false
+SKIP_AUDIT=false
 
 for arg in "$@"; do
 	case "${arg}" in
 	--fix) FIX=true ;;
 	--quiet) QUIET=true ;;
 	--skip-web) SKIP_WEB=true ;;
+	--skip-audit) SKIP_AUDIT=true ;;
 	esac
 done
 
@@ -55,6 +57,10 @@ if [[ "${SKIP_WEB}" != true ]]; then
 	else
 		run_step web "${quality_dir}/web.sh"
 	fi
+fi
+
+if [[ "${SKIP_AUDIT}" != true ]]; then
+	run_step audit "${quality_dir}/audit.sh"
 fi
 
 exit "${fail}"

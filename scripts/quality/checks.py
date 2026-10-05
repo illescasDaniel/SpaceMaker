@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quality gate: ruff, ty, pytest, and web (Biome + tsc).
+"""Quality gate: ruff, ty, pytest, web (Biome + tsc) and a dependency audit (pip-audit + npm audit).
 
 Runs natively via ``uv`` / ``npm`` so Windows PowerShell does not need a working
 ``bash`` on ``PATH`` (the WindowsApps WSL stub often shadows Git Bash and fails
@@ -12,6 +12,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -85,11 +86,28 @@ def step_web(*, fix: bool, quiet: bool) -> int:
 	return _run([npm, "run", script], quiet=quiet)
 
 
+def step_audit(*, quiet: bool) -> int:
+	"""Known-vulnerability audit of the locked dependencies. Needs network; skip offline with --skip-audit."""
+	_log(quiet, "== audit ==")
+	with tempfile.TemporaryDirectory() as tmp:
+		req = Path(tmp) / "requirements.txt"
+		code = _run(["uv", "export", "--quiet", "--frozen", "--no-emit-project", "--all-groups", "--no-hashes", "-o", str(req)], quiet=True)
+		if code != 0:
+			return code
+		# --no-deps: the lock is already fully resolved; --disable-pip: audit the file, not an environment.
+		code = _run(["uvx", "pip-audit", "-r", str(req), "--no-deps", "--disable-pip"], quiet=quiet)
+	npm = _npm()
+	if code == 0 and npm is not None and (_REPO / "package-lock.json").is_file():
+		code = _run([npm, "audit", "--audit-level=high"], quiet=quiet)
+	return code
+
+
 def main(argv: list[str] | None = None) -> int:
 	parser = argparse.ArgumentParser(description="SpaceMaker quality gate")
 	parser.add_argument("--fix", action="store_true")
 	parser.add_argument("--quiet", action="store_true")
 	parser.add_argument("--skip-web", action="store_true")
+	parser.add_argument("--skip-audit", action="store_true", help="skip the dependency audit (it needs network)")
 	args, rest = parser.parse_known_args(argv)
 
 	if not (_REPO / ".venv").is_dir():
@@ -121,6 +139,13 @@ def main(argv: list[str] | None = None) -> int:
 			fail = 1
 		else:
 			_log(args.quiet, "ok: web")
+
+	if not args.skip_audit:
+		if step_audit(quiet=args.quiet) != 0:
+			print("fail: audit", file=sys.stderr)
+			fail = 1
+		else:
+			_log(args.quiet, "ok: audit")
 
 	return fail
 
