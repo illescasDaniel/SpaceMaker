@@ -14,6 +14,5 @@ Nothing in flight. Latest: jevmem 0.3.1 config switch (`.mcp.json`, `.cursor/mcp
 
 ## Next steps
 
-- Confirm `secret-scan.yml` CI run on the push to `main`.
-- Verify `.cursor/mcp.json` in Cursor itself (`${userHome}` untested).
-- Optionally make `.claude/settings.json` jevmem hooks shell-independent (exec form, see jev-mem's `.claude/settings.json`).
+- Verify `.cursor/mcp.json` in Cursor itself: `${userHome}` is documented for the desktop IDE but untestable from here (forum reports it is not expanded in cloud agents).
+- `.claude/settings.json` jevmem hooks keep the bash-style env prefix on purpose: hook entries have no per-hook `env`, so exec form cannot set `JEVMEM_DB`; they work on Windows via Git Bash (verified 2026-10-06). Revisit only if jevmem gains a `--db` flag or a PowerShell-only user needs it.
