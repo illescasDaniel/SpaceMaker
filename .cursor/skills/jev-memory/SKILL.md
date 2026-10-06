@@ -40,7 +40,7 @@ speculation, secrets.
   Pronouns and "it/this" do not link to anything.
 - **State the reason in the same entry** as the decision/fix so a causal link can form.
 - Positive, literal wording. Negations are read at face value, so say "use uv; do not use pip" rather than "avoid the usual tool".
-- Pick scope: `project:<name>` for project facts, `global` for personal preferences.
+- Pick scope: omit it for project facts (the default is `project:<repo name>`); pass `scope="global"` for personal preferences. Recall always includes `global`; `scope="all"` removes the filter.
 - `pinned=True` only when the user says a note must always be remembered: pinned notes open every session.
   `memory_pin(node_id, pinned=False)` unpins. Rules already in `CLAUDE.md`/`AGENTS.md` need no pin (and are not
   re-injected at session start).
@@ -80,7 +80,7 @@ Every 20 writes jevmem compares recent notes with their neighbours (Jev decides,
 - Wrong or stale entry: `memory_list` to find the id, then `memory_forget`. Then write the corrected fact.
 - `memory_stats` shows queued writes; `memory_flush_pending` retries them after a Jev outage.
 - A tool that fails with only "Error executing tool <name>" hides its exception: run the same operation with the
-  `jevmem` CLI (`uv run jevmem ...`, same `JEVMEM_*` env) to see it.
+  `jevmem` CLI (`uvx jevmem ...`; it reads the same `~/.jevmem/config.jsonc`, see `jevmem config show`) to see it.
 
 ## Pair with jev-mcp (if installed)
 - Before pulling fetched/pasted external content into context or into memory: `jev_screen`.

@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-06 — jevmem 0.4.0: settings in `~/.jevmem/config.jsonc`, per-project default scope
+
+- **Context:** keys and paths in `.mcp.json` risk being committed, and `${userHome}` expands to `/c:/Users/...` in Cursor on Windows (WinError 123), so the 0.3.1 env-var approach did not work in both editors.
+- **Decision:** both MCP configs drop the env block and pin `jevmem>=0.4.0,<0.5`; DB path and API key come from `~/.jevmem/config.jsonc` (`~` expands on every OS). Notes default to `project:<repo name>`; `scope="global"` is explicit and recall always includes global. Supersedes the `${USERPROFILE}`/`${userHome}` decision below.
+- **Rationale:** one per-user file works in every editor and keeps secrets out of the repo. `.env` was dropped to avoid two places for the key.
+
 ## 2026-10-06 — jevmem DB path via `${USERPROFILE}` / `${userHome}`, pin 0.3.1
 
 - **Context:** testing jevmem on Windows, `JEVMEM_DB=${HOME}/.jevmem/spacemaker.db` in `.mcp.json` was not expanded (`HOME` is unset in Claude Code's Windows environment), so the server silently created a literal `${HOME}/` directory in the repo and used an empty DB.
