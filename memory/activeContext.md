@@ -1,20 +1,19 @@
-_Last updated: 2026-10-06 (smart-commit-guard 0.2.0 pushed)_
+_Last updated: 2026-10-06 (Windows unit-test PATH/.exe fixes)_
 
 ## Branch
 
-`main`. webnav starts with `npx --yes webnav-ts-mcp@^0.2.0`; codenav via `uvx` (`codenav-mcp>=0.2.0,<0.3`); jevmem pinned `>=0.3.0,<0.4`.
+`main`. webnav starts with `npx --yes webnav-ts-mcp@^0.2.0`; codenav via `uvx` (`codenav-mcp>=0.2.0,<0.3`); jevmem pinned `>=0.3.0,<0.4`. Secret gate on `smart-commit-guard` 0.2.0.
 
 ## Current focus
 
-Secret gate on `smart-commit-guard` 0.2.0 (shared `pre-commit` + `commit-msg`, CI pin `>=0.2,<0.3`). Local `doctor` green.
+Windows pytest failures fixed (PATH `os.pathsep` + `.exe` stubs in managed/bundled tool tests). Full suite: 532 passed, 12 skipped. Commit `0dda41e` (0.2.0 gate) is still unpushed with this fix pending commit.
 
 ## Just changed
 
-- `.githooks/pre-commit` / `.githooks/commit-msg` — 0.2 shared hooks
-- `.github/workflows/secret-scan.yml` — `>=0.2,<0.3`, `--messages` on PRs, `--all` on push
-- `docs/agent-tooling.md`, `README.md`, memory
+- `tests/unit/test_bundled_tools.py` — PATH tests use `os.pathsep`
+- `tests/unit/test_managed_tools.py` — Windows `.exe` names + which mock accepts `ffmpeg.exe`
 
 ## Next steps
 
-- Confirm the `secret-scan.yml` CI run on this push to `main`.
-- Local Windows `task checks`: PATH-separator unit tests and `@types/node` still fail on this machine (unrelated to the gate); CI is ubuntu.
+- Commit + push both commits to `main`.
+- Confirm `secret-scan.yml` CI on the push.

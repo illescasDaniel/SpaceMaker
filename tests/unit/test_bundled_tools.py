@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -134,24 +135,25 @@ def test_given_host_bin_dir_missing_from_path_when_ensure_then_prepends(tmp_path
 	# given
 	brew_bin = tmp_path / "opt" / "homebrew" / "bin"
 	brew_bin.mkdir(parents=True)
-	env = {"PATH": "/usr/bin:/bin"}
+	env = {"PATH": os.pathsep.join(("/usr/bin", "/bin"))}
 	# when
 	added = ensure_host_tool_path_dirs(environ=env, extra_dirs=(brew_bin,))
 	# then
 	assert added == [str(brew_bin)]
-	assert env["PATH"].startswith(f"{brew_bin}:")
+	assert env["PATH"].startswith(f"{brew_bin}{os.pathsep}")
 
 
 def test_given_host_bin_already_on_path_when_ensure_then_no_duplicate(tmp_path: Path) -> None:
 	# given
 	brew_bin = tmp_path / "opt" / "homebrew" / "bin"
 	brew_bin.mkdir(parents=True)
-	env = {"PATH": f"{brew_bin}:/usr/bin"}
+	original = os.pathsep.join((str(brew_bin), "/usr/bin"))
+	env = {"PATH": original}
 	# when
 	added = ensure_host_tool_path_dirs(environ=env, extra_dirs=(brew_bin,))
 	# then
 	assert added == []
-	assert env["PATH"] == f"{brew_bin}:/usr/bin"
+	assert env["PATH"] == original
 
 
 def test_given_brew_style_bin_when_which_misses_then_resolve_uses_host_dir(

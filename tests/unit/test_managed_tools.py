@@ -111,13 +111,14 @@ def test_given_path_ffmpeg_before_continue_when_snapshot_then_path_green_convert
 	dest = tmp_path / "managed"
 	dest.mkdir()
 	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(dest))
-	system_ffmpeg = tmp_path / "bin" / "ffmpeg"
+	ffmpeg_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+	system_ffmpeg = tmp_path / "bin" / ffmpeg_name
 	system_ffmpeg.parent.mkdir()
 	system_ffmpeg.write_text("stub")
 	system_ffmpeg.chmod(0o755)
 	monkeypatch.setattr(
 		"spacemaker.bootstrap.bundled_tools.shutil.which",
-		lambda name: str(system_ffmpeg) if name == "ffmpeg" else None,
+		lambda name: str(system_ffmpeg) if name in ("ffmpeg", "ffmpeg.exe") else None,
 	)
 	service = ManagedToolsService(FakeInstaller(entries=set()), dest_dir=dest)
 	# when
@@ -135,8 +136,9 @@ def test_given_path_only_tools_when_status_then_summary_ok_details_collapsed(tmp
 	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(dest))
 	bins = tmp_path / "bin"
 	bins.mkdir()
+	windows = sys.platform == "win32"
 	for tool in BundledTool:
-		exe = bins / tool.value
+		exe = bins / (f"{tool.value}.exe" if windows else tool.value)
 		exe.write_text("stub")
 		exe.chmod(0o755)
 	monkeypatch.setattr(
@@ -158,8 +160,9 @@ def test_given_all_managed_when_status_then_summary_ok_setup_not_pending(tmp_pat
 	dest = tmp_path / "managed"
 	dest.mkdir()
 	monkeypatch.setenv("SPACEMAKER_TOOLS_DIR", str(dest))
+	windows = sys.platform == "win32"
 	for tool in BundledTool:
-		path = bundled_tool_path(tool, root=dest, platform_is_windows=False)
+		path = bundled_tool_path(tool, root=dest, platform_is_windows=windows)
 		path.write_text("stub")
 		path.chmod(0o755)
 	service = ManagedToolsService(FakeInstaller(entries=set()), dest_dir=dest)
