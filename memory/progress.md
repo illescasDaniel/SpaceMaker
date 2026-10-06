@@ -4,6 +4,7 @@ Open items only. Finished work: `memory/archive.md`.
 
 ## SpaceMaker app
 
+- [x] **jevmem 0.3.1 adopted, Windows verified** (2026-10-06) — local checkout tested over MCP on Windows 11, then 0.3.1 released to PyPI and re-tested from the public package (write/recall/list + SessionStart/UserPromptSubmit hooks). `${HOME}` is unset in Claude Code's Windows env, so `.mcp.json` uses `${USERPROFILE}` and `.cursor/mcp.json` uses `${userHome}` (Cursor side untested); both pin `jevmem>=0.3.1,<0.4`. jevmem now errors on an unexpanded `${` in `JEVMEM_DB`. Open: `.claude/settings.json` hooks still use bash-style `VAR=... uvx jevmem hook` (works here, would not under PowerShell).
 - [x] **Dependency audit + Dependabot** (2026-10-05) — `pip-audit` + `npm audit` as the last step of the quality gate (`--skip-audit` offline), `.github/dependabot.yml`; 0 vulnerabilities on the first run. GitGuardian not set up (needs the owner to install the GitHub App).
 - [x] **Secret gate on 0.2.0** (2026-10-06) — upgraded from 0.1.0: `install-hook --shared --force` (pre-commit + new commit-msg, pin `>=0.2,<0.3`); CI uses `--messages` on PRs and `--all` on push; docs updated. Local `doctor` green. Open: confirm the CI run on the push to `main`.
 - [x] **Secret gate adopted** (2026-10-05) — `smart-commit-guard` 0.1.0 (PyPI) via tracked `.githooks/pre-commit` (uvx, pinned `>=0.1,<0.2`) + `.github/workflows/secret-scan.yml`; docs in `docs/agent-tooling.md`; README links the repo. Superseded by 0.2.0 upgrade above.

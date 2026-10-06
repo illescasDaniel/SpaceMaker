@@ -29,12 +29,12 @@
 			"command": "uvx",
 			"args": [
 				"--from",
-				"jevmem>=0.3.0,<0.4",
+				"jevmem>=0.3.1,<0.4",
 				"jevmem-mcp"
 			],
 			"env": {
 				"JEVMEM_SCOPE": "project:spacemaker",
-				"JEVMEM_DB": "${HOME}/.jevmem/spacemaker.db"
+				"JEVMEM_DB": "${userHome}/.jevmem/spacemaker.db"
 			}
 		}
 	}

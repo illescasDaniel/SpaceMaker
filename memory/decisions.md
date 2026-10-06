@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-06 — jevmem DB path via `${USERPROFILE}` / `${userHome}`, pin 0.3.1
+
+- **Context:** testing jevmem on Windows, `JEVMEM_DB=${HOME}/.jevmem/spacemaker.db` in `.mcp.json` was not expanded (`HOME` is unset in Claude Code's Windows environment), so the server silently created a literal `${HOME}/` directory in the repo and used an empty DB.
+- **Decision:** `.mcp.json` uses `${USERPROFILE}/.jevmem/spacemaker.db`; `.cursor/mcp.json` uses Cursor's `${userHome}`; both pin `jevmem>=0.3.1,<0.4`. jevmem 0.3.1 raises on a `JEVMEM_DB` containing `${`.
+- **Rationale:** `USERPROFILE` is always set on Windows, and the guard turns this silent failure into a clear error. Rejected: keeping `${HOME}` (works only under bash-launched processes).
+
 ## 2026-10-06 — Secret gate upgraded to `smart-commit-guard` 0.2.0
 
 - **Context:** 0.2.0 adds a `commit-msg` hook, `scan --all`, `--messages` for CI, and a tighter shared-hook template; the repo still had the 0.1.0 pin and only `pre-commit`.
