@@ -2,18 +2,16 @@ _Last updated: 2026-10-06 (Windows unit-test PATH/.exe fixes)_
 
 ## Branch
 
-`main`. webnav starts with `npx --yes webnav-ts-mcp@^0.2.0`; codenav via `uvx` (`codenav-mcp>=0.2.0,<0.3`); jevmem pinned `>=0.3.0,<0.4`. Secret gate on `smart-commit-guard` 0.2.0.
+`main` (in sync with `origin/main`). webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevmem `>=0.3.0,<0.4`. Secret gate on `smart-commit-guard` 0.2.0.
 
 ## Current focus
 
-Windows pytest failures fixed (PATH `os.pathsep` + `.exe` stubs in managed/bundled tool tests). Full suite: 532 passed, 12 skipped. Commit `0dda41e` (0.2.0 gate) is still unpushed with this fix pending commit.
+Nothing in flight. Latest on `main`: smart-commit-guard 0.2.0 + Windows PATH/`.exe` unit-test fixes (`97d6eb5`).
 
 ## Just changed
 
-- `tests/unit/test_bundled_tools.py` — PATH tests use `os.pathsep`
-- `tests/unit/test_managed_tools.py` — Windows `.exe` names + which mock accepts `ffmpeg.exe`
+- Pushed `0dda41e` (gate 0.2.0) and `97d6eb5` (Windows test fixes).
 
 ## Next steps
 
-- Commit + push both commits to `main`.
-- Confirm `secret-scan.yml` CI on the push.
+- Confirm `secret-scan.yml` CI run on the push to `main`.
