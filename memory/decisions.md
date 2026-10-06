@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-06 — Secret gate upgraded to `smart-commit-guard` 0.2.0
+
+- **Context:** 0.2.0 adds a `commit-msg` hook, `scan --all`, `--messages` for CI, and a tighter shared-hook template; the repo still had the 0.1.0 pin and only `pre-commit`.
+- **Decision:** reinstall with `smart-commit-guard install-hook --shared --force`; pin hooks and CI to `>=0.2,<0.3`; PR CI runs `--diff ... --messages`, push CI runs `--all` (replacing `--files $(git ls-files)`).
+- **Rationale:** matches the upstream docs; commit messages are a real leak path; `--all` avoids argument-length limits on large trees. Local tool install is once per machine; tracked `.githooks/` still carries the gate for every clone.
+
 ## 2026-10-05 — Dependency audit in the quality gate, plus Dependabot
 
 - **Context:** SpaceMaker had no vulnerability audit and no automated dependency updates; srxy already had `pip-audit` in its gate and a Dependabot config.

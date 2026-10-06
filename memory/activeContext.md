@@ -1,4 +1,4 @@
-_Last updated: 2026-10-05 (README smart-commit-guard link)_
+_Last updated: 2026-10-06 (smart-commit-guard 0.2.0 pushed)_
 
 ## Branch
 
@@ -6,14 +6,15 @@ _Last updated: 2026-10-05 (README smart-commit-guard link)_
 
 ## Current focus
 
-Secret gate is on `main` (commit `a51af8e`): tracked `.githooks/pre-commit`, CI workflow, docs. README now links [`smart-commit-guard`](https://github.com/illescasDaniel/smart-commit-guard) under Development tooling.
+Secret gate on `smart-commit-guard` 0.2.0 (shared `pre-commit` + `commit-msg`, CI pin `>=0.2,<0.3`). Local `doctor` green.
 
 ## Just changed
 
-- `README.md` — short reference + repo link for the pre-commit/CI secret scan.
+- `.githooks/pre-commit` / `.githooks/commit-msg` — 0.2 shared hooks
+- `.github/workflows/secret-scan.yml` — `>=0.2,<0.3`, `--messages` on PRs, `--all` on push
+- `docs/agent-tooling.md`, `README.md`, memory
 
 ## Next steps
 
-- Confirm the first real `secret-scan.yml` CI run on a PR/push.
-- Optional (upstream): add the `uvx` install + CI example to the smart-commit-guard README.
-- Ideas still open: codenav skipping gitignored paths (e.g. `site/`) in the rename mention scan; jevmem README known limitations.
+- Confirm the `secret-scan.yml` CI run on this push to `main`.
+- Local Windows `task checks`: PATH-separator unit tests and `@types/node` still fail on this machine (unrelated to the gate); CI is ubuntu.

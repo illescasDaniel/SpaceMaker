@@ -3,6 +3,7 @@ import pytest
 from spacemaker.application.open_map_location import OpenMapLocation
 from spacemaker.domain.map_link import MapPoint, maps_url, parse_maps_url
 
+
 VALID = "https://www.google.com/maps/search/?api=1&query=52.52,13.405"
 
 

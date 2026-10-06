@@ -593,14 +593,15 @@ Stops API keys, passwords, private keys and sensitive files (`.env`, key stores,
 Rules block the obvious cases without a model; ambiguous candidates (`DB_PASS = "..."`) go to a small local decision
 model (ollaya `jevk5:4b` on `http://localhost:11435` by default) and only warn when it is unavailable. Published on
 PyPI as [`smart-commit-guard`](https://pypi.org/project/smart-commit-guard/) (repo `illescasDaniel/smart-commit-guard`);
-SpaceMaker uses only its CLI, through `uvx`, pinned to `>=0.1,<0.2` (uvx caches, so unpinned could serve an old release).
+SpaceMaker uses only its CLI, through `uvx`, pinned to `>=0.2,<0.3` (uvx caches, so unpinned could serve an old release).
 
-- **Hook:** `.githooks/pre-commit` (tracked, `core.hooksPath=.githooks`, LF via `.gitattributes`). `core.hooksPath` is
-  local git config shared by all worktrees of a clone; **each new clone runs `git config core.hooksPath .githooks` once**.
+- **Hooks:** `.githooks/pre-commit` (staged diff) and `.githooks/commit-msg` (commit message), both tracked;
+  `core.hooksPath=.githooks`, LF via `.gitattributes`. `core.hooksPath` is local git config shared by all worktrees of a
+  clone; **each new clone runs `git config core.hooksPath .githooks` once** (or `smart-commit-guard install-hook --shared`).
   The first commit on a machine downloads the tool through `uvx`.
-- **CI:** `.github/workflows/secret-scan.yml` runs the same rules without a model (`--diff` on pull requests, whole tree
-  on pushes to `main`). It ignores `SKIP_SECRET_GUARD`, so a bypassed or `--no-verify` commit still has to pass.
-- **Check it works:** `uvx --from 'smart-commit-guard>=0.1,<0.2' smart-commit-guard doctor`.
+- **CI:** `.github/workflows/secret-scan.yml` runs the same rules without a model (`--diff --messages` on pull requests,
+  `--all` on pushes to `main`). It ignores `SKIP_SECRET_GUARD`, so a bypassed or `--no-verify` commit still has to pass.
+- **Check it works:** `uvx --from 'smart-commit-guard>=0.2,<0.3' smart-commit-guard doctor`.
 - **False positive:** add the printed `allowlist:` fingerprint to `.secret-guard.toml`, or for one commit run
   `SKIP_SECRET_GUARD=1 git commit ...` (logged to `.git/secret-guard-skips.log`; never `export` it).
 - **No model running** (ollaya stopped): rule hits still block, ambiguous candidates warn and the commit proceeds.
