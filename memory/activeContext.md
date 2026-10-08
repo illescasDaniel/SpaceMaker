@@ -1,4 +1,4 @@
-_Last updated: 2026-10-06 (jevmem 0.4.0 adopted, verified on Claude Code)_
+_Last updated: 2026-10-08 (jevmem 0.4.0 verified on Linux)_
 
 ## Branch
 
@@ -11,6 +11,8 @@ Nothing in flight. Latest: jevmem 0.4.0 config switch (`.mcp.json`, `.cursor/mcp
 ## Just changed
 
 - jevmem MCP entries have no env block: key and DB path live in `~/.jevmem/config.jsonc` (`uvx jevmem config init --api-key ...`), outside the repo. Notes default to `project:spacemaker`; `scope="global"` for personal preferences. Verified over MCP with public 0.4.0 on Claude Code and on Cursor (no-scope write lands in `project:spacemaker`, global write, recall of both; no env needed).
+
+- jevmem 0.4.0 verified on Linux (2026-10-08): created `~/.jevmem/config.jsonc` from the old `~/.jevmem/.env` key and set `"db": "~/.jevmem/spacemaker.db"` (0.4.0 defaults to an empty `memory.db`); CLI, both hooks and the MCP (79 nodes, recall works) pass after a restart. `memory/README.md` Setup paragraph updated.
 
 ## Next steps
 
