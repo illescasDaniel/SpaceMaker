@@ -601,10 +601,13 @@ SpaceMaker uses only its CLI, through `uvx`, pinned to `>=0.2,<0.3` (uvx caches,
   The first commit on a machine downloads the tool through `uvx`.
 - **CI:** `.github/workflows/secret-scan.yml` runs the same rules without a model (`--diff --messages` on pull requests,
   `--all` on pushes to `main`). It ignores `SKIP_SECRET_GUARD`, so a bypassed or `--no-verify` commit still has to pass.
-- **Check it works:** `uvx --from 'smart-commit-guard>=0.2,<0.3' smart-commit-guard doctor`.
+- **Check it works:** `uvx --from 'smart-commit-guard>=0.3,<0.4' smart-commit-guard doctor`.
 - **False positive:** add the printed `allowlist:` fingerprint to `.secret-guard.toml`, or for one commit run
   `SKIP_SECRET_GUARD=1 git commit ...` (logged to `.git/secret-guard-skips.log`; never `export` it).
 - **No model running** (ollaya stopped): rule hits still block, ambiguous candidates warn and the commit proceeds.
+  With `"autostart": true` in `~/.config/smart-commit-guard/config.jsonc` (0.3.0+, per-machine, off by default) the hook instead
+  starts `ollaya serve` itself the first time an ambiguous candidate needs the model, and leaves it running. Do not set it on a
+  machine whose hooks still resolve to 0.2.x: that version rejects the unknown key.
 
 ## Dependency hygiene — audit and Dependabot
 
