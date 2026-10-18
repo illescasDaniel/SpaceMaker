@@ -185,7 +185,10 @@
 				</div>
 				<div class="info-panel" id="easy-qr-info-panel" aria-hidden="true">
 					<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
-					<input class="field" type="text" readonly id="easy-qr-url" aria-label="Photo upload page URL" value="" />
+					<div class="url-field">
+						<input type="text" readonly id="easy-qr-url" aria-label="Photo upload page URL" value="">
+						<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="copied-text" aria-live="polite">Copied</span></button>
+					</div>
 				</div>
 			</div>
 			<p class="easy-lead">Scan this QR code with your phone camera. Stay on the same Wi‑Fi, then choose photos and videos to send.</p>
@@ -250,7 +253,10 @@
 				</div>
 				<div class="info-panel" id="receive-qr-info-panel" aria-hidden="true">
 					<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
-					<input class="field" type="text" readonly id="receive-qr-url" aria-label="Receive files page URL" value="" />
+					<div class="url-field">
+						<input type="text" readonly id="receive-qr-url" aria-label="Receive files page URL" value="">
+						<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="copied-text" aria-live="polite">Copied</span></button>
+					</div>
 				</div>
 			</div>
 			<p class="easy-lead">Scan this QR code with your phone. Stay on the same Wi‑Fi, then send any files to this PC.</p>
@@ -404,7 +410,10 @@
 				</div>
 				<div class="info-panel" id="send-qr-info-panel" aria-hidden="true">
 					<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
-					<input class="field" type="text" readonly id="send-qr-url" aria-label="Share download page URL" value="" />
+					<div class="url-field">
+						<input type="text" readonly id="send-qr-url" aria-label="Share download page URL" value="">
+						<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="copied-text" aria-live="polite">Copied</span></button>
+					</div>
 				</div>
 			</div>
 			<p class="easy-lead" id="send-share-lead">Choose files or folders on this PC. Your phone can download files or zipped folders from the page opened by the QR code.</p>
@@ -427,7 +436,10 @@
 			</div>
 			<div class="info-panel" id="transfer-qr-info-panel" aria-hidden="true">
 				<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
-				<input class="field" type="text" readonly id="transfer-qr-url" aria-label="Transfer files page URL" value="" />
+				<div class="url-field">
+					<input type="text" readonly id="transfer-qr-url" aria-label="Transfer files page URL" value="">
+					<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="copied-text" aria-live="polite">Copied</span></button>
+				</div>
 			</div>
 			<p class="easy-lead">Scan this QR with any phone on the same Wi‑Fi. Everyone in the session can upload and download until you return to Home.</p>
 		</div>
@@ -521,12 +533,18 @@
 							</div>
 							<div>
 								<p class="folder-hint" style="margin: 0;">Upload page (same Wi‑Fi)</p>
-								<input class="field" type="text" id="wifi-upload-url" readonly aria-label="Upload URL" style="margin-top: 0.35rem;" />
+								<div class="url-field" style="margin-top: 0.35rem;">
+									<input type="text" readonly id="wifi-upload-url" aria-label="Upload URL" value="">
+									<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="copied-text" aria-live="polite">Copied</span></button>
+								</div>
 							</div>
 						</div>
 						<div class="info-panel" id="wifi-qr-info-panel" aria-hidden="true">
 							<p style="margin: 0;">If you cannot scan the QR code, open this URL in your phone&apos;s browser (same Wi‑Fi):</p>
-							<input class="field" type="text" readonly id="wifi-qr-url-copy" aria-label="Upload page URL" value="" />
+							<div class="url-field">
+								<input type="text" readonly id="wifi-qr-url-copy" aria-label="Upload page URL" value="">
+								<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="copied-text" aria-live="polite">Copied</span></button>
+							</div>
 						</div>
 					</div>
 					<p class="folder-hint" id="wizard-library-hint"></p>
@@ -603,7 +621,7 @@
 				<p class="status-line" id="visualize-status"><strong>Status:</strong> Not started</p>
 				<div class="qr-block">
 					<div class="qr-placeholder" id="qr-placeholder" role="img" aria-label="Gallery QR code"></div>
-					<div>
+					<div class="qr-side">
 						<div class="label-row">
 							<p class="label" style="margin: 0;">On your phone</p>
 							<button
@@ -617,30 +635,9 @@
 								i
 							</button>
 						</div>
-						<div class="field" id="gallery-url">…</div>
-						<div class="info-panel" id="lan-firewall-info-panel" aria-hidden="true">
-							<h4>Phone cannot open the gallery?</h4>
-							<p>
-								Use the URL or QR above on the <strong>same Wi‑Fi</strong> as this PC. The address must be
-								your computer’s LAN IP (not <code>127.0.0.1</code> or <code>localhost</code>).
-							</p>
-							<h4>Linux firewall (CachyOS / KDE)</h4>
-							<p>
-								Allow <strong>inbound TCP <span class="lan-firewall-port">8765</span></strong> for the
-								SpaceMaker process. With UFW:
-							</p>
-							<p><code>sudo ufw allow 8765/tcp comment 'SpaceMaker LAN gallery'</code></p>
-							<p>
-								Or from the repo:
-								<code>sudo uv run task firewall-allow</code>
-							</p>
-							<p>
-								Plasma Firewall: System Settings → Network → Firewall → allow inbound TCP on this port.
-							</p>
-							<p class="folder-hint" style="margin-top: 0.5rem;">
-								SpaceMaker checks UFW/firewalld rules and whether a LAN self-test can reach this port when
-								the server is running.
-							</p>
+						<div class="url-field">
+							<input type="text" readonly id="gallery-url" aria-label="Gallery URL on your phone" value="">
+							<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="copied-text" aria-live="polite">Copied</span></button>
 						</div>
 						<p class="folder-hint" id="gallery-lan-hint" hidden>
 							Phone must use your PC’s LAN address (not localhost). Same Wi‑Fi; allow port
@@ -648,6 +645,30 @@
 						</p>
 						<p class="folder-hint firewall-warn" id="gallery-firewall-warn" hidden></p>
 					</div>
+				</div>
+				<div class="info-panel" id="lan-firewall-info-panel" aria-hidden="true">
+					<h4>Phone cannot open the gallery?</h4>
+					<p>
+						Use the URL or QR above on the <strong>same Wi‑Fi</strong> as this PC. The address must be
+						your computer’s LAN IP (not <code>127.0.0.1</code> or <code>localhost</code>).
+					</p>
+					<h4>Linux firewall (CachyOS / KDE)</h4>
+					<p>
+						Allow <strong>inbound TCP <span class="lan-firewall-port">8765</span></strong> for the
+						SpaceMaker process. With UFW:
+					</p>
+					<p><code>sudo ufw allow 8765/tcp comment 'SpaceMaker LAN gallery'</code></p>
+					<p>
+						Or from the repo:
+						<code>sudo uv run task firewall-allow</code>
+					</p>
+					<p>
+						Plasma Firewall: System Settings → Network → Firewall → allow inbound TCP on this port.
+					</p>
+					<p class="folder-hint" style="margin-top: 0.5rem;">
+						SpaceMaker checks UFW/firewalld rules and whether a LAN self-test can reach this port when
+						the server is running.
+					</p>
 				</div>
 				<button type="button" class="btn btn-primary" id="btn-open-gallery" disabled>Open gallery</button>
 			</article>
@@ -675,7 +696,10 @@
 			</div>
 			<p class="folder-hint" style="margin: 0 0 0.75rem;">Scan the QR or open the URL on the same Wi‑Fi.</p>
 			<div class="qr-placeholder" id="gallery-popup-qr" role="img" aria-label="Gallery QR code"></div>
-			<div class="field" id="gallery-popup-url" data-gallery-url>…</div>
+			<div class="url-field">
+				<input type="text" readonly id="gallery-popup-url" aria-label="Gallery URL on your phone" value="">
+				<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL" disabled><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="copied-text" aria-live="polite">Copied</span></button>
+			</div>
 			<p class="easy-note">Please don&apos;t open this while uploading content.</p>
 			<p class="folder-hint" id="gallery-popup-lan-hint" hidden>
 				Use your PC&apos;s LAN address (not localhost). Same Wi‑Fi; allow port

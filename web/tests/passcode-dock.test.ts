@@ -135,15 +135,4 @@ describe("passcode dock", () => {
 		await flush();
 		expect(byId("passcode-dock").dataset.state).toBe("active");
 	});
-
-	it("given the info button when clicked then the panel toggles", async () => {
-		await mountDock();
-		byId("btn-passcode-info").click();
-		expect(byId("passcode-info-panel").classList.contains("visible")).toBe(true);
-		expect(byId("passcode-info-panel").getAttribute("aria-hidden")).toBe("false");
-		expect(byId("btn-passcode-info").getAttribute("aria-expanded")).toBe("true");
-		byId("btn-passcode-info").click();
-		expect(byId("passcode-info-panel").classList.contains("visible")).toBe(false);
-		expect(byId("btn-passcode-info").getAttribute("aria-expanded")).toBe("false");
-	});
 });

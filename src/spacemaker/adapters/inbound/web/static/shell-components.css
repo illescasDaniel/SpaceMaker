@@ -707,3 +707,69 @@
 		@media (max-width: 640px) {
 			.passcode-dock { left: 0.5rem; right: 0.5rem; width: auto; }
 		}
+
+		/* URL field: read-only single-line input (scrolls) + small Copy button */
+		.url-field {
+			display: flex;
+			align-items: stretch;
+			gap: 0.35rem;
+			min-width: 0;
+			width: 100%;
+			margin-top: 0.45rem;
+		}
+
+		.url-field input {
+			flex: 1 1 auto;
+			min-width: 0;
+			font: inherit;
+			font-size: 0.8rem;
+			color: var(--text);
+			background: var(--surface2);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 0.4rem 0.6rem;
+			white-space: nowrap;
+		}
+
+		.url-field input:focus-visible,
+		.url-copy:focus-visible,
+		.info-btn:focus-visible {
+			outline: 2px solid var(--accent);
+			outline-offset: 2px;
+		}
+
+		.url-copy {
+			flex-shrink: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.3rem;
+			font: inherit;
+			font-size: 0.78rem;
+			min-width: 2.1rem;
+			padding: 0 0.55rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--surface);
+			color: var(--text);
+			cursor: pointer;
+			transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+		}
+
+		.url-copy:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+		.url-copy:disabled { opacity: 0.45; cursor: not-allowed; }
+		.url-copy svg { width: 14px; height: 14px; }
+		.url-copy .copied-text { display: none; }
+		.url-copy.copied { color: var(--success); border-color: var(--success); }
+		.url-copy.copied .copied-text { display: inline; }
+		.url-copy.copied svg { display: none; }
+
+		.qr-block > .qr-side { flex: 1 1 12rem; min-width: 0; }
+
+		.info-btn[aria-expanded="true"] {
+			background: var(--accent-dim);
+			color: #fff;
+			border-color: var(--accent-dim);
+		}
+
+		.info-btn:hover { border-color: var(--accent); }

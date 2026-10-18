@@ -1,5 +1,5 @@
 import { apiSend } from "./api.js";
-import { bindDisclosure, errorMessage, onClick, showFormBanner } from "./dom.js";
+import { errorMessage, onClick, showFormBanner } from "./dom.js";
 import { bindGalleryUi } from "./gallery.js";
 import { closeGalleryPhonePopup, toggleGalleryPhonePopup } from "./gallery-item.js";
 import { selectedConnectionMethod, syncConnectionButtons, validateStep1Form } from "./home.js";
@@ -18,34 +18,6 @@ import { S } from "./state.js";
 function bindHomeDesktop() {
 	bindGalleryUi();
 	bindPasscodeDock();
-	document.getElementById("btn-lan-firewall-info")?.addEventListener("click", (ev) => {
-		const panel = document.getElementById("lan-firewall-info-panel");
-		if (!panel) {
-			return;
-		}
-		const open = panel.classList.toggle("visible");
-		panel.setAttribute("aria-hidden", open ? "false" : "true");
-		if (ev.currentTarget instanceof HTMLElement) {
-			ev.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
-		}
-	});
-	document.getElementById("btn-connection-info")?.addEventListener("click", (ev) => {
-		const panel = document.getElementById("connection-info-panel");
-		if (!panel) {
-			return;
-		}
-		const open = panel.classList.toggle("visible");
-		panel.setAttribute("aria-hidden", open ? "false" : "true");
-		if (ev.currentTarget instanceof HTMLElement) {
-			ev.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
-		}
-	});
-	bindDisclosure("btn-easy-qr-info", "easy-qr-info-panel");
-	bindDisclosure("btn-easy-compress-info", "easy-compress-info-panel");
-	bindDisclosure("btn-receive-qr-info", "receive-qr-info-panel");
-	bindDisclosure("btn-send-qr-info", "send-qr-info-panel");
-	bindDisclosure("btn-transfer-qr-info", "transfer-qr-info-panel");
-	bindDisclosure("btn-wifi-qr-info", "wifi-qr-info-panel");
 	const easyCompressCheckbox = document.getElementById("easy-compress-checkbox");
 	if (easyCompressCheckbox instanceof HTMLInputElement) {
 		easyCompressCheckbox.addEventListener("change", () => {

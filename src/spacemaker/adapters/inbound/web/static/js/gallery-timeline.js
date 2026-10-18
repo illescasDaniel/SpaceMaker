@@ -3,6 +3,7 @@ import { appendThumbCell } from "./gallery-item.js";
 import { resetSelection, toggleGroup } from "./gallery-selection.js";
 import { monthName } from "./home.js";
 import { S } from "./state.js";
+import { setUrlField } from "./url-field.js";
 
 function galleryDateParts(iso) {
 	const d = new Date(iso);
@@ -484,18 +485,12 @@ function applyGalleryFirewallHints(info, hintEl, fwWarnEl) {
 function loadServerInfo() {
 	apiSend("GET", "/api/server-info").then((info) => {
 		const qr = document.getElementById("qr-placeholder");
-		const urlField = document.getElementById("gallery-url");
-		const popupUrl = document.getElementById("gallery-popup-url");
 		const portLabel = document.getElementById("gallery-lan-port");
 		const galleryUrl = info.gallery_url || "";
 		setGalleryQrPlaceholder(qr, info.qr_url);
 		setGalleryQrPlaceholder(document.getElementById("gallery-popup-qr"), info.qr_url);
-		if (urlField) {
-			urlField.textContent = galleryUrl;
-		}
-		if (popupUrl) {
-			popupUrl.textContent = galleryUrl;
-		}
+		setUrlField("gallery-url", galleryUrl);
+		setUrlField("gallery-popup-url", galleryUrl);
 		const portText = info.port ? String(info.port) : "8765";
 		if (portLabel) {
 			portLabel.textContent = portText;

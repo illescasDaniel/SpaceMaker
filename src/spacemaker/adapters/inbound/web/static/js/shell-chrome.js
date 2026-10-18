@@ -1,6 +1,8 @@
 import { apiSend } from "./api.js";
 import { errorMessage, onClick, showFormBanner } from "./dom.js";
+import { bindInfoPanels } from "./info-panels.js";
 import { enterModule, goHomeHub, showView } from "./shell.js";
+import { bindUrlFields } from "./url-field.js";
 
 function bindDesktopChrome() {
 	document.querySelectorAll(".view-tabs button").forEach((btn) => {
@@ -38,23 +40,8 @@ function bindDesktopChrome() {
 			window.alert(errorMessage(err, "Could not open documents folder."));
 		});
 	});
-	function bindInfoToggle(btnId, panelId) {
-		const btn = document.getElementById(btnId);
-		const panel = document.getElementById(panelId);
-		if (!btn || !panel) {
-			return;
-		}
-		btn.addEventListener("click", () => {
-			const open = panel.classList.toggle("visible");
-			btn.setAttribute("aria-expanded", open ? "true" : "false");
-			panel.setAttribute("aria-hidden", open ? "false" : "true");
-		});
-	}
-	bindInfoToggle("btn-uft-connection-info", "uft-connection-info-panel");
-	bindInfoToggle("btn-uft-folders-info", "uft-folders-info-panel");
-	bindInfoToggle("btn-uft-dest-info", "uft-dest-info-panel");
-	bindInfoToggle("btn-uft-mode-info", "uft-mode-info-panel");
-	bindInfoToggle("btn-uft-actions-info", "uft-actions-info-panel");
+	bindInfoPanels(document);
+	bindUrlFields(document);
 }
 
 export { bindDesktopChrome };

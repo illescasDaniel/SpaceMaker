@@ -1,7 +1,8 @@
-import { isAbsolutePath, setQrImage, setQrUrlField, showFormBanner } from "./dom.ts";
+import { isAbsolutePath, setQrImage, showFormBanner } from "./dom.ts";
 import { easyFileCountLabel } from "./shell.ts";
 import { S } from "./state.ts";
 import type { AppSnapshot, FormValidation } from "./types.ts";
+import { setUrlField } from "./url-field.ts";
 
 function clearHomeFormBanner(): void {
 	const homeBanner = document.getElementById("home-form-banner");
@@ -127,7 +128,6 @@ function updateWifiUploadPanel(next: AppSnapshot): void {
 	const wifi = next.wifi_upload;
 	const idle = document.getElementById("wifi-idle-hint");
 	const live = document.getElementById("wifi-live-receive");
-	const urlInput = document.getElementById("wifi-upload-url");
 	const qrImg = document.getElementById("wifi-upload-qr");
 	const wizardLibraryHint = document.getElementById("wizard-library-hint");
 	const libDisplay = next.library_root_display || next.library_root;
@@ -139,13 +139,11 @@ function updateWifiUploadPanel(next: AppSnapshot): void {
 	} else if (wizardLibraryHint) {
 		wizardLibraryHint.textContent = "";
 	}
-	setQrUrlField("wifi-qr-url-copy", wifi?.upload_url || "");
+	setUrlField("wifi-qr-url-copy", wifi?.upload_url || "");
 	if (wifi?.active) {
 		idle.classList.add("panel-hidden");
 		live.classList.remove("panel-hidden");
-		if (urlInput instanceof HTMLInputElement) {
-			urlInput.value = wifi.upload_url || "";
-		}
+		setUrlField("wifi-upload-url", wifi.upload_url || "");
 		setQrImage(qrImg instanceof HTMLImageElement ? qrImg : null, wifi.qr_url, "wifi-upload-qr");
 	} else {
 		idle.classList.remove("panel-hidden");
@@ -245,7 +243,7 @@ function updateEasyUi(next: AppSnapshot): void {
 	if (compressOffStatus) {
 		compressOffStatus.classList.toggle("panel-hidden", compressOn);
 	}
-	setQrUrlField("easy-qr-url", wifi?.upload_url || "");
+	setUrlField("easy-qr-url", wifi?.upload_url || "");
 	if (wifi?.active && uploadQr) {
 		uploadQr.hidden = false;
 		setQrImage(uploadQr instanceof HTMLImageElement ? uploadQr : null, wifi.qr_url, "easy-upload-qr");

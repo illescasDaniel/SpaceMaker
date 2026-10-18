@@ -1,7 +1,8 @@
 import { apiSend } from "./api.js";
-import { errorMessage, onClick, setQrUrlField, showFormBanner } from "./dom.js";
+import { errorMessage, onClick, showFormBanner } from "./dom.js";
 import { applyState, easyFileCountLabel } from "./shell.js";
 import { S } from "./state.js";
+import { setUrlField } from "./url-field.js";
 
 function updateReceiveUi(next) {
 	const session = next.receive_files_session;
@@ -43,7 +44,7 @@ function updateReceiveUi(next) {
 			typeof next.documents_receive_file_count === "number" ? next.documents_receive_file_count : rp.completed;
 		openWrap.classList.toggle("panel-hidden", fileCount < 1);
 	}
-	setQrUrlField("receive-qr-url", session?.page_url || "");
+	setUrlField("receive-qr-url", session?.page_url || "");
 }
 function updateSendUi(next) {
 	const share = next.file_share;
@@ -70,11 +71,11 @@ function updateSendUi(next) {
 		if (share.qr_url) {
 			uploadQr.src = share.qr_url + "&_=" + Date.now();
 		}
-		setQrUrlField("send-qr-url", share.page_url || "");
+		setUrlField("send-qr-url", share.page_url || "");
 	} else if (qrSection && uploadQr instanceof HTMLImageElement) {
 		qrSection.classList.add("panel-hidden");
 		uploadQr.hidden = true;
-		setQrUrlField("send-qr-url", "");
+		setUrlField("send-qr-url", "");
 	}
 }
 function showTransferSaveTip(displayPath) {
@@ -143,7 +144,7 @@ function updateTransferUi(next) {
 		}
 		hideTransferSaveTip();
 	}
-	setQrUrlField("transfer-qr-url", pageUrl);
+	setUrlField("transfer-qr-url", pageUrl);
 	if (list) {
 		list.innerHTML = "";
 		items.forEach((item) => {

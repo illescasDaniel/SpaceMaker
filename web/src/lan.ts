@@ -1,8 +1,9 @@
 import { apiSend } from "./api.ts";
-import { errorMessage, onClick, setQrUrlField, showFormBanner } from "./dom.ts";
+import { errorMessage, onClick, showFormBanner } from "./dom.ts";
 import { applyState, easyFileCountLabel } from "./shell.ts";
 import { S } from "./state.ts";
 import type { AppSnapshot, TransferSaveResult } from "./types.ts";
+import { setUrlField } from "./url-field.ts";
 
 function updateReceiveUi(next: AppSnapshot): void {
 	const session = next.receive_files_session;
@@ -44,7 +45,7 @@ function updateReceiveUi(next: AppSnapshot): void {
 			typeof next.documents_receive_file_count === "number" ? next.documents_receive_file_count : rp.completed;
 		openWrap.classList.toggle("panel-hidden", fileCount < 1);
 	}
-	setQrUrlField("receive-qr-url", session?.page_url || "");
+	setUrlField("receive-qr-url", session?.page_url || "");
 }
 function updateSendUi(next: AppSnapshot): void {
 	const share = next.file_share;
@@ -71,11 +72,11 @@ function updateSendUi(next: AppSnapshot): void {
 		if (share.qr_url) {
 			uploadQr.src = share.qr_url + "&_=" + Date.now();
 		}
-		setQrUrlField("send-qr-url", share.page_url || "");
+		setUrlField("send-qr-url", share.page_url || "");
 	} else if (qrSection && uploadQr instanceof HTMLImageElement) {
 		qrSection.classList.add("panel-hidden");
 		uploadQr.hidden = true;
-		setQrUrlField("send-qr-url", "");
+		setUrlField("send-qr-url", "");
 	}
 }
 function showTransferSaveTip(displayPath: string): void {
@@ -144,7 +145,7 @@ function updateTransferUi(next: AppSnapshot): void {
 		}
 		hideTransferSaveTip();
 	}
-	setQrUrlField("transfer-qr-url", pageUrl);
+	setUrlField("transfer-qr-url", pageUrl);
 	if (list) {
 		list.innerHTML = "";
 		items.forEach((item) => {

@@ -82,26 +82,6 @@ export function setStatusLine(el: HTMLElement | null, detailText: string): void 
 	el.appendChild(document.createTextNode(" " + detailText));
 }
 
-export function bindDisclosure(btnId: string, panelId: string): void {
-	const btn = document.getElementById(btnId);
-	const panel = document.getElementById(panelId);
-	if (!btn || !panel) {
-		return;
-	}
-	btn.addEventListener("click", () => {
-		const open = panel.hasAttribute("hidden");
-		panel.toggleAttribute("hidden", !open);
-		btn.setAttribute("aria-expanded", open ? "true" : "false");
-	});
-}
-
-export function setQrUrlField(inputId: string, url: string): void {
-	const input = document.getElementById(inputId);
-	if (input instanceof HTMLInputElement) {
-		input.value = url || "";
-	}
-}
-
 export function setQrImage(img: HTMLImageElement | null, qrUrl: string, cacheKey?: string): void {
 	if (!img) {
 		return;

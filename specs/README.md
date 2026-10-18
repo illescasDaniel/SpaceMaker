@@ -15,6 +15,7 @@ Source of truth for behavior. Wireframes: [wireframes/app.html](../wireframes/ap
 | [convert-media/SPEC.md](convert-media/SPEC.md) | Folder routing, encode policy, retries, user recovery actions |
 | [gallery/SPEC.md](gallery/SPEC.md) | Timeline/calendar, `processed/` only, LAN + QR |
 | [gallery-batch/SPEC.md](gallery-batch/SPEC.md) | Gallery Select mode: batch move to Trash, batch convert to JPEG/MP4 (.zip) |
+| [url-field/SPEC.md](url-field/SPEC.md) | Shared URL field + Copy button, working ⓘ info panels, USB Visualize / gallery popup URL |
 | [packaging/SPEC.md](packaging/SPEC.md) | AppImage (Linux), managed CLI downloads per OS/arch |
 | [legal/SPEC.md](legal/SPEC.md) | Privacy, disclaimer, third-party notice in release + UI |
 | [network-passcode/SPEC.md](network-passcode/SPEC.md) | Optional LAN passcode, phone unlock page, QR token sign-in, lockout |

@@ -72,24 +72,6 @@ export function setStatusLine(el, detailText) {
 	el.appendChild(strong);
 	el.appendChild(document.createTextNode(" " + detailText));
 }
-export function bindDisclosure(btnId, panelId) {
-	const btn = document.getElementById(btnId);
-	const panel = document.getElementById(panelId);
-	if (!btn || !panel) {
-		return;
-	}
-	btn.addEventListener("click", () => {
-		const open = panel.hasAttribute("hidden");
-		panel.toggleAttribute("hidden", !open);
-		btn.setAttribute("aria-expanded", open ? "true" : "false");
-	});
-}
-export function setQrUrlField(inputId, url) {
-	const input = document.getElementById(inputId);
-	if (input instanceof HTMLInputElement) {
-		input.value = url || "";
-	}
-}
 export function setQrImage(img, qrUrl, cacheKey) {
 	if (!img) {
 		return;

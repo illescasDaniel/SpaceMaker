@@ -527,7 +527,7 @@ misleading.
   by file with line numbers, per root. A JS/TS string literal exactly equal
   to the bare name, on a line no DOM API above already covers, is reported
   as a `string literal` hit — this is how ids passed to project helpers
-  (`onClick("btn-save", …)`, `bindDisclosure(…)`) show up; it also counts
+  (`onClick("btn-save", …)`, `setUrlField(…)`) show up; it also counts
   as a reference for the unreferenced-selector diagnostic. Hits in
   `WEBNAV_MCP_EXCLUDE` output are labeled `[generated]`.
 - **`references`/`definition` fallback**: when the token under the cursor

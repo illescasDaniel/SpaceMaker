@@ -55,21 +55,7 @@ export function loadPasscodeStatus() {
 		.then(render)
 		.catch(() => undefined);
 }
-/** The dock's info panel is shown by the shared `.info-panel.visible` CSS, not the `hidden` attribute. */
-function bindInfoPanel() {
-	const button = document.getElementById("btn-passcode-info");
-	const panel = document.getElementById("passcode-info-panel");
-	button?.addEventListener("click", () => {
-		if (!panel) {
-			return;
-		}
-		const open = panel.classList.toggle("visible");
-		panel.setAttribute("aria-hidden", open ? "false" : "true");
-		button.setAttribute("aria-expanded", open ? "true" : "false");
-	});
-}
 export function bindPasscodeDock() {
-	bindInfoPanel();
 	const submit = () => {
 		const field = input();
 		if (!field) {

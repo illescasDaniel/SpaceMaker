@@ -1,6 +1,7 @@
-import { isAbsolutePath, setQrImage, setQrUrlField, showFormBanner } from "./dom.js";
+import { isAbsolutePath, setQrImage, showFormBanner } from "./dom.js";
 import { easyFileCountLabel } from "./shell.js";
 import { S } from "./state.js";
+import { setUrlField } from "./url-field.js";
 
 function clearHomeFormBanner() {
 	const homeBanner = document.getElementById("home-form-banner");
@@ -126,7 +127,6 @@ function updateWifiUploadPanel(next) {
 	const wifi = next.wifi_upload;
 	const idle = document.getElementById("wifi-idle-hint");
 	const live = document.getElementById("wifi-live-receive");
-	const urlInput = document.getElementById("wifi-upload-url");
 	const qrImg = document.getElementById("wifi-upload-qr");
 	const wizardLibraryHint = document.getElementById("wizard-library-hint");
 	const libDisplay = next.library_root_display || next.library_root;
@@ -138,13 +138,11 @@ function updateWifiUploadPanel(next) {
 	} else if (wizardLibraryHint) {
 		wizardLibraryHint.textContent = "";
 	}
-	setQrUrlField("wifi-qr-url-copy", wifi?.upload_url || "");
+	setUrlField("wifi-qr-url-copy", wifi?.upload_url || "");
 	if (wifi?.active) {
 		idle.classList.add("panel-hidden");
 		live.classList.remove("panel-hidden");
-		if (urlInput instanceof HTMLInputElement) {
-			urlInput.value = wifi.upload_url || "";
-		}
+		setUrlField("wifi-upload-url", wifi.upload_url || "");
 		setQrImage(qrImg instanceof HTMLImageElement ? qrImg : null, wifi.qr_url, "wifi-upload-qr");
 	} else {
 		idle.classList.remove("panel-hidden");
@@ -244,7 +242,7 @@ function updateEasyUi(next) {
 	if (compressOffStatus) {
 		compressOffStatus.classList.toggle("panel-hidden", compressOn);
 	}
-	setQrUrlField("easy-qr-url", wifi?.upload_url || "");
+	setUrlField("easy-qr-url", wifi?.upload_url || "");
 	if (wifi?.active && uploadQr) {
 		uploadQr.hidden = false;
 		setQrImage(uploadQr instanceof HTMLImageElement ? uploadQr : null, wifi.qr_url, "easy-upload-qr");

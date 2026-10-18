@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpaceMaker — URL field &amp; info buttons (wireframe)</title>
+	<style>
+		:root {
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--success: #37b24d;
+			--warn: #e67700;
+			--disabled: #adb5bd;
+			--radius: 12px;
+			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+			--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+			--dur-fast: 120ms;
+			--dur-base: 200ms;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #0f1419;
+				--surface: #1a2332;
+				--surface2: #243044;
+				--border: #3d4f6f;
+				--text: #e8eef7;
+				--muted: #8b9cb3;
+				--accent: #4dabf7;
+				--accent-dim: #228be6;
+				--success: #51cf66;
+				--warn: #fcc419;
+				--disabled: #5c6b82;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			:root { --dur-fast: 0.001ms; --dur-base: 0.001ms; }
+		}
+
+		* { box-sizing: border-box; }
+
+		body {
+			margin: 0;
+			font-family: var(--font);
+			background: var(--bg);
+			color: var(--text);
+			line-height: 1.5;
+		}
+
+		.wireframe-banner {
+			padding: 0.5rem 1rem;
+			font-size: 0.8rem;
+			color: var(--accent-dim);
+			background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+			border-bottom: 1px solid var(--border);
+		}
+
+		main { max-width: 64rem; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
+		h1 { font-size: 1.3rem; margin: 0.5rem 0 0.25rem; }
+		h2 { font-size: 1rem; margin: 2rem 0 0.5rem; }
+		.lead { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+
+		.grid { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: flex-start; }
+
+		.card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 1rem;
+		}
+
+		.card-label {
+			font-size: 0.7rem;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			color: var(--muted);
+			margin: 0 0 0.6rem;
+		}
+
+		.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; }
+		.label-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+		.status-line { font-size: 0.9rem; color: var(--muted); margin: 0.5rem 0; }
+		.folder-hint { font-size: 0.8rem; color: var(--muted); margin: 0.5rem 0 0; }
+
+		/* ── Info button + panel (ONE pattern for every ⓘ in the app) ── */
+		.info-btn {
+			font: inherit;
+			flex-shrink: 0;
+			width: 28px;
+			height: 28px;
+			border-radius: 50%;
+			border: 1px solid var(--border);
+			background: var(--surface2);
+			color: var(--accent);
+			cursor: pointer;
+			font-size: 0.85rem;
+			font-weight: 700;
+			line-height: 1;
+		}
+
+		.info-btn:hover { border-color: var(--accent); }
+		.info-btn[aria-expanded="true"] { background: var(--accent-dim); color: #fff; border-color: var(--accent-dim); }
+		.info-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+		.info-panel {
+			display: none;
+			font-size: 0.82rem;
+			color: var(--muted);
+			background: var(--surface2);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 0.65rem 0.75rem;
+			margin-top: 0.5rem;
+			text-align: left;
+		}
+
+		.info-panel.visible { display: block; animation: fade-in var(--dur-fast) var(--ease-standard); }
+		.info-panel p { margin: 0 0 0.4rem; }
+		.info-panel p:last-child { margin-bottom: 0; }
+		@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+		/* ── URL field: read-only input (scrolls horizontally) + copy button ── */
+		.url-field { display: flex; align-items: stretch; gap: 0.35rem; min-width: 0; width: 100%; }
+
+		.url-field input {
+			flex: 1 1 auto;
+			min-width: 0;
+			font: inherit;
+			font-size: 0.82rem;
+			color: var(--text);
+			background: var(--surface2);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 0.4rem 0.6rem;
+			text-overflow: clip;
+			white-space: nowrap;
+		}
+
+		.url-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+		.url-copy {
+			flex-shrink: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.3rem;
+			font: inherit;
+			font-size: 0.78rem;
+			min-width: 2.1rem;
+			padding: 0 0.55rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--surface);
+			color: var(--text);
+			cursor: pointer;
+		}
+
+		.url-copy:hover { border-color: var(--accent); color: var(--accent); }
+		.url-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+		.url-copy svg { width: 14px; height: 14px; }
+		.url-copy.copied { color: var(--success); border-color: var(--success); }
+		.url-copy .copied-text { display: none; }
+		.url-copy.copied .copied-text { display: inline; }
+		.url-copy.copied svg { display: none; }
+
+		/* ── Shared bits ── */
+		.qr-placeholder {
+			background:
+				conic-gradient(from 90deg at 50% 50%, #000 25%, #fff 0 50%, #000 0 75%, #fff 0) 0 0 / 14px 14px;
+			border: 6px solid #fff;
+			border-radius: 6px;
+			outline: 1px solid var(--border);
+		}
+
+		.qr-block { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+		.qr-block > .qr-placeholder { width: 120px; height: 120px; }
+		.qr-block > .qr-side { flex: 1 1 14rem; min-width: 0; }
+
+		.btn {
+			font: inherit; border: none; border-radius: 8px; padding: 0.5rem 0.9rem;
+			background: var(--accent-dim); color: #fff; cursor: pointer; font-size: 0.85rem;
+		}
+
+		.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+		.step-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+		.step-badge {
+			width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+			background: var(--success); color: #fff; font-weight: 700; font-size: 0.85rem;
+		}
+		.step-title { font-weight: 600; font-size: 1.05rem; margin: 0; }
+
+		/* Gallery phone popup (desktop) */
+		.popup { width: 20rem; max-width: 100%; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
+		.popup h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+		.popup .qr-placeholder { width: 140px; height: 140px; margin: 0.75rem auto; }
+		.popup .url-field { margin-top: 0.6rem; }
+
+		/* Photo-backup QR with ⓘ */
+		.qr-with-info { display: flex; justify-content: center; align-items: flex-start; gap: 0.5rem; }
+		.qr-with-info .qr-placeholder { width: 160px; height: 160px; }
+		.center { text-align: center; }
+		.compress-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface2); border-radius: 8px; font-size: 0.9rem; }
+
+		/* ── Annotation vocabulary (wireframe-only, never ships) ── */
+		.wf-note {
+			margin: 1rem 0 0;
+			padding: 0.65rem 0.85rem;
+			font-size: 0.8rem;
+			color: var(--muted);
+			background: repeating-linear-gradient(-45deg, var(--surface2), var(--surface2) 8px,
+				color-mix(in srgb, var(--warn) 10%, var(--surface2)) 8px, color-mix(in srgb, var(--warn) 10%, var(--surface2)) 16px);
+			border: 1px dashed var(--warn);
+			border-radius: 8px;
+		}
+
+		.wf-note[data-for="agent"] {
+			border-color: var(--disabled);
+			background: repeating-linear-gradient(-45deg, var(--surface2), var(--surface2) 8px,
+				color-mix(in srgb, var(--disabled) 18%, var(--surface2)) 8px, color-mix(in srgb, var(--disabled) 18%, var(--surface2)) 16px);
+		}
+
+		.wf-note-badge {
+			display: inline-block; margin: 0 0.4rem 0.35rem 0; padding: 0.05rem 0.45rem; border-radius: 4px;
+			font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+			color: #1a1400; background: var(--warn);
+		}
+
+		.wf-note[data-for="agent"] .wf-note-badge { color: #fff; background: var(--disabled); }
+		.wf-note ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
+	</style>
+</head>
+<body>
+	<div class="wireframe-banner">Wireframe — URL field &amp; info buttons. Everything on this page is interactive: click ⓘ, click Copy, scroll the URL.</div>
+	<main>
+		<h1>Reusable URL field + working ⓘ buttons</h1>
+		<p class="lead">Three fixes in one design: (1) every long URL becomes a scrollable read-only field with a small Copy button, (2) every ⓘ opens its panel, (3) the USB “Visualize” step uses the same URL field instead of a giant text box.</p>
+
+		<aside class="wf-note" data-for="reviewer">
+			<span class="wf-note-badge">Review only</span>
+			Bugs seen in AppImage 1.1.0, all addressed below:
+			<ul>
+				<li><strong>A. Phone popup:</strong> the gallery URL (with the long <code>#k=…</code> key) overflows the card.</li>
+				<li><strong>B. ⓘ buttons dead</strong> on Photo backup (QR + Compress media), Send, Receive, Transfer and the Wi‑Fi QR on USB photo backup.</li>
+				<li><strong>C. USB photo backup → Visualize:</strong> the URL runs across the whole 3rd card as a plain wide box.</li>
+			</ul>
+		</aside>
+
+		<!-- ═════════ A. Phone popup ═════════ -->
+		<h2>A · Gallery “On your phone” popup (fixes overflow)</h2>
+		<div class="grid">
+			<div class="card popup" role="dialog" aria-labelledby="popup-title">
+				<div class="label-row">
+					<h3 id="popup-title">On your phone</h3>
+					<button type="button" class="info-btn" aria-label="Close" title="Close">✕</button>
+				</div>
+				<p class="status-line" style="margin-top: 0;">Scan the QR or open the URL on the same Wi‑Fi.</p>
+				<div class="qr-placeholder" role="img" aria-label="Gallery QR code"></div>
+				<div class="url-field">
+					<input type="text" readonly aria-label="Gallery URL on your phone" value="http://192.168.1.100:8765/gallery#k=666f88d7ab4fd35e0adc0c1fd9438e139237666824293 07dbe9f290ad3d934d2">
+					<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL">
+						<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>
+						<span class="copied-text" aria-live="polite">Copied</span>
+					</button>
+				</div>
+				<p class="folder-hint">Please don't open this while uploading content.</p>
+			</div>
+
+			<aside class="wf-note" data-for="agent" style="flex: 1 1 18rem; margin-top: 0;">
+				<span class="wf-note-badge">Agent note</span>
+				<strong>URL field contract (one component, used everywhere):</strong>
+				<ul>
+					<li><code>&lt;input readonly&gt;</code> + icon Copy button, single line, never wraps, scrolls horizontally; the card never grows.</li>
+					<li>Click/focus in the input selects all text (easy manual copy).</li>
+					<li>Copy → clipboard; button shows a green “Copied” for ~1.5 s, then reverts. <strong>“Copied” only appears if the copy actually succeeded.</strong> The phone gallery is plain <code>http://</code> on the LAN (no <code>navigator.clipboard</code>), so use <code>navigator.clipboard</code> when <code>isSecureContext</code>, else select + <code>execCommand('copy')</code>; if both fail, no “Copied”: the text just stays selected for manual Ctrl/Cmd+C.</li>
+					<li>Copy button has <code>aria-label</code>; “Copied” is announced via <code>aria-live</code>.</li>
+					<li>Replaces: <code>#gallery-url</code> div, <code>#gallery-popup-url</code>, and the <code>.field</code> URL inputs in the QR info panels.</li>
+				</ul>
+			</aside>
+		</div>
+
+		<!-- ═════════ B. Info buttons ═════════ -->
+		<h2>B · ⓘ buttons open their panel</h2>
+		<div class="grid">
+			<div class="card" style="flex: 1 1 22rem;">
+				<p class="card-label">Photo backup — QR ⓘ (closed → click → open)</p>
+				<div class="center">
+					<div class="qr-with-info">
+						<div class="qr-placeholder" role="img" aria-label="Phone upload QR code"></div>
+						<button type="button" class="info-btn" id="b1" aria-expanded="false" aria-controls="p1" title="Show upload URL">i</button>
+					</div>
+					<div class="info-panel" id="p1" aria-hidden="true">
+						<p>If you cannot scan the QR code, open this URL in your phone's browser (same Wi‑Fi):</p>
+						<div class="url-field">
+							<input type="text" readonly aria-label="Photo upload page URL" value="http://192.168.1.100:8765/upload?t=666f88d7ab4fd35e0adc0c1fd9438e1392376668242930 7dbe9f290ad3d934d2">
+							<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL">
+								<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>
+								<span class="copied-text" aria-live="polite">Copied</span>
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="compress-row">
+					<label><input type="checkbox" checked> Compress media</label>
+					<button type="button" class="info-btn" id="b2" aria-expanded="false" aria-controls="p2" title="About media compression">i</button>
+				</div>
+				<div class="info-panel" id="p2" aria-hidden="true">
+					<p>Compress media to <strong>save disk space</strong> and keep photos and videos <strong>web-compatible</strong> for browsing in the gallery.</p>
+					<p><strong>How:</strong> photos convert to AVIF; videos to AV1 when this computer supports it.</p>
+				</div>
+			</div>
+
+			<aside class="wf-note" data-for="agent" style="flex: 1 1 18rem; margin-top: 0;">
+				<span class="wf-note-badge">Agent note</span>
+				<strong>Behavior (all ⓘ, same rules):</strong>
+				<ul>
+					<li>Click toggles the panel; <code>aria-expanded</code> + <code>aria-hidden</code> stay in sync; the open button gets the filled style.</li>
+					<li>Panel opens inline directly below its ⓘ row (no popover, no layout jump elsewhere).</li>
+					<li>Escape closes the open panel and returns focus to its button.</li>
+					<li>Affected: easy-qr, easy-compress, receive-qr, send-qr, transfer-qr, wifi-qr. The others (connection, firewall, passcode, USB folders/dest/mode/actions) already work and keep the same look.</li>
+					<li>Cause: those six toggled the <code>hidden</code> attribute, but the shared <code>.info-panel</code> is shown via <code>.visible</code>. One shared helper replaces both toggle styles.</li>
+				</ul>
+			</aside>
+		</div>
+
+		<!-- ═════════ C. USB visualize ═════════ -->
+		<h2>C · USB photo backup — step 3 “Visualize”</h2>
+		<div class="grid">
+			<div class="card" style="flex: 1 1 26rem; max-width: 34rem;">
+				<div class="step-head">
+					<span class="step-badge">3</span>
+					<h3 class="step-title">Visualize</h3>
+				</div>
+				<p class="status-line">Open the gallery from <code>processed/</code> only.</p>
+				<p class="status-line"><strong>Status:</strong> Ready: 20 files</p>
+				<div class="qr-block">
+					<div class="qr-placeholder" role="img" aria-label="Gallery QR code"></div>
+					<div class="qr-side">
+						<div class="label-row">
+							<p class="label">On your phone</p>
+							<button type="button" class="info-btn" id="b3" aria-expanded="false" aria-controls="p3" title="LAN gallery and firewall">i</button>
+						</div>
+						<div class="url-field" style="margin-top: 0.4rem;">
+							<input type="text" readonly aria-label="Gallery URL on your phone" value="http://192.168.1.100:8765/gallery#k=666f88d7ab4fd35e0adc0c1fd9438e139237666824293 07dbe9f290ad3d934d2">
+							<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL">
+								<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>
+								<span class="copied-text" aria-live="polite">Copied</span>
+							</button>
+						</div>
+					</div>
+				</div>
+				<div class="info-panel" id="p3" aria-hidden="true">
+					<p><strong>Phone cannot open the gallery?</strong> Use the URL or QR on the same Wi‑Fi as this PC. The address must be your computer's LAN IP (not <code>localhost</code>).</p>
+				</div>
+			</div>
+
+			<aside class="wf-note" data-for="agent" style="flex: 1 1 18rem; margin-top: 0;">
+				<span class="wf-note-badge">Agent note</span>
+				The URL sits beside the QR (wraps under it on narrow cards) and stays one line inside the field — it can no longer stretch the 3rd card past its column.
+				The ⓘ firewall panel opens below the QR block, full width of the card.
+			</aside>
+		</div>
+
+		<!-- ═════════ D. Narrow ═════════ -->
+		<h2>D · Narrow width check (~340 px)</h2>
+		<div class="card" style="width: 340px; max-width: 100%;">
+			<div class="label-row"><p class="label">On your phone</p><button type="button" class="info-btn" id="b4" aria-expanded="false" aria-controls="p4" title="LAN gallery and firewall">i</button></div>
+			<div class="info-panel" id="p4" aria-hidden="true">
+				<p><strong>Phone cannot open the gallery?</strong> Use the URL or QR on the same Wi‑Fi as this PC. The address must be your computer's LAN IP (not <code>localhost</code>).</p>
+			</div>
+			<div class="url-field" style="margin-top: 0.4rem;">
+				<input type="text" readonly aria-label="Gallery URL" value="http://192.168.1.100:8765/gallery#k=666f88d7ab4fd35e0adc0c1fd9438e139237666824293 07dbe9f290ad3d934d2">
+				<button type="button" class="url-copy" aria-label="Copy URL" title="Copy URL">
+					<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>
+					<span class="copied-text" aria-live="polite">Copied</span>
+				</button>
+			</div>
+		</div>
+	</main>
+
+	<script>
+		// Wireframe demo only — not production code.
+		document.querySelectorAll('.info-btn[aria-controls]').forEach(function (btn) {
+			var panel = document.getElementById(btn.getAttribute('aria-controls'));
+			btn.addEventListener('click', function () {
+				var open = panel.classList.toggle('visible');
+				btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+				panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+			});
+		});
+		document.querySelectorAll('.url-field').forEach(function (f) {
+			var input = f.querySelector('input');
+			var btn = f.querySelector('.url-copy');
+			input.value = input.value.replace(/\s+/g, '');
+			input.addEventListener('focus', function () { input.select(); });
+			function done(ok) {
+				if (!ok) { input.select(); return; } // stay selected so Ctrl+C works; no false "Copied"
+				btn.classList.add('copied');
+				setTimeout(function () { btn.classList.remove('copied'); }, 1500);
+			}
+			function legacyCopy() {
+				input.select();
+				try { return document.execCommand('copy'); } catch (e) { return false; }
+			}
+			btn.addEventListener('click', function () {
+				if (navigator.clipboard && window.isSecureContext) {
+					navigator.clipboard.writeText(input.value).then(function () { done(true); }, function () { done(legacyCopy()); });
+				} else {
+					done(legacyCopy()); // plain-http LAN pages have no navigator.clipboard
+				}
+			});
+		});
+	</script>
+</body>
+</html>
