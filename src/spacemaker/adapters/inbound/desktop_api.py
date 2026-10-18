@@ -23,7 +23,7 @@ class DesktopApi:
 		result = windows[0].create_file_dialog(
 			webview.FileDialog.SAVE,
 			directory=str(pictures_directory()),
-			save_filename=Path(suggested_name).name or "SpaceMaker-export.zip",
+			save_filename=Path(suggested_name).name or "spacemaker-media.zip",
 		)
 		if not result:
 			return ""

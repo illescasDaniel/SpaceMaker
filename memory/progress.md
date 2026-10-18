@@ -92,3 +92,5 @@ Open items only. Finished work: `memory/archive.md`.
 - [ ] Gallery batch: verify manually in a real browser/desktop shell (select, trash, convert, CPU confirm) and decide on a 1.1.0 release.
 - [ ] Gallery batch known test gaps (grader round 2, 2026-10-18): no 401-under-passcode test for the batch routes; no real `send2trash` integration test (only the failure path is faked).
 - [x] **Gallery download buttons** (2026-10-18) — batch **Download** (stored files zipped unchanged, `POST /api/gallery/batch/download`, job `kind`) and desktop item-page **Download**; desktop bridge `save_download`/`download_progress` (native Save dialog + progress) now also used by Download as JPEG/MP4; faded disabled selection-bar buttons; sticky toolbar. Gate green.
+
+- 2026-10-18: Batch zip now uses `spacemaker-media-<job id>.zip` with `YYYY/MM/<file>` entries (capture date via probe, mtime fallback, `_2` suffix on same-name collisions); spec updated, tests green.

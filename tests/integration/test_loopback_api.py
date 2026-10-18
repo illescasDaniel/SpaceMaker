@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -223,7 +225,8 @@ def test_given_selection_when_batch_convert_then_zip_downloads_once_and_is_clean
 	assert job["phase"] == "done"
 	assert str(tmp_path) not in str(job)
 	with zipfile.ZipFile(io.BytesIO(download.content)) as archive:
-		assert sorted(archive.namelist()) == ["a.jpg", "b.png.jpg", "v.mov.mp4"]
+		assert sorted(n.split("/")[-1] for n in archive.namelist()) == ["a.jpg", "b.png.jpg", "v.mov.mp4"]
+		assert all(re.fullmatch(r"\d{4}/\d{2}/[^/]+", n) for n in archive.namelist())
 	assert not any((tmp_path / "lib" / ".exports" / ".batch").glob("*/*.zip"))
 	assert client.get(job["download_url"]).status_code == 404
 	assert (tmp_path / "lib" / "processed" / "b.png").read_bytes() == b"png"
@@ -244,8 +247,9 @@ def test_given_selection_when_batch_download_then_zip_has_stored_bytes_unconvert
 	assert job["kind"] == "download"
 	assert response.status_code == 200
 	with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-		assert sorted(archive.namelist()) == ["a.jpg", "b.png"]
-		assert archive.read("b.png") == b"png"
+		assert sorted(n.split("/")[-1] for n in archive.namelist()) == ["a.jpg", "b.png"]
+		png = next(n for n in archive.namelist() if n.endswith("/b.png"))
+		assert archive.read(png) == b"png"
 	assert cpu_flags == []
 
 

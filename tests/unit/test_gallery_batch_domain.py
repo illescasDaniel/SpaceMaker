@@ -1,3 +1,6 @@
+from dataclasses import replace
+from datetime import datetime
+
 import pytest
 
 from spacemaker.domain.gallery_batch import (
@@ -8,6 +11,7 @@ from spacemaker.domain.gallery_batch import (
 	BatchProgress,
 	BatchTooLargeError,
 	UnsafeBatchPathError,
+	archive_file_name,
 	assign_zip_entry_names,
 	is_batch_artifact_expired,
 	normalize_batch_paths,
@@ -54,43 +58,50 @@ def test_given_limit_paths_with_duplicates_when_normalize_then_counts_distinct_o
 	assert len(result) == MAX_GALLERY_BATCH_ITEMS
 
 
-def test_given_converted_and_passthrough_when_zip_entry_name_then_extension_only_for_converted() -> None:
+def test_given_converted_and_passthrough_when_zip_entry_name_then_year_month_layout() -> None:
 	# given
+	when = datetime(2026, 9, 3)
 	# when
-	converted = zip_entry_name("2025/a.avif", ExportFormat.JPEG)
-	video = zip_entry_name("2025/clip.av1.mp4", ExportFormat.H264_AAC)
-	passthrough = zip_entry_name("2025/b.jpg", None)
+	converted = zip_entry_name("DCIM/100APPLE/a.avif", ExportFormat.JPEG, when)
+	video = zip_entry_name("Camera/clip.av1.mp4", ExportFormat.H264_AAC, datetime(2025, 1, 10))
+	passthrough = zip_entry_name("b.jpg", None, when)
 	# then
-	assert converted == "2025/a.avif.jpg"
-	assert video == "2025/clip.av1.mp4.mp4"
-	assert passthrough == "2025/b.jpg"
+	assert converted == "2026/09/a.avif.jpg"
+	assert video == "2025/01/clip.av1.mp4.mp4"
+	assert passthrough == "2026/09/b.jpg"
 
 
-def test_given_same_stem_in_two_years_when_assign_names_then_entries_are_unique() -> None:
+def test_given_same_name_in_one_month_when_assign_names_then_suffix_disambiguates() -> None:
 	# given
+	when = datetime(2025, 3, 1)
 	results = [
-		_ok("2025/a.avif", ExportFormat.JPEG),
-		_ok("2024/a.avif", ExportFormat.JPEG),
+		replace(_ok("A/a.avif", ExportFormat.JPEG), captured_at=when),
+		replace(_ok("B/a.avif", ExportFormat.JPEG), captured_at=when),
 	]
 	# when
 	named = assign_zip_entry_names(results)
 	# then
-	names = [r.archive_name for r in named]
-	assert sorted(names) == ["2024/a.avif.jpg", "2025/a.avif.jpg"]
+	assert [r.archive_name for r in named] == ["2025/03/a.avif.jpg", "2025/03/a.avif_2.jpg"]
 
 
-def test_given_passthrough_colliding_with_converted_when_assign_names_then_disambiguated() -> None:
+def test_given_same_name_in_two_months_when_assign_names_then_no_suffix() -> None:
 	# given
 	results = [
-		_ok("x.avif", ExportFormat.JPEG),
-		_ok("x.avif.jpg", None, outcome=BatchConvertOutcome.PASSED_THROUGH),
+		replace(_ok("a.avif", ExportFormat.JPEG), captured_at=datetime(2025, 3, 1)),
+		replace(_ok("x/a.avif", ExportFormat.JPEG), captured_at=datetime(2024, 3, 1)),
 	]
 	# when
 	named = assign_zip_entry_names(results)
 	# then
-	names = [r.archive_name for r in named]
-	assert len(set(names)) == 2
-	assert all(".." not in n and not n.startswith("/") for n in names)
+	assert sorted(r.archive_name for r in named) == ["2024/03/a.avif.jpg", "2025/03/a.avif.jpg"]
+
+
+def test_given_job_id_when_archive_file_name_then_spacemaker_media_prefix() -> None:
+	# given
+	# when
+	name = archive_file_name("abc123")
+	# then
+	assert name == "spacemaker-media-abc123.zip"
 
 
 def test_given_skipped_item_when_assign_names_then_excluded() -> None:

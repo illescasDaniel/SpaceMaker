@@ -224,7 +224,11 @@ function showConvertFinished(job: GalleryBatchConvertJob): void {
 	currentZipUrl = job.download_url;
 }
 let currentZipUrl = "";
-const ZIP_NAME = "SpaceMaker-export.zip";
+
+function zipNameFor(url: string): string {
+	const match = /\/batch\/convert\/([A-Za-z0-9_-]+)\/file/.exec(url);
+	return "spacemaker-media-" + (match?.[1] ?? "export") + ".zip";
+}
 
 function saveZip(url: string): void {
 	currentZipUrl = "";
@@ -235,10 +239,11 @@ function saveZip(url: string): void {
 			fn();
 		}
 	};
-	void saveOnDesktop(url, ZIP_NAME, {
+	const zipName = zipNameFor(url);
+	void saveOnDesktop(url, zipName, {
 		onProgress: (percent, text) =>
 			live(() => {
-				showBatchAlert({ title: "Saving " + ZIP_NAME + "… " + String(percent) + "%", detail: text, percent });
+				showBatchAlert({ title: "Saving " + zipName + "… " + String(percent) + "%", detail: text, percent });
 			}),
 		onDone: (path) =>
 			live(() => {

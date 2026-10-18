@@ -50,7 +50,7 @@
 - **Untrusted input:** the list of relative paths, the batch format choice and job ids, which can come from LAN phones as well as the desktop webview.
 - **Validation at the inbound adapter:** every path must pass `is_safe_gallery_relative_path` and resolve to an existing regular file **inside** `processed/` (no traversal, no symlink escape, never `originals/`, `error/`, `invalid/`, `.thumbnails/`, `.exports/`). Duplicates are collapsed; the list size is capped (500). Any invalid path rejects the whole request (403) before any action runs.
 - **Auth:** same rules as the existing single-item routes: loopback is trusted; non-loopback clients go through the optional network passcode middleware. Trash from a LAN phone acts on the host’s Trash — allowed (same as single delete today) because it is recoverable on the host.
-- **Zip contents:** entry names are derived server-side from the validated relative path (plus the new `.jpg`/`.mp4` extension where converted); client-supplied names are never used, entry names never contain `..` or absolute paths, and name collisions are impossible by construction (injective path-mirror, same rule as `.exports/`).
+- **Zip contents:** the archive is named `spacemaker-media-<job id>.zip` and uses SpaceMaker's own layout `YYYY/MM/<file name>` (year folder, zero-padded month folder) from each item's capture date (gallery index; file modification time if not indexed). The library's own folders (e.g. `DCIM/100APPLE`) are never reproduced. Converted files append `.jpg`/`.mp4` to the base name; stored files keep their name. Names come from server-validated data only, never from the client; entries never contain `..` or absolute paths, and two files with the same name in the same month get a deterministic `_2`, `_3` suffix.
 - **Job ids** are unguessable (random, ≥128 bits) and only grant download of that job’s zip; zips are never addressed by path.
 - **Desktop save bridge:** the destination comes only from the native Save dialog (never from the page), and the bridge fetches only loopback URLs of the batch zip, the single friendly-export file and `/media/{path}?download=1`; any other URL is refused. Data is written to a `.part` file and renamed on success. A batch zip is deleted after its first fully served response, so a failed desktop save means running the batch again.
 - **Trash access:** performed only through an outbound port by the host process on files already validated inside `processed/`; no shell string composition with user paths.
@@ -207,12 +207,18 @@ Aligned with the approved wireframe; theme/motion shared with [ui-motion](../ui-
 - **When** the user starts Convert
 - **Then** it fails before any conversion with an inline message and nothing is written
 
-### Scenario: Zip entries are server-derived and unique
+### Scenario: Zip uses a year/month layout
 
-- **Given** selected items `2025/a.avif` and `2024/a.avif`
+- **Given** selected items captured 2026-09-03 (`DCIM/100APPLE/IMG_1.heic`), 2026-09-20 (`DCIM/100APPLE/IMG_2.heic`) and 2025-01-10 (`Camera/x.mp4`)
 - **When** the zip is produced
-- **Then** entries are named from their relative paths with `.jpg`, so neither overwrites the other
+- **Then** it is named `spacemaker-media-<job id>.zip` and contains `2026/09/IMG_1.heic.jpg`, `2026/09/IMG_2.heic.jpg` and `2025/01/x.mp4.mp4`, with no `DCIM` or `Camera` folder
 - **And** no entry name contains `..` or an absolute path
+
+### Scenario: Same file name in one month does not collide
+
+- **Given** two selected items both named `a.avif` captured in 2025-03 from different library folders
+- **When** the zip is produced
+- **Then** the entries are `2025/03/a.avif.jpg` and `2025/03/a.avif_2.jpg`, so neither overwrites the other
 
 ### Scenario: Path validation rejects unsafe input
 
@@ -283,7 +289,7 @@ Aligned with the approved wireframe; theme/motion shared with [ui-motion](../ui-
 
 - All paths pass `is_safe_gallery_relative_path` and resolve inside `processed/` as regular files; duplicates collapsed; max 500.
 - Job ids are random and unguessable; zip is served only for a job in the done phase.
-- Zip entry names are produced by the server from validated relative paths only.
+- Zip entry names are produced by the server from validated paths and capture dates only.
 - Trash is performed only via the outbound Trash port; no hard-delete fallback.
 - The desktop save bridge accepts only loopback URLs of the batch zip, the single friendly-export file (`/api/gallery/export/{id}/file`) and `/media/{path}?download=1`; the destination always comes from the native dialog.
 
@@ -294,7 +300,7 @@ Aligned with the approved wireframe; theme/motion shared with [ui-motion](../ui-
 | Unit | `TrashGalleryItems`: success path calls the Trash port and cleans index/thumbnail/export caches; port failure leaves file and index untouched and reports a reason; missing file treated as done; never calls a delete/unlink port |
 | Unit | `ExportFriendlyMediaBatch`: mixed kinds routed to JPEG/MP4; pass-through for already-friendly; per-item failure isolated; CPU-fallback confirm required exactly once and only when a video needs encoding; no encoder at all → video skipped; zero-success yields no zip; cache reuse |
 | Unit | Batch request validation: limit 500, duplicates, unsafe paths rejected before any port call |
-| Unit | Zip entry naming: injective, no `..`/absolute, extension rules |
+| Unit | Zip entry naming: `YYYY/MM/` layout, collision suffix, no `..`/absolute, extension rules |
 | Unit | Disk-space estimate and early failure; batch zip cleanup rules (downloaded / 24 h / restart) |
 | Unit | Client selection logic (web vitest): toggle, per-month select, limit gating, Esc exit, tile click does not navigate in select mode |
 | Integration | `POST /api/gallery/batch/trash` and `/convert` + status + file with fixture tree in `tmp_path` and a fake Trash port; 403 on unsafe paths; 401 under passcode for unsigned clients |

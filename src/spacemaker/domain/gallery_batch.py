@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime
 from enum import StrEnum
 
 from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase, is_safe_gallery_relative_path
@@ -89,6 +90,8 @@ class BatchConvertItemResult:
 	output_path: str = ""
 	# Name inside the zip; assigned by assign_zip_entry_names, "" when skipped.
 	archive_name: str = ""
+	# Capture date that picks the YYYY/MM folder; set by the use case before naming.
+	captured_at: datetime | None = None
 
 	def to_dict(self) -> dict[str, object]:
 		return {
@@ -173,16 +176,23 @@ def normalize_batch_paths(relative_paths: Sequence[str]) -> tuple[str, ...]:
 	return distinct
 
 
-def zip_entry_name(relative_path: str, export_format: ExportFormat | None) -> str:
-	"""Entry name for one archive member: converted outputs append ``.jpg`` / ``.mp4`` to the full
-	relative path (same injective rule as ``.exports/``); pass-through files keep their relative path.
+def archive_file_name(job_id: str) -> str:
+	"""Name of the downloadable zip: ``spacemaker-media-<job id>.zip``."""
+	return f"spacemaker-media-{job_id}.zip"
+
+
+def zip_entry_name(relative_path: str, export_format: ExportFormat | None, captured_at: datetime) -> str:
+	"""Entry name for one archive member in SpaceMaker's own ``YYYY/MM/<file name>`` layout.
+
+	The library's folders are never reproduced; converted outputs append ``.jpg`` / ``.mp4`` to the
+	base name, pass-through files keep it.
 	"""
-	name = relative_path.replace("\\", "/").lstrip("/")
+	base = relative_path.replace("\\", "/").rsplit("/", 1)[-1]
 	if export_format is ExportFormat.JPEG:
-		return f"{name}.jpg"
-	if export_format is ExportFormat.H264_AAC:
-		return f"{name}.mp4"
-	return name
+		base = f"{base}.jpg"
+	elif export_format is ExportFormat.H264_AAC:
+		base = f"{base}.mp4"
+	return f"{captured_at.year:04d}/{captured_at.month:02d}/{base}"
 
 
 def _disambiguated(name: str, taken: set[str]) -> str:
@@ -198,18 +208,19 @@ def _disambiguated(name: str, taken: set[str]) -> str:
 
 
 def assign_zip_entry_names(results: Sequence[BatchConvertItemResult]) -> tuple[BatchConvertItemResult, ...]:
-	"""Return the successful results with unique ``archive_name`` values.
+	"""Return the successful results with unique ``archive_name`` values (``YYYY/MM/<name>``).
 
-	Built only from validated relative paths (never client-supplied names); no entry contains ``..``
-	or an absolute path. Residual collisions (a stored ``x.avif.jpg`` passed through next to a
-	converted ``x.avif``) are disambiguated deterministically.
+	Built only from validated paths and capture dates (never client-supplied names); no entry
+	contains ``..`` or an absolute path. Same-name files in one month get ``_2``, ``_3`` suffixes in
+	input order. Results without ``captured_at`` fall back to the epoch folder ``1970/01``.
 	"""
 	taken: set[str] = set()
 	named: list[BatchConvertItemResult] = []
 	for result in results:
 		if result.outcome is BatchConvertOutcome.SKIPPED:
 			continue
-		name = zip_entry_name(result.relative_path, result.export_format)
+		when = result.captured_at or datetime(1970, 1, 1)
+		name = zip_entry_name(result.relative_path, result.export_format, when)
 		if name in taken:
 			name = _disambiguated(name, taken)
 		taken.add(name)

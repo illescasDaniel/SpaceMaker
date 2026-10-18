@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -38,10 +39,11 @@ class Env:
 		export = ExportFriendlyMedia(self.fs, self.converter, self.probe)
 		self.use_case = ExportFriendlyMediaBatch(export, self.converter, self.probe, self.fs, self.disk, self.archive)
 
-	def add(self, rel: str, size: int = 100) -> str:
+	def add(self, rel: str, size: int = 100, captured: datetime = datetime(2025, 6, 1)) -> str:
 		path = self.fs.library_path(self.library, LibraryFolder.PROCESSED, rel)
 		Path(path).parent.mkdir(parents=True, exist_ok=True)
 		Path(path).write_bytes(b"x" * size)
+		self.probe.captured_at_map[path] = captured
 		return path
 
 	def run(self, paths, *, allow_cpu: bool = False, on_progress=None):
@@ -65,7 +67,7 @@ def test_given_photos_and_video_when_convert_then_each_encoded_and_one_zip_writt
 	assert len(env.archive.written) == 1
 	destination, entries = env.archive.written[0]
 	assert destination.startswith(batch_export_job_dir(env.library, "job1"))
-	assert sorted(e.entry_name for e in entries) == ["a.avif.jpg", "b.png.jpg", "c.av1.mp4.mp4"]
+	assert sorted(e.entry_name for e in entries) == ["2025/06/a.avif.jpg", "2025/06/b.png.jpg", "2025/06/c.av1.mp4.mp4"]
 	assert result.archive_path == destination
 	assert progress[-1].item_index >= 2
 
@@ -127,7 +129,7 @@ def test_given_one_item_fails_when_convert_then_others_zipped_and_failure_listed
 	assert by_path["bad.avif"].reason
 	assert by_path["ok.avif"].outcome is BatchConvertOutcome.CONVERTED
 	_dest, entries = env.archive.written[0]
-	assert [e.entry_name for e in entries] == ["ok.avif.jpg"]
+	assert [e.entry_name for e in entries] == ["2025/06/ok.avif.jpg"]
 
 
 def test_given_missing_source_when_convert_then_skipped_with_note(tmp_path) -> None:
@@ -311,9 +313,9 @@ def test_given_mixed_files_when_download_then_stored_files_zipped_unchanged_with
 	assert env.converter.encoded_h264 == []
 	assert [r.outcome for r in result.results] == [BatchConvertOutcome.PASSED_THROUGH] * 2
 	entries = {e.entry_name: e.source_path for e in env.archive.written[-1][1]}
-	assert entries["2025/a.avif"] == stored
-	assert set(entries) == {"2025/a.avif", "2025/c.av1.mp4"}
-	assert result.archive_path.endswith("SpaceMaker-export.zip")
+	assert entries["2025/06/a.avif"] == stored
+	assert set(entries) == {"2025/06/a.avif", "2025/06/c.av1.mp4"}
+	assert result.archive_path.endswith("spacemaker-media-job1.zip")
 
 
 def test_given_missing_file_when_download_then_skipped_and_others_zipped(tmp_path) -> None:
@@ -360,3 +362,29 @@ def test_given_low_disk_or_unsafe_paths_when_preflight_download_then_rejected(tm
 		env.use_case.preflight_download(env.library, ["../x.avif"])
 	with pytest.raises(BatchTooLargeError):
 		env.use_case.preflight_download(env.library, [f"{i}.avif" for i in range(501)])
+
+
+def test_given_nested_library_folders_when_convert_then_zip_uses_year_month_not_library_folders(tmp_path) -> None:
+	# given
+	env = Env(tmp_path)
+	env.add("DCIM/100APPLE/IMG_1.heic", captured=datetime(2026, 9, 3))
+	env.add("DCIM/100APPLE/IMG_2.heic", captured=datetime(2026, 9, 20))
+	env.add("Camera/x.mp4", captured=datetime(2025, 1, 10))
+	# when
+	result = env.run(["DCIM/100APPLE/IMG_1.heic", "DCIM/100APPLE/IMG_2.heic", "Camera/x.mp4"])
+	# then
+	names = sorted(e.entry_name for e in env.archive.written[0][1])
+	assert names == ["2025/01/x.mp4.mp4", "2026/09/IMG_1.heic.jpg", "2026/09/IMG_2.heic.jpg"]
+	assert result.archive_path.endswith("spacemaker-media-job1.zip")
+
+
+def test_given_no_capture_date_when_convert_then_file_modification_time_picks_the_folder(tmp_path) -> None:
+	# given
+	env = Env(tmp_path)
+	path = env.add("a.avif")
+	del env.probe.captured_at_map[path]
+	os.utime(path, (datetime(2024, 2, 5).timestamp(),) * 2)
+	# when
+	env.run(["a.avif"])
+	# then
+	assert [e.entry_name for e in env.archive.written[0][1]] == ["2024/02/a.avif.jpg"]

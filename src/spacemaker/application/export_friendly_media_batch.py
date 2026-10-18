@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
@@ -15,6 +16,7 @@ from spacemaker.domain.gallery_batch import (
 	GalleryBatchError,
 	InsufficientDiskSpaceError,
 	VideoExportEncoder,
+	archive_file_name,
 	assign_zip_entry_names,
 	is_batch_artifact_expired,
 	normalize_batch_paths,
@@ -32,7 +34,6 @@ from spacemaker.ports.outbound.media_probe import MediaProbePort
 
 
 _JOB_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
-ARCHIVE_FILE_NAME = "SpaceMaker-export.zip"
 
 
 def _format_for(relative_path: str) -> ExportFormat | None:
@@ -139,14 +140,7 @@ class ExportFriendlyMediaBatch:
 
 			results.append(self._convert_one(library_root, relative, allow_cpu_encode, report))
 			report(100)
-		named = {r.relative_path: r for r in assign_zip_entry_names(results)}
-		results = [named.get(r.relative_path, r) for r in results]
-		if not named:
-			return BatchConvertResult(tuple(results), "")
-		destination = str(Path(batch_export_job_dir(library_root, job_id)) / ARCHIVE_FILE_NAME)
-		entries = [ArchiveEntry(r.output_path, r.archive_name) for r in named.values()]
-		self._archive_writer.write_stored_zip(destination, entries)
-		return BatchConvertResult(tuple(results), destination)
+		return self._write_archive(library_root, job_id, results)
 
 	def preflight_download(self, library_root: str, relative_paths: Sequence[str]) -> tuple[str, ...]:
 		"""Like ``preflight`` for **Download**: stored files are zipped unchanged, so the only checks are
@@ -173,7 +167,7 @@ class ExportFriendlyMediaBatch:
 		on_progress: Callable[[BatchProgress], None] | None = None,
 	) -> BatchConvertResult:
 		"""Zip the stored ``processed/`` files byte-for-byte (no converter call) at
-		``.exports/.batch/{job_id}/SpaceMaker-export.zip``; missing files are SKIPPED with a reason,
+		``.exports/.batch/{job_id}/spacemaker-media-{job_id}.zip``; missing files are SKIPPED with a reason,
 		the rest are PASSED_THROUGH; no archive when everything is skipped."""
 		paths = normalize_batch_paths(relative_paths)
 		count = len(paths)
@@ -188,14 +182,30 @@ class ExportFriendlyMediaBatch:
 				)
 			if on_progress:
 				on_progress(BatchProgress(index, count, 100))
-		named = {r.relative_path: r for r in assign_zip_entry_names(results)}
-		results = [named.get(r.relative_path, r) for r in results]
+		return self._write_archive(library_root, job_id, results)
+
+	def _write_archive(
+		self, library_root: str, job_id: str, results: list[BatchConvertItemResult]
+	) -> BatchConvertResult:
+		dated = [
+			r if r.outcome is BatchConvertOutcome.SKIPPED else replace(r, captured_at=self._captured_at(library_root, r))
+			for r in results
+		]
+		named = {r.relative_path: r for r in assign_zip_entry_names(dated)}
+		final = [named.get(r.relative_path, r) for r in dated]
 		if not named:
-			return BatchConvertResult(tuple(results), "")
-		destination = str(Path(batch_export_job_dir(library_root, job_id)) / ARCHIVE_FILE_NAME)
+			return BatchConvertResult(tuple(final), "")
+		destination = str(Path(batch_export_job_dir(library_root, job_id)) / archive_file_name(job_id))
 		entries = [ArchiveEntry(r.output_path, r.archive_name) for r in named.values()]
 		self._archive_writer.write_stored_zip(destination, entries)
-		return BatchConvertResult(tuple(results), destination)
+		return BatchConvertResult(tuple(final), destination)
+
+	def _captured_at(self, library_root: str, result: BatchConvertItemResult) -> datetime:
+		source = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, result.relative_path)
+		return (
+			self._probe.captured_at(source)
+			or datetime.fromtimestamp(self._filesystem.file_stat(source).mtime)
+		)
 
 	def _convert_one(
 		self,
