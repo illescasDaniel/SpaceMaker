@@ -1,6 +1,7 @@
 /** Shared URL field: read-only input + Copy button (`.url-field` > `input`, `.url-copy`). */
 
 const COPIED_MS = 1500;
+const resetTimers = new WeakMap<HTMLElement, number>();
 
 function legacyCopy(input: HTMLInputElement): boolean {
 	input.select();
@@ -52,6 +53,7 @@ export function bindUrlFields(root: Document | HTMLElement = document): void {
 	root.querySelectorAll<HTMLElement>(".url-field").forEach((field) => {
 		const input = field.querySelector("input");
 		const button = field.querySelector(".url-copy");
+		const status = field.querySelector("[data-copy-status]");
 		if (!input || !(button instanceof HTMLButtonElement)) {
 			return;
 		}
@@ -63,7 +65,19 @@ export function bindUrlFields(root: Document | HTMLElement = document): void {
 					return;
 				}
 				button.classList.add("copied");
-				window.setTimeout(() => button.classList.remove("copied"), COPIED_MS);
+				if (status) {
+					status.textContent = "Copied";
+				}
+				window.clearTimeout(resetTimers.get(button));
+				resetTimers.set(
+					button,
+					window.setTimeout(() => {
+						button.classList.remove("copied");
+						if (status) {
+							status.textContent = "";
+						}
+					}, COPIED_MS),
+				);
 			});
 		});
 	});

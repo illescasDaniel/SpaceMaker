@@ -7,6 +7,7 @@ const HTML = `
 <div class="url-field" id="uf">
 	<input type="text" readonly id="uf-input" aria-label="Gallery URL" value="">
 	<button type="button" class="url-copy" id="uf-copy" aria-label="Copy URL" disabled></button>
+	<span class="sr-only" role="status" aria-live="polite" data-copy-status id="uf-status"></span>
 </div>`;
 
 const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -72,6 +73,32 @@ describe("url field", () => {
 		expect(writeText).not.toHaveBeenCalled();
 		expect(byId("uf-copy").classList.contains("copied")).toBe(true);
 		vi.advanceTimersByTime(1600);
+		expect(byId("uf-copy").classList.contains("copied")).toBe(false);
+	});
+
+	it("given a successful copy when it happens then the stable live region announces Copied and clears with the button", async () => {
+		vi.useFakeTimers();
+		stubClipboard(undefined, false);
+		stubExecCommand(true);
+		byId("uf-copy").click();
+		await flush();
+		expect(byId("uf-status").textContent).toBe("Copied");
+		vi.advanceTimersByTime(1600);
+		expect(byId("uf-status").textContent).toBe("");
+	});
+
+	it("given two quick copies when the first timer would fire then Copied stays until the second timer ends", async () => {
+		vi.useFakeTimers();
+		stubClipboard(undefined, false);
+		stubExecCommand(true);
+		byId("uf-copy").click();
+		await flush();
+		vi.advanceTimersByTime(1000);
+		byId("uf-copy").click();
+		await flush();
+		vi.advanceTimersByTime(700);
+		expect(byId("uf-copy").classList.contains("copied")).toBe(true);
+		vi.advanceTimersByTime(900);
 		expect(byId("uf-copy").classList.contains("copied")).toBe(false);
 	});
 

@@ -18,8 +18,14 @@ function closeOpenPanels(root: ParentNode): void {
 	(first as HTMLElement | null)?.focus();
 }
 
+const escapeBoundRoots = new WeakSet<object>();
+
 export function bindInfoPanels(root: Document | HTMLElement = document): void {
 	root.querySelectorAll<HTMLElement>(".info-btn[aria-controls]").forEach((btn) => {
+		if (btn.dataset.infoBound) {
+			return;
+		}
+		btn.dataset.infoBound = "1";
 		btn.addEventListener("click", () => {
 			const panel = document.getElementById(btn.getAttribute("aria-controls") ?? "");
 			if (panel) {
@@ -27,6 +33,10 @@ export function bindInfoPanels(root: Document | HTMLElement = document): void {
 			}
 		});
 	});
+	if (escapeBoundRoots.has(root)) {
+		return;
+	}
+	escapeBoundRoots.add(root);
 	document.addEventListener("keydown", (ev) => {
 		if (ev.key === "Escape") {
 			closeOpenPanels(root);

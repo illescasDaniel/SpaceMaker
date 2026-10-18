@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bindInfoPanels } from "../src/info-panels.ts";
 
 const HTML = `
@@ -58,5 +58,19 @@ describe("info panels", () => {
 		byId("btn-b").focus();
 		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 		expect(document.activeElement).toBe(byId("btn-b"));
+	});
+
+	it("given bindInfoPanels called twice when an info button is clicked then it still toggles once", () => {
+		bindInfoPanels(document);
+		byId("btn-a").click();
+		expect(byId("panel-a").classList.contains("visible")).toBe(true);
+	});
+
+	it("given bindInfoPanels called twice when Escape is pressed then focus is moved once to the button", () => {
+		bindInfoPanels(document);
+		byId("btn-a").click();
+		const focus = vi.spyOn(byId("btn-a"), "focus");
+		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+		expect(focus).toHaveBeenCalledTimes(1);
 	});
 });
