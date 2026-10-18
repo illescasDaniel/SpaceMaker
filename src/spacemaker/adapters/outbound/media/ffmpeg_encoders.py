@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from spacemaker.domain.gallery_batch import VideoExportEncoder
 from spacemaker.domain.video_encode import HardwareVideoEncoder
 
 
@@ -38,3 +39,18 @@ def h264_hw_encoder_ffmpeg_args(text: str, *, vaapi_render_node: bool) -> list[s
 			"23",
 		]
 	return None
+
+
+def cpu_h264_encoder_ffmpeg_args(text: str) -> list[str] | None:
+	"""``libx264`` arguments for the gallery friendly MP4 export; never used by library convert."""
+	if "libx264" in text:
+		return ["-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p"]
+	return None
+
+
+def friendly_video_encoder_from_ffmpeg_encoders(text: str, *, vaapi_render_node: bool) -> VideoExportEncoder:
+	if h264_hw_encoder_ffmpeg_args(text, vaapi_render_node=vaapi_render_node) is not None:
+		return VideoExportEncoder.HARDWARE_H264
+	if cpu_h264_encoder_ffmpeg_args(text) is not None:
+		return VideoExportEncoder.CPU_H264
+	return VideoExportEncoder.NONE

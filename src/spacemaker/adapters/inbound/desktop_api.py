@@ -4,6 +4,7 @@ from pathlib import Path
 
 import webview
 
+from spacemaker.adapters.inbound.desktop_download import DownloadRegistry, is_allowed_download_url
 from spacemaker.adapters.outbound.host.webbrowser_opener import WebbrowserUrlOpener
 from spacemaker.application.file_share_manifest import count_shareable_files_in_root
 from spacemaker.application.open_map_location import OpenMapLocation
@@ -11,6 +12,27 @@ from spacemaker.bootstrap.paths import default_library_root, normalize_library_r
 
 
 class DesktopApi:
+	def __init__(self) -> None:
+		self._downloads = DownloadRegistry()
+
+	def save_download(self, url: str, suggested_name: str) -> str:
+		"""Ask where to save, then stream ``url`` there. Returns a download id, or "" when cancelled or refused."""
+		windows = webview.windows
+		if not windows or not is_allowed_download_url(url):
+			return ""
+		result = windows[0].create_file_dialog(
+			webview.FileDialog.SAVE,
+			directory=str(pictures_directory()),
+			save_filename=Path(suggested_name).name or "SpaceMaker-export.zip",
+		)
+		if not result:
+			return ""
+		destination = result[0] if isinstance(result, (list, tuple)) else result
+		return self._downloads.start(url, str(destination))
+
+	def download_progress(self, download_id: str) -> dict[str, object]:
+		return self._downloads.progress(download_id)
+
 	def open_external_url(self, url: str) -> bool:
 		"""Open a validated Google Maps point in the system browser (anything else is refused)."""
 		return OpenMapLocation(WebbrowserUrlOpener()).run(url)

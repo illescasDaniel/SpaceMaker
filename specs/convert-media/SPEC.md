@@ -123,7 +123,7 @@ Encoded output is written to a **staging file** under `{library_root}/.convert-s
 ## Video encode
 
 - **Output:** `{stem}.av1.mp4` under `processed/` (skip if input already ends with `.av1.mp4` case-insensitive — move-as-is path).
-- **Hardware only:** no CPU encoders (no libsvtav1 / libx264) for library convert or friendly MP4 export.
+- **Hardware only (library convert):** no CPU encoders (no libsvtav1 / libx264) for library convert. The gallery's on-demand friendly MP4 export is the one exception: it may use CPU `libx264` after explicit user confirmation (see [gallery](../gallery/SPEC.md), [gallery-batch](../gallery-batch/SPEC.md)).
 - **Encoder priority:** av1_nvenc → av1_qsv → av1_vaapi (if render node present) → **h264_nvenc → h264_qsv → h264_vaapi** (if render node present). Never encode to HEVC/H.265 for library output (no in-browser preview).
 - **No hardware encoder:** videos that would otherwise be re-encoded are **moved as-is** to `processed/` (same relative path). Gallery may omit inline preview for non-preview codecs (e.g. HEVC).
 - **H.264 hardware fallback output:** `{stem}.h264.mp4` under `processed/` when AV1 hardware is unavailable but H.264 hardware is.

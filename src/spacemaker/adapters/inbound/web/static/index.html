@@ -690,9 +690,10 @@
 				<button type="button" class="active" id="btn-timeline">Timeline</button>
 				<button type="button" id="btn-calendar">Calendar</button>
 			</fieldset>
+			<button type="button" class="btn btn-secondary" id="btn-gallery-select" aria-pressed="false">Select</button>
 		</div>
 
-		<div class="gallery-layout">
+		<div class="gallery-layout" id="gallery-layout">
 			<div class="gallery-main">
 				<div id="timeline-view"></div>
 				<div id="calendar-view" class="calendar-panel" aria-hidden="true">
@@ -705,6 +706,44 @@
 					<p class="month-label calendar-day-grid" id="calendar-day-label" hidden></p>
 					<div class="thumb-grid" id="calendar-day-thumbs"></div>
 				</div>
+			</div>
+		</div>
+		<fieldset class="gallery-confirm panel-hidden" id="gallery-trash-confirm" aria-label="Confirm move to Trash">
+			<p><strong id="gallery-trash-confirm-title">Move items to the Trash?</strong> They disappear from the Gallery but stay in your system Trash, so you can restore them from there.</p>
+			<div class="gallery-confirm-actions">
+				<button type="button" class="btn btn-danger" id="btn-gallery-trash-confirm">Move to Trash</button>
+				<button type="button" class="btn btn-ghost" id="btn-gallery-trash-cancel">Keep</button>
+			</div>
+		</fieldset>
+		<fieldset class="gallery-confirm panel-hidden" id="gallery-cpu-confirm" aria-label="Confirm CPU video conversion">
+			<p><strong>No GPU video encoder found.</strong> Converting <span id="gallery-cpu-confirm-count">1 video</span> to MP4 will use your processor (CPU), which is much slower and may make your computer less responsive while it runs. Photos are not affected. Continue?</p>
+			<div class="gallery-confirm-actions">
+				<button type="button" class="btn btn-primary" id="btn-gallery-cpu-continue">Continue</button>
+				<button type="button" class="btn btn-ghost" id="btn-gallery-cpu-cancel">Cancel</button>
+			</div>
+		</fieldset>
+		<div class="gallery-floating">
+			<div class="alert alert-info gallery-batch-alert" id="gallery-batch-alert" hidden role="status">
+				<span class="alert-icon" aria-hidden="true">⏳</span>
+				<div class="alert-body">
+					<strong id="gallery-batch-alert-title">Converting…</strong>
+					<p class="folder-hint" id="gallery-batch-alert-detail" style="margin: 0.25rem 0 0;" hidden></p>
+					<div class="progress" role="progressbar" id="gallery-batch-progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="margin-top: 0.5rem;" hidden>
+						<div class="progress-fill" id="gallery-batch-progress-fill" style="width: 0%"></div>
+					</div>
+					<ul class="gallery-batch-list" id="gallery-batch-alert-list" hidden></ul>
+					<div class="alert-actions" id="gallery-batch-alert-actions" hidden>
+						<button type="button" class="btn btn-primary" id="btn-gallery-batch-zip" hidden>Download .zip</button>
+						<button type="button" class="btn btn-ghost" id="btn-gallery-batch-dismiss">Dismiss</button>
+					</div>
+				</div>
+			</div>
+			<div class="gallery-selection-bar" id="gallery-selection-bar" hidden role="region" aria-label="Selection actions">
+				<span class="gallery-selection-count" id="gallery-selection-count" aria-live="polite">0 selected</span>
+				<button type="button" class="btn btn-primary" id="btn-gallery-batch-download" title="Download the stored files as they are, in one .zip" disabled>Download</button>
+				<button type="button" class="btn btn-secondary" id="btn-gallery-batch-convert" title="Photos → JPEG, videos → MP4" disabled>Convert to JPEG / MP4</button>
+				<button type="button" class="btn btn-danger" id="btn-gallery-batch-trash" title="Move to the system Trash" disabled>Move to Trash</button>
+				<button type="button" class="btn btn-ghost" id="btn-gallery-select-cancel">Cancel</button>
 			</div>
 		</div>
 	</section>
@@ -721,9 +760,10 @@
 			<h2 class="gallery-item-title" id="gallery-item-title"></h2>
 			<dl class="gallery-meta" id="gallery-item-meta"></dl>
 			<div class="gallery-item-actions">
-				<button type="button" class="btn btn-primary" id="btn-gallery-open">Open</button>
-				<button type="button" class="btn btn-secondary" id="btn-gallery-open-folder">Open containing folder</button>
+				<button type="button" class="btn btn-primary" id="btn-gallery-download">Download</button>
 				<button type="button" class="btn btn-secondary" id="btn-gallery-friendly" hidden>Download as JPEG</button>
+				<button type="button" class="btn btn-secondary" id="btn-gallery-open">Open</button>
+				<button type="button" class="btn btn-secondary" id="btn-gallery-open-folder">Open containing folder</button>
 				<button type="button" class="btn btn-danger" id="btn-gallery-delete" title="Delete from this computer">Delete</button>
 			</div>
 			<div class="alert alert-info" id="gallery-export-alert" role="alert" hidden>
@@ -736,6 +776,13 @@
 					<p class="alert-detail" id="gallery-export-error" hidden></p>
 				</div>
 			</div>
+			<fieldset class="gallery-confirm panel-hidden" id="gallery-item-cpu-confirm" aria-label="Confirm CPU video conversion">
+				<p><strong>No GPU video encoder found.</strong> Converting this video to MP4 will use your processor (CPU), which is much slower and may make your computer less responsive while it runs. Continue?</p>
+				<div class="gallery-confirm-actions">
+					<button type="button" class="btn btn-primary" id="btn-gallery-item-cpu-continue">Continue</button>
+					<button type="button" class="btn btn-ghost" id="btn-gallery-item-cpu-cancel">Cancel</button>
+				</div>
+			</fieldset>
 		</div>
 	</section>
 

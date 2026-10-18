@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
@@ -20,6 +20,13 @@ class UnlockBody(BaseModel):
 class GalleryExportBody(BaseModel):
 	relative_path: str
 	format: str
+	allow_cpu_encode: bool = False
+
+
+class GalleryBatchBody(BaseModel):
+	# The hard item limit (500) lives in the domain; this cap only bounds the request body size.
+	relative_paths: list[str] = Field(max_length=5000)
+	allow_cpu_encode: bool = False
 
 
 class GalleryOpenBody(BaseModel):

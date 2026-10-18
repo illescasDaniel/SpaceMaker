@@ -88,3 +88,7 @@ Open items only. Finished work: `memory/archive.md`.
 
 - [x] **Gallery Open in Maps button** (2026-10-02) — wireframe → spec (`specs/gallery-open-in-maps`) → arch → tests → impl; Google Maps link beside Location, desktop bridge `open_external_url`. Gate green; grader PASS (PARTIAL findings fixed).
 - [ ] JS test coverage gap: only `passcode.ts`, `unlock.ts`, `auth-guard.ts` have vitest tests; other `web/src/*` modules (gallery, home-bind, dom, …) are untested. Remember `npm run build:web` after editing `web/src/`.
+- [x] **Gallery batch trash + convert** (2026-10-18) — Select mode in Timeline/Calendar/phone shell; Move to Trash via `send2trash` (never hard-delete); Convert to JPEG/MP4 into a zip under `.exports/.batch/{job}`; CPU `libx264` fallback with confirm in item page and batch. Gate green.
+- [ ] Gallery batch: verify manually in a real browser/desktop shell (select, trash, convert, CPU confirm) and decide on a 1.1.0 release.
+- [ ] Gallery batch known test gaps (grader round 2, 2026-10-18): no 401-under-passcode test for the batch routes; no real `send2trash` integration test (only the failure path is faked).
+- [x] **Gallery download buttons** (2026-10-18) — batch **Download** (stored files zipped unchanged, `POST /api/gallery/batch/download`, job `kind`) and desktop item-page **Download**; desktop bridge `save_download`/`download_progress` (native Save dialog + progress) now also used by Download as JPEG/MP4; faded disabled selection-bar buttons; sticky toolbar. Gate green.

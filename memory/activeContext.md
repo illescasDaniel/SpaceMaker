@@ -1,4 +1,4 @@
-_Last updated: 2026-10-08 (smart-commit-guard 0.3.0 adopted)_
+_Last updated: 2026-10-18 (gallery batch implemented, Phase 5 grading)_
 
 ## Branch
 
@@ -6,7 +6,7 @@ _Last updated: 2026-10-08 (smart-commit-guard 0.3.0 adopted)_
 
 ## Current focus
 
-Nothing in flight. Latest: jevmem 0.4.0 config switch (`.mcp.json`, `.cursor/mcp.json`, hooks in `.claude/settings.json`, README, jev-memory skill).
+Gallery batch delete (system Trash) + convert (JPEG/MP4, zip download, CPU libx264 fallback behind a confirm): spec `specs/gallery-batch/SPEC.md`. Phases 0-4 done (backend, routes, web select mode in `web/src/gallery-select.ts`/`gallery-selection.ts`, HTML/CSS in `index.html`, `gallery_mobile.html`, `shell-gallery.css`); `uv run task checks` + `npm run check` green; Phase 5 grader running. Nothing committed. Earlier: nothing in flight. Latest: jevmem 0.4.0 config switch (`.mcp.json`, `.cursor/mcp.json`, hooks in `.claude/settings.json`, README, jev-memory skill).
 
 ## Just changed
 

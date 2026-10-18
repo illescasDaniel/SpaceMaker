@@ -550,3 +550,125 @@ body {
 .cal-cell.selected { outline: 2px solid var(--accent); }
 
 .calendar-day-grid { margin-top: 1.25rem; }
+
+/* Gallery batch selection (select mode) — specs/gallery-batch/SPEC.md */
+.panel-hidden { display: none; }
+
+.gallery-toolbar .btn,
+.mobile-gallery-header-row .btn { margin-top: 0; }
+
+.thumb-check {
+	display: none;
+	position: absolute;
+	top: 6px;
+	left: 6px;
+	z-index: 1;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	background: rgba(15, 20, 25, 0.55);
+	box-shadow: 0 0 0 1px rgba(15, 20, 25, 0.4);
+	color: #fff;
+	font-size: 0.8rem;
+	line-height: 18px;
+	text-align: center;
+}
+
+.is-selecting .thumb-check { display: block; }
+.is-selecting .thumb { cursor: pointer; }
+.thumb.selected { outline: 3px solid var(--accent); outline-offset: -3px; }
+.thumb.selected .thumb-check { background: var(--accent-dim, var(--accent)); border-color: #fff; }
+.thumb.selected .thumb-check::before { content: "✓"; }
+
+.group-select {
+	display: none;
+	font: inherit;
+	font-size: 0.75rem;
+	margin-left: 0.5rem;
+	padding: 0.1rem 0.5rem;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--accent);
+	cursor: pointer;
+}
+
+.is-selecting .group-select { display: inline-block; }
+
+.gallery-floating {
+	position: sticky;
+	bottom: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-top: 1rem;
+	padding-right: 4.5rem; /* clears the floating phone button */
+}
+
+.gallery-floating:empty { display: none; }
+
+.gallery-selection-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.65rem 0.75rem;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.gallery-selection-bar[hidden] { display: none; }
+.gallery-selection-bar .btn { margin-top: 0; }
+.gallery-selection-count { font-weight: 600; margin-right: auto; min-width: 6.5rem; }
+
+.gallery-batch-alert { max-width: 960px; margin: 0; box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18); background: var(--surface); }
+.gallery-batch-alert[hidden] { display: none; }
+.gallery-batch-alert .alert-body { flex: 1; min-width: 0; }
+.gallery-batch-alert .alert-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.gallery-batch-alert .btn { margin-top: 0; }
+.gallery-batch-list { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; overflow-wrap: anywhere; }
+
+.gallery-confirm {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 50;
+	width: min(28rem, calc(100vw - 2rem));
+	box-sizing: border-box;
+	box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5);
+	margin: 0;
+	padding: 1rem 1.1rem;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	min-width: 0;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.gallery-confirm p { margin: 0 0 0.75rem; }
+.gallery-confirm-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.gallery-confirm .btn { margin-top: 0; }
+
+/* Select stays reachable while scrolling a long gallery: the toolbar sticks to the top. */
+.gallery-toolbar,
+.mobile-gallery-header {
+	position: sticky;
+	top: 0;
+	z-index: 6;
+	background: var(--bg);
+}
+
+.gallery-toolbar { padding: 0.5rem 0; }
+
+/* Actions are visibly faded until something is selected. */
+.gallery-selection-bar .btn:disabled {
+	opacity: 0.35;
+	filter: grayscale(0.6);
+	cursor: not-allowed;
+}

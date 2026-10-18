@@ -4,19 +4,49 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from spacemaker.adapters.inbound.web.client_access import is_loopback_client_host, require_loopback
 from spacemaker.adapters.inbound.web.media_paths import (
 	_attachment_filename,
 	_content_disposition,
+	_path_is_under_base,
 	_resolve_processed_file,
 	_session_library_root,
 )
-from spacemaker.adapters.inbound.web.models import GalleryExportBody, GalleryOpenBody
+from spacemaker.adapters.inbound.web.models import GalleryBatchBody, GalleryExportBody, GalleryOpenBody
 from spacemaker.adapters.inbound.web.serializers import _gallery_item_dict, _metadata_dict
 from spacemaker.adapters.outbound.host.open_paths import open_file_with_default_app, reveal_in_file_manager
 from spacemaker.bootstrap.services import AppServices
+from spacemaker.domain.gallery_batch import (
+	BatchTooLargeError,
+	CpuEncodeConfirmationRequired,
+	InsufficientDiskSpaceError,
+	UnsafeBatchPathError,
+	normalize_batch_paths,
+)
 from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase, is_safe_gallery_relative_path
+from spacemaker.domain.library import LibraryFolder
+
+
+def _cpu_confirmation_required(exc: CpuEncodeConfirmationRequired) -> HTTPException:
+	return HTTPException(status_code=409, detail={"code": "cpu_confirm_required", "video_count": exc.video_count})
+
+
+def _validated_batch_paths(services: AppServices, relative_paths: list[str]) -> tuple[str, ...]:
+	"""Reject the whole request (403/400) before any file is touched: unsafe paths, >500 items, or a
+	path whose real location escapes ``processed/`` (e.g. through a symlink)."""
+	try:
+		paths = normalize_batch_paths(relative_paths)
+	except UnsafeBatchPathError as exc:
+		raise HTTPException(status_code=403, detail="invalid path") from exc
+	except BatchTooLargeError as exc:
+		raise HTTPException(status_code=400, detail=str(exc)) from exc
+	base = Path(services.filesystem.library_path(services.session.library_root, LibraryFolder.PROCESSED, "")).resolve()
+	for relative in paths:
+		if not _path_is_under_base(base, (base / relative).resolve()):
+			raise HTTPException(status_code=403, detail="invalid path")
+	return paths
 
 
 def build_gallery_router(services: AppServices) -> APIRouter:
@@ -119,8 +149,87 @@ def build_gallery_router(services: AppServices) -> APIRouter:
 		except ValueError as exc:
 			raise HTTPException(status_code=400, detail="unknown export format") from exc
 		_resolve_processed_file(services, body.relative_path)
-		job = services.start_gallery_export(root, body.relative_path, export_format)
+		try:
+			job = services.start_gallery_export(
+				root, body.relative_path, export_format, allow_cpu_encode=body.allow_cpu_encode
+			)
+		except CpuEncodeConfirmationRequired as exc:
+			raise _cpu_confirmation_required(exc) from exc
+		except ValueError as exc:
+			raise HTTPException(status_code=422, detail=str(exc)) from exc
 		return job.to_dict()
+
+	@router.post("/api/gallery/batch/trash")
+	async def gallery_batch_trash(body: GalleryBatchBody) -> dict[str, object]:
+		root = _session_library_root(services)
+		if not root:
+			raise HTTPException(status_code=400, detail="library not configured")
+		paths = _validated_batch_paths(services, body.relative_paths)
+		results = await services.trash_gallery_batch(root, list(paths))
+		return {"results": [result.to_dict() for result in results]}
+
+	@router.post("/api/gallery/batch/convert")
+	def gallery_batch_convert_start(body: GalleryBatchBody) -> dict[str, object]:
+		root = services.session.library_root
+		if not root:
+			raise HTTPException(status_code=400, detail="library not configured")
+		paths = _validated_batch_paths(services, body.relative_paths)
+		try:
+			job = services.start_gallery_batch_convert(root, list(paths), allow_cpu_encode=body.allow_cpu_encode)
+		except CpuEncodeConfirmationRequired as exc:
+			raise _cpu_confirmation_required(exc) from exc
+		except InsufficientDiskSpaceError as exc:
+			raise HTTPException(
+				status_code=507,
+				detail={
+					"code": "insufficient_disk_space",
+					"required_bytes": exc.required_bytes,
+					"available_bytes": exc.available_bytes,
+				},
+			) from exc
+		return job.to_dict()
+
+	@router.post("/api/gallery/batch/download")
+	def gallery_batch_download_start(body: GalleryBatchBody) -> dict[str, object]:
+		root = services.session.library_root
+		if not root:
+			raise HTTPException(status_code=400, detail="library not configured")
+		paths = _validated_batch_paths(services, body.relative_paths)
+		try:
+			job = services.start_gallery_batch_download(root, list(paths))
+		except InsufficientDiskSpaceError as exc:
+			raise HTTPException(
+				status_code=507,
+				detail={
+					"code": "insufficient_disk_space",
+					"required_bytes": exc.required_bytes,
+					"available_bytes": exc.available_bytes,
+				},
+			) from exc
+		return job.to_dict()
+
+	@router.get("/api/gallery/batch/convert/{job_id}")
+	def gallery_batch_convert_status(job_id: str) -> dict[str, object]:
+		job = services.get_batch_job(job_id)
+		if job is None:
+			raise HTTPException(status_code=404, detail="unknown job")
+		return job.to_dict()
+
+	@router.get("/api/gallery/batch/convert/{job_id}/file")
+	def gallery_batch_convert_file(job_id: str) -> FileResponse:
+		job = services.get_batch_job(job_id)
+		if job is None:
+			raise HTTPException(status_code=404, detail="unknown job")
+		if job.phase is not ExportJobPhase.DONE or not job.download_path:
+			raise HTTPException(status_code=409, detail="export not ready")
+		path = Path(job.download_path)
+		if not path.is_file():
+			raise HTTPException(status_code=404, detail="export file missing")
+		return FileResponse(
+			path,
+			headers={"Content-Disposition": _attachment_filename(path)},
+			background=BackgroundTask(services.finish_batch_download, job_id),
+		)
 
 	@router.get("/api/gallery/export/{job_id}")
 	def gallery_export_status(job_id: str) -> dict[str, object]:

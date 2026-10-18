@@ -16,6 +16,12 @@ from spacemaker.domain.convert_policy import (
 	should_requeue_convert_drain,
 )
 from spacemaker.domain.extract_control import ExtractJobControl
+from spacemaker.domain.gallery_batch import (
+	BatchJobKind,
+	BatchProgress,
+	GalleryBatchConvertJob,
+)
+from spacemaker.domain.gallery_cache_paths import batch_export_job_dir
 from spacemaker.domain.gallery_export import ExportFormat, ExportJobPhase
 from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase, can_start_convert
@@ -42,8 +48,15 @@ class JobsMixin:
 			return self._export_jobs.get(job_id)
 
 	def start_gallery_export(
-		self: AppServices, library_root: str, relative_path: str, export_format: ExportFormat
+		self: AppServices,
+		library_root: str,
+		relative_path: str,
+		export_format: ExportFormat,
+		*,
+		allow_cpu_encode: bool = False,
 	) -> GalleryExportJob:
+		# Raises CpuEncodeConfirmationRequired / ValueError before any job exists (nothing starts on Cancel).
+		self.export_friendly.preflight(library_root, relative_path, export_format, allow_cpu_encode=allow_cpu_encode)
 		job_id = uuid.uuid4().hex
 		job = GalleryExportJob(
 			job_id=job_id,
@@ -58,7 +71,9 @@ class JobsMixin:
 		with self._export_lock:
 			self._export_jobs[job_id] = job
 		self.push_gallery_export(job)
-		self._export_executor.submit(self._run_gallery_export, library_root, job_id, relative_path, export_format)
+		self._export_executor.submit(
+			self._run_gallery_export, library_root, job_id, relative_path, export_format, allow_cpu_encode
+		)
 		return job
 
 	def _run_gallery_export(
@@ -67,6 +82,7 @@ class JobsMixin:
 		job_id: str,
 		relative_path: str,
 		export_format: ExportFormat,
+		allow_cpu_encode: bool = False,
 	) -> None:
 		def on_progress(percent: int) -> None:
 			with self._export_lock:
@@ -83,6 +99,7 @@ class JobsMixin:
 				relative_path,
 				export_format,
 				on_progress=on_progress,
+				allow_cpu_encode=allow_cpu_encode,
 			)
 			with self._export_lock:
 				job = self._export_jobs.get(job_id)
@@ -103,6 +120,133 @@ class JobsMixin:
 				job.phase = ExportJobPhase.ERROR
 				job.error = str(exc)
 			self.push_gallery_export(self._export_jobs[job_id])
+
+	def push_gallery_batch(self: AppServices, job: GalleryBatchConvertJob) -> None:
+		self.broadcast({"type": "gallery_batch", "batch": job.to_dict()})
+
+	def get_batch_job(self: AppServices, job_id: str) -> GalleryBatchConvertJob | None:
+		with self._export_lock:
+			return self._batch_jobs.get(job_id)
+
+	def start_gallery_batch_convert(
+		self: AppServices,
+		library_root: str,
+		relative_paths: list[str],
+		*,
+		allow_cpu_encode: bool,
+	) -> GalleryBatchConvertJob:
+		# Raises the batch domain errors before any job exists, so Cancel / a rejected request leaves nothing behind.
+		paths = self.export_friendly_batch.preflight(library_root, relative_paths, allow_cpu_encode=allow_cpu_encode)
+		return self._start_gallery_batch(library_root, paths, BatchJobKind.CONVERT, allow_cpu_encode)
+
+	def start_gallery_batch_download(
+		self: AppServices,
+		library_root: str,
+		relative_paths: list[str],
+	) -> GalleryBatchConvertJob:
+		"""Zip the stored files unchanged (spec: gallery-batch **Download**); same job shape as convert."""
+		paths = self.export_friendly_batch.preflight_download(library_root, relative_paths)
+		return self._start_gallery_batch(library_root, paths, BatchJobKind.DOWNLOAD, False)
+
+	def _start_gallery_batch(
+		self: AppServices,
+		library_root: str,
+		paths: tuple[str, ...],
+		kind: BatchJobKind,
+		allow_cpu_encode: bool,
+	) -> GalleryBatchConvertJob:
+		self.sweep_batch_exports()
+		job_id = uuid.uuid4().hex
+		job = GalleryBatchConvertJob(
+			job_id=job_id,
+			item_count=len(paths),
+			phase=ExportJobPhase.RUNNING,
+			percent=0,
+			current_index=0,
+			results=[],
+			download_path="",
+			error="",
+			kind=kind,
+		)
+		with self._export_lock:
+			self._batch_jobs[job_id] = job
+		self.push_gallery_batch(job)
+		self._export_executor.submit(
+			self._run_gallery_batch_convert, library_root, job_id, paths, allow_cpu_encode, kind
+		)
+		return job
+
+	def _run_gallery_batch_convert(
+		self: AppServices,
+		library_root: str,
+		job_id: str,
+		paths: tuple[str, ...],
+		allow_cpu_encode: bool,
+		kind: BatchJobKind = BatchJobKind.CONVERT,
+	) -> None:
+		def on_progress(progress: BatchProgress) -> None:
+			with self._export_lock:
+				job = self._batch_jobs.get(job_id)
+				if job is None:
+					return
+				job.percent = progress.overall_percent
+				job.current_index = min(progress.item_index + 1, job.item_count)
+			self.push_gallery_batch(job)
+
+		try:
+			if kind is BatchJobKind.DOWNLOAD:
+				result = self.export_friendly_batch.run_download(library_root, job_id, paths, on_progress=on_progress)
+			else:
+				result = self.export_friendly_batch.run(
+					library_root,
+					job_id,
+					paths,
+					allow_cpu_encode=allow_cpu_encode,
+					on_progress=on_progress,
+				)
+			with self._export_lock:
+				job = self._batch_jobs.get(job_id)
+				if job is None:
+					return
+				job.results = list(result.results)
+				job.percent = 100
+				job.download_path = result.archive_path
+				job.phase = ExportJobPhase.DONE
+				job.error = ""
+			self.push_gallery_batch(job)
+		except Exception as exc:
+			logger.exception("Gallery batch convert job crashed")
+			with self._export_lock:
+				job = self._batch_jobs.get(job_id)
+				if job is None:
+					return
+				job.phase = ExportJobPhase.ERROR
+				job.error = str(exc)
+			self.push_gallery_batch(job)
+
+	def finish_batch_download(self: AppServices, job_id: str) -> None:
+		"""Delete a batch zip once it has been served; the job then answers 404 (spec: gallery-batch)."""
+		root = self.session.library_root
+		with self._export_lock:
+			self._batch_jobs.pop(job_id, None)
+		if root:
+			with contextlib.suppress(Exception):
+				self.export_friendly_batch.delete_job(root, job_id)
+
+	def sweep_batch_exports(self: AppServices, *, expire_all: bool = False) -> None:
+		"""Remove expired (or, at app start, all) batch zips; running jobs and the unexpired are kept."""
+		root = self.session.library_root
+		if not root:
+			return
+		with self._export_lock:
+			keep = frozenset(job_id for job_id, job in self._batch_jobs.items() if job.phase is ExportJobPhase.RUNNING)
+		with contextlib.suppress(Exception):
+			self.export_friendly_batch.sweep(root, now=time.time(), keep_job_ids=keep, expire_all=expire_all)
+		# Forget finished jobs whose zip folder was just swept so they answer 404 and free memory.
+		with self._export_lock:
+			for job_id in [j for j in self._batch_jobs if j not in keep]:
+				if not self.filesystem.exists(batch_export_job_dir(root, job_id)):
+					self._batch_jobs.pop(job_id, None)
 
 	def start_extract(self: AppServices) -> None:
 		if self._extract_job_active():

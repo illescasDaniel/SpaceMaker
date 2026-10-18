@@ -681,6 +681,138 @@
 			border-radius: 4px;
 		}
 
+		/* Gallery batch selection (select mode) */
+		.btn-danger {
+			background: transparent;
+			color: var(--error);
+			border: 1px solid var(--error);
+		}
+
+		.btn-danger:hover { background: rgba(255, 107, 107, 0.12); }
+
+		.gallery-toolbar-actions {
+			display: flex;
+			align-items: center;
+			flex-wrap: wrap;
+			gap: 0.75rem;
+		}
+
+		.gallery-toolbar-actions .btn { margin-top: 0; }
+
+		/* The toolbar (with Select) sticks to the top so Select is always reachable while scrolling. */
+		.gallery-toolbar {
+			position: sticky;
+			top: 0;
+			z-index: 6;
+			background: var(--bg);
+			padding: 0.5rem 0;
+		}
+
+		.thumb-check {
+			display: none;
+			position: absolute;
+			top: 6px;
+			left: 6px;
+			z-index: 1;
+			width: 22px;
+			height: 22px;
+			border-radius: 50%;
+			border: 2px solid #fff;
+			background: rgba(15, 20, 25, 0.55);
+			box-shadow: 0 0 0 1px rgba(15, 20, 25, 0.4);
+			color: #fff;
+			font-size: 0.8rem;
+			line-height: 18px;
+			text-align: center;
+		}
+
+		.is-selecting .thumb-check { display: block; }
+		.is-selecting .thumb { cursor: pointer; }
+
+		.thumb.selected { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+		.thumb.selected .thumb-check {
+			background: var(--accent-dim);
+			border-color: #fff;
+		}
+
+		.thumb.selected .thumb-check::before { content: "✓"; }
+
+		.group-select {
+			display: none;
+			font: inherit;
+			font-size: 0.75rem;
+			margin-left: 0.5rem;
+			padding: 0.1rem 0.5rem;
+			border-radius: 999px;
+			border: 1px solid var(--border);
+			background: transparent;
+			color: var(--accent);
+			cursor: pointer;
+		}
+
+		.is-selecting .group-select { display: inline-block; }
+
+		.gallery-floating {
+			position: sticky;
+			bottom: 0;
+			z-index: 5;
+			display: flex;
+			flex-direction: column;
+			gap: 0.5rem;
+			margin-top: 1rem;
+			padding-right: 4.5rem; /* clears the floating phone button */
+		}
+
+		.gallery-selection-bar {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 0.5rem;
+			padding: 0.65rem 0.75rem;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18);
+		}
+
+		.gallery-selection-bar[hidden] { display: none; }
+
+		/* Actions are visibly faded until something is selected. */
+		.gallery-selection-bar .btn:disabled {
+			opacity: 0.35;
+			filter: grayscale(0.6);
+			cursor: not-allowed;
+		}
+
+
+		/* Trash / CPU confirms are modal dialogs over a dimmed backdrop (Esc closes). */
+		#gallery-trash-confirm, #gallery-cpu-confirm {
+			position: fixed;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			z-index: 50;
+			width: min(28rem, calc(100vw - 2rem));
+			box-sizing: border-box;
+			margin: 0;
+			background: var(--surface);
+			box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5);
+		}
+		.gallery-selection-bar .btn { margin-top: 0; }
+
+		.gallery-selection-count {
+			font-weight: 600;
+			margin-right: auto;
+			min-width: 6.5rem;
+		}
+
+		.gallery-batch-alert { max-width: 960px; margin: 0; box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18); background: var(--surface); }
+		.gallery-batch-alert[hidden] { display: none; }
+		.gallery-batch-alert .alert-body { flex: 1; min-width: 0; }
+		.gallery-batch-alert .alert-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+		.gallery-batch-alert .btn { margin-top: 0; }
+
 		.calendar-panel {
 			display: none;
 			max-width: 420px;
@@ -2820,12 +2952,23 @@
 		</div>
 		<div class="gallery-toolbar">
 			<h2 style="margin: 0; font-size: 1.2rem;">Gallery</h2>
-			<fieldset class="toggle-group">
-				<legend class="sr-only">Gallery organization</legend>
-				<button type="button" class="active" id="btn-timeline">Timeline</button>
-				<button type="button" id="btn-calendar">Calendar</button>
-			</fieldset>
+			<div class="gallery-toolbar-actions">
+				<button type="button" class="btn btn-secondary" id="btn-gallery-select" aria-pressed="false">Select</button>
+				<fieldset class="toggle-group">
+					<legend class="sr-only">Gallery organization</legend>
+					<button type="button" class="active" id="btn-timeline">Timeline</button>
+					<button type="button" id="btn-calendar">Calendar</button>
+				</fieldset>
+			</div>
 		</div>
+		<aside class="wf-note" data-for="agent">
+			<span class="wf-note-badge">Agent note</span>
+			<strong>Batch select / delete / convert (new):</strong> <b>Download</b> (primary, left of Convert) zips the <em>stored</em> files exactly as they are in <code>processed/</code> — no conversion, no CPU/GPU confirm — and delivers the .zip the same way as Convert (desktop: native Save dialog + progress; phone/browser: normal download). The same <b>Download</b> primary button is also added to the desktop item page. <b>Select</b> in the toolbar enters select mode (button becomes <b>Done</b>; <kbd>Esc</kbd> also exits). In select mode a tile click <em>toggles selection</em> (no navigation to the item page) and every tile shows a round check badge top-left; each month heading gets a small <b>Select</b> pill that selects/deselects all loaded tiles of that month. A sticky bottom bar shows the count and <b>Convert to JPEG / MP4</b>, <b>Move to Trash</b>, <b>Cancel</b> (clears selection and leaves select mode); <b>Download</b>, <b>Convert to JPEG / MP4</b> and <b>Move to Trash</b> are all disabled at 0 selected (Cancel stays enabled). <b>Move to Trash</b> asks for an inline confirm (same pattern as Settings confirms), then moves the files to the <em>operating-system Trash / Recycle Bin</em> (never a hard delete) and removes the tiles in place with the existing <code>.thumb-removing</code> animation. <b>Convert</b> reuses the item-page friendly export (photos → JPEG, videos → H.264 + AAC MP4; already-friendly files are passed through untouched). <b>No GPU video encoder:</b> <b>Download as MP4</b> stays visible; when the video needs a re-encode and no GPU encoder exists, an inline confirm (<code>#wireframe-cpu-confirm</code> on the item page, <code>#gallery-cpu-confirm</code> in the batch bar) warns the CPU will be much slower and offers <b>Continue</b> / <b>Cancel</b> before anything starts; photos and already-friendly videos never prompt, and with a GPU encoder there is no prompt, shows one progress alert for the whole batch, and ends with a single <b>Download .zip</b>. Originals in <code>processed/</code> are never changed by Convert. The toolbar, including <b>Select</b>, is sticky and floats at the top while the gallery scrolls. Select mode works in Timeline and Calendar (day grid) views and on the phone gallery shell.
+		</aside>
+		<aside class="wf-note" data-for="reviewer">
+			<span class="wf-note-badge">Review only</span>
+			Try it: click <b>Select</b>, click a few tiles, then <b>Convert</b> (progress → done) or <b>Move to Trash</b> (inline confirm → tiles vanish). The buttons below ("Wireframe demo") force the partial-failure and phone-width states. Questions for you: (1) convert delivers one <b>.zip</b> — OK, or would you rather write the converted copies to a folder? (2) the single-item <b>Delete</b> on the item page currently hard-deletes; should it also move to Trash for consistency? (3) no global “select all” (the library can be 50,000+ items) — per-month <b>Select</b> only. OK?
+		</aside>
 		<aside class="wf-note" data-for="agent">
 			<span class="wf-note-badge">Agent note</span>
 			<strong>Thumbnail cache aspect:</strong> <code>.thumbnails/</code> JPEGs are fit-within a max edge (e.g. 320), <em>preserving source aspect</em> — never Magick <code>WxH^</code> + <code>-extent</code> square crop. Grid tiles stay square with <code>object-fit: cover</code> (CSS crops). Item page reuses the same URL with <code>object-fit: contain</code> so the progressive placeholder matches full framing. Video poster frames follow the same fit-within rule. Stale square caches need a refresh (source newer, or wipe <code>.thumbnails/</code>).
@@ -2835,29 +2978,29 @@
 			Grid tiles below use landscape / portrait / wide demo images inside square cells — they look center-cropped in the grid. Open an item: the loading thumb should keep that photo’s real shape (letterbox/pillarbox), not a pre-squared crop. Approve if that split (cache keeps aspect; grid crops in CSS) is what you want.
 		</aside>
 
-		<div class="gallery-layout">
+		<div class="gallery-layout" id="gallery-layout">
 			<div class="gallery-main">
 				<div id="timeline-view">
 					<div class="year-block">
 						<h3 class="year-title">2025</h3>
-						<p class="month-label">September</p>
+						<p class="month-label">September <button type="button" class="group-select" data-group-select>Select</button></p>
 						<div class="thumb-grid">
-							<button type="button" class="thumb thumb-link" data-item-demo="image" aria-label="Landscape photo"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='240'%3E%3Crect fill='%232a3440' width='320' height='240'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='18' text-anchor='middle' dominant-baseline='middle'%3E4%3A3 landscape%3C/text%3E%3C/svg%3E" alt="" /></button>
-							<button type="button" class="thumb thumb-link" data-item-demo="image" aria-label="Portrait photo"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='320'%3E%3Crect fill='%23405a35' width='240' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E3%3A4 portrait%3C/text%3E%3C/svg%3E" alt="" /></button>
-							<button type="button" class="thumb thumb-link" data-item-demo="video" aria-label="Video clip"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect fill='%235a3540' width='320' height='180'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E16%3A9 video%3C/text%3E%3C/svg%3E" alt="" /><span class="thumb-badge">Video</span></button>
-							<div class="thumb" aria-hidden="true"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Crect fill='%2335405a' width='320' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='18' text-anchor='middle' dominant-baseline='middle'%3E1%3A1 square%3C/text%3E%3C/svg%3E" alt="" /></div>
-							<div class="thumb" aria-hidden="true"><span class="thumb-fill"></span></div>
-							<div class="thumb" aria-hidden="true"><span class="thumb-fill"></span></div>
+							<button type="button" class="thumb thumb-link" data-item-demo="image" aria-label="Landscape photo"><span class="thumb-check" aria-hidden="true"></span><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='240'%3E%3Crect fill='%232a3440' width='320' height='240'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='18' text-anchor='middle' dominant-baseline='middle'%3E4%3A3 landscape%3C/text%3E%3C/svg%3E" alt="" /></button>
+							<button type="button" class="thumb thumb-link" data-item-demo="image" aria-label="Portrait photo"><span class="thumb-check" aria-hidden="true"></span><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='320'%3E%3Crect fill='%23405a35' width='240' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E3%3A4 portrait%3C/text%3E%3C/svg%3E" alt="" /></button>
+							<button type="button" class="thumb thumb-link" data-item-demo="video" aria-label="Video clip"><span class="thumb-check" aria-hidden="true"></span><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect fill='%235a3540' width='320' height='180'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E16%3A9 video%3C/text%3E%3C/svg%3E" alt="" /><span class="thumb-badge">Video</span></button>
+							<div class="thumb" aria-hidden="true"><span class="thumb-check" aria-hidden="true"></span><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Crect fill='%2335405a' width='320' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='18' text-anchor='middle' dominant-baseline='middle'%3E1%3A1 square%3C/text%3E%3C/svg%3E" alt="" /></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-check" aria-hidden="true"></span><span class="thumb-fill"></span></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-check" aria-hidden="true"></span><span class="thumb-fill"></span></div>
 						</div>
 					</div>
 					<div class="year-block">
 						<h3 class="year-title">2024</h3>
-						<p class="month-label">December</p>
+						<p class="month-label">December <button type="button" class="group-select" data-group-select>Select</button></p>
 						<div class="thumb-grid">
-							<div class="thumb" aria-hidden="true"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='200'%3E%3Crect fill='%232a4050' width='320' height='200'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E16%3A10%3C/text%3E%3C/svg%3E" alt="" /></div>
-							<div class="thumb" aria-hidden="true"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='320'%3E%3Crect fill='%2350402a' width='200' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E5%3A8%3C/text%3E%3C/svg%3E" alt="" /></div>
-							<div class="thumb" aria-hidden="true"><span class="thumb-fill"></span></div>
-							<div class="thumb" aria-hidden="true"><span class="thumb-fill"></span></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-check" aria-hidden="true"></span><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='200'%3E%3Crect fill='%232a4050' width='320' height='200'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E16%3A10%3C/text%3E%3C/svg%3E" alt="" /></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-check" aria-hidden="true"></span><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='320'%3E%3Crect fill='%2350402a' width='200' height='320'/%3E%3Ctext x='50%25' y='50%25' fill='%238b9cb3' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E5%3A8%3C/text%3E%3C/svg%3E" alt="" /></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-check" aria-hidden="true"></span><span class="thumb-fill"></span></div>
+							<div class="thumb" aria-hidden="true"><span class="thumb-check" aria-hidden="true"></span><span class="thumb-fill"></span></div>
 						</div>
 					</div>
 					<!-- Infinite scroll: shown while the next page of items is being fetched, at the bottom of the loaded grid. Large libraries load in pages rather than all at once. -->
@@ -2878,14 +3021,59 @@
 					</div>
 					<p class="month-label calendar-day-grid">September 4, 2025</p>
 					<div class="thumb-grid">
-						<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
-						<div class="thumb"><span class="thumb-fill" aria-hidden="true"></span></div>
+						<div class="thumb"><span class="thumb-check" aria-hidden="true"></span><span class="thumb-fill" aria-hidden="true"></span></div>
+						<div class="thumb"><span class="thumb-check" aria-hidden="true"></span><span class="thumb-fill" aria-hidden="true"></span></div>
 					</div>
 				</div>
 			</div>
 			<!-- Empty state (shown when processed/ has no files): -->
 			<p class="gallery-empty-hint" hidden>No saved media yet</p>
 		</div>
+		<fieldset class="settings-confirm panel-hidden" id="gallery-trash-confirm" aria-label="Confirm move to Trash">
+			<p><strong id="gallery-trash-confirm-title">Move 3 items to the Trash?</strong> They disappear from the Gallery but stay in your system Trash, so you can restore them from there.</p>
+			<div class="settings-confirm-actions">
+				<button type="button" class="btn btn-danger" id="btn-gallery-trash-confirm">Move to Trash</button>
+				<button type="button" class="btn btn-ghost" id="btn-gallery-trash-cancel">Keep</button>
+			</div>
+		</fieldset>
+
+		<fieldset class="settings-confirm panel-hidden" id="gallery-cpu-confirm" aria-label="Confirm CPU video conversion">
+			<p><strong id="gallery-cpu-confirm-title">No GPU video encoder found.</strong> Converting <span id="gallery-cpu-confirm-count">1 video</span> to MP4 will use your processor (CPU), which is much slower and may make your computer less responsive while it runs. Photos are not affected. Continue?</p>
+			<div class="settings-confirm-actions">
+				<button type="button" class="btn btn-primary" id="btn-gallery-cpu-continue">Continue</button>
+				<button type="button" class="btn btn-ghost" id="btn-gallery-cpu-cancel">Cancel</button>
+			</div>
+		</fieldset>
+
+		<div class="gallery-floating">
+			<div class="alert alert-info gallery-batch-alert" id="gallery-batch-alert" hidden role="status">
+				<span class="alert-icon" aria-hidden="true">⏳</span>
+				<div class="alert-body">
+					<strong id="gallery-batch-alert-title">Converting 0 of 0…</strong>
+					<p class="folder-hint" id="gallery-batch-alert-detail" style="margin: 0.25rem 0 0;">Photos → JPEG, videos → MP4. Your originals are not changed.</p>
+					<div class="progress" role="progressbar" id="gallery-batch-progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="margin-top: 0.5rem;">
+						<div class="progress-fill" id="gallery-batch-progress-fill" style="width: 0%"></div>
+					</div>
+					<div class="alert-actions" id="gallery-batch-alert-actions" hidden>
+						<button type="button" class="btn btn-primary" id="btn-gallery-batch-zip">Download .zip</button>
+						<button type="button" class="btn btn-ghost" id="btn-gallery-batch-dismiss">Dismiss</button>
+					</div>
+				</div>
+			</div>
+
+			<div class="gallery-selection-bar" id="gallery-selection-bar" hidden role="region" aria-label="Selection actions">
+				<span class="gallery-selection-count" id="gallery-selection-count" aria-live="polite">0 selected</span>
+				<button type="button" class="btn btn-primary" id="btn-gallery-batch-download" title="Download the stored files as they are, in one .zip" disabled>Download</button>
+				<button type="button" class="btn btn-secondary" id="btn-gallery-batch-convert" title="Photos → JPEG, videos → MP4" disabled>Convert to JPEG / MP4</button>
+				<button type="button" class="btn btn-danger" id="btn-gallery-batch-trash" title="Move to the system Trash" disabled>Move to Trash</button>
+				<button type="button" class="btn btn-ghost" id="btn-gallery-select-cancel">Cancel</button>
+			</div>
+		</div>
+			<div class="wf-demo">
+				<button type="button" id="btn-wf-batch-preselect">Pre-select 3 tiles</button>
+				<button type="button" id="btn-wf-batch-fail">Convert with 1 failure</button>
+				<button type="button" id="btn-wf-no-gpu" aria-pressed="false">Simulate: no GPU encoder</button>
+			</div>
 	</section>
 
 	<!-- GALLERY ITEM — /gallery/item/{relative_path} -->
@@ -2911,11 +3099,24 @@
 				<dt>File size</dt><dd>1.2 MB</dd>
 				<dt>Location</dt><dd class="gallery-meta-location"><span>52.5200° N, 13.4050° E</span><a class="gallery-open-maps" href="https://www.google.com/maps/search/?api=1&amp;query=52.52%2C13.405" target="_blank" rel="noopener noreferrer">Open in Maps ↗</a></dd>
 			</dl>
+			<p class="folder-hint" style="margin: 0 0 0.35rem;"><strong>Phone gallery</strong> (<code>gallery_mobile.html</code>) — unchanged:</p>
 			<div class="gallery-item-actions">
 				<button type="button" class="btn btn-primary">Download</button>
 				<button type="button" class="btn btn-secondary" id="btn-wireframe-friendly">Download as JPEG</button>
 				<button type="button" class="btn btn-danger" id="btn-wireframe-delete" title="Delete from this computer">Delete</button>
 			</div>
+			<p class="folder-hint" style="margin: 0 0 0.35rem;"><strong>Desktop app</strong> (<code>index.html</code>) — new <b>Download</b> (primary, left of the friendly download); <b>Open</b> becomes secondary:</p>
+			<div class="gallery-item-actions" id="wireframe-desktop-actions">
+				<button type="button" class="btn btn-primary" id="btn-wireframe-desktop-download">Download</button>
+				<button type="button" class="btn btn-secondary">Download as JPEG</button>
+				<button type="button" class="btn btn-secondary">Open</button>
+				<button type="button" class="btn btn-secondary">Open containing folder</button>
+				<button type="button" class="btn btn-danger" title="Delete from this computer">Delete</button>
+			</div>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				<strong>Desktop Download (new):</strong> saves the stored file as-is (no conversion) — the same file the phone gallery's <b>Download</b> serves. The desktop webview has no browser download dialog, so it uses the same flow as the batch zip: native Save dialog (suggested name = the file name), then an inline progress alert "Saving IMG_0042.avif… N%" ending in "Saved" + path (or the error); cancelling the dialog does nothing. The file is not re-encoded, so no CPU/GPU confirm applies. <b>Download as JPEG / MP4</b> keeps its behaviour and also uses the Save dialog on desktop.
+			</aside>
 			<aside class="wf-note" data-for="agent">
 				<span class="wf-note-badge">Agent note</span>
 				<strong>Open in Maps:</strong> a small pill link beside the Location text, shown only when the item has parseable GPS (hidden if the text can't be turned into decimal lat/lon). Opens the point in the user's default browser in a new tab (<code>rel="noopener noreferrer"</code>); in the desktop shell it must open the system browser, not navigate the app webview. Target: Google Maps (<code>https://www.google.com/maps/search/?api=1&amp;query=&lt;lat&gt;,&lt;lon&gt;</code>, no key needed). The coordinates are sent to that site only when the user clicks.
@@ -2924,6 +3125,13 @@
 				<span class="wf-note-badge">Agent note</span>
 				<strong>Delete → thumbnail removal animation:</strong> after a successful delete, navigate back to the Gallery grid <em>first</em>, then play the removal on that item's thumbnail (<code>.thumb-removing</code>: fade + shrink over <code>--dur-base</code>), remove it from the DOM on <code>transitionend</code>, and let the remaining thumbnails reflow. The removal must also complete if <code>transitionend</code> never fires (timeout fallback slightly longer than <code>--dur-base</code>) and when reduced motion collapses <code>--dur-base</code> to ~0 (remove immediately, no animation). In production the tile is removed <em>in place</em> — no timeline reload (it would blank the grid and reset scroll); a month left empty disappears with its heading.
 			</aside>
+			<fieldset class="settings-confirm panel-hidden" id="wireframe-cpu-confirm" aria-label="Confirm CPU video conversion">
+				<p><strong>No GPU video encoder found.</strong> Converting this video to MP4 will use your processor (CPU), which is much slower and may make your computer less responsive while it runs. Continue?</p>
+				<div class="settings-confirm-actions">
+					<button type="button" class="btn btn-primary" id="btn-wireframe-cpu-continue">Continue</button>
+					<button type="button" class="btn btn-ghost" id="btn-wireframe-cpu-cancel">Cancel</button>
+				</div>
+			</fieldset>
 			<div class="alert alert-info" id="wireframe-export-alert" hidden>
 				<span class="alert-icon" aria-hidden="true">⏳</span>
 				<div>
@@ -3245,9 +3453,23 @@
 		});
 		document.getElementById('btn-wireframe-friendly').addEventListener('click', function () {
 			var alertEl = document.getElementById('wireframe-export-alert');
+			var cpuConfirm = document.getElementById('wireframe-cpu-confirm');
+			var isVideo = this.textContent.indexOf('MP4') !== -1;
+			// Videos that need a re-encode on a machine with no GPU encoder ask first (CPU is much slower).
+			if (isVideo && window.wfNoGpuEncoder) {
+				cpuConfirm.classList.remove('panel-hidden');
+				return;
+			}
 			if (alertEl) {
 				alertEl.hidden = false;
 			}
+		});
+		document.getElementById('btn-wireframe-cpu-continue').addEventListener('click', function () {
+			document.getElementById('wireframe-cpu-confirm').classList.add('panel-hidden');
+			document.getElementById('wireframe-export-alert').hidden = false;
+		});
+		document.getElementById('btn-wireframe-cpu-cancel').addEventListener('click', function () {
+			document.getElementById('wireframe-cpu-confirm').classList.add('panel-hidden');
 		});
 
 		document.querySelectorAll('.view-tabs button').forEach(function (btn) {
@@ -3652,6 +3874,148 @@
 			showView('settings');
 		});
 
+		// Gallery batch select / trash / convert (wireframe demo only).
+		(function () {
+			var view = document.getElementById('view-gallery');
+			var layout = document.getElementById('gallery-layout');
+			var btnSelect = document.getElementById('btn-gallery-select');
+			var bar = document.getElementById('gallery-selection-bar');
+			var count = document.getElementById('gallery-selection-count');
+			var btnConvert = document.getElementById('btn-gallery-batch-convert');
+			var btnDownload = document.getElementById('btn-gallery-batch-download');
+			var btnTrash = document.getElementById('btn-gallery-batch-trash');
+			var confirmBox = document.getElementById('gallery-trash-confirm');
+			var alertEl = document.getElementById('gallery-batch-alert');
+			var failNext = false;
+			var timer = null;
+
+			function selected() { return Array.from(view.querySelectorAll('.thumb.selected')); }
+			function refresh() {
+				var n = selected().length;
+				count.textContent = n + ' selected';
+				btnConvert.disabled = n === 0;
+				btnDownload.disabled = n === 0;
+				btnTrash.disabled = n === 0;
+				if (n === 0) { confirmBox.classList.add('panel-hidden'); document.getElementById('gallery-cpu-confirm').classList.add('panel-hidden'); }
+			}
+			function setSelecting(on) {
+				layout.classList.toggle('is-selecting', on);
+				bar.hidden = !on;
+				btnSelect.textContent = on ? 'Done' : 'Select';
+				btnSelect.setAttribute('aria-pressed', on ? 'true' : 'false');
+				if (!on) {
+					selected().forEach(function (t) { t.classList.remove('selected'); });
+					confirmBox.classList.add('panel-hidden');
+				}
+				refresh();
+			}
+			btnSelect.addEventListener('click', function () { setSelecting(!layout.classList.contains('is-selecting')); });
+			document.getElementById('btn-gallery-select-cancel').addEventListener('click', function () { setSelecting(false); });
+			document.addEventListener('keydown', function (e) {
+				if (e.key === 'Escape' && layout.classList.contains('is-selecting')) setSelecting(false);
+			});
+			// Capture phase: in select mode a tile click toggles instead of opening the item page.
+			view.addEventListener('click', function (e) {
+				if (!layout.classList.contains('is-selecting')) return;
+				var tile = e.target.closest('.thumb');
+				if (!tile) return;
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				tile.classList.toggle('selected');
+				refresh();
+			}, true);
+			view.querySelectorAll('[data-group-select]').forEach(function (b) {
+				b.addEventListener('click', function () {
+					var grid = b.closest('.month-label').nextElementSibling;
+					var tiles = Array.from(grid.querySelectorAll('.thumb'));
+					var all = tiles.every(function (t) { return t.classList.contains('selected'); });
+					tiles.forEach(function (t) { t.classList.toggle('selected', !all); });
+					refresh();
+				});
+			});
+
+			btnTrash.addEventListener('click', function () {
+				var n = selected().length;
+				document.getElementById('gallery-trash-confirm-title').textContent = 'Move ' + n + (n === 1 ? ' item' : ' items') + ' to the Trash?';
+				confirmBox.classList.remove('panel-hidden');
+			});
+			document.getElementById('btn-gallery-trash-cancel').addEventListener('click', function () { confirmBox.classList.add('panel-hidden'); });
+			document.getElementById('btn-gallery-trash-confirm').addEventListener('click', function () {
+				var tiles = selected();
+				confirmBox.classList.add('panel-hidden');
+				tiles.forEach(function (t) {
+					t.classList.remove('selected');
+					t.classList.add('thumb-removing');
+					setTimeout(function () { t.remove(); refresh(); }, 350);
+				});
+				refresh();
+			});
+
+			function setAlert(title, detail, pct, done) {
+				document.getElementById('gallery-batch-alert-title').textContent = title;
+				document.getElementById('gallery-batch-alert-detail').textContent = detail;
+				document.getElementById('gallery-batch-progress-fill').style.width = pct + '%';
+				document.getElementById('gallery-batch-progress').setAttribute('aria-valuenow', String(pct));
+				document.getElementById('gallery-batch-alert-actions').hidden = !done;
+				document.getElementById('gallery-batch-progress').hidden = done;
+			}
+			function runConvert(forceFail) {
+				var total = Math.max(selected().length, 1);
+				var step = 0;
+				clearInterval(timer);
+				alertEl.hidden = false;
+				timer = setInterval(function () {
+					step += 1;
+					if (step <= total) {
+						setAlert('Converting ' + step + ' of ' + total + '…', 'Photos → JPEG, videos → MP4. Your originals are not changed.', Math.round((step - 1) / total * 100), false);
+						return;
+					}
+					clearInterval(timer);
+					if (forceFail) {
+						setAlert((total - 1) + ' of ' + total + ' converted · 1 skipped', 'Skipped: 2025/September/IMG_0042.avif (could not be decoded). It stays selected so you can retry.', 100, true);
+					} else {
+						setAlert('All ' + total + ' converted', 'Ready to download as one .zip. Files that were already JPEG / MP4 are included unchanged.', 100, true);
+					}
+				}, 600);
+			}
+			var cpuConfirm = document.getElementById('gallery-cpu-confirm');
+			btnConvert.addEventListener('click', function () {
+				var videos = selected().filter(function (t) { return t.querySelector('.thumb-badge'); }).length;
+				// Only videos that need a re-encode and have no GPU encoder trigger the prompt (photos never do).
+				if (window.wfNoGpuEncoder && videos > 0) {
+					document.getElementById('gallery-cpu-confirm-count').textContent = videos + (videos === 1 ? ' video' : ' videos');
+					confirmBox.classList.add('panel-hidden');
+					cpuConfirm.classList.remove('panel-hidden');
+					return;
+				}
+				runConvert(failNext); failNext = false;
+			});
+			document.getElementById('btn-gallery-cpu-continue').addEventListener('click', function () {
+				cpuConfirm.classList.add('panel-hidden');
+				runConvert(failNext); failNext = false;
+			});
+			document.getElementById('btn-gallery-cpu-cancel').addEventListener('click', function () { cpuConfirm.classList.add('panel-hidden'); });
+			document.getElementById('btn-gallery-batch-dismiss').addEventListener('click', function () { alertEl.hidden = true; });
+
+			// wf-demo controls
+			document.getElementById('btn-wf-batch-fail').addEventListener('click', function () {
+				failNext = true;
+				if (!layout.classList.contains('is-selecting')) setSelecting(true);
+				if (selected().length === 0) view.querySelectorAll('.thumb')[0].classList.add('selected');
+				refresh();
+				btnConvert.click();
+			});
+			document.getElementById('btn-wf-batch-preselect').addEventListener('click', function () {
+				setSelecting(true);
+				view.querySelectorAll('#timeline-view .thumb').forEach(function (t, i) { if (i < 3) t.classList.add('selected'); });
+				refresh();
+			});
+		})();
+
+		document.getElementById('btn-wf-no-gpu').addEventListener('click', function () {
+			window.wfNoGpuEncoder = !window.wfNoGpuEncoder;
+			this.setAttribute('aria-pressed', window.wfNoGpuEncoder ? 'true' : 'false');
+		});
 		var btnTimeline = document.getElementById('btn-timeline');
 		var btnCalendar = document.getElementById('btn-calendar');
 		var timelineView = document.getElementById('timeline-view');

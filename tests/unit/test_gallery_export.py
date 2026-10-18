@@ -6,6 +6,7 @@ from tests.unit.fakes import FakeMediaConverter, FakeMediaProbe
 
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
+from spacemaker.domain.gallery_batch import CpuEncodeConfirmationRequired, VideoExportEncoder
 from spacemaker.domain.gallery_cache_paths import export_cache_path
 from spacemaker.domain.gallery_export import (
 	ExportFormat,
@@ -130,3 +131,67 @@ def test_given_encode_fails_midway_when_export_jpeg_then_no_cache_file_or_partia
 	# then
 	assert not cache.exists()
 	assert list(cache.parent.glob("*")) == []
+
+
+def _video_env(tmp_path, encoder: VideoExportEncoder):
+	library = str(tmp_path / "lib")
+	fs = LocalFileSystem()
+	fs.ensure_library_folders(library)
+	source = fs.library_path(library, LibraryFolder.PROCESSED, "v.av1.mp4")
+	Path(source).write_bytes(b"x" * 100)
+	converter = FakeMediaConverter(friendly_encoder=encoder)
+	return library, converter, ExportFriendlyMedia(fs, converter, FakeMediaProbe())
+
+
+def test_given_no_hardware_but_cpu_when_export_mp4_unconfirmed_then_confirmation_required(tmp_path) -> None:
+	# given
+	library, converter, use_case = _video_env(tmp_path, VideoExportEncoder.CPU_H264)
+	# when
+	# then
+	with pytest.raises(CpuEncodeConfirmationRequired) as info:
+		use_case.run(library, "v.av1.mp4", ExportFormat.H264_AAC)
+	assert info.value.video_count == 1
+	assert converter.encoded_h264 == []
+
+
+def test_given_no_hardware_but_cpu_when_export_mp4_confirmed_then_encodes_on_cpu(tmp_path) -> None:
+	# given
+	library, converter, use_case = _video_env(tmp_path, VideoExportEncoder.CPU_H264)
+	# when
+	result = use_case.run(library, "v.av1.mp4", ExportFormat.H264_AAC, allow_cpu_encode=True)
+	# then
+	assert converter.h264_use_cpu_flags == [True]
+	assert result.skipped_encode is False
+
+
+def test_given_hardware_when_export_mp4_then_no_confirmation_and_not_cpu(tmp_path) -> None:
+	# given
+	library, converter, use_case = _video_env(tmp_path, VideoExportEncoder.HARDWARE_H264)
+	# when
+	use_case.run(library, "v.av1.mp4", ExportFormat.H264_AAC)
+	# then
+	assert converter.h264_use_cpu_flags == [False]
+
+
+def test_given_no_encoder_when_export_mp4_then_error_without_encode(tmp_path) -> None:
+	# given
+	library, converter, use_case = _video_env(tmp_path, VideoExportEncoder.NONE)
+	# when
+	# then
+	with pytest.raises(ValueError, match="not available"):
+		use_case.run(library, "v.av1.mp4", ExportFormat.H264_AAC, allow_cpu_encode=True)
+	assert converter.encoded_h264 == []
+
+
+def test_given_no_hardware_and_friendly_source_when_export_mp4_then_no_prompt(tmp_path) -> None:
+	# given
+	library, converter, use_case = _video_env(tmp_path, VideoExportEncoder.CPU_H264)
+	source = str(Path(library) / "processed" / "v.av1.mp4")
+	use_case._probe.videos[source] = VideoProbe(  # type: ignore[attr-defined]
+		container_ext="mp4", video_codec="h264", audio_codec="aac", bitrate_bps=1_000_000
+	)
+	# when
+	result = use_case.run(library, "v.av1.mp4", ExportFormat.H264_AAC)
+	# then
+	assert result.skipped_encode is True
+	assert converter.encoded_h264 == []

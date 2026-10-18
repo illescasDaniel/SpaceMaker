@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-18 — Gallery batch: send2trash, CPU libx264 behind a confirm, zips in `.exports/.batch`
+
+- **Context:** users need to delete/convert many gallery items at once; deletion must be recoverable and conversion must work without a GPU encoder.
+- **Decision:** `send2trash` (new dependency) behind `TrashPort` with no hard-delete fallback; library convert stays hardware-only, but gallery MP4 export may use `libx264` after a 409 `cpu_confirm_required` confirm (client retries with `allow_cpu_encode`); batch zips live in `.exports/.batch/{job_id}/` with a 24 h sweep and are deleted after download; max 500 items per request.
+- **Rationale:** trash keeps mistakes reversible; the confirm keeps the slow CPU path an explicit choice; the existing `.exports/` cache dir needs no new storage root.
+
 ## 2026-10-06 — jevmem 0.4.0: settings in `~/.jevmem/config.jsonc`, per-project default scope
 
 - **Context:** keys and paths in `.mcp.json` risk being committed, and `${userHome}` expands to `/c:/Users/...` in Cursor on Windows (WinError 123), so the 0.3.1 env-var approach did not work in both editors.

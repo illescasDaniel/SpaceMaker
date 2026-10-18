@@ -13,6 +13,7 @@ from spacemaker.bootstrap.paths import default_library_root, display_user_path
 from spacemaker.bootstrap.ui_shell import UI_SHELL_VERSION
 from spacemaker.domain.app_module import LanSessionKind
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.gallery_batch import VideoExportEncoder
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import LibraryFolder
 from spacemaker.domain.transfer_session import TransferOrigin, TransferSessionItem
@@ -21,7 +22,6 @@ from spacemaker.domain.usb_file_transfer import (
 	shows_iphone_limit_banner,
 	transfer_control_flags,
 )
-from spacemaker.domain.video_encode import HardwareVideoEncoder
 
 
 class SnapshotMixin:
@@ -67,9 +67,10 @@ class SnapshotMixin:
 			}
 		else:
 			base["image_import_issues"] = {"errors": 0, "invalid": 0}
-		base["video_friendly_export_available"] = (
-			self.converter.library_video_encoder() is not HardwareVideoEncoder.NONE
-		)
+		friendly_encoder = self.converter.friendly_video_encoder()
+		base["video_friendly_export_available"] = friendly_encoder is not VideoExportEncoder.NONE
+		# True when MP4 export has no GPU encoder and must ask before using the (slower) CPU.
+		base["video_friendly_export_needs_cpu"] = friendly_encoder is VideoExportEncoder.CPU_H264
 		tools_status = self.managed_tools.status_dict()
 		base["managed_tools"] = tools_status
 		base["tools_ready"] = bool(tools_status.get("all_ready"))

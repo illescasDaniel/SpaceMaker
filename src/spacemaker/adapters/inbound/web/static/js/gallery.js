@@ -1,11 +1,20 @@
 import { apiSend } from "./api.js";
+import { canSaveOnDesktop } from "./desktop-save.js";
 import { encodePathSegments, errorMessage, onClick } from "./dom.js";
-import { shiftGalleryItem, startFriendlyExport, triggerFileDownload } from "./gallery-item.js";
+import {
+	saveItemOnDesktop,
+	setItemCpuConfirmVisible,
+	shiftGalleryItem,
+	startFriendlyExport,
+	triggerFileDownload,
+} from "./gallery-item.js";
+import { bindGallerySelectUi } from "./gallery-select.js";
 import { loadCalendarMonth, loadGallery, removeGalleryItem, shiftCalendarMonth } from "./gallery-timeline.js";
 import { showView } from "./shell.js";
 import { S } from "./state.js";
 
 function bindGalleryUi() {
+	bindGallerySelectUi();
 	const btnTimeline = document.getElementById("btn-timeline");
 	const btnCalendar = document.getElementById("btn-calendar");
 	const timelineView = document.getElementById("timeline-view");
@@ -46,7 +55,12 @@ function bindGalleryUi() {
 		if (!S.galleryItemPath) {
 			return;
 		}
-		triggerFileDownload("/media/" + encodePathSegments(S.galleryItemPath) + "?download=1");
+		const url = "/media/" + encodePathSegments(S.galleryItemPath) + "?download=1";
+		if (canSaveOnDesktop()) {
+			saveItemOnDesktop(url, S.galleryItemPath.split("/").pop() || "download");
+			return;
+		}
+		triggerFileDownload(url);
 	});
 	onClick("btn-gallery-open", () => {
 		if (!S.galleryItemPath) {
@@ -69,6 +83,13 @@ function bindGalleryUi() {
 			return;
 		}
 		startFriendlyExport();
+	});
+	onClick("btn-gallery-item-cpu-continue", () => {
+		setItemCpuConfirmVisible(false);
+		startFriendlyExport(true);
+	});
+	onClick("btn-gallery-item-cpu-cancel", () => {
+		setItemCpuConfirmVisible(false);
 	});
 	onClick("btn-gallery-delete", () => {
 		if (!S.galleryItemPath) {

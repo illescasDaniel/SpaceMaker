@@ -156,3 +156,180 @@ def test_given_desktop_client_when_export_then_poll_reaches_done_and_file_downlo
 	assert job["phase"] == "done"
 	assert job["download_url"] == f"/api/gallery/export/{job['job_id']}/file"
 	assert client.get(job["download_url"]).content == b"\xff\xd8\xff\xd9"
+
+
+def _batch_app(tmp_path, monkeypatch, *, encoder=None):
+	from tests.unit.fakes import FakeTrash
+
+	from spacemaker.domain.gallery_batch import VideoExportEncoder
+
+	app = _library_with_photo(tmp_path, monkeypatch)
+	services = app.state.services
+	processed = tmp_path / "lib" / "processed"
+	(processed / "b.png").write_bytes(b"png")
+	(processed / "v.mov").write_bytes(b"mov")
+
+	def fake_jpeg(source: str, destination: str) -> None:
+		from pathlib import Path
+
+		Path(destination).parent.mkdir(parents=True, exist_ok=True)
+		Path(destination).write_bytes(b"\xff\xd8\xff\xd9")
+
+	cpu_flags: list[bool] = []
+
+	def fake_h264(source: str, destination: str, *, on_progress=None, use_cpu: bool = False) -> None:
+		from pathlib import Path
+
+		cpu_flags.append(use_cpu)
+		Path(destination).parent.mkdir(parents=True, exist_ok=True)
+		Path(destination).write_bytes(b"mp4")
+
+	monkeypatch.setattr(services.converter, "encode_image_to_jpeg", fake_jpeg)
+	monkeypatch.setattr(services.converter, "encode_video_to_h264_aac", fake_h264)
+	monkeypatch.setattr(
+		services.converter, "friendly_video_encoder", lambda: encoder or VideoExportEncoder.HARDWARE_H264
+	)
+	monkeypatch.setattr(services.probe, "probe_video", lambda _path: None)
+	trash = FakeTrash()
+	services.trash_gallery_items._trash = trash
+	return app, trash, cpu_flags
+
+
+def _wait_for_batch(client: TestClient, job_id: str) -> dict[str, object]:
+	import time
+
+	deadline = time.monotonic() + 10
+	while time.monotonic() < deadline:
+		job = client.get(f"/api/gallery/batch/convert/{job_id}").json()
+		if job["phase"] != "running":
+			return job
+		time.sleep(0.05)
+	raise AssertionError("batch never finished")
+
+
+def test_given_selection_when_batch_convert_then_zip_downloads_once_and_is_cleaned_up(tmp_path, monkeypatch) -> None:
+	# given
+	import io
+	import zipfile
+
+	app, _trash, _h264 = _batch_app(tmp_path, monkeypatch)
+	client = TestClient(app)
+	# when
+	started = client.post("/api/gallery/batch/convert", json={"relative_paths": ["a.jpg", "b.png", "v.mov"]})
+	job = _wait_for_batch(client, started.json()["job_id"])
+	download = client.get(job["download_url"])
+	# then
+	assert started.status_code == 200
+	assert job["phase"] == "done"
+	assert str(tmp_path) not in str(job)
+	with zipfile.ZipFile(io.BytesIO(download.content)) as archive:
+		assert sorted(archive.namelist()) == ["a.jpg", "b.png.jpg", "v.mov.mp4"]
+	assert not any((tmp_path / "lib" / ".exports" / ".batch").glob("*/*.zip"))
+	assert client.get(job["download_url"]).status_code == 404
+	assert (tmp_path / "lib" / "processed" / "b.png").read_bytes() == b"png"
+
+
+def test_given_selection_when_batch_download_then_zip_has_stored_bytes_unconverted(tmp_path, monkeypatch) -> None:
+	# given
+	import io
+	import zipfile
+
+	app, _trash, cpu_flags = _batch_app(tmp_path, monkeypatch)
+	client = TestClient(app)
+	# when
+	started = client.post("/api/gallery/batch/download", json={"relative_paths": ["a.jpg", "b.png"]})
+	job = _wait_for_batch(client, started.json()["job_id"])
+	response = client.get(job["download_url"])
+	# then
+	assert job["kind"] == "download"
+	assert response.status_code == 200
+	with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+		assert sorted(archive.namelist()) == ["a.jpg", "b.png"]
+		assert archive.read("b.png") == b"png"
+	assert cpu_flags == []
+
+
+def test_given_unsafe_path_when_batch_download_then_403(tmp_path, monkeypatch) -> None:
+	# given
+	app, _trash, _flags = _batch_app(tmp_path, monkeypatch)
+	client = TestClient(app)
+	# when
+	response = client.post("/api/gallery/batch/download", json={"relative_paths": ["../x.jpg"]})
+	# then
+	assert response.status_code == 403
+
+
+def test_given_unsafe_or_too_many_paths_when_batch_then_rejected_before_work(tmp_path, monkeypatch) -> None:
+	# given
+	app, trash, _h264 = _batch_app(tmp_path, monkeypatch)
+	client = TestClient(app)
+	# when
+	unsafe = client.post("/api/gallery/batch/trash", json={"relative_paths": ["a.jpg", "../outside.jpg"]})
+	too_many = client.post("/api/gallery/batch/convert", json={"relative_paths": [f"{i}.jpg" for i in range(501)]})
+	# then
+	assert unsafe.status_code == 403
+	assert too_many.status_code == 400
+	assert trash.trashed == []
+	assert (tmp_path / "lib" / "processed" / "a.jpg").is_file()
+
+
+def test_given_symlink_escaping_processed_when_batch_trash_then_403_and_nothing_trashed(tmp_path, monkeypatch) -> None:
+	# given
+	app, trash, _h264 = _batch_app(tmp_path, monkeypatch)
+	client = TestClient(app)
+	outside = tmp_path / "outside.jpg"
+	outside.write_bytes(b"secret")
+	(tmp_path / "lib" / "processed" / "link.jpg").symlink_to(outside)
+	# when
+	response = client.post("/api/gallery/batch/trash", json={"relative_paths": ["a.jpg", "link.jpg"]})
+	# then
+	assert response.status_code == 403
+	assert trash.trashed == []
+	assert outside.is_file()
+
+
+def test_given_no_gpu_when_batch_convert_unconfirmed_then_409_and_nothing_starts_then_confirmed_runs_on_cpu(
+	tmp_path, monkeypatch
+) -> None:
+	# given
+	from spacemaker.domain.gallery_batch import VideoExportEncoder
+
+	app, _trash, h264 = _batch_app(tmp_path, monkeypatch, encoder=VideoExportEncoder.CPU_H264)
+	client = TestClient(app)
+	body = {"relative_paths": ["b.png", "v.mov"]}
+	# when
+	refused = client.post("/api/gallery/batch/convert", json=body)
+	confirmed = client.post("/api/gallery/batch/convert", json={**body, "allow_cpu_encode": True})
+	job = _wait_for_batch(client, confirmed.json()["job_id"])
+	# then
+	assert refused.status_code == 409
+	assert refused.json()["detail"] == {"code": "cpu_confirm_required", "video_count": 1}
+	assert confirmed.status_code == 200
+	assert job["phase"] == "done"
+	assert h264 == [True]
+
+
+def test_given_no_gpu_when_single_mp4_export_unconfirmed_then_409(tmp_path, monkeypatch) -> None:
+	# given
+	from spacemaker.domain.gallery_batch import VideoExportEncoder
+
+	app, _trash, h264 = _batch_app(tmp_path, monkeypatch, encoder=VideoExportEncoder.CPU_H264)
+	client = TestClient(app)
+	# when
+	refused = client.post("/api/gallery/export", json={"relative_path": "v.mov", "format": "h264_aac"})
+	# then
+	assert refused.status_code == 409
+	assert h264 == []
+
+
+def test_given_selection_when_batch_trash_then_files_trashed_and_removed_from_gallery(tmp_path, monkeypatch) -> None:
+	# given
+	app, trash, _h264 = _batch_app(tmp_path, monkeypatch)
+	client = TestClient(app)
+	# when
+	response = client.post("/api/gallery/batch/trash", json={"relative_paths": ["a.jpg", "b.png"]})
+	# then
+	assert response.status_code == 200
+	assert [r["outcome"] for r in response.json()["results"]] == ["trashed", "trashed"]
+	assert len(trash.trashed) == 2
+	assert not (tmp_path / "lib" / "processed" / "a.jpg").exists()

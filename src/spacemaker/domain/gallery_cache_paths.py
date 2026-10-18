@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from spacemaker.domain.gallery_export import ExportFormat
-from spacemaker.domain.library_paths import CONVERT_STAGING_DIR_NAME, EXPORTS_DIR_NAME, THUMBNAILS_DIR_NAME
+from spacemaker.domain.library_paths import (
+	BATCH_EXPORTS_DIR_NAME,
+	CONVERT_STAGING_DIR_NAME,
+	EXPORTS_DIR_NAME,
+	THUMBNAILS_DIR_NAME,
+)
 
 
 def _normalize_relative(relative_path: str) -> str:
@@ -49,6 +54,16 @@ def export_cache_path(library_root: str, relative_path: str, export_format: Expo
 	ext = ".jpg" if export_format is ExportFormat.JPEG else ".mp4"
 	rel = _append_cache_extension(relative_path, ext)
 	return str(Path(library_root) / EXPORTS_DIR_NAME / Path(rel))
+
+
+def batch_exports_root(library_root: str) -> str:
+	"""Absolute path of the folder holding gallery batch-convert job folders."""
+	return str(Path(library_root) / EXPORTS_DIR_NAME / BATCH_EXPORTS_DIR_NAME)
+
+
+def batch_export_job_dir(library_root: str, job_id: str) -> str:
+	"""Absolute path of one batch-convert job's folder (its zip lives here; deleted after download / 24 h / restart)."""
+	return str(Path(batch_exports_root(library_root)) / job_id)
 
 
 def export_cache_paths_for_relative(library_root: str, relative_path: str) -> tuple[str, ...]:

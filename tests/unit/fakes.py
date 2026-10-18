@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from spacemaker.domain.gallery import GalleryItem
+from spacemaker.domain.gallery_batch import ArchiveEntry, TrashError, VideoExportEncoder
 from spacemaker.domain.gallery_index import FileStat, GalleryCursor, GalleryIndexRow, GalleryPage
 from spacemaker.domain.gallery_metadata import GalleryDisplayMetadata
 from spacemaker.domain.library import LibraryFolder
@@ -221,9 +222,14 @@ class FakeMediaConverter:
 	encoded_h264: list[tuple[str, str]] = field(default_factory=list)
 	fail_destinations: set[str] = field(default_factory=set)
 	output_sizes: dict[str, int] = field(default_factory=dict)
+	friendly_encoder: VideoExportEncoder = VideoExportEncoder.HARDWARE_H264
+	h264_use_cpu_flags: list[bool] = field(default_factory=list)
 
 	def library_video_encoder(self) -> HardwareVideoEncoder:
 		return self.library_encoder
+
+	def friendly_video_encoder(self) -> VideoExportEncoder:
+		return self.friendly_encoder
 
 	def encode_image_to_avif(self, source: str, destination: str) -> None:
 		if destination in self.fail_destinations:
@@ -238,7 +244,7 @@ class FakeMediaConverter:
 		self._fs.files[destination] = self.output_sizes.get(destination, 50)
 
 	def encode_image_to_jpeg(self, source: str, destination: str) -> None:
-		if destination in self.fail_destinations:
+		if destination in self.fail_destinations or source in self.fail_destinations:
 			raise RuntimeError("encode failed")
 		self.encoded_jpegs.append((source, destination))
 		size = self.output_sizes.get(destination, 50)
@@ -247,13 +253,28 @@ class FakeMediaConverter:
 		dest.parent.mkdir(parents=True, exist_ok=True)
 		dest.write_bytes(b"x" * size)
 
-	def encode_video_to_h264_aac(self, source: str, destination: str, *, on_progress=None) -> None:
-		if destination in self.fail_destinations:
+	@staticmethod
+	def _write_real(destination: str, size: int) -> None:
+		"""Export tests use real tmp dirs; library-convert tests use fake paths that cannot be created."""
+		try:
+			dest = Path(destination)
+			dest.parent.mkdir(parents=True, exist_ok=True)
+			dest.write_bytes(b"x" * size)
+		except OSError:
+			pass
+
+	def encode_video_to_h264_aac(
+		self, source: str, destination: str, *, on_progress=None, use_cpu: bool = False
+	) -> None:
+		if destination in self.fail_destinations or source in self.fail_destinations:
 			raise RuntimeError("encode failed")
 		if on_progress:
 			on_progress(50)
 		self.encoded_h264.append((source, destination))
-		self._fs.files[destination] = self.output_sizes.get(destination, 50)
+		self.h264_use_cpu_flags.append(use_cpu)
+		size = self.output_sizes.get(destination, 50)
+		self._fs.files[destination] = size
+		self._write_real(destination, size)
 		if on_progress:
 			on_progress(100)
 
@@ -334,3 +355,37 @@ class FakeGalleryIndex:
 
 	async def close(self, library_root: str) -> None:
 		self.rows.pop(library_root, None)
+
+
+@dataclass
+class FakeTrash:
+	"""Records trashed paths; ``fail_paths`` raise TrashError and leave the file untouched."""
+
+	trashed: list[str] = field(default_factory=list)
+	fail_paths: set[str] = field(default_factory=set)
+	delete_calls: list[str] = field(default_factory=list)
+
+	def move_to_trash(self, path: str) -> None:
+		if path in self.fail_paths:
+			raise TrashError("trash unavailable")
+		self.trashed.append(path)
+		Path(path).unlink()
+
+
+@dataclass
+class FakeDiskSpace:
+	free: int = 10**12
+
+	def free_bytes(self, path: str) -> int:
+		_ = path
+		return self.free
+
+
+@dataclass
+class FakeArchiveWriter:
+	written: list[tuple[str, list[ArchiveEntry]]] = field(default_factory=list)
+
+	def write_stored_zip(self, destination: str, entries) -> None:
+		self.written.append((destination, list(entries)))
+		Path(destination).parent.mkdir(parents=True, exist_ok=True)
+		Path(destination).write_bytes(b"zip")

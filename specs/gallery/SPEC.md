@@ -258,15 +258,34 @@
 
 - **Given** an AV1 `.av1.mp4` in `processed/` and a **hardware** H.264 encoder available on the host
 - **When** user chooses **Download as MP4**
-- **Then** the server encodes H.264 + AAC MP4 with hardware only (unless already H.264+AAC MP4)
+- **Then** the server encodes H.264 + AAC MP4 with the hardware encoder and no CPU-fallback prompt is shown (unless already H.264+AAC MP4)
 - **And** the result is cached under `.exports/` at the path-mirrored location for that relative path
 - **And** the UI shows export progress in an alert
 - **And** the browser downloads the MP4 when encoding completes
 
-### Scenario: No Download as MP4 without hardware encoder
+### Scenario: Download as MP4 without hardware encoder asks before using the CPU
 
-- **Given** the host has **no** hardware video encoder (no AV1 or H.264 HW)
-- **When** the user opens a gallery video item
+- **Given** the host has **no** hardware H.264 encoder, `libx264` is available, and a video in `processed/` that is not already H.264 + AAC MP4
+- **When** the user opens the item page
+- **Then** **Download as MP4** is shown
+- **When** the user chooses **Download as MP4**
+- **Then** a confirmation says the conversion will be much slower because there is no GPU video encoding, with **Continue** and **Cancel**
+- **And** nothing is encoded until the user chooses **Continue**
+- **When** the user chooses **Cancel**
+- **Then** no job starts and no file is written
+- **When** the user chooses **Continue**
+- **Then** the server encodes H.264 (`libx264`) + AAC MP4 with the usual progress alert and download
+
+### Scenario: No CPU prompt when nothing needs encoding
+
+- **Given** the host has no hardware H.264 encoder
+- **When** the user chooses **Download as MP4** for a video that is already H.264 + AAC MP4, or whose `.exports/` copy is up to date
+- **Then** no confirmation is shown and the file is served immediately
+
+### Scenario: No MP4 export without any H.264 encoder
+
+- **Given** the host has neither a hardware H.264 encoder nor `libx264`
+- **When** the user opens a gallery video item that is not already H.264 + AAC MP4
 - **Then** **Download as MP4** is not shown
 
 ### Scenario: Video without inline preview

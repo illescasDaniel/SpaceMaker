@@ -9,6 +9,8 @@ SKIPPED_LIBRARY_DIR_NAMES: frozenset[str] = frozenset({".thumbnails", ".exports"
 THUMBNAILS_DIR_NAME = ".thumbnails"
 EXPORTS_DIR_NAME = ".exports"
 CONVERT_STAGING_DIR_NAME = ".convert-staging"
+# Inside EXPORTS_DIR_NAME: one folder per gallery batch-convert job holding its zip (see specs/gallery-batch).
+BATCH_EXPORTS_DIR_NAME = ".batch"
 
 
 def skip_library_relative_path(relative: str) -> bool:

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -9,18 +11,28 @@ from typing import IO
 
 from spacemaker.adapters.outbound.media.ffmpeg_encoders import (
 	av1_encoder_ffmpeg_args,
+	cpu_h264_encoder_ffmpeg_args,
+	friendly_video_encoder_from_ffmpeg_encoders,
 	h264_hw_encoder_ffmpeg_args,
 	hardware_video_encoder_from_ffmpeg_encoders,
 )
 from spacemaker.adapters.outbound.media.raw_preview import extract_raw_embedded_jpeg
 from spacemaker.adapters.outbound.media.tool_runner import ToolExecutionError, ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
+from spacemaker.domain.gallery_batch import VideoExportEncoder
 from spacemaker.domain.media import (
 	is_avifenc_native_extension,
 	is_raw_extension,
 	normalize_extension,
 )
 from spacemaker.domain.video_encode import HardwareVideoEncoder
+
+
+BELOW_NORMAL_PRIORITY = 0x00004000  # Windows BELOW_NORMAL_PRIORITY_CLASS; the constant is Windows-only
+
+
+def _lower_priority() -> None:
+	os.nice(10)
 
 
 class SubprocessMediaConverter:
@@ -159,6 +171,12 @@ class SubprocessMediaConverter:
 			)
 		return self._library_encoder
 
+	def friendly_video_encoder(self) -> VideoExportEncoder:
+		return friendly_video_encoder_from_ffmpeg_encoders(
+			self._ffmpeg_encoders_text(),
+			vaapi_render_node=self._vaapi_render_node_available(),
+		)
+
 	def encode_video_to_av1(self, source: str, destination: str) -> None:
 		source_path = str(Path(source).resolve())
 		dest_path = str(Path(destination).resolve())
@@ -202,17 +220,21 @@ class SubprocessMediaConverter:
 		destination: str,
 		*,
 		on_progress: Callable[[int], None] | None = None,
+		use_cpu: bool = False,
 	) -> None:
 		source_path = str(Path(source).resolve())
 		dest_path = str(Path(destination).resolve())
 		Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
 		duration_ms = self._video_duration_ms(source_path)
-		video_encoder = h264_hw_encoder_ffmpeg_args(
-			self._ffmpeg_encoders_text(),
-			vaapi_render_node=self._vaapi_render_node_available(),
-		)
+		if use_cpu:
+			video_encoder = cpu_h264_encoder_ffmpeg_args(self._ffmpeg_encoders_text())
+		else:
+			video_encoder = h264_hw_encoder_ffmpeg_args(
+				self._ffmpeg_encoders_text(),
+				vaapi_render_node=self._vaapi_render_node_available(),
+			)
 		if video_encoder is None:
-			raise RuntimeError("no hardware H.264 encoder available")
+			raise RuntimeError("no H.264 encoder available")
 		args = [
 			"-nostdin",
 			"-hide_banner",
@@ -246,6 +268,9 @@ class SubprocessMediaConverter:
 				stdout=subprocess.PIPE,
 				stderr=stderr_file,
 				text=True,
+				# A CPU encode must not starve the rest of the machine (the web UI included).
+				preexec_fn=_lower_priority if use_cpu and sys.platform != "win32" else None,
+				creationflags=BELOW_NORMAL_PRIORITY if use_cpu and sys.platform == "win32" else 0,
 			)
 			stderr = self._drain_h264_progress(proc, stderr_file, duration_ms, on_progress)
 		finally:

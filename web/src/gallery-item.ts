@@ -1,5 +1,7 @@
-import { apiGet, apiSend } from "./api.ts";
+import { ApiError, apiGet, apiSend } from "./api.ts";
+import { canSaveOnDesktop, saveOnDesktop } from "./desktop-save.ts";
 import { encodePathSegments, isDesktopShell } from "./dom.ts";
+import { isSelected, isSelecting, toggleSelected } from "./gallery-selection.ts";
 import { appendLocation } from "./gps.ts";
 import { showView } from "./shell.ts";
 import { S } from "./state.ts";
@@ -294,7 +296,12 @@ function appendThumbCell(grid: Element, item: GalleryItem): void {
 	const cell = document.createElement("button");
 	const img = document.createElement("img");
 	cell.type = "button";
-	cell.className = "thumb thumb-link";
+	cell.className = isSelected(item.relative_path) ? "thumb thumb-link selected" : "thumb thumb-link";
+	cell.dataset.path = item.relative_path;
+	const check = document.createElement("span");
+	check.className = "thumb-check";
+	check.setAttribute("aria-hidden", "true");
+	cell.appendChild(check);
 	img.src = "/thumbs/" + encodePathSegments(item.relative_path);
 	img.alt = item.relative_path;
 	img.loading = "lazy";
@@ -306,6 +313,11 @@ function appendThumbCell(grid: Element, item: GalleryItem): void {
 		cell.appendChild(badge);
 	}
 	cell.addEventListener("click", () => {
+		// Select mode: a tile click toggles selection and never opens the item page.
+		if (isSelecting()) {
+			toggleSelected(item.relative_path);
+			return;
+		}
 		showGalleryItem(item.relative_path);
 	});
 	grid.appendChild(cell);
@@ -369,6 +381,10 @@ function hideGalleryExportAlert(): void {
 		err.textContent = "";
 	}
 	setGalleryExportProgress(0, "Preparing download…");
+	setItemCpuConfirmVisible(false);
+}
+function setItemCpuConfirmVisible(visible: boolean): void {
+	document.getElementById("gallery-item-cpu-confirm")?.classList.toggle("panel-hidden", !visible);
 }
 function triggerFileDownload(url: string): void {
 	const a = document.createElement("a");
@@ -385,9 +401,39 @@ function deliverFriendlyExport(downloadUrl: string): void {
 		return;
 	}
 	lastDeliveredExportUrl = downloadUrl;
+	const base = (S.galleryItemPath || "download").split("/").pop() || "download";
+	const name = base + (pathLooksLikeVideo(S.galleryItemPath || "") ? ".mp4" : ".jpg");
+	if (canSaveOnDesktop()) {
+		saveItemOnDesktop(downloadUrl, name);
+		return;
+	}
 	setGalleryExportProgress(100, "Download starting…");
 	triggerFileDownload(downloadUrl);
 	setTimeout(hideGalleryExportAlert, 1500);
+}
+/** Desktop webview: native Save dialog, then progress in the item page's alert. Cancelling shows nothing. */
+function saveItemOnDesktop(url: string, suggestedName: string): void {
+	const alertEl = document.getElementById("gallery-export-alert");
+	const err = document.getElementById("gallery-export-error");
+	const show = (percent: number, label: string, error = ""): void => {
+		if (alertEl) {
+			alertEl.hidden = false;
+		}
+		setGalleryExportProgress(percent, label);
+		if (err) {
+			err.hidden = !error;
+			err.textContent = error;
+		}
+	};
+	void saveOnDesktop(url, suggestedName, {
+		onProgress: (percent) => show(percent, "Saving " + suggestedName + "… " + String(percent) + "%"),
+		onDone: (path) => show(100, "Saved", path),
+		onError: (message) => show(0, "Could not save the file", message),
+	}).then((started) => {
+		if (!started) {
+			hideGalleryExportAlert();
+		}
+	});
 }
 function applyGalleryExport(exp: GalleryExportJob | null | undefined): void {
 	if (!exp || exp.relative_path !== S.galleryItemPath) {
@@ -452,7 +498,8 @@ function pollGalleryExport(jobId: string, relativePath: string, token: number): 
 			});
 	}, EXPORT_POLL_MS);
 }
-function startFriendlyExport(): void {
+/** `allowCpuEncode` is true only after the user chose Continue in the CPU-encoding confirm. */
+function startFriendlyExport(allowCpuEncode = false): void {
 	exportPollToken += 1;
 	const token = exportPollToken;
 	const fmt = S.galleryItemKind === "video" ? "h264_aac" : "jpeg";
@@ -462,7 +509,11 @@ function startFriendlyExport(): void {
 	if (alertEl) {
 		alertEl.hidden = false;
 	}
-	apiSend<GalleryExportJob>("POST", "/api/gallery/export", { relative_path: S.galleryItemPath, format: fmt })
+	apiSend<GalleryExportJob>("POST", "/api/gallery/export", {
+		relative_path: S.galleryItemPath,
+		format: fmt,
+		allow_cpu_encode: allowCpuEncode,
+	})
 		.then((job) => {
 			if (token !== exportPollToken) {
 				return;
@@ -473,6 +524,12 @@ function startFriendlyExport(): void {
 			}
 		})
 		.catch((exportErr: unknown) => {
+			if (exportErr instanceof ApiError && exportErr.status === 409 && token === exportPollToken) {
+				// No GPU encoder: nothing started. Ask before using the (much slower) CPU.
+				hideGalleryExportAlert();
+				setItemCpuConfirmVisible(true);
+				return;
+			}
 			const message = exportErr instanceof Error ? exportErr.message : "Export failed.";
 			applyGalleryExport({
 				job_id: "",
@@ -588,7 +645,9 @@ export {
 	refreshGalleryItemNeighbors,
 	renderGalleryItemStage,
 	revealGalleryFull,
+	saveItemOnDesktop,
 	setGalleryExportProgress,
+	setItemCpuConfirmVisible,
 	setStageLoading,
 	setStageMessage,
 	shiftGalleryItem,

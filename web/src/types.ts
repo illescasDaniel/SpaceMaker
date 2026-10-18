@@ -8,6 +8,15 @@ export type JsonObject = { [key: string]: JsonValue };
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+export interface DesktopDownloadProgress {
+	downloaded: number;
+	total: number;
+	percent: number;
+	done: boolean;
+	error: string;
+	path: string;
+}
+
 /** Native file/folder pickers exposed by the pywebview desktop shell (absent in a plain browser tab —
  * every call site guards with `window.pywebview?.api?.<method>` before using it). */
 export interface PywebviewApi {
@@ -17,6 +26,8 @@ export interface PywebviewApi {
 	choose_files?: (current: string) => Promise<string[] | null> | string[] | null;
 	choose_share_folder?: (current: string) => Promise<string | null> | string | null;
 	share_folder_file_count?: (folder: string) => Promise<number> | number;
+	save_download?: (url: string, suggestedName: string) => Promise<string> | string;
+	download_progress?: (downloadId: string) => Promise<DesktopDownloadProgress> | DesktopDownloadProgress;
 	open_external_url?: (url: string) => Promise<boolean> | boolean;
 }
 
@@ -210,6 +221,8 @@ export interface AppSnapshot {
 	usb_transfer_show_open_folder?: boolean;
 	image_import_issues?: { errors: number; invalid: number };
 	video_friendly_export_available?: boolean;
+	/** True when MP4 export has no GPU encoder and must ask before using the CPU. */
+	video_friendly_export_needs_cpu?: boolean;
 	managed_tools?: ManagedToolsStatus;
 	tools_ready?: boolean;
 	tools_downloads_pending?: boolean;
@@ -331,6 +344,37 @@ export interface GalleryExportJob {
 	download_url: string;
 	error: string;
 	skipped_encode: boolean;
+}
+
+/** `spacemaker.domain.gallery_batch.TrashItemResult.to_dict()` (`POST /api/gallery/batch/trash`). */
+export interface BatchTrashResult {
+	relative_path: string;
+	outcome: "trashed" | "already_gone" | "failed";
+	reason: string;
+}
+
+export interface BatchTrashResponse {
+	results: BatchTrashResult[];
+}
+
+/** `spacemaker.domain.gallery_batch.BatchConvertItemResult.to_dict()`. */
+export interface BatchConvertItemResult {
+	relative_path: string;
+	outcome: "converted" | "passed_through" | "skipped";
+	reason: string;
+}
+
+/** `spacemaker.domain.gallery_batch.GalleryBatchConvertJob.to_dict()` (`/api/gallery/batch/convert`). */
+export interface GalleryBatchConvertJob {
+	job_id: string;
+	kind: "convert" | "download";
+	phase: "idle" | "running" | "done" | "error";
+	percent: number;
+	item_count: number;
+	current_index: number;
+	results: BatchConvertItemResult[];
+	download_url: string;
+	error: string;
 }
 
 /** One rendered/collapsed month section of the gallery timeline (client-side windowing state;

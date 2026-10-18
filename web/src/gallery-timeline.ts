@@ -1,5 +1,6 @@
 import { apiSend } from "./api.ts";
 import { appendThumbCell } from "./gallery-item.ts";
+import { resetSelection, toggleGroup } from "./gallery-selection.ts";
 import { monthName } from "./home.ts";
 import { S } from "./state.ts";
 import type {
@@ -31,7 +32,15 @@ function buildGalleryMonthBlockElement(block: GalleryMonthBlock): HTMLElement {
 	}
 	const mLabel = document.createElement("p");
 	mLabel.className = "month-label";
-	mLabel.textContent = monthName(block.month);
+	mLabel.append(monthName(block.month) + " ");
+	const groupSelect = document.createElement("button");
+	groupSelect.type = "button";
+	groupSelect.className = "group-select";
+	groupSelect.textContent = "Select";
+	groupSelect.addEventListener("click", () => {
+		toggleGroup(block.items.map((item) => item.relative_path));
+	});
+	mLabel.appendChild(groupSelect);
 	wrap.appendChild(mLabel);
 	const grid = document.createElement("div");
 	grid.className = "thumb-grid";
@@ -329,6 +338,8 @@ function loadGallery(): void {
 		S.galleryIntersectionObserver = null;
 	}
 	galleryLoadGeneration += 1;
+	// A reload rebuilds every tile, so a selection from the previous load would point at nothing visible.
+	resetSelection();
 	S.galleryMonthBlocks = [];
 	S.galleryNextCursor = null;
 	S.galleryHasMore = true;

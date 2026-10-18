@@ -21,6 +21,7 @@ dependencies = [
 	"qtpy>=2.4.3; sys_platform == 'linux'",
 	"uvicorn>=0.53.0",
 	"websockets>=17.1",
+	"send2trash>=2.1.0",
 ]
 
 [project.scripts]

@@ -51,7 +51,7 @@ Separate from library convert. On-demand when the user chooses **Download as JPE
 
 **Image → JPEG:** ImageMagick `-quality 95`; ExifTool copy all tags from source. No size rollback — quality first.
 
-**Video → MP4:** **Hardware H.264 + AAC** only (same encoder priority as library convert). If no HW H.264 encoder is available, hide **Download as MP4** on the item page. No CPU `libx264`. No size rollback.
+**Video → MP4:** **H.264 + AAC**. Prefer a hardware H.264 encoder (same priority as library convert: h264_nvenc → h264_qsv → h264_vaapi). If none is available, fall back to the CPU encoder `libx264` (+ AAC) **only after the user confirms** an on-screen prompt that the conversion will be much slower (**Continue** / **Cancel**; nothing starts on Cancel). The prompt appears on the item page and once per batch (see [gallery-batch](../../specs/gallery-batch/SPEC.md)); it is never shown when a hardware encoder exists, when the stored file is already friendly, or when an up-to-date `.exports/` copy exists. **Download as MP4** therefore stays visible without a hardware encoder. This CPU fallback applies to gallery export only — library convert stays hardware-only (see above). If the ffmpeg build has no `libx264`, MP4 export is unavailable (hidden on the item page, skipped in batches). No size rollback.
 
 **Skip encode:** if the stored file is already JPEG (image action) or already H.264 + AAC in MP4 (video action), serve the stored file as the download.
 

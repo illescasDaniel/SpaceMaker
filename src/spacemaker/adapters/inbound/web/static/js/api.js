@@ -1,3 +1,15 @@
+/** Non-2xx API response: `status` is the HTTP status and `detail` the raw FastAPI `detail`
+ * (a string, or an object such as `{code: "cpu_confirm_required", video_count: 2}`). */
+export class ApiError extends Error {
+	status;
+	detail;
+	constructor(message, status, detail) {
+		super(message);
+		this.name = "ApiError";
+		this.status = status;
+		this.detail = detail;
+	}
+}
 /** Generic response type defaults to the loose `JsonValue` the server actually promises
  * (every route here returns `dict[str, object]`); callers that know a payload's shape
  * pass it explicitly, e.g. `apiSend<GalleryItemDetail>("GET", ...)`. */
@@ -12,7 +24,7 @@ export async function apiSend(method, path, body) {
 	const data = await response.json().catch(() => ({}));
 	if (!response.ok) {
 		const detail = typeof data === "object" && data !== null && "detail" in data ? data.detail : response.statusText;
-		throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+		throw new ApiError(typeof detail === "string" ? detail : JSON.stringify(detail), response.status, detail);
 	}
 	return data;
 }

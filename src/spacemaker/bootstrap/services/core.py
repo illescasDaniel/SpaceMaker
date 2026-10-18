@@ -11,7 +11,10 @@ from typing import TYPE_CHECKING, Protocol, TypeVar
 from spacemaker.adapters.inbound.web.session import AppSession
 from spacemaker.adapters.outbound.device.factory import device_repository_for
 from spacemaker.adapters.outbound.filesystem.local import LocalFileSystem
+from spacemaker.adapters.outbound.filesystem.send2trash_trash import SystemTrash
 from spacemaker.adapters.outbound.filesystem.sha256_hasher import Sha256ContentHasher
+from spacemaker.adapters.outbound.filesystem.shutil_disk_space import ShutilDiskSpace
+from spacemaker.adapters.outbound.filesystem.zip_archive_writer import StoredZipArchiveWriter
 from spacemaker.adapters.outbound.gallery.sqlite_index import SqliteGalleryIndex
 from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMediaConverter
 from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaProbe
@@ -29,6 +32,7 @@ from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.delete_gallery_item import DeleteGalleryItem
 from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
+from spacemaker.application.export_friendly_media_batch import ExportFriendlyMediaBatch
 from spacemaker.application.extract_media import ExtractMedia
 from spacemaker.application.file_share_manifest import (
 	SharedManifestEntry,
@@ -46,6 +50,7 @@ from spacemaker.application.transfer_session import (
 	StageTransferItem,
 )
 from spacemaker.application.transfer_usb_files import TransferUsbFiles
+from spacemaker.application.trash_gallery_items import TrashGalleryItems
 from spacemaker.bootstrap.bundled_tools import (
 	BundledTool,
 	ensure_host_tool_path_dirs,
@@ -69,6 +74,7 @@ from spacemaker.domain.app_module import LanSessionKind
 from spacemaker.domain.compress_media import CompressMediaPreference, resolve_compress_media_preference
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.extract_control import ExtractJobControl
+from spacemaker.domain.gallery_batch import GalleryBatchConvertJob, TrashItemResult, TrashOutcome
 from spacemaker.domain.gallery_export_job import GalleryExportJob
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import LibraryFolder
@@ -122,6 +128,15 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self.get_gallery_item = GetGalleryItem(self.filesystem, self.probe)
 		self.delete_gallery_item = DeleteGalleryItem(self.filesystem)
 		self.export_friendly = ExportFriendlyMedia(self.filesystem, self.converter, self.probe)
+		self.trash_gallery_items = TrashGalleryItems(self.filesystem, SystemTrash())
+		self.export_friendly_batch = ExportFriendlyMediaBatch(
+			self.export_friendly,
+			self.converter,
+			self.probe,
+			self.filesystem,
+			ShutilDiskSpace(),
+			StoredZipArchiveWriter(),
+		)
 		self.thumbnails = SubprocessThumbnailGenerator(self.runner)
 		self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spacemaker-job")
 		# Friendly exports get their own worker so a long extract + convert can't starve a download.
@@ -129,6 +144,7 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self._device_repos: dict[ConnectionMethod, DeviceRepositoryPort] = {}
 		self._export_jobs: dict[str, GalleryExportJob] = {}
 		self._export_lock = threading.Lock()
+		self._batch_jobs: dict[str, GalleryBatchConvertJob] = {}
 		self._ws_clients: set[WebSocketLike] = set()
 		self._ws_lock = threading.Lock()
 		self._event_loop: asyncio.AbstractEventLoop | None = None
@@ -158,6 +174,8 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self.stage_transfer = StageTransferItem(self.filesystem, self.content_hasher)
 		self.save_transfer_to_documents = SaveTransferItemToDocuments(self.filesystem)
 		self._documents_receive_root = default_documents_receive_root()
+		# Batch zips never survive an app restart (spec: gallery-batch).
+		self.sweep_batch_exports(expire_all=True)
 
 	def devices_for(self, method: ConnectionMethod) -> DeviceRepositoryPort:
 		if method is ConnectionMethod.WIFI:
@@ -207,6 +225,15 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 			await self.gallery_index.remove(library_root, relative_path)
 			self.push_state()
 		return removed
+
+	async def trash_gallery_batch(self, library_root: str, relative_paths: list[str]) -> list[TrashItemResult]:
+		results = await asyncio.to_thread(self.trash_gallery_items.run, library_root, relative_paths)
+		for result in results:
+			if result.outcome in {TrashOutcome.TRASHED, TrashOutcome.ALREADY_GONE}:
+				await self.gallery_index.remove(library_root, result.relative_path)
+		if any(result.outcome is not TrashOutcome.FAILED for result in results):
+			self.push_state()
+		return results
 
 	def run_coro(self, coro: Coroutine[object, object, _T]) -> _T:
 		"""Bridge async gallery-index work from sync code onto an event loop.
