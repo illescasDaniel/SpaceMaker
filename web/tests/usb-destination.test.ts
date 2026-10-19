@@ -107,6 +107,6 @@ describe("destination row", () => {
 		input().dispatchEvent(new Event("change"));
 		// then
 		const sent = (globalThis.fetch as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
-		expect(JSON.parse(String(sent[1].body)).usb_transfer_destination).toBe("/home/u/Phone");
+		expect(JSON.parse(String(sent?.[1].body)).usb_transfer_destination).toBe("/home/u/Phone");
 	});
 });
