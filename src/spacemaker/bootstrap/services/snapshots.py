@@ -108,7 +108,12 @@ class SnapshotMixin:
 		base["usb_transfer_iphone_limit"] = shows_iphone_limit_banner(usb_method)
 		base["usb_transfer_show_open_folder"] = (
 			usb_phase in {JobPhase.DONE, JobPhase.STOPPED} and usb_completed > 0
-		) or self._documents_receive_file_count() > 0
+		) or self._usb_destination_file_count() > 0
+		destination = self.usb_transfer_destination()
+		base["usb_transfer_destination"] = destination
+		base["usb_transfer_destination_display"] = display_user_path(destination, trailing_slash=False)
+		base["usb_transfer_destination_default"] = display_user_path(self._documents_receive_root, trailing_slash=False)
+		base["usb_transfer_destination_custom"] = destination != self._documents_receive_root
 		browse = self._usb_browse_snapshot(usb_method, usb_device_id)
 		base["usb_transfer_browse"] = browse
 		base["extract_extra_paths"] = extract_extras

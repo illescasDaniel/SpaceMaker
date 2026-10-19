@@ -14,6 +14,14 @@ class UserPreferencesPort(Protocol):
 
 	def set_compress_media(self, enabled: bool) -> None: ...
 
+	def get_usb_transfer_destination(self) -> str | None:
+		"""Absolute folder chosen for USB file transfer, or ``None`` for the default."""
+		...
+
+	def set_usb_transfer_destination(self, path: str | None) -> None:
+		"""Store the chosen destination; ``None`` (or empty) restores the default."""
+		...
+
 	def clear(self) -> None:
 		"""Remove all saved preferences (defaults apply on next read)."""
 		...

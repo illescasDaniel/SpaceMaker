@@ -57,3 +57,31 @@ def test_given_other_keys_when_set_compress_media_then_preserves_them(tmp_path):
 	assert prefs.get_compress_media() is False
 	raw = path.read_text(encoding="utf-8")
 	assert '"other"' in raw
+
+
+def test_given_destination_set_when_reloaded_then_persists_and_none_restores_default(tmp_path):
+	# given
+	path = tmp_path / "preferences.json"
+	JsonUserPreferences(path).set_usb_transfer_destination("/data/phone")
+
+	# when
+	reloaded = JsonUserPreferences(path)
+
+	# then
+	assert reloaded.get_usb_transfer_destination() == "/data/phone"
+	reloaded.set_usb_transfer_destination(None)
+	assert reloaded.get_usb_transfer_destination() is None
+
+
+def test_given_destination_and_compress_when_clear_then_both_gone(tmp_path):
+	# given
+	prefs = JsonUserPreferences(tmp_path / "preferences.json")
+	prefs.set_usb_transfer_destination("/data/phone")
+	prefs.set_compress_media(False)
+
+	# when
+	prefs.clear()
+
+	# then
+	assert prefs.get_usb_transfer_destination() is None
+	assert prefs.get_compress_media() is None

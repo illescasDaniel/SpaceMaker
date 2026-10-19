@@ -345,9 +345,14 @@
 				<p class="label" style="margin: 0;">Destination</p>
 				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
 			</div>
-			<input class="field" type="text" id="uft-dest-path" value="" aria-label="Destination folder" readonly />
+			<div class="library-row">
+				<input class="field" type="text" id="uft-dest-path" value="" aria-label="Destination folder" aria-describedby="uft-dest-error" />
+				<button type="button" class="btn btn-secondary" id="btn-uft-dest-browse">Browse…</button>
+				<button type="button" class="btn btn-ghost" id="btn-uft-dest-reset" hidden>Use default</button>
+			</div>
+			<p class="field-error" id="uft-dest-error" hidden>Choose an absolute folder path where files should be saved.</p>
 			<div class="info-panel" id="uft-dest-info-panel" aria-hidden="true">
-				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Android user-storage prefixes (<code>storage/self/primary</code>, <code>storage/emulated/0</code>, <code>sdcard</code>) are stripped so a phone path like <code>…/Download/report.pdf</code> lands as <code>Download/report.pdf</code> — not nested under those mount aliases. Remaining nested folders are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
+				<p>Files are saved under the destination folder — by default <code>~/Documents/SpaceMaker/</code> (same root as Receive files). <strong>Browse…</strong> opens the computer’s folder dialog (desktop app only); you can also type an absolute path. The choice is remembered, like the photo backup library root, and <strong>Use default</strong> restores the default. Android user-storage prefixes (<code>storage/self/primary</code>, <code>storage/emulated/0</code>, <code>sdcard</code>) are stripped so a phone path like <code>…/Download/report.pdf</code> lands as <code>Download/report.pdf</code> — not nested under those mount aliases. Remaining nested folders are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
 			</div>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Mode</p>

@@ -65,6 +65,7 @@ class SettingsBody(BaseModel):
 	transfer_folders: list[str] | None = None
 	transfer_extra_paths: list[str] | None = None
 	compress_media: bool | None = None
+	usb_transfer_destination: str | None = None
 
 
 class UsbTransferExtrasBody(BaseModel):

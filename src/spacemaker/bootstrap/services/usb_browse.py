@@ -100,8 +100,15 @@ class UsbBrowseMixin:
 			self.session.usb_transfer_phase = JobPhase.RUNNING
 			self.session.usb_transfer_progress = JobProgress(0, 0)
 			self.session.last_error = ""
-		dest_root = self._documents_receive_root
-		Path(dest_root).mkdir(parents=True, exist_ok=True)
+		dest_root = self.usb_transfer_destination()
+		try:
+			Path(dest_root).mkdir(parents=True, exist_ok=True)
+		except OSError as exc:
+			with self.session._lock:
+				self.session.usb_transfer_phase = JobPhase.ERROR
+				self.session.last_error = f"Cannot use destination folder: {exc}"
+			self.push_state()
+			return
 		self._usb_transfer_control = ExtractJobControl(on_paused=self._on_usb_transfer_paused)
 		self.push_state()
 		self._usb_transfer_future = self._executor.submit(

@@ -93,6 +93,11 @@ def build_settings_router(services: AppServices) -> APIRouter:
 				JobPhase.RUNNING,
 				JobPhase.PAUSED,
 			} or services.session.usb_transfer_phase in {JobPhase.RUNNING, JobPhase.PAUSED}
+			if not job_active and body.usb_transfer_destination is not None:
+				try:
+					services.set_usb_transfer_destination(body.usb_transfer_destination)
+				except ValueError as exc:
+					raise HTTPException(status_code=400, detail=str(exc)) from exc
 			if not job_active:
 				library_root = normalize_library_root(body.library_root)
 				if library_root and not is_absolute_library_path(library_root):

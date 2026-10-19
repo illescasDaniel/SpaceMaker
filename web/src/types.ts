@@ -269,6 +269,10 @@ export interface AppSnapshot {
 	usb_transfer_available_folders?: string[] | null;
 	usb_transfer_iphone_limit?: boolean;
 	usb_transfer_show_open_folder?: boolean;
+	usb_transfer_destination?: string;
+	usb_transfer_destination_display?: string;
+	usb_transfer_destination_default?: string;
+	usb_transfer_destination_custom?: boolean;
 	image_import_issues?: { errors: number; invalid: number };
 	video_friendly_export_available?: boolean;
 	/** True when MP4 export has no GPU encoder and must ask before using the CPU. */

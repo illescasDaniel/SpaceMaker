@@ -26,6 +26,21 @@ class JsonUserPreferences:
 			data["compress_media"] = bool(enabled)
 			self._write_unlocked(data)
 
+	def get_usb_transfer_destination(self) -> str | None:
+		value = self._read().get("usb_transfer_destination")
+		if isinstance(value, str) and value.strip():
+			return value
+		return None
+
+	def set_usb_transfer_destination(self, path: str | None) -> None:
+		with self._lock:
+			data = self._read_unlocked()
+			if path and path.strip():
+				data["usb_transfer_destination"] = path
+			else:
+				data.pop("usb_transfer_destination", None)
+			self._write_unlocked(data)
+
 	def clear(self) -> None:
 		with self._lock:
 			self._path.parent.mkdir(parents=True, exist_ok=True)

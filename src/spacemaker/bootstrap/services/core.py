@@ -61,6 +61,7 @@ from spacemaker.bootstrap.bundled_tools import (
 from spacemaker.bootstrap.paths import (
 	default_documents_receive_root,
 	default_library_root,
+	is_absolute_library_path,
 	network_passcode_path,
 	normalize_library_root,
 	user_preferences_path,
@@ -212,6 +213,28 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		if not library_root:
 			return {f.value: 0 for f in LibraryFolder}
 		return {f.value: self.filesystem.count_files_in_folder(library_root, f) for f in LibraryFolder}
+
+	def usb_transfer_destination(self) -> str:
+		"""Chosen USB file transfer folder, falling back to the default Documents/SpaceMaker root."""
+		stored = self.user_preferences.get_usb_transfer_destination()
+		if stored and is_absolute_library_path(stored):
+			return normalize_library_root(stored)
+		return default_documents_receive_root()
+
+	def set_usb_transfer_destination(self, path: str) -> None:
+		"""Persist ``path`` (absolute) or restore the default when empty; raises ValueError when relative."""
+		text = normalize_library_root(path) if path.strip() else ""
+		if text and not is_absolute_library_path(text):
+			raise ValueError("destination must be an absolute path")
+		if text and Path(text) == Path(default_documents_receive_root()):
+			text = ""
+		self.user_preferences.set_usb_transfer_destination(text or None)
+
+	def _usb_destination_file_count(self) -> int:
+		root = Path(self.usb_transfer_destination())
+		if not root.is_dir():
+			return 0
+		return sum(1 for path in root.rglob("*") if path.is_file())
 
 	def _documents_receive_file_count(self) -> int:
 		root = Path(self._documents_receive_root)

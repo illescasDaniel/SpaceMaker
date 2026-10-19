@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
 from spacemaker.adapters.inbound.web.client_access import require_loopback
 from spacemaker.adapters.inbound.web.models import UsbTransferExtrasBody
+from spacemaker.adapters.outbound.host.open_paths import reveal_in_file_manager
+from spacemaker.bootstrap.paths import documents_directory
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.domain.connection import ConnectionMethod
 
@@ -27,6 +30,18 @@ def build_usb_transfer_router(services: AppServices) -> APIRouter:
 			raise HTTPException(status_code=400, detail="select at least one folder or Browse source")
 		services.start_usb_transfer()
 		return services.enriched_snapshot()
+
+	@router.post("/api/usb-transfer/open-folder")
+	def usb_transfer_open_folder(request: Request) -> dict[str, bool]:
+		require_loopback(request)
+		target = Path(services.usb_transfer_destination())
+		if not target.is_dir():
+			target = documents_directory()
+		try:
+			reveal_in_file_manager(str(target))
+		except OSError as exc:
+			raise HTTPException(status_code=500, detail=str(exc)) from exc
+		return {"ok": True}
 
 	@router.post("/api/usb-transfer/extras")
 	def usb_transfer_set_extras(request: Request, body: UsbTransferExtrasBody) -> dict[str, object]:

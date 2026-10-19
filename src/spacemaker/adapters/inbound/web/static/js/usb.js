@@ -181,6 +181,73 @@ function refreshUsbTransferDevices(method) {
 			showFormBanner(errorMessage(err, "Could not list devices."), "uft-form-banner");
 		});
 }
+/** Destination edit waiting to be sent with the next settings PUT ("" = restore default); null = leave unchanged. */
+let uftDestPending = null;
+const ABSOLUTE_PATH = /^(\/|[A-Za-z]:[\\/]|\\\\)/;
+function isAbsoluteDestination(value) {
+	return ABSOLUTE_PATH.test(value.trim());
+}
+function setDestinationError(visible) {
+	const err = document.getElementById("uft-dest-error");
+	const input = document.getElementById("uft-dest-path");
+	if (err) {
+		err.hidden = !visible;
+	}
+	input?.setAttribute("aria-invalid", visible ? "true" : "false");
+	const start = document.getElementById("btn-uft-start");
+	if (start instanceof HTMLButtonElement && visible) {
+		start.disabled = true;
+	}
+}
+function commitDestination(value) {
+	uftDestPending = value;
+	pushUsbTransferSettings().catch(() => undefined);
+}
+function bindUsbDestination() {
+	const input = document.getElementById("uft-dest-path");
+	if (!(input instanceof HTMLInputElement)) {
+		return;
+	}
+	input.addEventListener("input", () => {
+		const text = input.value.trim();
+		setDestinationError(text !== "" && !isAbsoluteDestination(text));
+	});
+	input.addEventListener("change", () => {
+		const text = input.value.trim();
+		if (text === "") {
+			setDestinationError(false);
+			commitDestination("");
+		} else if (isAbsoluteDestination(text)) {
+			setDestinationError(false);
+			commitDestination(text);
+		} else {
+			setDestinationError(true);
+		}
+	});
+	onClick("btn-uft-dest-browse", () => {
+		const current = input.value.trim();
+		if (!window.pywebview?.api?.choose_library_folder) {
+			showFormBanner("Browse works in the desktop app. Type an absolute path.", "uft-form-banner");
+			input.focus();
+			return;
+		}
+		Promise.resolve(window.pywebview.api.choose_library_folder(current))
+			.then((path) => {
+				if (path && path !== current) {
+					input.value = path;
+					setDestinationError(false);
+					commitDestination(path);
+				}
+			})
+			.catch(() => {
+				showFormBanner("Could not open the folder picker.", "uft-form-banner");
+			});
+	});
+	onClick("btn-uft-dest-reset", () => {
+		setDestinationError(false);
+		commitDestination("");
+	});
+}
 function pushUsbTransferSettings() {
 	return pushUsbTransferSettingsWithExtras(currentUsbExtraPaths());
 }
@@ -198,8 +265,15 @@ function pushUsbTransferSettingsWithExtras(extras) {
 		transfer_folders: selectedUsbTransferFolders(),
 		transfer_extra_paths: extras || [],
 	};
+	const sentDestination = uftDestPending;
+	if (sentDestination !== null) {
+		body.usb_transfer_destination = sentDestination;
+	}
 	return apiSend("PUT", "/api/settings", body)
 		.then((data) => {
+			if (uftDestPending === sentDestination) {
+				uftDestPending = null;
+			}
 			clearFormBanner("uft-form-banner");
 			applyState(data);
 			return data;
@@ -254,7 +328,20 @@ function updateUsbTransferUi(next) {
 		renderUsbTransferExtras(next.transfer_extra_paths ?? []);
 		syncUsbTransferBrowseUi(next);
 		if (dest instanceof HTMLInputElement) {
-			dest.value = next.documents_receive_root_display || next.documents_receive_root || "";
+			if (document.activeElement !== dest && uftDestPending === null) {
+				dest.value = next.usb_transfer_destination || "";
+				setDestinationError(false);
+			}
+			dest.disabled = transferActive;
+		}
+		const destBrowse = document.getElementById("btn-uft-dest-browse");
+		if (destBrowse instanceof HTMLButtonElement) {
+			destBrowse.disabled = transferActive;
+		}
+		const destReset = document.getElementById("btn-uft-dest-reset");
+		if (destReset instanceof HTMLButtonElement) {
+			destReset.hidden = !next.usb_transfer_destination_custom;
+			destReset.disabled = transferActive;
 		}
 		if (banner) {
 			banner.hidden = !next.usb_transfer_iphone_limit;
@@ -297,7 +384,8 @@ function updateUsbTransferUi(next) {
 		countText.textContent = progress.completed + " files transferred";
 	}
 	if (btnStart instanceof HTMLButtonElement) {
-		btnStart.disabled = !actions.start;
+		const destInvalid = document.getElementById("uft-dest-error")?.hidden === false;
+		btnStart.disabled = !actions.start || destInvalid;
 		btnStart.hidden = phase === "running" || phase === "paused";
 	}
 	if (btnPause instanceof HTMLButtonElement) {
@@ -329,6 +417,7 @@ function updateUsbTransferUi(next) {
 		});
 }
 function bindUsbDesktop() {
+	bindUsbDestination();
 	document.querySelectorAll("#view-usb-file-transfer .connection-toggle button").forEach((btn) => {
 		btn.addEventListener("click", () => {
 			const method = btn.getAttribute("data-uft-method") || "adb";
@@ -415,7 +504,7 @@ function bindUsbDesktop() {
 			});
 	});
 	onClick("btn-uft-open-folder", () => {
-		apiSend("POST", "/api/documents/open-folder").catch((err) => {
+		apiSend("POST", "/api/usb-transfer/open-folder").catch((err) => {
 			showFormBanner(errorMessage(err, "Could not open destination folder."), "uft-form-banner");
 		});
 	});
@@ -424,6 +513,7 @@ function bindUsbDesktop() {
 export {
 	bindUsbDesktop,
 	currentUsbExtraPaths,
+	isAbsoluteDestination,
 	pushUsbTransferSettings,
 	pushUsbTransferSettingsWithExtras,
 	rebuildUsbTransferFolders,
