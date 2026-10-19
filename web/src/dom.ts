@@ -21,18 +21,14 @@ export function errorMessage(err: unknown, fallback: string): string {
 	return err instanceof Error && err.message ? err.message : fallback;
 }
 
-/** Copy text for desktop shells where selection may be unavailable. */
+/**
+ * Copy text for desktop shells where selection may be unavailable. `execCommand("copy")` goes first: it needs
+ * no permission, whereas `navigator.clipboard` makes QtWebEngine raise a permission request that pywebview's
+ * Qt backend answers with an invalid policy type (TypeError), so it is only a fallback.
+ */
 export async function copyTextToClipboard(text: string): Promise<boolean> {
 	if (!text) {
 		return false;
-	}
-	try {
-		if (navigator.clipboard?.writeText) {
-			await navigator.clipboard.writeText(text);
-			return true;
-		}
-	} catch {
-		/* fall through */
 	}
 	const area = document.createElement("textarea");
 	area.value = text;
@@ -48,7 +44,18 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
 		ok = false;
 	}
 	area.remove();
-	return ok;
+	if (ok) {
+		return true;
+	}
+	if (navigator.clipboard && window.isSecureContext) {
+		try {
+			await navigator.clipboard.writeText(text);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+	return false;
 }
 
 export function isAbsolutePath(path: string): boolean {
