@@ -6,7 +6,7 @@ _Last updated: 2026-10-19 (Components Copy button fix, committed)_
 
 ## Current focus
 
-In-app phone file/folder picker (replaces adbfs): wireframe approved 2026-10-19; Phase 1 spec `specs/device-file-picker/SPEC.md` drafted (design decisions proposed) — awaiting spec approval; no code yet.
+In-app phone file/folder picker (replaces adbfs): wireframe approved 2026-10-19; spec approved 2026-10-19; Phase 2 types+ports added (`domain/device_browse.py`, `DeviceRepositoryPort.list_directory`, `application/list_device_directory.py` stub) — awaiting architecture approval.
 
 Previous:
 

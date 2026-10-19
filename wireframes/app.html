@@ -4697,7 +4697,7 @@
 			function d(name, mtime) { return { name: name, dir: true, size: 0, mtime: mtime || '2026-09-12' }; }
 			function f(name, size, mtime, media) { return { name: name, dir: false, size: size, mtime: mtime || '2026-09-12', media: media !== false }; }
 			var big = [];
-			for (var i = 1; i <= 3412; i += 1) { big.push(f('IMG_' + String(20260000 + i) + '.jpg', 3.1 * M + (i % 7) * 200 * K, '2026-08-' + String(1 + (i % 28)).padStart(2, '0'))); }
+			for (let i = 1; i <= 3412; i += 1) { big.push(f('IMG_' + String(20260000 + i) + '.jpg', 3.1 * M + (i % 7) * 200 * K, '2026-08-' + String(1 + (i % 28)).padStart(2, '0'))); }
 			var tree = {
 				'': [d('Alarms'), d('Android'), d('DCIM'), d('Documents'), d('Download', '2026-10-17'), d('Movies'), d('Music'), d('Pictures'), d('WhatsApp'), d('.thumbnails'), f('.nomedia', 0, '2025-01-04', false), f('notes.txt', 2 * K, '2026-10-01', false)],
 				'Android': [d('data'), d('media'), d('obb')],
@@ -4965,9 +4965,9 @@
 			stateEl.addEventListener('click', function (ev) {
 				var act = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-dp-act');
 				if (act === 'up') {
-					var parts = cwd.split('/');
-					parts.pop();
-					go(parts.join('/'));
+					const upParts = cwd.split('/');
+					upParts.pop();
+					go(upParts.join('/'));
 				} else if (act === 'retry') {
 					go(cwd);
 				}

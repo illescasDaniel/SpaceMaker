@@ -188,7 +188,9 @@ class ExportFriendlyMediaBatch:
 		self, library_root: str, job_id: str, results: list[BatchConvertItemResult]
 	) -> BatchConvertResult:
 		dated = [
-			r if r.outcome is BatchConvertOutcome.SKIPPED else replace(r, captured_at=self._captured_at(library_root, r))
+			r
+			if r.outcome is BatchConvertOutcome.SKIPPED
+			else replace(r, captured_at=self._captured_at(library_root, r))
 			for r in results
 		]
 		named = {r.relative_path: r for r in assign_zip_entry_names(dated)}
@@ -202,10 +204,7 @@ class ExportFriendlyMediaBatch:
 
 	def _captured_at(self, library_root: str, result: BatchConvertItemResult) -> datetime:
 		source = self._filesystem.library_path(library_root, LibraryFolder.PROCESSED, result.relative_path)
-		return (
-			self._probe.captured_at(source)
-			or datetime.fromtimestamp(self._filesystem.file_stat(source).mtime)
-		)
+		return self._probe.captured_at(source) or datetime.fromtimestamp(self._filesystem.file_stat(source).mtime)
 
 	def _convert_one(
 		self,

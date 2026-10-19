@@ -4,7 +4,7 @@
 
 - **Feature:** An in-app screen that browses a USB-connected phone one directory at a time and returns picked folders/files to its caller. Replaces the adbfs FUSE mount + native OS dialog.
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-device-picker`; entry points `#btn-uft-add-files` / `#btn-uft-add-folder` in `#view-usb-file-transfer` and `#btn-wz-add-folder` / `#btn-wz-add-files` in the USB photo backup Step 1. **Wireframe approved** 2026-10-19 (iPhone uses the same picker; photo backup gets Add folder + Add files; adbfs removed).
-- **Spec approved:** _pending_
+- **Spec approved:** 2026-10-19
 - **Callers:** [usb-file-transfer](../usb-file-transfer/SPEC.md) (**Add files…** / **Add folder…**), [extract-media](../extract-media/SPEC.md) / [main-wizard](../main-wizard/SPEC.md) Step 1 for ADB and iPhone USB (**Add folder…** / **Add files…**)
 - **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> DeviceDirectoryPage`; domain `DeviceEntry`
 - **Supersedes:** adbfs mount path in usb-file-transfer (“Mount backends”), `adbfs` in [packaging](../packaging/SPEC.md), `docs/legal/THIRD_PARTY_TOOLS.md`
