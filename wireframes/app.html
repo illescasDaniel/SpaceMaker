@@ -706,6 +706,11 @@
 			transition: width var(--dur-base) var(--ease-standard);
 		}
 
+		.library-row { display: flex; gap: 0.5rem; align-items: stretch; }
+		.library-row .field { flex: 1; min-width: 0; }
+		.field-error { font-size: 0.8rem; color: var(--error); margin: 0.25rem 0 0; }
+		.field-error[hidden] { display: none; }
+		.field[aria-invalid="true"] { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
 		.folder-hint {
 			font-size: 0.8rem;
 			color: var(--muted);
@@ -2849,9 +2854,15 @@
 				<p class="label" style="margin: 0;">Destination</p>
 				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
 			</div>
-			<input class="field" type="text" value="/home/user/Documents/SpaceMaker" aria-label="Destination folder" readonly />
+			<div class="library-row">
+				<input class="field" type="text" id="uft-dest-input" value="/home/user/Documents/SpaceMaker" aria-label="Destination folder" aria-describedby="uft-dest-error" />
+				<button type="button" class="btn btn-secondary" id="btn-uft-dest-browse">Browse…</button>
+				<button type="button" class="btn btn-ghost" id="btn-uft-dest-reset" hidden>Use default</button>
+			</div>
+			<p class="field-error" id="uft-dest-error" hidden>Choose an absolute folder path where files should be saved.</p>
+			<p class="folder-hint" id="uft-dest-hint">Default: <code>~/Documents/SpaceMaker</code>. Your choice is remembered.</p>
 			<div class="info-panel" id="uft-dest-info-panel" aria-hidden="true">
-				<p>Files are saved under <code>~/Documents/SpaceMaker/</code> (same root as Receive files). Android user-storage prefixes (<code>storage/self/primary</code>, <code>storage/emulated/0</code>, <code>sdcard</code>) are stripped so a phone path like <code>…/Download/report.pdf</code> lands as <code>Download/report.pdf</code> — not nested under those mount aliases. Remaining nested folders are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
+				<p>Files are saved under the destination folder — by default <code>~/Documents/SpaceMaker/</code> (same root as Receive files). <strong>Browse…</strong> opens the computer’s folder dialog (desktop app only); you can also type an absolute path. The choice is remembered, like the photo backup library root, and <strong>Use default</strong> restores the default. Android user-storage prefixes (<code>storage/self/primary</code>, <code>storage/emulated/0</code>, <code>sdcard</code>) are stripped so a phone path like <code>…/Download/report.pdf</code> lands as <code>Download/report.pdf</code> — not nested under those mount aliases. Remaining nested folders are preserved. No <code>originals/</code> folder and no convert pipeline — files land as-is.</p>
 			</div>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Mode</p>
@@ -2893,6 +2904,8 @@
 				<button type="button" id="btn-uft-demo-add-extra">Add sample file pick</button>
 				<button type="button" id="btn-uft-demo-add-folder-extra">Add sample folder pick</button>
 				<button type="button" id="btn-uft-demo-no-presets">Simulate no preset folders</button>
+				<button type="button" id="btn-uft-demo-dest-custom">Simulate custom destination</button>
+				<button type="button" id="btn-uft-demo-dest-invalid">Simulate invalid destination</button>
 			</p>
 		</article>
 	</section>
@@ -4685,8 +4698,34 @@
 				setPresetsHtml('<legend class="sr-only">Device folders that exist on this phone</legend>', true);
 			});
 			document.getElementById('btn-uft-open-folder').addEventListener('click', function () {
-				alert('Wireframe: open ~/Documents/SpaceMaker/ in file manager');
+				alert('Wireframe: open the destination folder in the file manager');
 			});
+			(function () {
+				var destInput = document.getElementById('uft-dest-input');
+				var destErr = document.getElementById('uft-dest-error');
+				var destReset = document.getElementById('btn-uft-dest-reset');
+				var DEFAULT_DEST = '/home/user/Documents/SpaceMaker';
+				function syncDest() {
+					var v = destInput.value.trim();
+					var bad = v !== '' && v.charAt(0) !== '/';
+					destErr.hidden = !bad;
+					destInput.setAttribute('aria-invalid', bad ? 'true' : 'false');
+					destReset.hidden = v === DEFAULT_DEST;
+					document.getElementById('btn-uft-start').disabled = bad || v === '';
+				}
+				destInput.addEventListener('input', syncDest);
+				document.getElementById('btn-uft-dest-browse').addEventListener('click', function () {
+					destInput.value = '/home/user/Backups/Phone files';
+					syncDest();
+				});
+				destReset.addEventListener('click', function () { destInput.value = DEFAULT_DEST; syncDest(); });
+				document.getElementById('btn-uft-demo-dest-custom').addEventListener('click', function () {
+					destInput.value = '/home/user/Backups/Phone files'; syncDest();
+				});
+				document.getElementById('btn-uft-demo-dest-invalid').addEventListener('click', function () {
+					destInput.value = 'Backups/phone'; syncDest();
+				});
+			})();
 			setMethod('adb');
 			renderExtras();
 		})();

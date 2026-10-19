@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SpaceMaker — Desktop only (wireframe)</title>
+	<style>
+		:root {
+			--bg: #f7f8fa;
+			--surface: #ffffff;
+			--surface2: #eef1f5;
+			--border: #dde2ea;
+			--text: #1a2332;
+			--muted: #5c6b82;
+			--accent: #228be6;
+			--accent-dim: #1c7ed6;
+			--warn: #e67700;
+			--error: #e03131;
+			--radius: 12px;
+			--font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #0f1419;
+				--surface: #1a2332;
+				--surface2: #243044;
+				--border: #3d4f6f;
+				--text: #e8eef7;
+				--muted: #8b9cb3;
+				--accent: #4dabf7;
+				--accent-dim: #228be6;
+				--warn: #fcc419;
+				--error: #ff6b6b;
+			}
+		}
+		:root {
+			--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+			--dur-fast: 120ms;
+			--dur-base: 200ms;
+		}
+		@media (prefers-reduced-motion: reduce) {
+			:root { --dur-fast: 0.001ms; --dur-base: 0.001ms; }
+		}
+		* { box-sizing: border-box; }
+		body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+		.wireframe-banner {
+			background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+			color: var(--accent-dim);
+			text-align: center;
+			padding: 0.5rem 1rem;
+			font-size: 0.8rem;
+			border-bottom: 1px solid var(--border);
+		}
+		.page { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+		.logo { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.35rem; }
+		.logo span { color: var(--accent); }
+		.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+		.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+		.card label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; }
+		.card input {
+			width: 100%;
+			font: inherit;
+			padding: 0.6rem 0.75rem;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--bg);
+			color: var(--text);
+		}
+		.card input:disabled { opacity: 0.5; }
+		.btn {
+			width: 100%;
+			margin-top: 0.75rem;
+			font: inherit;
+			font-weight: 600;
+			border: none;
+			border-radius: 8px;
+			padding: 0.65rem;
+			background: var(--accent-dim);
+			color: #fff;
+			cursor: pointer;
+			transition: transform var(--dur-fast) var(--ease-standard), opacity var(--dur-base) var(--ease-standard);
+		}
+		.btn:active:not(:disabled) { transform: scale(0.97); }
+		.btn:disabled { opacity: 0.5; cursor: default; }
+		.msg { margin: 0.6rem 0 0; font-size: 0.85rem; min-height: 1.3em; }
+		.msg.error { color: var(--error); }
+		.msg.wait { color: var(--warn); }
+		.hint { margin: 0.9rem 0 0; font-size: 0.8rem; color: var(--muted); }
+		.wf-demo { margin-top: 1.25rem; font-size: 0.75rem; color: var(--muted); }
+		.wf-demo button { font: inherit; font-size: 0.75rem; margin: 0 0.25rem 0.25rem 0; }
+		.wf-note {
+			margin: 1rem 0 0;
+			padding: 0.65rem 0.85rem;
+			font-size: 0.8rem;
+			color: var(--muted);
+			background: var(--surface2);
+			border: 1px dashed var(--warn);
+			border-radius: 8px;
+		}
+		.wf-note-badge {
+			display: inline-block;
+			margin-right: 0.4rem;
+			padding: 0.05rem 0.45rem;
+			border-radius: 4px;
+			font-size: 0.68rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			color: #1a1400;
+			background: var(--warn);
+		}
+	</style>
+</head>
+<body>
+	<div class="wireframe-banner">Wireframe — phone/LAN page shown when a device on the network opens the SpaceMaker address (<code>/</code>) or any control screen</div>
+	<main class="page">
+		<h1 class="logo">Space<span>Maker</span></h1>
+		<p class="sub">SpaceMaker is controlled from the computer it is running on.</p>
+		<section class="card" id="lan-card">
+			<p class="lead">This device can open the photo gallery and the upload / download pages shared by QR code. Everything else is on the computer.</p>
+			<a class="btn" id="btn-open-gallery" href="#gallery">Open gallery</a>
+			<p class="hint" id="hint-pc">To change settings or back up a phone, open SpaceMaker on the computer.</p>
+		</section>
+
+		<div class="wf-demo">
+			Wireframe demo:
+			<button type="button" data-demo="normal">Normal</button>
+			<button type="button" data-demo="locked">Passcode set, not signed in (unlock page instead)</button>
+		</div>
+		<aside class="wf-note" data-for="reviewer">
+			<span class="wf-note-badge">Review only</span>
+			Replaces today’s “Use the QR codes on your PC…” card. “Open gallery” goes to <code>/gallery</code> (same login rules as the gallery QR). With a passcode set and no login, the existing unlock page is shown first (see phone-unlock.html). The computer’s own browser at the same address still gets the full SpaceMaker app, including in <code>--server-only</code> mode.
+		</aside>
+		<aside class="wf-note" data-for="agent">
+			<span class="wf-note-badge">Agent note</span>
+			Keep the .lead and .hint copy; the button is a plain link to /gallery. Do not ship the demo buttons.
+		</aside>
+	</main>
+	<style>
+		.lead { margin: 0 0 0.25rem; font-size: 0.95rem; }
+		a.btn { display: block; text-align: center; text-decoration: none; }
+	</style>
+	<script>
+		const card = document.getElementById('lan-card');
+		document.querySelectorAll('[data-demo]').forEach((b) => {
+			b.addEventListener('click', () => {
+				card.style.opacity = b.dataset.demo === 'locked' ? '0.4' : '1';
+			});
+		});
+	</script>
+</body>
+</html>

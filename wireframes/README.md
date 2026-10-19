@@ -26,6 +26,7 @@ Striped dashed boxes = wireframe-only. If it isn’t labeled Tip / Review only /
 | [phone-share.html](phone-share.html) | Phone web page: download list (Send files QR) |
 | [phone-transfer.html](phone-transfer.html) | Phone web page: shared temporary upload + download (Transfer files QR) |
 | [phone-unlock.html](phone-unlock.html) | Phone web page: passcode prompt when the network passcode is set |
+| [phone-desktop-only.html](phone-desktop-only.html) | Phone/LAN page at `/`: SpaceMaker is controlled from the computer; link to the gallery |
 
 Open in any browser:
 
