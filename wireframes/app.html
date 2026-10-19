@@ -436,6 +436,205 @@
 			margin: 0.4rem 0 0;
 		}
 
+
+		/* Phone file picker (in-app screen; lists the device over adb shell / AFC, no FUSE mount) */
+		#view-device-picker.screen {
+			max-width: 40rem;
+			width: 100%;
+		}
+
+		#view-device-picker .wizard-intro {
+			max-width: none;
+			margin-bottom: 1rem;
+		}
+
+		.dp-card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			padding: 1rem;
+			display: flex;
+			flex-direction: column;
+			gap: 0.65rem;
+		}
+
+		.dp-device-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+		}
+
+		.dp-device-row .device-status { margin: 0; flex: 1; min-width: 12rem; }
+
+		.dp-trail {
+			display: flex;
+			align-items: center;
+			flex-wrap: wrap;
+			gap: 0.25rem;
+			font-size: 0.9rem;
+			min-width: 0;
+		}
+
+		.dp-trail button {
+			font: inherit;
+			background: none;
+			border: none;
+			padding: 0.15rem 0.2rem;
+			color: var(--accent);
+			cursor: pointer;
+			border-radius: 4px;
+		}
+
+		.dp-trail button:hover { text-decoration: underline; }
+		.dp-trail .dp-trail-current { font-weight: 700; color: var(--text); padding: 0.15rem 0.2rem; }
+		.dp-trail .dp-sep { color: var(--muted); }
+
+		.dp-toolbar {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+		}
+
+		.dp-toolbar .btn { margin-top: 0; padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+		.dp-toolbar input.field { flex: 1; min-width: 8rem; width: auto; border-style: solid; }
+
+		.dp-toggle {
+			display: flex;
+			align-items: center;
+			gap: 0.35rem;
+			font-size: 0.85rem;
+			color: var(--muted);
+			cursor: pointer;
+			white-space: nowrap;
+		}
+
+		.dp-list-wrap {
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			overflow: hidden;
+			background: var(--surface);
+		}
+
+		.dp-head,
+		.dp-row {
+			display: grid;
+			grid-template-columns: 1.6rem minmax(0, 1fr) 5rem 7.5rem;
+			align-items: center;
+			gap: 0.5rem;
+			padding: 0.45rem 0.65rem;
+			font-size: 0.88rem;
+		}
+
+		.dp-head {
+			background: var(--surface2);
+			color: var(--muted);
+			font-size: 0.78rem;
+			font-weight: 600;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.dp-list {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			max-height: 22rem;
+			overflow-y: auto;
+		}
+
+		.dp-row { border-bottom: 1px solid var(--border); }
+		.dp-row:last-child { border-bottom: none; }
+		.dp-row:hover { background: var(--surface2); }
+		.dp-row.is-selected { background: rgba(77, 171, 247, 0.12); }
+		.dp-row.is-hidden-file .dp-name { opacity: 0.65; }
+
+		.dp-row input[type="checkbox"] { margin: 0; width: 1rem; height: 1rem; cursor: pointer; }
+
+		.dp-name {
+			display: flex;
+			align-items: center;
+			gap: 0.45rem;
+			min-width: 0;
+			font: inherit;
+			text-align: left;
+			background: none;
+			border: none;
+			padding: 0.1rem 0;
+			color: var(--text);
+		}
+
+		.dp-name .dp-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		button.dp-name { cursor: pointer; }
+		button.dp-name:hover .dp-label { color: var(--accent); text-decoration: underline; }
+		.dp-ico { flex-shrink: 0; width: 1.1rem; text-align: center; }
+		.dp-size, .dp-date { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+		.dp-size { text-align: right; }
+
+		.dp-more {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+			padding: 0.5rem 0.65rem;
+			border-top: 1px solid var(--border);
+			background: var(--surface2);
+			font-size: 0.82rem;
+			color: var(--muted);
+		}
+
+		.dp-more[hidden], .dp-state[hidden], .dp-list[hidden], .dp-head[hidden] { display: none; }
+
+		.dp-more .btn { margin-top: 0; padding: 0.3rem 0.7rem; font-size: 0.82rem; }
+
+		.dp-state {
+			padding: 1.75rem 1rem;
+			text-align: center;
+			color: var(--muted);
+			font-size: 0.9rem;
+		}
+
+		.dp-state strong { display: block; color: var(--text); margin-bottom: 0.25rem; font-size: 1rem; }
+		.dp-state .btn { margin-top: 0.75rem; }
+
+		.dp-spinner {
+			width: 1.4rem;
+			height: 1.4rem;
+			margin: 0 auto 0.6rem;
+			border: 3px solid var(--border);
+			border-top-color: var(--accent);
+			border-radius: 50%;
+			animation: dp-spin 0.8s linear infinite;
+		}
+
+		@keyframes dp-spin { to { transform: rotate(360deg); } }
+		@media (prefers-reduced-motion: reduce) { .dp-spinner { animation: none; } }
+
+		.dp-footer {
+			position: sticky;
+			bottom: 0;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+			padding: 0.65rem 0.85rem;
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			background: var(--surface);
+			margin-top: 0.75rem;
+		}
+
+		.dp-footer .dp-count { font-size: 0.9rem; font-weight: 600; }
+		.dp-footer .dp-footer-actions { display: flex; gap: 0.5rem; }
+		.dp-footer .btn { margin-top: 0; }
+
+		@media (max-width: 520px) {
+			.dp-head, .dp-row { grid-template-columns: 1.6rem minmax(0, 1fr) 4.2rem; }
+			.dp-date { display: none; }
+		}
+
 		.extract-actions {
 			display: flex;
 			flex-wrap: wrap;
@@ -528,6 +727,8 @@
 			font-size: 0.85rem;
 			margin-top: 0.5rem;
 		}
+
+		.alert[hidden] { display: none; }
 
 		.alert-warn {
 			background: var(--warn-bg);
@@ -2600,7 +2801,7 @@
 			</fieldset>
 			<div class="info-panel" id="uft-connection-info-panel" aria-hidden="true">
 				<h4>ADB (cable) — Android default</h4>
-				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move. <strong>Add files…</strong> / <strong>Add folder…</strong> need <code>adbfs</code> on PATH (e.g. AUR <code>adbfs-rootless-git</code>).</p>
+				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move. <strong>Add files…</strong> / <strong>Add folder…</strong> open SpaceMaker’s own phone browser — nothing extra to install.</p>
 				<h4>iPhone (USB)</h4>
 				<p><strong>Linux only</strong> in this release (Apple File Conduit / AFC via <code>usbmuxd</code>, <code>libimobiledevice</code>, <code>ifuse</code>). Unlock, tap <strong>Trust</strong>, keep unlocked. Access is limited — mostly <strong>Camera (DCIM)</strong>; other app sandboxes are not exposed. Files copy as-is (no HEIC→JPEG convert here).</p>
 			</div>
@@ -2626,7 +2827,7 @@
 				<button type="button" class="info-btn" id="btn-uft-folders-info" title="Preset folders and Add files/folder" aria-expanded="false" aria-controls="uft-folders-info-panel">i</button>
 			</div>
 			<div class="info-panel" id="uft-folders-info-panel" aria-hidden="true">
-				<p>Common folders appear only when they exist on the phone. <strong>Add files…</strong> and <strong>Add folder…</strong> open the system file dialog at the phone mount (flattened to user storage — you see <code>Download</code>, <code>DCIM</code>, etc., not <code>storage/self/primary</code>). Each pick is added below as a removable extra. Needs a mount: ADB with <code>adbfs</code>, or iPhone <code>ifuse</code>.</p>
+				<p>Common folders appear only when they exist on the phone. <strong>Add files…</strong> and <strong>Add folder…</strong> open the in-app phone browser (starts at <em>Phone storage</em> — you see <code>Download</code>, <code>DCIM</code>, etc., not <code>/sdcard</code>). Each pick is added below as a removable extra. Works on Linux, macOS and Windows, and from a phone browser in <code>--server-only</code> mode — no mount, no native dialog.</p>
 			</div>
 			<fieldset class="folder-picker" id="uft-folder-picker">
 				<legend class="sr-only">Device folders that exist on this phone</legend>
@@ -2643,7 +2844,7 @@
 				<button type="button" class="btn btn-secondary" id="btn-uft-add-files">Add files…</button>
 				<button type="button" class="btn btn-secondary" id="btn-uft-add-folder">Add folder…</button>
 			</div>
-			<p class="folder-hint uft-browse-hint panel-hidden" id="uft-browse-unavailable">Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.</p>
+			<p class="folder-hint uft-browse-hint panel-hidden" id="uft-browse-unavailable">Add files/folder needs a connected, authorized device. Plug in the phone and accept the USB debugging prompt.</p>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Destination</p>
 				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
@@ -2687,13 +2888,84 @@
 				Wireframe demo:
 				<button type="button" id="btn-uft-demo-progress">Simulate transfer progress</button>
 				<button type="button" id="btn-uft-demo-done">Mark transfer done</button>
-				<button type="button" id="btn-uft-demo-no-mount">Simulate no mount (Add off)</button>
-				<button type="button" id="btn-uft-demo-mount-ok">Simulate mount OK</button>
+				<button type="button" id="btn-uft-demo-no-mount">Simulate no device (Add off)</button>
+				<button type="button" id="btn-uft-demo-mount-ok">Simulate device ready</button>
 				<button type="button" id="btn-uft-demo-add-extra">Add sample file pick</button>
 				<button type="button" id="btn-uft-demo-add-folder-extra">Add sample folder pick</button>
 				<button type="button" id="btn-uft-demo-no-presets">Simulate no preset folders</button>
 			</p>
 		</article>
+	</section>
+
+	<!-- PHONE FILE PICKER — in-app screen reached from USB file transfer (Add files/folder) and USB photo backup Step 1 (Add folder/files) -->
+	<section id="view-device-picker" class="screen" aria-label="Pick from phone">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<button type="button" class="breadcrumb-home" id="dp-bc-origin">USB file transfer</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current" id="dp-bc-title">Pick from phone</span>
+		</nav>
+		<p class="wizard-intro" id="dp-intro">
+			Browse the phone and tick what to add. Nothing is copied yet — picks go back to the previous screen as removable sources.
+		</p>
+
+		<article class="dp-card" aria-labelledby="dp-title">
+			<div class="dp-device-row">
+				<h2 class="step-title" id="dp-title" style="margin: 0;">Phone storage</h2>
+				<button type="button" class="info-btn" id="btn-dp-info" title="How the phone browser works" aria-expanded="false" aria-controls="dp-info-panel">i</button>
+			</div>
+			<div class="info-panel" id="dp-info-panel" aria-hidden="true">
+				<p>Folders are listed one at a time straight from the phone (<code>adb shell</code> for Android) — nothing is mounted, nothing is downloaded, and big folders like Camera load a page at a time. This is a normal SpaceMaker screen, so it works the same on Linux, macOS and Windows, and from a phone browser in <code>--server-only</code> mode. Ticking a folder adds the whole folder (sub-folders included) when you start the transfer; it is not expanded here.</p>
+			</div>
+			<div class="alert alert-warn" id="dp-media-note" hidden>
+				<span class="alert-icon" aria-hidden="true">ⓘ</span>
+				<div>Photo backup only extracts photos and videos. Other files inside a ticked folder are skipped (non-media files are greyed out here).</div>
+			</div>
+			<div class="field device-status connected" id="dp-device-status">
+				<span class="status-dot" aria-hidden="true"></span>
+				<span id="dp-device-status-text">Pixel 8 · Connected via ADB</span>
+			</div>
+
+			<nav class="dp-trail" id="dp-trail" aria-label="Phone folder path"></nav>
+
+			<div class="dp-toolbar">
+				<button type="button" class="btn btn-secondary" id="btn-dp-up">↑ Up</button>
+				<button type="button" class="btn btn-secondary" id="btn-dp-select-folder">Select this folder</button>
+				<input class="field" type="search" id="dp-filter" placeholder="Filter this folder by name" aria-label="Filter this folder by name" />
+				<label class="dp-toggle"><input type="checkbox" id="dp-hidden-toggle" /> Show hidden</label>
+			</div>
+
+			<div class="dp-list-wrap" id="dp-list-wrap">
+				<div class="dp-head" aria-hidden="true"><span></span><span>Name</span><span style="text-align: right;">Size</span><span class="dp-date">Modified</span></div>
+				<ul class="dp-list" id="dp-list" aria-label="Phone folder contents"></ul>
+				<div class="dp-state" id="dp-state" hidden></div>
+				<div class="dp-more" id="dp-more" hidden>
+					<span id="dp-more-text"></span>
+					<button type="button" class="btn btn-secondary" id="btn-dp-more">Show 500 more</button>
+				</div>
+			</div>
+			<p class="folder-hint" id="dp-hint" style="margin: 0;"></p>
+
+			<p class="wireframe-demo-row">
+				Wireframe demo states:
+				<button type="button" data-dp-state="ok">Normal</button>
+				<button type="button" data-dp-state="loading">Loading</button>
+				<button type="button" data-dp-state="empty">Empty folder</button>
+				<button type="button" data-dp-state="denied">Permission denied</button>
+				<button type="button" data-dp-state="unauthorized">Unauthorized</button>
+				<button type="button" data-dp-state="unplugged">Unplugged</button>
+				<button type="button" data-dp-state="big">Big folder (3,412)</button>
+			</p>
+		</article>
+
+		<div class="dp-footer" id="dp-footer">
+			<span class="dp-count" id="dp-count" aria-live="polite">Nothing selected</span>
+			<span class="dp-footer-actions">
+				<button type="button" class="btn btn-ghost" id="btn-dp-cancel">Cancel</button>
+				<button type="button" class="btn btn-primary" id="btn-dp-add" disabled>Add</button>
+			</span>
+		</div>
 	</section>
 
 	<section id="view-transfer-files" class="screen" aria-label="Transfer files">
@@ -2830,6 +3102,15 @@
 						<label><input type="checkbox" checked /> Pictures</label>
 						<label><input type="checkbox" checked /> Movies</label>
 					</fieldset>
+					<ul class="uft-extra-sources" id="wz-extra-sources" aria-label="Additional folders and files" hidden></ul>
+					<div class="uft-folder-actions">
+						<button type="button" class="btn btn-secondary" id="btn-wz-add-folder">Add folder…</button>
+						<button type="button" class="btn btn-secondary" id="btn-wz-add-files">Add files…</button>
+						<button type="button" class="info-btn" id="btn-wz-add-info" title="About Add folder and Add files" aria-expanded="false" aria-controls="wz-add-info-panel">i</button>
+					</div>
+					<div class="info-panel" id="wz-add-info-panel" aria-hidden="true">
+						<p>Back up folders that are not in the list above (e.g. <code>WhatsApp/Media</code>, <code>Telegram</code>) or single files. Opens SpaceMaker’s phone browser — no extra install, same on Linux, macOS and Windows. Only photos and videos are extracted; other files inside a picked folder are skipped.</p>
+					</div>
 				</div>
 				<div id="panel-wifi" class="wifi-receive-block">
 					<p class="label" style="margin: 0;">Phone upload</p>
@@ -4187,6 +4468,7 @@
 			var openWrap = document.getElementById('uft-open-folder-wrap');
 			var phase = 'idle';
 			var mountOk = true;
+			var uftMethod = 'adb';
 			var extras = [];
 			var extraSeq = 0;
 			/* Music omitted: does not exist on demo device */
@@ -4279,18 +4561,15 @@
 				btnAdb.classList.toggle('active', method === 'adb');
 				btnAfc.classList.toggle('active', method === 'afc');
 				iphoneBanner.hidden = method !== 'afc';
+				uftMethod = method;
 				if (method === 'adb') {
 					statusText.textContent = 'Pixel 8 · Connected via ADB';
 					setPresetsHtml(androidFolders, false);
-					/* Demo default: ADB without adbfs — Add off until demo mount OK */
-					setMountAvailable(false);
-					browseHint.textContent = 'Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.';
 				} else {
 					statusText.textContent = 'Daniel’s iPhone · Connected via iPhone USB';
 					setPresetsHtml(iphoneFolders, false);
-					setMountAvailable(true);
-					browseHint.textContent = 'Add files/folder needs a mounted phone (iPhone ifuse, or ADB with adbfs). Desktop app only.';
 				}
+				setMountAvailable(true);
 			}
 
 			btnAdb.addEventListener('click', function () { setMethod('adb'); });
@@ -4307,19 +4586,21 @@
 				updateStartEnabled();
 			}
 
+			function addPicked(items) {
+				items.forEach(function (it) { addExtra(it.path, it.isDir ? 'folder' : 'file'); });
+			}
+
 			btnAddFiles.addEventListener('click', function () {
 				if (!mountOk) {
 					return;
 				}
-				alert('Wireframe: native multi-file dialog opens at the flattened phone mount (Download, DCIM, …).');
-				addExtra('Download/notes.txt', 'file');
+				window.wfOpenPicker({ origin: 'usb-file-transfer', originLabel: 'USB file transfer', method: uftMethod, kind: 'files', onAdd: addPicked });
 			});
 			btnAddFolder.addEventListener('click', function () {
 				if (!mountOk) {
 					return;
 				}
-				alert('Wireframe: native folder dialog opens at the flattened phone mount (not storage/self/primary).');
-				addExtra('WhatsApp/Media', 'folder');
+				window.wfOpenPicker({ origin: 'usb-file-transfer', originLabel: 'USB file transfer', method: uftMethod, kind: 'folders', onAdd: addPicked });
 			});
 
 			chipCopy.addEventListener('click', function () {
@@ -4390,7 +4671,6 @@
 			});
 			document.getElementById('btn-uft-demo-no-mount').addEventListener('click', function () {
 				setMountAvailable(false);
-				browseHint.textContent = 'Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.';
 			});
 			document.getElementById('btn-uft-demo-mount-ok').addEventListener('click', function () {
 				setMountAvailable(true);
@@ -4409,6 +4689,346 @@
 			});
 			setMethod('adb');
 			renderExtras();
+		})();
+
+		/* Phone file picker (demo tree, no real device) */
+		(function () {
+			var K = 1024, M = K * K;
+			function d(name, mtime) { return { name: name, dir: true, size: 0, mtime: mtime || '2026-09-12' }; }
+			function f(name, size, mtime, media) { return { name: name, dir: false, size: size, mtime: mtime || '2026-09-12', media: media !== false }; }
+			var big = [];
+			for (var i = 1; i <= 3412; i += 1) { big.push(f('IMG_' + String(20260000 + i) + '.jpg', 3.1 * M + (i % 7) * 200 * K, '2026-08-' + String(1 + (i % 28)).padStart(2, '0'))); }
+			var tree = {
+				'': [d('Alarms'), d('Android'), d('DCIM'), d('Documents'), d('Download', '2026-10-17'), d('Movies'), d('Music'), d('Pictures'), d('WhatsApp'), d('.thumbnails'), f('.nomedia', 0, '2025-01-04', false), f('notes.txt', 2 * K, '2026-10-01', false)],
+				'Android': [d('data'), d('media'), d('obb')],
+				'Android/data': 'denied',
+				'DCIM': [d('Camera', '2026-10-18'), d('Screenshots')],
+				'DCIM/Camera': big,
+				'DCIM/Screenshots': [f('Screenshot_20261012.png', 840 * K), f('Screenshot_20261015.png', 910 * K)],
+				'Documents': [f('contract.pdf', 1.2 * M, '2026-09-30', false), f('resume 2026 (final).docx', 96 * K, '2026-08-02', false), f('Ünïcode — notes.txt', 4 * K, '2026-07-19', false)],
+				'Download': [f('report.pdf', 2.4 * M, '2026-10-17', false), f('invoice-október.pdf', 310 * K, '2026-10-12', false), f('setup.apk', 48 * M, '2026-10-01', false), d('Telegram')],
+				'Download/Telegram': [],
+				'Movies': [f('CLIP_0007.mp4', 18.4 * M, '2026-09-04'), f('holiday.mov', 212 * M, '2026-08-20')],
+				'Music': [],
+				'Pictures': [d('Instagram'), f('wallpaper.png', 2.2 * M, '2026-05-02')],
+				'Pictures/Instagram': [f('IMG_5521.jpg', 1.1 * M), f('IMG_5522.jpg', 980 * K)],
+				'WhatsApp': [d('Media'), d('Databases')],
+				'WhatsApp/Media': [d('WhatsApp Images'), d('WhatsApp Video'), d('WhatsApp Documents')],
+				'WhatsApp/Media/WhatsApp Images': [f('IMG-20261010-WA0001.jpg', 240 * K), f('IMG-20261011-WA0004.jpg', 310 * K)],
+				'WhatsApp/Media/WhatsApp Video': [f('VID-20261003-WA0002.mp4', 7.8 * M)],
+				'WhatsApp/Media/WhatsApp Documents': [f('ticket.pdf', 180 * K, '2026-10-03', false)],
+				'WhatsApp/Databases': 'denied',
+				'.thumbnails': [f('1203.jpg', 12 * K)]
+			};
+			var iphoneTree = {
+				'': [d('DCIM')],
+				'DCIM': [d('100APPLE'), d('101APPLE')],
+				'DCIM/100APPLE': [f('IMG_0001.HEIC', 2.4 * M), f('IMG_0002.HEIC', 2.1 * M), f('IMG_0003.MOV', 41 * M)],
+				'DCIM/101APPLE': [f('IMG_1001.HEIC', 2.6 * M)]
+			};
+
+			var PAGE = 500;
+			var ctx = null;
+			var cwd = '';
+			var shown = PAGE;
+			var selected = {};
+			var forced = null;
+			var listEl = document.getElementById('dp-list');
+			var stateEl = document.getElementById('dp-state');
+			var moreEl = document.getElementById('dp-more');
+			var moreText = document.getElementById('dp-more-text');
+			var trailEl = document.getElementById('dp-trail');
+			var countEl = document.getElementById('dp-count');
+			var btnAdd = document.getElementById('btn-dp-add');
+			var hiddenToggle = document.getElementById('dp-hidden-toggle');
+			var filterEl = document.getElementById('dp-filter');
+			var headEl = document.querySelector('#dp-list-wrap .dp-head');
+			var hintEl = document.getElementById('dp-hint');
+
+			(function () {
+				var btn = document.getElementById('btn-dp-info');
+				var panel = document.getElementById('dp-info-panel');
+				btn.addEventListener('click', function () {
+					var open = panel.classList.toggle('visible');
+					btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+					panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+				});
+			})();
+
+			function fmtSize(n) {
+				if (n >= M) { return (n / M).toFixed(1) + ' MB'; }
+				if (n >= K) { return Math.round(n / K) + ' KB'; }
+				return n + ' B';
+			}
+			function t() { return ctx && ctx.method === 'afc' ? iphoneTree : tree; }
+			function join(dir, name) { return dir ? dir + '/' + name : name; }
+			function selCount() { return Object.keys(selected).length; }
+			function rootName() { return ctx && ctx.method === 'afc' ? 'iPhone' : 'Phone storage'; }
+
+			function renderTrail() {
+				trailEl.innerHTML = '';
+				var parts = cwd ? cwd.split('/') : [];
+				var acc = '';
+				function crumb(label, path, current) {
+					var el;
+					if (current) {
+						el = document.createElement('span');
+						el.className = 'dp-trail-current';
+						el.setAttribute('aria-current', 'page');
+					} else {
+						el = document.createElement('button');
+						el.type = 'button';
+						el.addEventListener('click', function () { go(path); });
+					}
+					el.textContent = label;
+					trailEl.appendChild(el);
+				}
+				function sep() {
+					var s = document.createElement('span');
+					s.className = 'dp-sep';
+					s.setAttribute('aria-hidden', 'true');
+					s.textContent = '›';
+					trailEl.appendChild(s);
+				}
+				crumb(rootName(), '', parts.length === 0);
+				parts.forEach(function (p, i) {
+					acc = join(acc, p);
+					sep();
+					crumb(p, acc, i === parts.length - 1);
+				});
+			}
+
+			function showState(kind) {
+				var html = '';
+				if (kind === 'loading') {
+					html = '<div class="dp-spinner" aria-hidden="true"></div><strong>Reading folder…</strong>Asking the phone for this folder’s contents.';
+				} else if (kind === 'empty') {
+					html = '<strong>This folder is empty</strong>' + (hiddenToggle.checked ? '' : 'Hidden files are not shown. ') + 'Use Up or the path above to go elsewhere.';
+				} else if (kind === 'nomatch') {
+					html = '<strong>No match</strong>Nothing in this folder matches “' + filterEl.value.replace(/</g, '&lt;') + '”.';
+				} else if (kind === 'denied') {
+					html = '<strong>Android doesn’t allow access to this folder</strong>Folders like <code>Android/data</code> are protected on Android 11+ and can’t be read over USB. Pick another folder.<br><button type="button" class="btn btn-secondary" data-dp-act="up">Go up</button>';
+				} else if (kind === 'unauthorized') {
+					html = '<strong>Phone not authorized</strong>Unlock the phone and accept the “Allow USB debugging?” prompt, then retry.<br><button type="button" class="btn btn-secondary" data-dp-act="retry">Retry</button>';
+				} else if (kind === 'unplugged') {
+					html = '<strong>Phone disconnected</strong>The cable was unplugged or the phone went to sleep. Your ticked items are kept — reconnect and retry.<br><button type="button" class="btn btn-secondary" data-dp-act="retry">Retry</button>';
+				}
+				stateEl.innerHTML = html;
+				stateEl.hidden = false;
+				listEl.hidden = true;
+				headEl.hidden = true;
+				moreEl.hidden = true;
+				var st = document.getElementById('dp-device-status');
+				st.classList.toggle('connected', kind !== 'unauthorized' && kind !== 'unplugged');
+			}
+
+			function render() {
+				renderTrail();
+				var data = forced && forced !== 'ok' && forced !== 'big' ? forced : t()[cwd];
+				if (forced === 'big') { data = tree['DCIM/Camera']; }
+				document.getElementById('btn-dp-up').disabled = cwd === '' && forced !== 'big';
+				if (data === undefined) { data = []; }
+				if (typeof data === 'string') {
+					showState(data);
+					return;
+				}
+				var q = filterEl.value.trim().toLowerCase();
+				var rows = data.filter(function (e) {
+					if (!hiddenToggle.checked && e.name.charAt(0) === '.') { return false; }
+					return !q || e.name.toLowerCase().indexOf(q) >= 0;
+				});
+				rows.sort(function (a, b) {
+					if (a.dir !== b.dir) { return a.dir ? -1 : 1; }
+					return a.name.localeCompare(b.name);
+				});
+				if (!rows.length) {
+					showState(q ? 'nomatch' : 'empty');
+					return;
+				}
+				document.getElementById('dp-device-status').classList.add('connected');
+				stateEl.hidden = true;
+				listEl.hidden = false;
+				headEl.hidden = false;
+				listEl.innerHTML = '';
+				var slice = rows.slice(0, shown);
+				slice.forEach(function (e) {
+					var path = join(cwd, e.name);
+					var li = document.createElement('li');
+					li.className = 'dp-row' + (e.name.charAt(0) === '.' ? ' is-hidden-file' : '') + (selected[path] ? ' is-selected' : '');
+					var cb = document.createElement('input');
+					cb.type = 'checkbox';
+					cb.checked = !!selected[path];
+					cb.setAttribute('aria-label', 'Select ' + e.name);
+					var forbidFile = ctx && ctx.kind === 'folders' && !e.dir;
+					cb.disabled = !!forbidFile;
+					cb.addEventListener('change', function () {
+						if (cb.checked) { selected[path] = { path: path, isDir: e.dir }; } else { delete selected[path]; }
+						li.classList.toggle('is-selected', cb.checked);
+						updateFooter();
+					});
+					var name;
+					if (e.dir) {
+						name = document.createElement('button');
+						name.type = 'button';
+						name.addEventListener('click', function () { go(path); });
+					} else {
+						name = document.createElement('span');
+						if (ctx && ctx.mediaOnly && e.media === false) { li.style.opacity = '0.55'; }
+					}
+					name.className = 'dp-name';
+					name.innerHTML = '<span class="dp-ico" aria-hidden="true">' + (e.dir ? '📁' : '📄') + '</span><span class="dp-label"></span>';
+					name.querySelector('.dp-label').textContent = e.name;
+					var size = document.createElement('span');
+					size.className = 'dp-size';
+					size.textContent = e.dir ? '—' : fmtSize(e.size);
+					var date = document.createElement('span');
+					date.className = 'dp-date';
+					date.textContent = e.mtime;
+					li.appendChild(cb);
+					li.appendChild(name);
+					li.appendChild(size);
+					li.appendChild(date);
+					listEl.appendChild(li);
+				});
+				if (rows.length > shown) {
+					moreEl.hidden = false;
+					moreText.textContent = 'Showing ' + shown.toLocaleString('en-US') + ' of ' + rows.length.toLocaleString('en-US') + ' items';
+				} else {
+					moreEl.hidden = true;
+				}
+				updateFooter();
+			}
+
+			function updateFooter() {
+				var n = selCount();
+				countEl.textContent = n === 0 ? 'Nothing selected' : n + (n === 1 ? ' item selected' : ' items selected');
+				btnAdd.disabled = n === 0;
+				btnAdd.textContent = n === 0 ? 'Add' : 'Add ' + n + (n === 1 ? ' item' : ' items');
+				var hasFolder = Object.keys(selected).some(function (k) { return selected[k].isDir; });
+				hintEl.textContent = hasFolder ? 'Ticked folders are added whole (including sub-folders) when the transfer starts.' : '';
+			}
+
+			function go(path) {
+				cwd = path;
+				shown = PAGE;
+				forced = null;
+				filterEl.value = '';
+				showState('loading');
+				renderTrail();
+				window.setTimeout(render, 350);
+			}
+
+			function openPicker(opts) {
+				ctx = opts;
+				selected = {};
+				var isAfc = opts.method === 'afc';
+				document.getElementById('dp-bc-origin').textContent = opts.originLabel;
+				document.getElementById('dp-bc-origin').onclick = function () { showView(opts.origin); };
+				document.getElementById('dp-bc-title').textContent = opts.kind === 'folders' ? 'Pick folders' : 'Pick files';
+				document.getElementById('dp-title').textContent = rootName();
+				document.getElementById('dp-device-status-text').textContent = isAfc ? 'Daniel’s iPhone · Connected via iPhone USB' : 'Pixel 8 · Connected via ADB';
+				document.getElementById('dp-media-note').hidden = !opts.mediaOnly;
+				document.getElementById('btn-dp-select-folder').hidden = opts.kind === 'files';
+				showView('device-picker');
+				go('');
+			}
+			window.wfOpenPicker = openPicker;
+
+			function finish(commit) {
+				var cb = ctx && ctx.onAdd;
+				var items = Object.keys(selected).map(function (k) { return selected[k]; });
+				var origin = ctx && ctx.origin;
+				ctx = null;
+				showView(origin || 'home');
+				if (commit && cb) { cb(items); }
+			}
+
+			document.getElementById('btn-dp-cancel').addEventListener('click', function () { finish(false); });
+			btnAdd.addEventListener('click', function () { finish(true); });
+			document.getElementById('btn-dp-up').addEventListener('click', function () {
+				if (forced === 'big') { go('DCIM'); return; }
+				var parts = cwd.split('/');
+				parts.pop();
+				go(parts.join('/'));
+			});
+			document.getElementById('btn-dp-select-folder').addEventListener('click', function () {
+				if (!cwd) { return; }
+				var parts = cwd.split('/');
+				selected[cwd] = { path: cwd, isDir: true };
+				updateFooter();
+				render();
+				hintEl.textContent = 'Added “' + parts[parts.length - 1] + '” as a whole folder.';
+			});
+			hiddenToggle.addEventListener('change', function () { shown = PAGE; render(); });
+			filterEl.addEventListener('input', function () { shown = PAGE; render(); });
+			document.getElementById('btn-dp-more').addEventListener('click', function () { shown += PAGE; render(); });
+			stateEl.addEventListener('click', function (ev) {
+				var act = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-dp-act');
+				if (act === 'up') {
+					var parts = cwd.split('/');
+					parts.pop();
+					go(parts.join('/'));
+				} else if (act === 'retry') {
+					go(cwd);
+				}
+			});
+			document.querySelectorAll('[data-dp-state]').forEach(function (b) {
+				b.addEventListener('click', function () {
+					var k = b.getAttribute('data-dp-state');
+					if (!ctx) { openPicker({ origin: 'usb-file-transfer', originLabel: 'USB file transfer', method: 'adb', kind: 'files', onAdd: null }); }
+					shown = PAGE;
+					if (k === 'ok') { go(''); return; }
+					forced = k;
+					if (k === 'big') { cwd = 'DCIM/Camera'; }
+					if (k === 'loading') { renderTrail(); showState('loading'); return; }
+					render();
+				});
+			});
+
+			/* USB photo backup Step 1 entry points */
+			(function () {
+				var list = document.getElementById('wz-extra-sources');
+				var picks = [];
+				function renderPicks() {
+					list.innerHTML = '';
+					list.hidden = picks.length === 0;
+					picks.forEach(function (it, idx) {
+						var li = document.createElement('li');
+						var n = document.createElement('span');
+						n.className = 'uft-extra-name';
+						n.textContent = it.path;
+						var k = document.createElement('span');
+						k.className = 'uft-extra-kind';
+						k.textContent = it.isDir ? 'folder' : 'file';
+						var r = document.createElement('button');
+						r.type = 'button';
+						r.className = 'btn-uft-extra-remove';
+						r.textContent = 'Remove';
+						r.setAttribute('aria-label', 'Remove ' + it.path);
+						r.addEventListener('click', function () { picks.splice(idx, 1); renderPicks(); });
+						li.appendChild(n);
+						li.appendChild(k);
+						li.appendChild(r);
+						list.appendChild(li);
+					});
+				}
+				function open(kind) {
+					var m = document.getElementById('btn-conn-afc').classList.contains('active') ? 'afc' : 'adb';
+					openPicker({
+						origin: 'wizard', originLabel: 'USB photo backup', method: m, kind: kind, mediaOnly: true,
+						onAdd: function (items) { picks = picks.concat(items); renderPicks(); }
+					});
+				}
+				document.getElementById('btn-wz-add-folder').addEventListener('click', function () { open('folders'); });
+				document.getElementById('btn-wz-add-files').addEventListener('click', function () { open('files'); });
+				var b = document.getElementById('btn-wz-add-info');
+				var p = document.getElementById('wz-add-info-panel');
+				b.addEventListener('click', function () {
+					var o = p.classList.toggle('visible');
+					b.setAttribute('aria-expanded', o ? 'true' : 'false');
+					p.setAttribute('aria-hidden', o ? 'false' : 'true');
+				});
+			})();
 		})();
 	</script>
 </body>

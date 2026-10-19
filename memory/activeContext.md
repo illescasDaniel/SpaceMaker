@@ -6,6 +6,10 @@ _Last updated: 2026-10-19 (Components Copy button fix, committed)_
 
 ## Current focus
 
+In-app phone file/folder picker (replaces adbfs): Phase 0 wireframe drafted in `wireframes/app.html` (`#view-device-picker`, entry points in USB file transfer and USB photo backup Step 1) — awaiting design approval; no spec/code yet. Open Qs: iPhone via same picker, files in photo backup, remove adbfs.
+
+Previous:
+
 Nothing in flight. Latest: Components Copy buttons now use `execCommand("copy")` first (`web/src/dom.ts`), fixing the desktop-shell crash; no version bump. url-field (1.1.2) and gallery batch are committed.
 
 ## Just changed
