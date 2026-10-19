@@ -76,7 +76,8 @@ _Proposed — confirm or adjust at spec review._
 
 ### Scenario: Wi‑Fi has no picker entry
 
-- **Given** USB photo backup Step 1 with Wi‑Fi selected
+- **Given** USB photo backup Step 1
+- **When** Wi‑Fi is the selected connection
 - **Then** no **Add folder…** / **Add files…** controls are visible
 
 ### Scenario: Navigate and multi-select across folders
@@ -104,8 +105,10 @@ _Proposed — confirm or adjust at spec review._
 ### Scenario: Folders-only mode disables file checkboxes
 
 - **Given** the picker was opened with `kind: "folders"`
+- **When** a directory with files is listed
 - **Then** file rows have disabled checkboxes and **Select this folder** is available
 - **Given** it was opened with `kind: "files"`
+- **When** a directory with sub-folders is listed
 - **Then** **Select this folder** is hidden, folder rows can still be opened, and folder checkboxes are disabled
 
 ### Scenario: Hidden entries off by default
@@ -155,6 +158,7 @@ _Proposed — confirm or adjust at spec review._
 ### Scenario: Empty folder
 
 - **Given** an empty directory
+- **When** the user opens it
 - **Then** the empty state is shown (mentions hidden files when **Show hidden** is off)
 
 ### Scenario: Awkward names
@@ -166,6 +170,7 @@ _Proposed — confirm or adjust at spec review._
 ### Scenario: Path validation
 
 - **Given** a list request with `path` containing `..`, a NUL byte, or an absolute path outside user storage
+- **When** the route handles it
 - **Then** the route returns 400 and no `adb` process is started
 
 ### Scenario: Passcode gate
@@ -222,6 +227,7 @@ _Proposed — confirm or adjust at spec review._
 ### Scenario: adbfs is gone
 
 - **Given** the packaged app and Components screen
+- **When** the picker change set is implemented
 - **Then** no `adbfs` tool, hint, legal row, or mount code remains
 
 ## Out of scope
