@@ -3,8 +3,8 @@
 ## Metadata
 
 - **Feature:** Only the computer running SpaceMaker (and its own browser) can use the app GUI and control APIs; other devices on the network reach only the gallery and the QR upload/download pages.
-- **Wireframe:** [wireframes/phone-desktop-only.html](../../wireframes/phone-desktop-only.html) — **awaiting approval**
-- **Spec approved:** _not yet_ (draft 2026-10-19)
+- **Wireframe:** [wireframes/phone-desktop-only.html](../../wireframes/phone-desktop-only.html) — **approved** 2026-10-19 (chat)
+- **Spec approved:** 2026-10-19 (chat), incl. gallery writes LAN-allowed and the Open gallery notice page; architecture approved 2026-10-19
 - **User direction (2026-10-19):** "the program GUI should only be accessible from the computer running the app/server and its browser. other devices on the local network should only access the gallery and download/upload endpoints."
 - **Related:** [network-passcode](../network-passcode/SPEC.md), [gallery](../gallery/SPEC.md), [receive-files](../receive-files/SPEC.md), [send-files](../send-files/SPEC.md), [transfer-files](../transfer-files/SPEC.md), [device-file-picker](../device-file-picker/SPEC.md)
 
@@ -98,6 +98,7 @@
 | POST | `/api/module/home` | **Desktop** |  | Loopback-only |
 | POST | `/api/documents/open-folder` | **Desktop** |  | Loopback-only |
 | POST | `/api/library/open-folder` | **Desktop** |  | Loopback-only |
+| POST | `/api/usb-transfer/open-folder` | **Desktop** |  | Loopback-only |
 | GET | `/api/tools/status` | **Desktop** |  | Loopback-only |
 | POST | `/api/tools/ensure` | **Desktop** |  | Loopback-only |
 | POST | `/api/tools/components-continue` | **Desktop** |  | Loopback-only |

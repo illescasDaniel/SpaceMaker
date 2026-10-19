@@ -30,7 +30,9 @@ from spacemaker.adapters.inbound.web.lan_policy import is_lan_allowed
 	],
 )
 def test_given_lan_endpoint_when_checked_then_allowed(method: str, path: str) -> None:
-	# given / when / then
+	# given
+	# when
+	# then
 	assert is_lan_allowed(method, path)
 
 
@@ -56,5 +58,7 @@ def test_given_lan_endpoint_when_checked_then_allowed(method: str, path: str) ->
 	],
 )
 def test_given_control_endpoint_when_checked_then_denied(method: str, path: str) -> None:
-	# given / when / then
+	# given
+	# when
+	# then
 	assert not is_lan_allowed(method, path)

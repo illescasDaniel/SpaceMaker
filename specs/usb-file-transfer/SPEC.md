@@ -6,7 +6,7 @@
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-usb-file-transfer` + Home tile `usb_file_transfer`. **Wireframe approved** 2026-09-26; **updated** 2026-09-27 (exist-only presets + Browse; MTP removed); **updated** 2026-09-27 — **Add files…** / **Add folder…** + flatten Android user-storage prefixes (**wireframe approved** 2026-09-27).
 - **Spec approved:** 2026-09-26; **re-approved** 2026-09-27 (presets + Browse); **re-approved** 2026-09-27 — drop MTP; ADB default; ship ADB **adbfs** + AFC **ifuse** Browse/exist-probe together; **2026-09-27** — no preset pre-selection (user opts in); **re-approved** 2026-09-27 — dual Add buttons + path flattening
 - **Architecture approved:** 2026-09-26 — `TransferUsbFiles`, `TransferFolder`, `DeviceRepositoryPort.list_file_paths`; **2026-09-27** Browse / exist-probe / extras; **2026-09-27** MTP removed, ADB+AFC Browse; **2026-09-27** — `strip_android_user_storage_prefix` in destination + Browse extras (**architecture approved** with wireframe/spec)
-- **Destination selector (2026-10-19):** wireframe `#view-usb-file-transfer` Destination row (input + Browse… + Use default) approved 2026-10-19; spec revision below awaiting approval.
+- **Destination selector (2026-10-19):** wireframe `#view-usb-file-transfer` Destination row (input + Browse… + Use default) approved 2026-10-19; spec revision below **approved** 2026-10-19 (chat, incl. on-disk persistence).
 - **Related:** [home-modules](../home-modules/SPEC.md), [receive-files](../receive-files/SPEC.md) (same Documents root), [extract-media](../extract-media/SPEC.md) (shared ADB / AFC device backends; different destination and file scope)
 - **Use case:** `TransferUsbFiles` (`application/transfer_usb_files.py`)
 - **Ports:** outbound `DeviceRepositoryPort` (+ `list_file_paths`, `list_extra_file_paths`, `browse_root` / exist probe); `FileSystemPort`; destination = user-chosen folder, default `documents_directory()/SpaceMaker/` (not photo library `originals/`); `UserPreferencesPort` (+ `get/set_usb_transfer_destination`)
@@ -126,7 +126,7 @@ Strip these **user-storage prefixes** (case-insensitive, longest match first) fr
 
 ## Destination
 
-### Design decisions (destination selector)
+## Design decisions (destination selector)
 
 | Decision | Choice |
 |---|---|
@@ -399,6 +399,7 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 ### Scenario: Destination locked during a transfer
 
 - **Given** a transfer is running or paused
+- **When** the user looks at the Destination row
 - **Then** the Destination input, **Browse…** and **Use default** are disabled
 
 ### Scenario: Browse without the desktop shell

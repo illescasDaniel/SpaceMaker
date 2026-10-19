@@ -234,7 +234,7 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		root = Path(self.usb_transfer_destination())
 		if not root.is_dir():
 			return 0
-		return sum(1 for path in root.rglob("*") if path.is_file())
+		return 1 if any(path.is_file() for path in root.rglob("*")) else 0
 
 	def _documents_receive_file_count(self) -> int:
 		root = Path(self._documents_receive_root)

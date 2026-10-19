@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-19 — LAN access: default-deny allow-list keyed on the TCP peer
+
+- **Context:** the GUI and control APIs were reachable from any LAN device (and Host-header spoofing picked the desktop shell).
+- **Decision:** non-loopback peers may reach only the allow-list in `web/lan_policy.py` (gallery, QR upload/receive/share/transfer pages and their APIs, unlock); everything else is 403 `desktop-only`; `GET /` shows a notice page. Middleware sits inside the passcode guard so unauthenticated LAN clients get 401 before 403. Shell choice uses `request.client.host`, not Host.
+- **Rationale:** new routes are private by default; a route-audit test enforces it. Known edge: a same-machine browser using its own LAN IP looks remote (use `localhost`). Spec: `specs/lan-access/SPEC.md`.
+
 ## 2026-10-19 — In-app phone picker over `adb shell` replaces adbfs + native dialog
 
 - **Context:** USB file transfer Add files/folder needed `adbfs` (FUSE, only on Arch AUR, nothing for Ubuntu/macOS/Windows) plus a native dialog that does not exist in `--server-only`; photo backup had no way to pick a custom folder.
