@@ -6,7 +6,7 @@ _Last updated: 2026-10-19 (Components Copy button fix, committed)_
 
 ## Current focus
 
-In-app phone file/folder picker (replaces adbfs): Phase 0 wireframe drafted in `wireframes/app.html` (`#view-device-picker`, entry points in USB file transfer and USB photo backup Step 1) — awaiting design approval; no spec/code yet. Open Qs: iPhone via same picker, files in photo backup, remove adbfs.
+In-app phone file/folder picker (replaces adbfs): wireframe approved 2026-10-19; Phase 1 spec `specs/device-file-picker/SPEC.md` drafted (design decisions proposed) — awaiting spec approval; no code yet.
 
 Previous:
 

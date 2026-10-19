@@ -4,7 +4,7 @@
 
 - **Feature:** Primary desktop/web UI inside pywebview
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — USB wizard + Home hub (Photo backup uses `#view-easy`)
-- **Related specs:** [easy-mode](../easy-mode/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
+- **Related specs:** [device-file-picker](../device-file-picker/SPEC.md) (Step 1 USB **Add folder…** / **Add files…**), [easy-mode](../easy-mode/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md)
 - **Transport:** HTTP for pages/API; WebSockets for extract and convert progress
 
 ## Triggers & routing

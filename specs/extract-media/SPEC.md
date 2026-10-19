@@ -8,6 +8,7 @@
 - **Ports:** `DeviceRepository` (outbound), `FileSystem` (outbound)
 - **UI:** [main-wizard](../main-wizard/SPEC.md) Step 1
 - **Packaging:** Bundled native tools — [packaging/SPEC.md](../packaging/SPEC.md)
+- **Picker:** USB (ADB / iPhone) Step 1 also supports **Add folder…** / **Add files…** extras via [device-file-picker](../device-file-picker/SPEC.md); the job queue is presets ∪ extras, media files only, still written to `originals/`; Start is enabled with ≥ 1 preset or ≥ 1 extra (supersedes “at least one folder must remain selected”). *(pending spec approval)*
 - **Spec note:** MTP / libmtp removed from product 2026-09-27 (unreliable exclusive USB access). Android USB = ADB only.
 
 ## Connection method (Wi‑Fi, ADB, iPhone USB)

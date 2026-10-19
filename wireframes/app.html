@@ -4859,7 +4859,7 @@
 					cb.type = 'checkbox';
 					cb.checked = !!selected[path];
 					cb.setAttribute('aria-label', 'Select ' + e.name);
-					var forbidFile = ctx && ctx.kind === 'folders' && !e.dir;
+					var forbidFile = ctx && ((ctx.kind === 'folders' && !e.dir) || (ctx.kind === 'files' && e.dir));
 					cb.disabled = !!forbidFile;
 					cb.addEventListener('change', function () {
 						if (cb.checked) { selected[path] = { path: path, isDir: e.dir }; } else { delete selected[path]; }

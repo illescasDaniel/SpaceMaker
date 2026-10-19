@@ -11,6 +11,8 @@
 - **Ports:** outbound `DeviceRepositoryPort` (+ `list_file_paths`, `list_extra_file_paths`, `browse_root` / exist probe); `FileSystemPort`; destination `documents_directory()/SpaceMaker/` (not photo library `originals/`)
 - **Domain:** `TransferFolder`, `usb_file_transfer` helpers (`documents_transfer_destination`, Android prefix strip); session extras as flattened device-relative paths; `AppModule.USB_FILE_TRANSFER`
 
+> **Superseded 2026-10-19 (pending spec approval):** Browse via adbfs/native dialog is replaced by the in-app picker — see [device-file-picker](../device-file-picker/SPEC.md). Where this file mentions adbfs, a mount for ADB Browse, the native dialog, or “Desktop app only”, the picker spec wins; ADB preset exist-probe becomes one `list_directory` call; iPhone keeps ifuse and lists through the same picker. Sections are rewritten when the picker is implemented.
+
 ## Triggers & routing
 
 - **Entry:** Home hub → **USB file transfer** → `POST /api/module/enter` with `{ "module": "usb_file_transfer" }`.
