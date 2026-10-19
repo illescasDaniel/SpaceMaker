@@ -6,9 +6,10 @@
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-usb-file-transfer` + Home tile `usb_file_transfer`. **Wireframe approved** 2026-09-26; **updated** 2026-09-27 (exist-only presets + Browse; MTP removed); **updated** 2026-09-27 — **Add files…** / **Add folder…** + flatten Android user-storage prefixes (**wireframe approved** 2026-09-27).
 - **Spec approved:** 2026-09-26; **re-approved** 2026-09-27 (presets + Browse); **re-approved** 2026-09-27 — drop MTP; ADB default; ship ADB **adbfs** + AFC **ifuse** Browse/exist-probe together; **2026-09-27** — no preset pre-selection (user opts in); **re-approved** 2026-09-27 — dual Add buttons + path flattening
 - **Architecture approved:** 2026-09-26 — `TransferUsbFiles`, `TransferFolder`, `DeviceRepositoryPort.list_file_paths`; **2026-09-27** Browse / exist-probe / extras; **2026-09-27** MTP removed, ADB+AFC Browse; **2026-09-27** — `strip_android_user_storage_prefix` in destination + Browse extras (**architecture approved** with wireframe/spec)
+- **Destination selector (2026-10-19):** wireframe `#view-usb-file-transfer` Destination row (input + Browse… + Use default) approved 2026-10-19; spec revision below awaiting approval.
 - **Related:** [home-modules](../home-modules/SPEC.md), [receive-files](../receive-files/SPEC.md) (same Documents root), [extract-media](../extract-media/SPEC.md) (shared ADB / AFC device backends; different destination and file scope)
 - **Use case:** `TransferUsbFiles` (`application/transfer_usb_files.py`)
-- **Ports:** outbound `DeviceRepositoryPort` (+ `list_file_paths`, `list_extra_file_paths`, `browse_root` / exist probe); `FileSystemPort`; destination `documents_directory()/SpaceMaker/` (not photo library `originals/`)
+- **Ports:** outbound `DeviceRepositoryPort` (+ `list_file_paths`, `list_extra_file_paths`, `browse_root` / exist probe); `FileSystemPort`; destination = user-chosen folder, default `documents_directory()/SpaceMaker/` (not photo library `originals/`); `UserPreferencesPort` (+ `get/set_usb_transfer_destination`)
 - **Domain:** `TransferFolder`, `usb_file_transfer` helpers (`documents_transfer_destination`, Android prefix strip); session extras as flattened device-relative paths; `AppModule.USB_FILE_TRANSFER`
 
 > **Superseded 2026-10-19:** Browse via adbfs/native dialog is replaced by the in-app picker — see [device-file-picker](../device-file-picker/SPEC.md). ADB preset exist-probe is one `list_directory` call; iPhone keeps ifuse (listing, pull) and uses the same picker. adbfs is removed; remaining historical wording below (**Browse…**) means the picker's **Add files… / Add folder…**.
@@ -49,7 +50,7 @@ Always-visible body copy stays minimal. Detail lives behind ⓘ toggles (collaps
 
 1. **Connection** — ADB / iPhone setup (same substance as extract-media USB help; no Wi‑Fi; no MTP).
 2. **Sources** — presets appear only when they exist; **Add files…** / **Add folder…** open the system dialog at the (flattened) phone mount and add picks.
-3. **Destination** — files under `~/Documents/SpaceMaker/`; same root as Receive files; Android user-storage prefixes stripped; remaining nested paths preserved; no `originals/` / convert pipeline.
+3. **Destination** — files under the destination folder (default `~/Documents/SpaceMaker/`, same root as Receive files; changeable with **Browse…**); Android user-storage prefixes stripped; remaining nested paths preserved; no `originals/` / convert pipeline.
 4. **Mode** — Copy vs Move; Move deletes on device after successful copy when supported (ADB preferred; iPhone may fall back to copy-only per file).
 5. **Actions** — Pause finishes the current file then waits; Stop ends the queue after the current file; completed files stay in the destination.
 
@@ -125,11 +126,24 @@ Strip these **user-storage prefixes** (case-insensitive, longest match first) fr
 
 ## Destination
 
-- Root: `documents_directory()/SpaceMaker/` (create if missing) — **same** as [receive-files](../receive-files/SPEC.md).
+### Design decisions (destination selector)
+
+| Decision | Choice |
+|---|---|
+| **Success criteria** | The user can pick any writable absolute folder on the computer as the transfer destination with the OS folder dialog (desktop app) or by typing an absolute path; the choice is remembered across app restarts; **Use default** restores `documents_directory()/SpaceMaker/`. Everything else (prefix flattening, idempotency, Move verification) is unchanged. |
+| **Failure handling** | Relative or empty path → inline error under the field, **Start transfer** disabled, nothing stored. Folder missing → created at Start; cannot create or not writable → status `failed` with the reason and no file touched. Dialog unavailable (phone browser or non-desktop shell) → banner “Browse works in the desktop app. Type an absolute path.” (same copy as the photo backup library root). Destination cannot change while a transfer is running or paused (field and Browse disabled). |
+| **Performance & resource budget** | One folder dialog per click; one `Path.is_dir/mkdir` check at Start; the preference is a few bytes in the existing preferences file. |
+| **Trust boundary** | The destination is set only by the desktop (loopback) via `PUT /api/settings` (already desktop-only, see [lan-access](../lan-access/SPEC.md)); it must be absolute and is normalized (no NUL). Device paths still cannot escape it (`..`/absolute rejected as before). The app never deletes or overwrites existing files in the destination beyond the existing size-matched skip rule. |
+
+### Rules
+
+- Default root: `documents_directory()/SpaceMaker/` (create if missing) — **same** as [receive-files](../receive-files/SPEC.md), which keeps its own fixed root; the selector affects **USB file transfer only**.
+- Persisted in user preferences (survives relaunch). Unlike the photo backup library root (session state), this value is stored on disk; **Use default** clears it.
 - Flatten Android user-storage prefixes (see Destination relative paths); preserve remaining relative path segments; sanitize (`..`, absolute paths rejected).
 - **No** photo library layout (`originals/`, `converted/`, `error/`, `invalid/`).
 - **No** convert, gallery indexing, or HEIC/AVIF pipeline.
-- Destination path field is shown read-only (or OS-default Documents path); changing the root is out of scope v1.
+- UI: `library-row` with the path input, **Browse…** (desktop folder dialog starting at the current value) and **Use default** (visible only when the value differs from the default); ⓘ explains default, Browse and persistence.
+- **Open destination folder** opens the chosen destination (falls back to Documents if it no longer exists).
 
 ## Copy vs Move
 
@@ -199,7 +213,7 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 - **When** Sources, Destination, Mode, and Actions ⓘ panels are collapsed
 - **Then** the long sources / destination / Move / Pause-Stop explanations are not shown as always-visible body hints
 - **When** the user opens Destination ⓘ
-- **Then** help text states files land under `~/Documents/SpaceMaker/` with Android storage prefixes stripped and no convert pipeline
+- **Then** help text states files land under the destination folder (default `~/Documents/SpaceMaker/`, changeable with Browse…) with Android storage prefixes stripped and no convert pipeline
 
 ### Scenario: Missing preset folders are hidden
 
@@ -358,12 +372,54 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 - **When** the user activates **Open destination folder**
 - **Then** the OS file manager opens that folder (or Documents if SpaceMaker was removed)
 
+### Scenario: Choose a destination with Browse
+
+- **Given** the desktop app is on USB file transfer and no transfer is running
+- **When** the user clicks **Browse…** and picks `/home/user/Backups/Phone files`
+- **Then** the Destination field shows that path, **Use default** appears, and the next transfer lands under it
+
+### Scenario: Destination is remembered
+
+- **Given** the user chose a custom destination
+- **When** the app is restarted and USB file transfer is opened
+- **Then** the Destination field shows the custom path
+
+### Scenario: Use default
+
+- **Given** a custom destination is set
+- **When** the user clicks **Use default**
+- **Then** the field shows `~/Documents/SpaceMaker` (resolved), **Use default** hides, and the stored choice is cleared
+
+### Scenario: Invalid destination
+
+- **Given** the user types `Backups/phone` (not absolute)
+- **When** the field loses focus or Start is pressed
+- **Then** the inline error shows, **Start transfer** is disabled, and the previous valid destination is kept in preferences
+
+### Scenario: Destination locked during a transfer
+
+- **Given** a transfer is running or paused
+- **Then** the Destination input, **Browse…** and **Use default** are disabled
+
+### Scenario: Browse without the desktop shell
+
+- **Given** the page is opened in a normal browser (no folder dialog)
+- **When** the user clicks **Browse…**
+- **Then** a banner asks them to type an absolute path
+
+### Scenario: Unwritable destination
+
+- **Given** the destination cannot be created or written
+- **When** the user starts a transfer
+- **Then** the status is `failed` with the reason and no phone file is deleted (even in Move mode)
+
 ## Out of scope
 
 - **MTP / GVFS / libmtp** (removed from product)
 - Wi‑Fi / QR receive in this module (see receive-files)
 - Convert, gallery, `originals/` / `converted/` / `error/` / `invalid/`
-- Custom destination picker outside the Documents/SpaceMaker root (v1)
+- Per-transfer or per-source destinations (one destination for the module)
+- Changing Receive files’ destination (it stays `~/Documents/SpaceMaker/`)
 - Free-text typing of device paths (Add is mount-scoped native dialog only)
 - Single native dialog that selects files and folders together (OS limitation; two buttons instead)
 - Replacing the preset checklist with Add-only
