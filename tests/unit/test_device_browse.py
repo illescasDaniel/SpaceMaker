@@ -25,7 +25,8 @@ from spacemaker.domain.device_browse import (
 	],
 )
 def test_given_path_when_normalize_then_storage_relative(raw: str, expected: str) -> None:
-	# given / when
+	# given
+	# when
 	result = normalize_browse_path(raw)
 	# then
 	assert result == expected
@@ -33,7 +34,9 @@ def test_given_path_when_normalize_then_storage_relative(raw: str, expected: str
 
 @pytest.mark.parametrize("raw", ["../etc", "DCIM/../../x", "a/\x00b", "/sdcard/../data", "..", "a\\..\\b"])
 def test_given_escaping_path_when_normalize_then_invalid(raw: str) -> None:
-	# given / when / then
+	# given
+	# when
+	# then
 	with pytest.raises(DeviceBrowseError) as exc:
 		normalize_browse_path(raw)
 	assert exc.value.kind is DeviceBrowseErrorKind.INVALID_PATH
@@ -70,6 +73,8 @@ def test_given_many_entries_when_page_then_cursor_walks_all_pages() -> None:
 
 
 def test_given_hidden_names_when_is_hidden_then_dot_prefix_only() -> None:
-	# given / when / then
+	# given
+	# when
+	# then
 	assert DeviceEntry(".thumbnails", True).is_hidden
 	assert not DeviceEntry("DCIM", True).is_hidden

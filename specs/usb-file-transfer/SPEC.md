@@ -32,7 +32,7 @@
 - Changing method while idle re-runs device detection for that backend, re-probes existing presets, clears Browse extras, and unmounts the previous method’s session mount.
 - Transfer must not start if the chosen backend reports no usable device.
 
-### Mount backends (Browse + exist-probe) — both required this revision
+### Listing backends (Browse + exist-probe) — both required this revision
 
 | Backend | Mount | Tooling | Notes |
 |---------|-------|---------|--------|

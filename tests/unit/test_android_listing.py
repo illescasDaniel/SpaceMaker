@@ -35,6 +35,15 @@ def test_given_awkward_names_when_parse_then_exact_names_kept() -> None:
 	assert names == ["résumé final (2).pdf", "a'b.txt", "$HOME.txt", "pipe|name.txt", "link"]
 
 
+def test_given_newline_in_name_when_parse_then_one_entry_with_exact_name() -> None:
+	# given
+	output = "regular file|1|1|./a\nb.txt\nregular file|2|2|./c.txt\n"
+	# when
+	entries = parse_android_stat_listing(output)
+	# then
+	assert [e.name for e in entries] == ["a\nb.txt", "c.txt"]
+
+
 def test_given_error_and_blank_lines_when_parse_then_ignored() -> None:
 	# given
 	output = "\nstat: './broken': No such file or directory\nregular file|5|9|./ok.jpg\n"
@@ -45,7 +54,8 @@ def test_given_error_and_blank_lines_when_parse_then_ignored() -> None:
 
 
 def test_given_root_when_command_then_sdcard_cd_and_not_recursive() -> None:
-	# given / when
+	# given
+	# when
 	command = android_list_command("")
 	# then
 	assert command.startswith("cd /sdcard && ")
@@ -74,5 +84,8 @@ def test_given_hostile_path_when_command_then_path_is_one_quoted_argument() -> N
 	],
 )
 def test_given_shell_failure_text_when_classify_then_kind(text: str, kind: DeviceBrowseErrorKind) -> None:
-	# given / when / then
-	assert classify_android_shell_failure(text) is kind
+	# given
+	# when
+	result = classify_android_shell_failure(text)
+	# then
+	assert result is kind

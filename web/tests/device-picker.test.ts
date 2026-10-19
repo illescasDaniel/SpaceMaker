@@ -151,6 +151,65 @@ describe("device picker", () => {
 		expect(boxes[1]?.disabled).toBe(true);
 	});
 
+	it("given hidden entries then they stay out of the list until the toggle is on", async () => {
+		mockList({
+			"": page("", [
+				[".thumbnails", true],
+				["a.txt", false],
+			]),
+		});
+		open();
+		await flush();
+		expect(document.querySelectorAll("#dp-list .dp-label").length).toBe(1);
+		const toggle = document.getElementById("dp-hidden-toggle") as HTMLInputElement;
+		toggle.checked = true;
+		toggle.dispatchEvent(new Event("change"));
+		expect(document.querySelectorAll("#dp-list .dp-label").length).toBe(2);
+	});
+
+	it("given a filter then only matching rows remain", async () => {
+		mockList({
+			"": page("", [
+				["IMG_1.jpg", false],
+				["notes.txt", false],
+			]),
+		});
+		open();
+		await flush();
+		const filter = document.getElementById("dp-filter") as HTMLInputElement;
+		filter.value = "img";
+		filter.dispatchEvent(new Event("input"));
+		await flush();
+		expect([...document.querySelectorAll(".dp-label")].map((n) => n.textContent)).toEqual(["IMG_1.jpg"]);
+	});
+
+	it("given an empty folder then the empty state shows", async () => {
+		mockList({ "": page("", []) });
+		open();
+		await flush();
+		expect((document.getElementById("dp-state") as HTMLElement).hidden).toBe(false);
+	});
+
+	it("given the device unplugged then picks are kept and Retry lists again", async () => {
+		mockList({
+			"": page("", [
+				["a.txt", false],
+				["Docs", true],
+			]),
+			Docs: { status: 409, detail: { error: "unplugged", message: "" } },
+		});
+		const onAdd = open();
+		await flush();
+		const box = document.querySelectorAll<HTMLInputElement>("#dp-list input")[1] as HTMLInputElement;
+		box.checked = true;
+		box.dispatchEvent(new Event("change"));
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		await flush();
+		expect(document.querySelector("[data-dp-act='retry']")).not.toBeNull();
+		expect(document.getElementById("dp-count")?.textContent).toContain("1");
+		expect(onAdd).not.toHaveBeenCalled();
+	});
+
 	it("given a big folder then Show more fetches the next page", async () => {
 		mockList({
 			"": {

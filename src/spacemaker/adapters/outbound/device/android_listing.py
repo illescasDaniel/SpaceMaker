@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shlex
 
 from spacemaker.domain.device_browse import DeviceBrowseErrorKind, DeviceEntry
@@ -22,26 +23,25 @@ def android_list_command(path: str) -> str:
 	)
 
 
+_HEADER = re.compile(r"^([A-Za-z][A-Za-z ]*)\|(\d+)\|(-?\d+)\|(.*)$")
+
+
 def parse_android_stat_listing(output: str) -> list[DeviceEntry]:
-	"""Parse ``%F|%s|%Y|%n`` lines; skip blanks and error lines (the name is last, so ``|`` in names is safe)."""
+	"""Parse ``%F|%s|%Y|%n`` records; a line that is not a record header continues the previous name (newline in a name)."""
+	records: list[list[str]] = []
+	for line in output.removesuffix("\n").split("\n"):
+		match = _HEADER.match(line)
+		if match:
+			records.append(list(match.groups()))
+		elif records and not line.startswith(("stat:", "find:")):
+			records[-1][3] += "\n" + line
 	entries: list[DeviceEntry] = []
-	for line in output.splitlines():
-		parts = line.split("|", 3)
-		if len(parts) != 4:
-			continue
-		kind, size_text, mtime_text, name = parts
-		if not size_text.strip().isdigit() or not mtime_text.strip().lstrip("-").isdigit():
-			continue
-		name = name.removeprefix("./")
-		if not name:
+	for kind, size_text, mtime_text, raw_name in records:
+		name = raw_name.removeprefix("./")
+		if not name.strip("\n"):
 			continue
 		entries.append(
-			DeviceEntry(
-				name=name,
-				is_dir=kind.strip() == "directory",
-				size=int(size_text),
-				mtime=int(mtime_text),
-			),
+			DeviceEntry(name=name, is_dir=kind.strip() == "directory", size=int(size_text), mtime=int(mtime_text))
 		)
 	return entries
 
