@@ -6,7 +6,7 @@ _Last updated: 2026-10-19 (Components Copy button fix, committed)_
 
 ## Current focus
 
-In-app phone file/folder picker (replaces adbfs): wireframe approved 2026-10-19; spec approved 2026-10-19; Phase 2 types+ports added (`domain/device_browse.py`, `DeviceRepositoryPort.list_directory`, `application/list_device_directory.py` stub) — awaiting architecture approval.
+In-app phone file/folder picker (replaces adbfs): wireframe, spec, architecture approved 2026-10-19; backend (`POST /api/device/list`, shell/ifuse `list_directory`, extract extras) committed; web UI (`device-picker.ts`, `extra-sources.ts`, `wizard-extras.ts`, USB transfer + wizard Step 1 entry points) written, `task checks` green. Next: Phase 5 code-grader, then report. Caveat: add/start routes are loopback-only, so a LAN phone browser can list but not add.
 
 Previous:
 

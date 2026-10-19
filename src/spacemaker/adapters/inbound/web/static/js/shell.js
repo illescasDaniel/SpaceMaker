@@ -1,4 +1,5 @@
 import { apiSend } from "./api.js";
+import { bindDevicePicker } from "./device-picker.js";
 import { encodePathSegments, errorMessage, isDesktopShell, isMobileGalleryShell, showFormBanner } from "./dom.js";
 import { bindGalleryUi } from "./gallery.js";
 import {
@@ -33,6 +34,7 @@ import { bootDesktopSession } from "./shell-boot.js";
 import { bindDesktopChrome } from "./shell-chrome.js";
 import { S } from "./state.js";
 import { bindUsbDesktop, updateUsbTransferUi } from "./usb.js";
+import { bindWizardExtras, syncWizardExtras } from "./wizard-extras.js";
 
 function reloadStaleShell(serverVersion) {
 	const slug = serverVersion.replace(/\./g, "-");
@@ -80,6 +82,7 @@ function syncActiveModuleView(next) {
 		currentId === "gallery-item" ||
 		currentId === "settings" ||
 		currentId === "settings-tools" ||
+		currentId === "device-picker" ||
 		currentId === "legal"
 	) {
 		return;
@@ -262,6 +265,7 @@ function applyState(next) {
 	updateReceiveUi(next);
 	updateSendUi(next);
 	updateUsbTransferUi(next);
+	syncWizardExtras(next);
 	updateTransferUi(next);
 	if (next.managed_tools) {
 		renderComponentsList(next.managed_tools);
@@ -301,6 +305,8 @@ function bootstrapMobileGalleryShell() {
 function bootstrapDesktopShell() {
 	bindDesktopChrome();
 	bindUsbDesktop();
+	bindDevicePicker();
+	bindWizardExtras();
 	bindLanDesktop();
 	bindSettingsDesktop();
 	bindHomeDesktop();

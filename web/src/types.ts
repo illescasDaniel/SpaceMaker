@@ -21,8 +21,6 @@ export interface DesktopDownloadProgress {
  * every call site guards with `window.pywebview?.api?.<method>` before using it). */
 export interface PywebviewApi {
 	choose_library_folder?: (current: string) => Promise<string | null> | string | null;
-	choose_device_files?: (mount: string) => Promise<string[] | null> | string[] | null;
-	choose_device_folder?: (mount: string) => Promise<string | null> | string | null;
 	choose_files?: (current: string) => Promise<string[] | null> | string[] | null;
 	choose_share_folder?: (current: string) => Promise<string | null> | string | null;
 	share_folder_file_count?: (folder: string) => Promise<number> | number;
@@ -53,6 +51,7 @@ export type ViewId =
 	| "easy"
 	| "wizard"
 	| "usb-file-transfer"
+	| "device-picker"
 	| "receive-files"
 	| "send-files"
 	| "transfer-files"
@@ -112,10 +111,61 @@ export interface CompressMediaSnapshot {
 }
 
 export interface UsbTransferBrowseSnapshot {
-	mount_available?: boolean;
-	mount_root?: string;
+	/** True when a connected device can be listed by the in-app phone browser. */
+	picker_available?: boolean;
 	hint?: string;
 	available_folders?: string[] | null;
+}
+
+/** One row of `POST /api/device/list` (`spacemaker.domain.device_browse.DeviceEntry`). */
+export interface DeviceEntryRow {
+	name: string;
+	is_dir: boolean;
+	size: number;
+	mtime: number;
+}
+
+export interface DeviceListPage {
+	path: string;
+	entries: DeviceEntryRow[];
+	next_cursor: number | null;
+	total: number;
+}
+
+/** `detail` of a failed `POST /api/device/list` (`DeviceBrowseErrorKind` value plus device text). */
+export interface DeviceListError {
+	error: string;
+	message: string;
+}
+
+export type DevicePickerStateKind =
+	| "loading"
+	| "empty"
+	| "nomatch"
+	| "denied"
+	| "unauthorized"
+	| "unplugged"
+	| "timeout"
+	| "notfound"
+	| "failed";
+
+/** A ticked row, keyed by its storage-relative path. */
+export interface DevicePickedItem {
+	path: string;
+	isDir: boolean;
+}
+
+export interface DevicePickerOptions {
+	/** View to return to on Add / Cancel. */
+	origin: ViewId;
+	originLabel: string;
+	method: "adb" | "afc";
+	deviceId: string;
+	deviceLabel: string;
+	kind: "files" | "folders";
+	/** Photo backup: non-photo/video files are shown greyed out. */
+	mediaOnly: boolean;
+	onAdd: (items: DevicePickedItem[]) => void;
 }
 
 /** One row of `transfer_files_session.items` (`spacemaker.bootstrap.services.snapshots`'s
@@ -201,10 +251,10 @@ export interface AppSnapshot {
 	transfer_mode?: string;
 	transfer_folders?: string[];
 	transfer_extra_paths?: string[];
+	extract_extra_paths?: string[];
 	share_selection?: string[];
 	last_error?: string;
 	hint?: string;
-	mount_root?: string;
 	receive_files?: JobPhaseState;
 	extract?: JobPhaseState;
 	extract_controls?: ControlFlags;

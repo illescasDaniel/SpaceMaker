@@ -1,5 +1,7 @@
 import { apiSend } from "./api.js";
+import { openDevicePicker } from "./device-picker.js";
 import { clearFormBanner, errorMessage, onClick, showFormBanner } from "./dom.js";
+import { renderExtraSources } from "./extra-sources.js";
 import { libraryRootForSave } from "./jobs.js";
 import { applyState } from "./shell.js";
 import { S } from "./state.js";
@@ -45,44 +47,9 @@ function currentUsbExtraPaths() {
 	});
 	return out;
 }
-function extraPathKind(path) {
-	const name = path.split("/").pop() || path;
-	return name.indexOf(".") > 0 ? "file" : "folder";
-}
 function renderUsbTransferExtras(paths) {
-	const list = document.getElementById("uft-extra-sources");
-	if (!list) {
-		return;
-	}
-	list.innerHTML = "";
-	const items = paths ?? [];
-	if (!items.length) {
-		list.hidden = true;
-		return;
-	}
-	list.hidden = false;
-	items.forEach((path) => {
-		const li = document.createElement("li");
-		li.setAttribute("data-extra-path", path);
-		const name = document.createElement("span");
-		name.className = "uft-extra-name";
-		name.textContent = path;
-		const kind = document.createElement("span");
-		kind.className = "uft-extra-kind";
-		kind.textContent = extraPathKind(path);
-		const remove = document.createElement("button");
-		remove.type = "button";
-		remove.className = "btn-uft-extra-remove";
-		remove.textContent = "Remove";
-		remove.setAttribute("aria-label", "Remove " + path);
-		remove.addEventListener("click", () => {
-			const next = currentUsbExtraPaths().filter((p) => p !== path);
-			pushUsbTransferSettingsWithExtras(next);
-		});
-		li.appendChild(name);
-		li.appendChild(kind);
-		li.appendChild(remove);
-		list.appendChild(li);
+	renderExtraSources("uft-extra-sources", paths, (remaining) => {
+		pushUsbTransferSettingsWithExtras(remaining).catch(() => undefined);
 	});
 }
 function rebuildUsbTransferFolders(method, selected, available) {
@@ -126,7 +93,7 @@ function syncUsbTransferBrowseUi(next) {
 	const btnFiles = document.getElementById("btn-uft-add-files");
 	const btnFolder = document.getElementById("btn-uft-add-folder");
 	const hint = document.getElementById("uft-browse-unavailable");
-	const mountOk = !!browse?.mount_available;
+	const mountOk = !!browse?.picker_available;
 	if (btnFiles instanceof HTMLButtonElement) {
 		btnFiles.disabled = !mountOk;
 	}
@@ -387,67 +354,33 @@ function bindUsbDesktop() {
 			pushUsbTransferSettings();
 		});
 	}
-	function ensureUsbMountForPicks() {
-		const browse = S.state?.usb_transfer_browse;
-		if (browse?.mount_root) {
-			return Promise.resolve(browse.mount_root);
+	function openUsbPicker(kind) {
+		const sel = document.getElementById("uft-select-device");
+		const deviceId = sel instanceof HTMLSelectElement ? sel.value : "";
+		if (!deviceId) {
+			showFormBanner("Add files/folder needs a connected, authorized device.", "uft-form-banner");
+			return;
 		}
-		if (!browse?.mount_available) {
-			showFormBanner(
-				browse?.hint || "Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.",
-				"uft-form-banner",
-			);
-			return Promise.reject(new Error("mount unavailable"));
-		}
-		return apiSend("POST", "/api/usb-transfer/mount").then((data) => {
-			applyState(data);
-			const next = data.usb_transfer_browse;
-			if (!next?.mount_root) {
-				throw new Error(next?.hint || "Could not mount phone for Add files/folder.");
-			}
-			return next.mount_root;
-		});
-	}
-	function postUsbHostPicks(paths) {
-		const filtered = Array.isArray(paths) ? paths.filter(Boolean) : [];
-		if (!filtered.length) {
-			return Promise.resolve(null);
-		}
-		return apiSend("POST", "/api/usb-transfer/extras", { host_paths: filtered }).then((data) => {
-			clearFormBanner("uft-form-banner");
-			applyState(data);
-			return data;
+		const method = selectedUsbTransferMethod() === "afc" ? "afc" : "adb";
+		openDevicePicker({
+			origin: "usb-file-transfer",
+			originLabel: "USB file transfer",
+			method,
+			deviceId,
+			deviceLabel: uftDeviceLabels[deviceId] || "",
+			kind,
+			mediaOnly: false,
+			onAdd: (items) => {
+				const picked = items.map((item) => item.path);
+				pushUsbTransferSettingsWithExtras(currentUsbExtraPaths().concat(picked)).catch(() => undefined);
+			},
 		});
 	}
 	onClick("btn-uft-add-files", () => {
-		if (!window.pywebview?.api?.choose_device_files) {
-			showFormBanner("Add files works in the desktop app.", "uft-form-banner");
-			return;
-		}
-		ensureUsbMountForPicks()
-			.then((mount) => Promise.resolve(window.pywebview?.api?.choose_device_files?.(mount)))
-			.then(postUsbHostPicks)
-			.catch((err) => {
-				if (err instanceof Error && err.message === "mount unavailable") {
-					return;
-				}
-				showFormBanner(errorMessage(err, "Could not add files."), "uft-form-banner");
-			});
+		openUsbPicker("files");
 	});
 	onClick("btn-uft-add-folder", () => {
-		if (!window.pywebview?.api?.choose_device_folder) {
-			showFormBanner("Add folder works in the desktop app.", "uft-form-banner");
-			return;
-		}
-		ensureUsbMountForPicks()
-			.then((mount) => Promise.resolve(window.pywebview?.api?.choose_device_folder?.(mount)))
-			.then((folder) => postUsbHostPicks(folder ? [folder] : []))
-			.catch((err) => {
-				if (err instanceof Error && err.message === "mount unavailable") {
-					return;
-				}
-				showFormBanner(errorMessage(err, "Could not add folder."), "uft-form-banner");
-			});
+		openUsbPicker("folders");
 	});
 	onClick("btn-uft-start", () => {
 		pushUsbTransferSettings()
@@ -491,7 +424,6 @@ function bindUsbDesktop() {
 export {
 	bindUsbDesktop,
 	currentUsbExtraPaths,
-	extraPathKind,
 	pushUsbTransferSettings,
 	pushUsbTransferSettingsWithExtras,
 	rebuildUsbTransferFolders,

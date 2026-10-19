@@ -38,7 +38,7 @@ function validateStep1Form(showFieldErrors: boolean): FormValidation {
 	const method = selectedConnectionMethod();
 	const deviceOk = method === "wifi" || !!(sel instanceof HTMLSelectElement && sel.value);
 	const libraryOk = isAbsolutePath(libraryPath);
-	const foldersOk = method === "wifi" || folders.length > 0;
+	const foldersOk = method === "wifi" || folders.length > 0 || (S.state?.extract_extra_paths ?? []).length > 0;
 	const libErr = document.getElementById("library-root-error");
 	if (showFieldErrors && lib) {
 		lib.classList.toggle("field-invalid", !libraryOk);

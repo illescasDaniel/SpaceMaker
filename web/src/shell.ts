@@ -1,4 +1,5 @@
 import { apiSend } from "./api.ts";
+import { bindDevicePicker } from "./device-picker.ts";
 import { encodePathSegments, errorMessage, isDesktopShell, isMobileGalleryShell, showFormBanner } from "./dom.ts";
 import { bindGalleryUi } from "./gallery.ts";
 import {
@@ -34,6 +35,7 @@ import { bindDesktopChrome } from "./shell-chrome.ts";
 import { S } from "./state.ts";
 import type { AppModuleId, AppSnapshot, GalleryExportJob, ViewId, ViewOptions } from "./types.ts";
 import { bindUsbDesktop, updateUsbTransferUi } from "./usb.ts";
+import { bindWizardExtras, syncWizardExtras } from "./wizard-extras.ts";
 
 function reloadStaleShell(serverVersion: string): void {
 	const slug = serverVersion.replace(/\./g, "-");
@@ -81,6 +83,7 @@ function syncActiveModuleView(next: AppSnapshot): void {
 		currentId === "gallery-item" ||
 		currentId === "settings" ||
 		currentId === "settings-tools" ||
+		currentId === "device-picker" ||
 		currentId === "legal"
 	) {
 		return;
@@ -263,6 +266,7 @@ function applyState(next: AppSnapshot): void {
 	updateReceiveUi(next);
 	updateSendUi(next);
 	updateUsbTransferUi(next);
+	syncWizardExtras(next);
 	updateTransferUi(next);
 	if (next.managed_tools) {
 		renderComponentsList(next.managed_tools);
@@ -302,6 +306,8 @@ function bootstrapMobileGalleryShell(): void {
 function bootstrapDesktopShell(): void {
 	bindDesktopChrome();
 	bindUsbDesktop();
+	bindDevicePicker();
+	bindWizardExtras();
 	bindLanDesktop();
 	bindSettingsDesktop();
 	bindHomeDesktop();

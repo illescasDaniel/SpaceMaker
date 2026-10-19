@@ -303,7 +303,7 @@
 			</fieldset>
 			<div class="info-panel" id="uft-connection-info-panel" aria-hidden="true">
 				<h4>ADB (cable) — Android default</h4>
-				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move. <strong>Add files…</strong> / <strong>Add folder…</strong> need <code>adbfs</code> on PATH (e.g. AUR <code>adbfs-rootless-git</code>).</p>
+				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move. <strong>Add files…</strong> / <strong>Add folder…</strong> open the in-app phone browser.</p>
 				<h4>iPhone (USB)</h4>
 				<p><strong>Linux only</strong> in this release (Apple File Conduit / AFC via <code>usbmuxd</code>, <code>libimobiledevice</code>, <code>ifuse</code>). Unlock, tap <strong>Trust</strong>, keep unlocked. Access is limited — mostly <strong>Camera (DCIM)</strong>; other app sandboxes are not exposed. Files copy as-is (no HEIC→JPEG convert here).</p>
 			</div>
@@ -329,7 +329,7 @@
 				<button type="button" class="info-btn" id="btn-uft-folders-info" title="Preset folders and Add files/folder" aria-expanded="false" aria-controls="uft-folders-info-panel">i</button>
 			</div>
 			<div class="info-panel" id="uft-folders-info-panel" aria-hidden="true">
-				<p>Common folders appear only when they exist on the phone. <strong>Add files…</strong> and <strong>Add folder…</strong> open the system file dialog at the phone mount (flattened to user storage — you see <code>Download</code>, <code>DCIM</code>, etc., not <code>storage/self/primary</code>). Each pick is added below as a removable extra. Needs a mount: ADB with <code>adbfs</code>, or iPhone <code>ifuse</code>.</p>
+				<p>Common folders appear only when they exist on the phone. <strong>Add files…</strong> and <strong>Add folder…</strong> open SpaceMaker’s phone browser (no extra install; same on Linux, macOS and Windows). You see <code>Download</code>, <code>DCIM</code>, etc. under Phone storage. Each pick is added below as a removable extra.</p>
 			</div>
 			<fieldset class="folder-picker" id="uft-folder-picker">
 				<legend class="sr-only">Device folders that exist on this phone</legend>
@@ -340,7 +340,7 @@
 				<button type="button" class="btn btn-secondary" id="btn-uft-add-files" disabled>Add files…</button>
 				<button type="button" class="btn btn-secondary" id="btn-uft-add-folder" disabled>Add folder…</button>
 			</div>
-			<p class="folder-hint uft-browse-hint panel-hidden" id="uft-browse-unavailable">Add files/folder needs adbfs on PATH for ADB (or iPhone ifuse). Desktop app only.</p>
+			<p class="folder-hint uft-browse-hint panel-hidden" id="uft-browse-unavailable">Add files/folder needs a connected, authorized device.</p>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Destination</p>
 				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
@@ -382,6 +382,67 @@
 				<button type="button" class="btn btn-primary" id="btn-uft-open-folder">Open destination folder</button>
 			</div>
 		</article>
+	</section>
+
+	<!-- PHONE FILE PICKER — in-app screen reached from USB file transfer (Add files/folder) and USB photo backup Step 1 (Add folder/files) -->
+	<section id="view-device-picker" class="screen" aria-label="Pick from phone">
+		<nav class="module-breadcrumbs" aria-label="You are here">
+			<button type="button" class="breadcrumb-home">Home</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<button type="button" class="breadcrumb-link" id="dp-bc-origin">USB file transfer</button>
+			<span class="breadcrumb-sep" aria-hidden="true">/</span>
+			<span class="breadcrumb-current" id="dp-bc-title">Pick from phone</span>
+		</nav>
+		<p class="wizard-intro" id="dp-intro">
+			Browse the phone and tick what to add. Nothing is copied yet — picks go back to the previous screen as removable sources.
+		</p>
+
+		<article class="dp-card" aria-labelledby="dp-title">
+			<div class="dp-device-row">
+				<h2 class="step-title" id="dp-title" style="margin: 0;">Phone storage</h2>
+				<button type="button" class="info-btn" id="btn-dp-info" title="How the phone browser works" aria-expanded="false" aria-controls="dp-info-panel">i</button>
+			</div>
+			<div class="info-panel" id="dp-info-panel" aria-hidden="true">
+				<p>Folders are listed one at a time straight from the phone (<code>adb shell</code> for Android) — nothing is mounted, nothing is downloaded, and big folders like Camera load a page at a time. This is a normal SpaceMaker screen, so it works the same on Linux, macOS and Windows, and from a phone browser in <code>--server-only</code> mode. Ticking a folder adds the whole folder (sub-folders included) when you start the transfer; it is not expanded here.</p>
+			</div>
+			<div class="alert alert-warn" id="dp-media-note" hidden>
+				<span class="alert-icon" aria-hidden="true">ⓘ</span>
+				<div>Photo backup only extracts photos and videos. Other files inside a ticked folder are skipped (non-media files are greyed out here).</div>
+			</div>
+			<div class="field device-status connected" id="dp-device-status">
+				<span class="status-dot" aria-hidden="true"></span>
+				<span id="dp-device-status-text">Connected</span>
+			</div>
+
+			<nav class="dp-trail" id="dp-trail" aria-label="Phone folder path"></nav>
+
+			<div class="dp-toolbar">
+				<button type="button" class="btn btn-secondary" id="btn-dp-up">↑ Up</button>
+				<button type="button" class="btn btn-secondary" id="btn-dp-select-folder">Select this folder</button>
+				<input class="field" type="search" id="dp-filter" placeholder="Filter this folder by name" aria-label="Filter this folder by name" />
+				<label class="dp-toggle"><input type="checkbox" id="dp-hidden-toggle" /> Show hidden</label>
+			</div>
+
+			<div class="dp-list-wrap" id="dp-list-wrap">
+				<div class="dp-head" aria-hidden="true"><span></span><span>Name</span><span style="text-align: right;">Size</span><span class="dp-date">Modified</span></div>
+				<ul class="dp-list" id="dp-list" aria-label="Phone folder contents"></ul>
+				<div class="dp-state" id="dp-state" hidden></div>
+				<div class="dp-more" id="dp-more" hidden>
+					<span id="dp-more-text"></span>
+					<button type="button" class="btn btn-secondary" id="btn-dp-more">Show 500 more</button>
+				</div>
+			</div>
+			<p class="folder-hint" id="dp-hint" style="margin: 0;"></p>
+
+		</article>
+
+		<div class="dp-footer" id="dp-footer">
+			<span class="dp-count" id="dp-count" aria-live="polite">Nothing selected</span>
+			<span class="dp-footer-actions">
+				<button type="button" class="btn btn-ghost" id="btn-dp-cancel">Cancel</button>
+				<button type="button" class="btn btn-primary" id="btn-dp-add" disabled>Add</button>
+			</span>
+		</div>
 	</section>
 
 	<section id="view-send-files" class="screen" aria-label="Send files">
@@ -521,6 +582,15 @@
 						<label><input type="checkbox" data-folder="pictures" checked /> Pictures</label>
 						<label><input type="checkbox" data-folder="movies" checked /> Movies</label>
 					</fieldset>
+					<ul class="uft-extra-sources" id="wz-extra-sources" aria-label="Additional folders and files" hidden></ul>
+					<div class="uft-folder-actions">
+						<button type="button" class="btn btn-secondary" id="btn-wz-add-folder">Add folder…</button>
+						<button type="button" class="btn btn-secondary" id="btn-wz-add-files">Add files…</button>
+						<button type="button" class="info-btn" id="btn-wz-add-info" title="About Add folder and Add files" aria-expanded="false" aria-controls="wz-add-info-panel">i</button>
+					</div>
+					<div class="info-panel" id="wz-add-info-panel" aria-hidden="true">
+						<p>Back up folders that are not in the list above (e.g. <code>WhatsApp/Media</code>, <code>Telegram</code>) or single files. Opens SpaceMaker’s phone browser — no extra install, same on Linux, macOS and Windows. Only photos and videos are extracted; other files in a chosen folder are skipped.</p>
+					</div>
 				</div>
 				<div id="panel-wifi" class="wifi-receive-block">
 					<p class="label" style="margin: 0;">Phone upload</p>

@@ -621,7 +621,8 @@
 			padding-right: clamp(0.5rem, 2vw, 1.25rem);
 		}
 
-		.breadcrumb-home {
+		.breadcrumb-home,
+		.breadcrumb-link {
 			font: inherit;
 			border: none;
 			background: none;
@@ -632,7 +633,8 @@
 			font-weight: 500;
 		}
 
-		.breadcrumb-home:hover {
+		.breadcrumb-home:hover,
+		.breadcrumb-link:hover {
 			color: var(--accent-dim);
 		}
 
