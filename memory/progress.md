@@ -97,3 +97,5 @@ Open items only. Finished work: `memory/archive.md`.
 - [x] **Gallery download buttons** (2026-10-18) — batch **Download** (stored files zipped unchanged, `POST /api/gallery/batch/download`, job `kind`) and desktop item-page **Download**; desktop bridge `save_download`/`download_progress` (native Save dialog + progress) now also used by Download as JPEG/MP4; faded disabled selection-bar buttons; sticky toolbar. Gate green.
 
 - 2026-10-18: Batch zip now uses `spacemaker-media-<job id>.zip` with `YYYY/MM/<file>` entries (capture date via probe, mtime fallback, `_2` suffix on same-name collisions); spec updated, tests green.
+
+- [x] **LAN access policy + USB destination selector** (2026-10-19) — `specs/lan-access/SPEC.md` (route audit test `tests/integration/test_lan_access.py`), `specs/usb-file-transfer/SPEC.md` destination rules. Gate green. Not verified on a real phone or in a browser pane visually.

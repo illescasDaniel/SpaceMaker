@@ -6,7 +6,7 @@ _Last updated: 2026-10-19 (Components Copy button fix, committed)_
 
 ## Current focus
 
-In-app phone file/folder picker (replaces adbfs): wireframe, spec, architecture approved 2026-10-19; backend (`POST /api/device/list`, shell/ifuse `list_directory`, extract extras) committed; web UI (`device-picker.ts`, `extra-sources.ts`, `wizard-extras.ts`, USB transfer + wizard Step 1 entry points) written, `task checks` green. Next: Phase 5 code-grader, then report. Picker + extras routes are desktop-only (user decision 2026-10-19: only QR/Wi-Fi transfer and gallery are LAN-visible).
+Branch `claude/device-file-picker-48a91d`: phone picker (desktop-only, grader PASS), USB transfer destination selector (`usb_transfer_destination`, persisted in preferences JSON), and LAN access policy (`web/lan_policy.py` default-deny allow-list middleware, registered inside the passcode guard so LAN gets 401 before 403; shell keyed on TCP peer, not Host; `GET /` for LAN = notice page with Open gallery). Gate green. Next: Phase 5 grader on lan-access, then report to parent session. Known edge: same-machine browser via its own LAN IP sees the notice page (use `localhost`).
 
 Previous:
 

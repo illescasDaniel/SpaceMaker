@@ -10,7 +10,7 @@ from spacemaker.adapters.inbound.web.media_paths import (
 	_no_cache_file,
 	_stamped_shell_page,
 )
-from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, normalize_host, spa_entry_for
+from spacemaker.adapters.inbound.web.spa_entry import SpaEntry, spa_entry_for
 from spacemaker.bootstrap.services import AppServices
 
 
@@ -41,16 +41,14 @@ def build_pages_router(services: AppServices) -> APIRouter:
 
 	@router.get("/")
 	def root_page(request: Request) -> Response:
-		host = normalize_host(request.headers.get("host", ""))
-		entry = spa_entry_for(host=host, path="/")
+		entry = spa_entry_for(client_host=request.client.host if request.client else None, path="/")
 		return _spa_response(entry)
 
 	@router.get("/gallery")
 	@router.get("/gallery/item/{relative_path:path}")
 	def gallery_page(request: Request, relative_path: str = "") -> Response:
 		_ = relative_path
-		host = normalize_host(request.headers.get("host", ""))
-		entry = spa_entry_for(host=host, path=request.url.path)
+		entry = spa_entry_for(client_host=request.client.host if request.client else None, path=request.url.path)
 		return _spa_response(entry)
 
 	@router.get("/upload")

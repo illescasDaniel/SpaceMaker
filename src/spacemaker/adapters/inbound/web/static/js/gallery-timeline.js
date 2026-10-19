@@ -1,4 +1,5 @@
 import { apiSend } from "./api.js";
+import { isMobileGalleryShell } from "./dom.js";
 import { appendThumbCell } from "./gallery-item.js";
 import { resetSelection, toggleGroup } from "./gallery-selection.js";
 import { monthName } from "./home.js";
@@ -483,6 +484,10 @@ function applyGalleryFirewallHints(info, hintEl, fwWarnEl) {
 	}
 }
 function loadServerInfo() {
+	// LAN browsers are denied /api/server-info and the gallery QR (desktop-only, spec: lan-access).
+	if (isMobileGalleryShell()) {
+		return;
+	}
 	apiSend("GET", "/api/server-info").then((info) => {
 		const qr = document.getElementById("qr-placeholder");
 		const portLabel = document.getElementById("gallery-lan-port");

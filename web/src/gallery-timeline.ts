@@ -1,4 +1,5 @@
 import { apiSend } from "./api.ts";
+import { isMobileGalleryShell } from "./dom.ts";
 import { appendThumbCell } from "./gallery-item.ts";
 import { resetSelection, toggleGroup } from "./gallery-selection.ts";
 import { monthName } from "./home.ts";
@@ -499,6 +500,10 @@ function applyGalleryFirewallHints(info: ServerInfo, hintEl: HTMLElement | null,
 	}
 }
 function loadServerInfo(): void {
+	// LAN browsers are denied /api/server-info and the gallery QR (desktop-only, spec: lan-access).
+	if (isMobileGalleryShell()) {
+		return;
+	}
 	apiSend<ServerInfo>("GET", "/api/server-info").then((info) => {
 		const qr = document.getElementById("qr-placeholder");
 		const portLabel = document.getElementById("gallery-lan-port");

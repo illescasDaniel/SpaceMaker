@@ -9,6 +9,7 @@ from starlette.responses import Response
 
 from spacemaker import __version__ as app_version
 from spacemaker.adapters.inbound.web.client_access import is_loopback_client_host
+from spacemaker.adapters.inbound.web.lan_policy import lan_policy_challenge
 from spacemaker.adapters.inbound.web.media_paths import _STATIC
 from spacemaker.adapters.inbound.web.passcode_guard import passcode_challenge
 from spacemaker.adapters.inbound.web.routes import register_routes
@@ -31,7 +32,18 @@ def create_fastapi_app(services: AppServices) -> FastAPI:
 	app.state.services = services
 	app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
-	# Registered first = innermost, so the unlock page still passes through the shell
+	# Innermost: runs after the passcode guard, so an unauthenticated LAN client gets 401 before 403.
+	@app.middleware("http")
+	async def lan_access_policy(
+		request: Request,
+		call_next: Callable[[Request], Awaitable[Response]],
+	) -> Response:
+		denied = lan_policy_challenge(request)
+		if denied is not None:
+			return denied
+		return await call_next(request)
+
+	# Registered after the LAN policy = outside it, so the unlock page still passes through the shell
 	# middleware below and gets the same CSP / no-store headers as the pages it replaces.
 	@app.middleware("http")
 	async def network_passcode_guard(
