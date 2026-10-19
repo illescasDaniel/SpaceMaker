@@ -109,6 +109,24 @@ def test_given_passcode_and_lan_client_when_post_list_then_401() -> None:
 	assert response.json() == {"detail": "passcode-required"}
 
 
+def test_given_lan_client_without_passcode_when_post_list_then_403_desktop_only() -> None:
+	# given
+	app, devices = _app_with_fake()
+
+	async def lan_app(scope, receive, send):  # type: ignore[no-untyped-def]
+		scope = dict(scope)
+		if scope["type"] in {"http", "websocket"}:
+			scope["client"] = ("10.0.0.2", 43210)
+		await app(scope, receive, send)
+
+	client = TestClient(lan_app)
+	# when
+	response = client.post("/api/device/list", json=_body())
+	# then
+	assert response.status_code == 403
+	assert devices.list_directory_calls == []
+
+
 def test_given_extract_extras_when_snapshot_then_start_gate_counts_them() -> None:
 	# given
 	app, _devices = _app_with_fake()

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import sys
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from spacemaker.adapters.inbound.web.client_access import require_loopback
 from spacemaker.adapters.inbound.web.models import DeviceListBody
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.domain.connection import ConnectionMethod
@@ -25,8 +26,9 @@ def build_device_router(services: AppServices) -> APIRouter:
 	router = APIRouter()
 
 	@router.post("/api/device/list")
-	def device_list(body: DeviceListBody) -> dict[str, object]:
-		"""List one phone directory for the in-app picker (read-only; passcode-gated, not loopback-only)."""
+	def device_list(request: Request, body: DeviceListBody) -> dict[str, object]:
+		"""List one phone directory for the in-app picker (read-only; desktop-only like every module screen API)."""
+		require_loopback(request)
 		try:
 			method = ConnectionMethod(body.method)
 		except ValueError as exc:

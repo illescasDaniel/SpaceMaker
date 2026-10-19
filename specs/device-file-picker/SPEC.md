@@ -15,10 +15,10 @@ _Proposed — confirm or adjust at spec review._
 
 | Decision | Answer |
 |----------|--------|
-| **Success criteria** | A user on Linux, macOS or Windows with an authorized Android phone can open the picker, navigate to any folder under user storage, tick several folders/files across several directories, and see them as removable sources in the calling screen — with no extra install, no FUSE, no native dialog. The same works from a phone browser in `--server-only` mode. Picks are stored as device-relative paths (user-storage prefix stripped), identical to today’s Browse extras, so the existing transfer/extract pipelines and idempotency are unchanged. iPhone (AFC) lists through the same screen. |
+| **Success criteria** | A user on Linux, macOS or Windows with an authorized Android phone can open the picker, navigate to any folder under user storage, tick several folders/files across several directories, and see them as removable sources in the calling screen — with no extra install, no FUSE, no native dialog. The picker is a module-screen feature: desktop app (or the computer running SpaceMaker) only, never other devices on the LAN (only QR/Wi-Fi transfer and gallery endpoints are LAN-visible). Picks are stored as device-relative paths (user-storage prefix stripped), identical to today’s Browse extras, so the existing transfer/extract pipelines and idempotency are unchanged. iPhone (AFC) lists through the same screen. |
 | **Failure handling** | Per directory, the picker shows one of: loading, empty, permission denied (e.g. `Android/data` on Android 11+), device unauthorized, device unplugged/offline, listing timed out, generic error — each with Retry or Go up where it helps. Failures never clear ticked items. A failed listing leaves the previous directory’s selection and path intact. Closing the picker (Cancel) discards picks; Add returns them. Nothing is copied by the picker. |
 | **Performance & resource budget** | One `adb shell` call (or one AFC directory read) per directory opened; never recurse; sub-folders of a ticked folder are not expanded in the picker. Directory listing of ~5 000 entries returns the first page in ≤ 2 s on USB 2; the UI renders at most 500 rows at a time (“Show N more”) and filters client-side over the loaded page set. The server holds no persistent connection and keeps at most a short-lived (≤ 30 s) listing cache per `(device, path)`. Entry payload ≤ ~150 bytes/entry. Listing is cancelled (superseded) when the user navigates away. |
-| **Trust boundary** | Untrusted input: the `path` sent by the web client (including LAN phone-browser clients in `--server-only` mode) and file names returned by the phone (arbitrary unicode, spaces, quotes, newlines, `$`, backticks). The inbound route validates and normalizes `path` (no `..`, no NUL, no absolute escape, must resolve under the user-storage root) before the adapter runs; the ADB adapter passes the path as a single `shlex`-quoted argument and never builds shell from phone-provided names. File names from the phone are rendered with `textContent` only. The routes are covered by the existing network-passcode gate like every other module API ([network-passcode](../network-passcode/SPEC.md)) — no new loopback-only restriction, so a passcode-authenticated phone browser can pick. The picker only lists; copying/moving remains in the transfer/extract use cases. |
+| **Trust boundary** | Untrusted input: the `path` sent by the web client (including a LAN client probing the endpoint) and file names returned by the phone (arbitrary unicode, spaces, quotes, newlines, `$`, backticks). The inbound route validates and normalizes `path` (no `..`, no NUL, no absolute escape, must resolve under the user-storage root) before the adapter runs; the ADB adapter passes the path as a single `shlex`-quoted argument and never builds shell from phone-provided names. File names from the phone are rendered with `textContent` only. `POST /api/device/list` and the extras routes are loopback-only like every other module-screen API (403 `desktop-only` for LAN clients; the network-passcode gate still answers first when a passcode is set — [network-passcode](../network-passcode/SPEC.md)). The picker only lists; copying/moving remains in the transfer/extract use cases. |
 
 ## Triggers & routing
 
@@ -173,13 +173,13 @@ _Proposed — confirm or adjust at spec review._
 - **When** the route handles it
 - **Then** the route returns 400 and no `adb` process is started
 
-### Scenario: Passcode gate
+### Scenario: Desktop-only
 
+- **Given** a request to `POST /api/device/list` from a non-loopback (LAN) client
+- **When** the route handles it
+- **Then** it returns 403 `desktop-only` and no `adb` process is started
 - **Given** a network passcode is set and a LAN client has no login
-- **When** it calls `POST /api/device/list`
-- **Then** it receives 401 `passcode-required` like other module APIs
-- **Given** it has a valid login (`--server-only` phone browser)
-- **Then** the picker works identically to the desktop
+- **Then** it receives 401 `passcode-required` first, like other APIs
 
 ### Scenario: Preset exist-probe uses one listing
 
@@ -212,9 +212,9 @@ _Proposed — confirm or adjust at spec review._
 - **When** the user opens the picker
 - **Then** the root is titled **iPhone**, lists the exposed top-level folders (typically `DCIM`), and one directory is read per navigation
 
-### Scenario: Works on every OS and in server-only mode
+### Scenario: Works on every OS
 
-- **Given** the app on Linux, macOS or Windows (bundled/managed `adb`), or a phone browser against `--server-only`
+- **Given** the desktop app on Linux, macOS or Windows (bundled/managed `adb`)
 - **When** the user opens the picker
 - **Then** it renders and lists the phone without any mount tool, native dialog or extra install
 
