@@ -128,8 +128,12 @@ export interface DeviceEntryRow {
 export interface DeviceListPage {
 	path: string;
 	entries: DeviceEntryRow[];
-	next_cursor: number | null;
+	/** Opaque server cursor for the next page, or null on the last page. */
+	next_cursor: string | null;
+	/** Entries matching the current filter / hidden toggle. */
 	total: number;
+	/** Entries in the folder ignoring the filter. */
+	total_unfiltered: number;
 }
 
 /** `detail` of a failed `POST /api/device/list` (`DeviceBrowseErrorKind` value plus device text). */

@@ -30,6 +30,7 @@ from spacemaker.application.clear_browser_cache import ClearBrowserCache
 from spacemaker.application.clear_user_preferences import ClearUserPreferences
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.delete_gallery_item import DeleteGalleryItem
+from spacemaker.application.device_listing_cache import DeviceListingCache
 from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.export_friendly_media_batch import ExportFriendlyMediaBatch
@@ -115,6 +116,8 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 			MonotonicClock(),
 		)
 		self.network_passcode.load()
+		# One cache for every picker listing (and the preset probe); entries expire after a short TTL.
+		self.device_listing_cache = DeviceListingCache(MonotonicClock())
 		self.compression_tools = ManagedCompressionTools(self.managed_tools)
 		self.runner = ToolRunner(path_fallback_allowed=self.managed_tools.permit_path_fallback)
 		self.probe = SubprocessMediaProbe(self.runner)
@@ -196,12 +199,13 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 				with contextlib.suppress(Exception):
 					release()
 		self._device_repos.clear()
+		self.device_listing_cache.clear()
 
 	def extract_use_case(self, method: ConnectionMethod) -> ExtractMedia:
 		return ExtractMedia(self.devices_for(method), self.filesystem)
 
 	def list_device_directory_use_case(self, method: ConnectionMethod) -> ListDeviceDirectory:
-		return ListDeviceDirectory(self.devices_for(method))
+		return ListDeviceDirectory(self.devices_for(method), cache=self.device_listing_cache)
 
 	def usb_transfer_use_case(self, method: ConnectionMethod) -> TransferUsbFiles:
 		return TransferUsbFiles(self.devices_for(method), self.filesystem)

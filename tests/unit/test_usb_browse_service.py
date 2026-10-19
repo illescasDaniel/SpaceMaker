@@ -9,7 +9,7 @@ from tests.unit.fakes import FakeDeviceRepository
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
-from spacemaker.domain.device_browse import DeviceEntry
+from spacemaker.domain.device_browse import DeviceBrowseQuery, DeviceEntry
 from spacemaker.domain.jobs import JobPhase
 
 
@@ -32,6 +32,30 @@ def test_given_root_with_download_and_documents_when_snapshot_then_one_listing_a
 	assert devices.list_directory_calls == [""]
 	assert snap["picker_available"] is True
 	assert snap["available_folders"] == ["documents", "download"]
+
+
+def test_given_root_with_150_folders_when_snapshot_then_late_preset_still_found() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	devices.tree[""] = [DeviceEntry(f"Aaa{i:03d}", True) for i in range(150)] + [DeviceEntry("Download", True)]
+	services = _services(devices)
+	# when
+	snap = services._usb_browse_snapshot(ConnectionMethod.ADB, "dev1")
+	# then
+	assert snap["available_folders"] == ["download"]
+
+
+def test_given_probe_then_picker_open_of_root_when_within_ttl_then_one_device_listing() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	devices.tree[""] = [DeviceEntry("Download", True), DeviceEntry("a.txt", False)]
+	services = _services(devices)
+	services._usb_browse_snapshot(ConnectionMethod.ADB, "dev1")
+	# when
+	page = services.list_device_directory(ConnectionMethod.ADB, "dev1", "", DeviceBrowseQuery())
+	# then
+	assert [e.name for e in page.entries] == ["Download", "a.txt"]
+	assert devices.list_directory_calls == [""]
 
 
 def test_given_no_device_when_snapshot_then_picker_unavailable_with_hint_and_no_listing() -> None:

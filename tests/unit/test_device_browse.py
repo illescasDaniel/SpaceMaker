@@ -1,12 +1,15 @@
 import pytest
 
 from spacemaker.domain.device_browse import (
-	BROWSE_PAGE_SIZE,
 	DeviceBrowseError,
 	DeviceBrowseErrorKind,
+	DeviceBrowseQuery,
 	DeviceEntry,
+	browse_sort_key,
+	decode_browse_cursor,
+	encode_browse_cursor,
 	normalize_browse_path,
-	page_entries,
+	scroll_page,
 	sort_entries,
 )
 
@@ -56,20 +59,162 @@ def test_given_mixed_entries_when_sort_then_folders_first_case_insensitive() -> 
 	assert names == ["alpha", "Zeta", "a.txt", "b.txt"]
 
 
-def test_given_many_entries_when_page_then_cursor_walks_all_pages() -> None:
+def _mixed_entries(count: int = 250) -> list[DeviceEntry]:
+	entries = [DeviceEntry(f"Dir{i:03d}", True) for i in range(count // 5)]
+	entries += [DeviceEntry(f"file{i:04d}.jpg" if i % 2 else f"File{i:04d}.JPG", False, size=i) for i in range(count)]
+	return entries
+
+
+def _walk(
+	entries: list[DeviceEntry], limit: int = 100, query: str = "", show_hidden: bool = False
+) -> list[list[str]]:
+	pages: list[list[str]] = []
+	cursor: str | None = None
+	while True:
+		page = scroll_page("p", entries, DeviceBrowseQuery(cursor=cursor, limit=limit, query=query, show_hidden=show_hidden))
+		pages.append([e.name for e in page.entries])
+		cursor = page.next_cursor
+		if cursor is None:
+			return pages
+
+
+@pytest.mark.parametrize("name", ["a", "Zoë", "line\nbreak", "日本語 file.txt", 'q"uo/te\\', "x" * 300])
+def test_given_entry_when_cursor_round_trip_then_sort_key_restored(name: str) -> None:
 	# given
-	entries = [DeviceEntry(f"f{i:05d}.jpg", False, size=i) for i in range(1200)]
+	entry = DeviceEntry(name, True)
 	# when
-	first = page_entries("DCIM/Camera", entries)
-	second = page_entries("DCIM/Camera", entries, cursor=first.next_cursor or 0)
-	last = page_entries("DCIM/Camera", entries, cursor=second.next_cursor or 0)
+	decoded = decode_browse_cursor(encode_browse_cursor(entry))
 	# then
-	assert len(first.entries) == BROWSE_PAGE_SIZE
-	assert first.total == 1200
-	assert first.next_cursor == BROWSE_PAGE_SIZE
-	assert len(second.entries) == BROWSE_PAGE_SIZE
-	assert len(last.entries) == 200
+	assert decoded == browse_sort_key(entry)
+
+
+def test_given_entry_when_encode_cursor_then_url_safe_and_versioned() -> None:
+	# given
+	# when
+	cursor = encode_browse_cursor(DeviceEntry("a/b+c", False))
+	# then
+	assert cursor.startswith("v1.")
+	assert all(ch.isalnum() or ch in "-_.=" for ch in cursor)
+
+
+@pytest.mark.parametrize(
+	"raw", ["", "garbage", "5", "v1.", "v1.!!!", "v0.W3RydWUsImEiLCJhIl0=", "v1.bm90LWpzb24", "v1.WzEsMiwzXQ", "v1.e30"]
+)
+def test_given_foreign_cursor_when_decode_then_invalid_cursor(raw: str) -> None:
+	# given
+	# when
+	# then
+	with pytest.raises(DeviceBrowseError) as exc:
+		decode_browse_cursor(raw)
+	assert exc.value.kind is DeviceBrowseErrorKind.INVALID_CURSOR
+
+
+def test_given_bad_cursor_when_scroll_then_invalid_cursor() -> None:
+	# given
+	# when
+	# then
+	with pytest.raises(DeviceBrowseError) as exc:
+		scroll_page("p", _mixed_entries(), DeviceBrowseQuery(cursor="12"))
+	assert exc.value.kind is DeviceBrowseErrorKind.INVALID_CURSOR
+
+
+def test_given_250_mixed_entries_when_scroll_then_each_entry_once_in_folder_first_order() -> None:
+	# given
+	entries = _mixed_entries(250)
+	# when
+	pages = _walk(entries, limit=100)
+	# then
+	flat = [n for page in pages for n in page]
+	assert [len(p) for p in pages] == [100, 100, 100]
+	assert flat == [e.name for e in sort_entries(entries)]
+	assert len(set(flat)) == len(entries)
+	assert flat[0].startswith("Dir")
+
+
+def test_given_last_page_when_scroll_then_next_cursor_none_and_totals() -> None:
+	# given
+	entries = [DeviceEntry(f"f{i:03d}", False) for i in range(150)]
+	# when
+	first = scroll_page("p", entries, DeviceBrowseQuery(limit=100))
+	last = scroll_page("p", entries, DeviceBrowseQuery(cursor=first.next_cursor, limit=100))
+	# then
+	assert first.next_cursor is not None
+	assert len(last.entries) == 50
 	assert last.next_cursor is None
+	assert last.total == 150
+	assert last.total_unfiltered == 150
+	assert last.path == "p"
+
+
+def test_given_exactly_limit_entries_when_scroll_then_single_page() -> None:
+	# given
+	entries = [DeviceEntry(f"f{i:03d}", False) for i in range(100)]
+	# when
+	page = scroll_page("p", entries, DeviceBrowseQuery(limit=100))
+	# then
+	assert len(page.entries) == 100
+	assert page.next_cursor is None
+
+
+def test_given_entry_inserted_before_cursor_when_continue_then_no_duplicate_or_skip() -> None:
+	# given
+	entries = [DeviceEntry(f"f{i:03d}", False) for i in range(30)]
+	first = scroll_page("p", entries, DeviceBrowseQuery(limit=10))
+	changed = [*entries, DeviceEntry("a-new", False), DeviceEntry("f005b", False)]
+	# when
+	second = scroll_page("p", changed, DeviceBrowseQuery(cursor=first.next_cursor, limit=100))
+	# then
+	assert [e.name for e in second.entries] == [f"f{i:03d}" for i in range(10, 30)]
+
+
+def test_given_cursor_entry_deleted_when_continue_then_resumes_after_its_position() -> None:
+	# given
+	entries = [DeviceEntry(f"f{i:03d}", False) for i in range(30)]
+	first = scroll_page("p", entries, DeviceBrowseQuery(limit=10))
+	remaining = [e for e in entries if e.name != "f009"]
+	# when
+	second = scroll_page("p", remaining, DeviceBrowseQuery(cursor=first.next_cursor, limit=100))
+	# then
+	assert [e.name for e in second.entries] == [f"f{i:03d}" for i in range(10, 30)]
+
+
+def test_given_query_when_scroll_then_case_insensitive_substring_and_counts() -> None:
+	# given
+	entries = [
+		DeviceEntry("IMG_001.jpg", False),
+		DeviceEntry("holiday", True),
+		DeviceEntry("img_002.PNG", False),
+		DeviceEntry("notes.txt", False),
+	]
+	# when
+	page = scroll_page("p", entries, DeviceBrowseQuery(query="IMG"))
+	# then
+	assert [e.name for e in page.entries] == ["IMG_001.jpg", "img_002.PNG"]
+	assert page.total == 2
+	assert page.total_unfiltered == 4
+
+
+def test_given_hidden_entries_when_scroll_then_excluded_unless_show_hidden() -> None:
+	# given
+	entries = [DeviceEntry(".thumbnails", True), DeviceEntry("DCIM", True), DeviceEntry(".nomedia", False)]
+	# when
+	default = scroll_page("p", entries, DeviceBrowseQuery())
+	shown = scroll_page("p", entries, DeviceBrowseQuery(show_hidden=True))
+	# then
+	assert [e.name for e in default.entries] == ["DCIM"]
+	assert default.total == 1
+	assert default.total_unfiltered == 3
+	assert [e.name for e in shown.entries] == [".thumbnails", "DCIM", ".nomedia"]
+	assert shown.total == 3
+
+
+def test_given_filter_and_paging_when_scroll_then_cursor_walks_filtered_set() -> None:
+	# given
+	entries = [DeviceEntry(f"match{i:03d}", False) for i in range(25)] + [DeviceEntry("other", False)]
+	# when
+	pages = _walk(entries, limit=10, query="MATCH")
+	# then
+	assert [len(p) for p in pages] == [10, 10, 5]
 
 
 def test_given_hidden_names_when_is_hidden_then_dot_prefix_only() -> None:

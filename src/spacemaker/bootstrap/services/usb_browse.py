@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING
 
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
-from spacemaker.domain.device_browse import DeviceBrowseError, DeviceDirectoryPage
+from spacemaker.domain.device_browse import (
+	BROWSE_PAGE_MAX,
+	DeviceBrowseError,
+	DeviceBrowseQuery,
+	DeviceDirectoryScrollPage,
+)
 from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import JobProgress, TransferMode
@@ -47,7 +52,12 @@ class UsbBrowseMixin:
 				"hint": "Add files/folder needs a connected, authorized device.",
 			}
 		try:
-			entries = self.list_device_directory_use_case(method).execute(device_id, "").entries
+			# Folder names only, so hidden entries are fine; the 500 cap matches the old probe.
+			entries = (
+				self.list_device_directory_use_case(method)
+				.scroll(method.value, device_id, "", DeviceBrowseQuery(limit=BROWSE_PAGE_MAX, show_hidden=True))
+				.entries
+			)
 		except DeviceBrowseError:
 			return {"picker_available": True, "available_folders": None, "hint": ""}
 		except Exception:
@@ -61,9 +71,9 @@ class UsbBrowseMixin:
 		}
 
 	def list_device_directory(
-		self: AppServices, method: ConnectionMethod, device_id: str, path: str, cursor: int = 0
-	) -> DeviceDirectoryPage:
-		return self.list_device_directory_use_case(method).execute(device_id, path, cursor)
+		self: AppServices, method: ConnectionMethod, device_id: str, path: str, request: DeviceBrowseQuery
+	) -> DeviceDirectoryScrollPage:
+		return self.list_device_directory_use_case(method).scroll(method.value, device_id, path, request)
 
 	def set_usb_transfer_extra_paths(self: AppServices, paths: list[str]) -> list[str]:
 		merged = merge_extra_paths([], paths)

@@ -1,8 +1,10 @@
-_Last updated: 2026-10-19 (Components Copy button fix, committed)_
+_Last updated: 2026-10-19 (phone picker scroll pagination merged into main)_
 
 ## Branch
 
-`main`. webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevmem `>=0.4.0,<0.5`. Secret gate on `smart-commit-guard` 0.2.0.
+`main`. Phone-picker scroll pagination merged from `worktree-paginated-adb-listing` (`specs/device-file-picker/PLAN-scroll-pagination.md`; SDD phases 0–5 done, grader PASS). Not yet tried against a real phone.
+
+webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevmem `>=0.4.0,<0.5`. Secret gate on `smart-commit-guard` 0.2.0.
 
 ## Current focus
 
