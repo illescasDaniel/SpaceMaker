@@ -1,8 +1,10 @@
-_Last updated: 2026-10-19 (Components Copy button fix, committed)_
+_Last updated: 2026-10-19 (phone picker scroll pagination done, uncommitted)_
 
 ## Branch
 
-`main`. webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevmem `>=0.4.0,<0.5`. Secret gate on `smart-commit-guard` 0.2.0.
+`worktree-paginated-adb-listing` (forked from `main`). Phone-picker scroll pagination (`specs/device-file-picker/PLAN-scroll-pagination.md`): phases 0–4 done and approved in chat, gate green, Phase 5 grader PASS, partials fixed, "No match" spec rule amended. Not committed; not tried against a real phone. `main` gained af56b9a since the fork (conflict expected in this file).
+
+webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevmem `>=0.4.0,<0.5`. Secret gate on `smart-commit-guard` 0.2.0.
 
 ## Current focus
 

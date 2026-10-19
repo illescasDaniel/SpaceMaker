@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.device_browse import BROWSE_PAGE_MAX, BROWSE_QUERY_MAX, BROWSE_SCROLL_PAGE_SIZE
 from spacemaker.domain.library import TransferMode
 from spacemaker.domain.ui_mode import UiMode
 
@@ -76,4 +77,8 @@ class DeviceListBody(BaseModel):
 	method: str
 	device_id: str
 	path: str = ""
-	cursor: int = 0
+	cursor: str | None = None
+	limit: int = Field(BROWSE_SCROLL_PAGE_SIZE, ge=1, le=BROWSE_PAGE_MAX)
+	query: str = Field("", max_length=BROWSE_QUERY_MAX)
+	show_hidden: bool = False
+	refresh: bool = False

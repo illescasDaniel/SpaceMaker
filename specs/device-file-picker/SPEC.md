@@ -4,9 +4,10 @@
 
 - **Feature:** An in-app screen that browses a USB-connected phone one directory at a time and returns picked folders/files to its caller. Replaces the adbfs FUSE mount + native OS dialog.
 - **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-device-picker`; entry points `#btn-uft-add-files` / `#btn-uft-add-folder` in `#view-usb-file-transfer` and `#btn-wz-add-folder` / `#btn-wz-add-files` in the USB photo backup Step 1. **Wireframe approved** 2026-10-19 (iPhone uses the same picker; photo backup gets Add folder + Add files; adbfs removed).
-- **Spec approved:** 2026-10-19
+- **Spec approved:** 2026-10-19 (original picker)
+- **Revision — scroll pagination:** wireframe revision (auto-load sentinel, “Loading more…”, inline Retry, **Load more** fallback) approved 2026-10-19 (in chat); **spec revision approved** 2026-10-19 (in chat); "No match" rule amended 2026-10-19 (in chat: filter typed and `total` = 0). Plan: [PLAN-scroll-pagination.md](PLAN-scroll-pagination.md)
 - **Callers:** [usb-file-transfer](../usb-file-transfer/SPEC.md) (**Add files…** / **Add folder…**), [extract-media](../extract-media/SPEC.md) / [main-wizard](../main-wizard/SPEC.md) Step 1 for ADB and iPhone USB (**Add folder…** / **Add files…**)
-- **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> DeviceDirectoryPage`; domain `DeviceEntry`
+- **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> list[DeviceEntry]` (contract unchanged; adapters stay dumb); domain `DeviceEntry`, `DeviceDirectoryScrollPage` with an opaque keyset cursor; application-level `DeviceListingCache` (not a port) owned by the long-lived services object
 - **Supersedes:** adbfs mount path in usb-file-transfer (“Mount backends”), `adbfs` in [packaging](../packaging/SPEC.md), `docs/legal/THIRD_PARTY_TOOLS.md`
 
 ## Design decisions
@@ -16,15 +17,15 @@ _Proposed — confirm or adjust at spec review._
 | Decision | Answer |
 |----------|--------|
 | **Success criteria** | A user on Linux, macOS or Windows with an authorized Android phone can open the picker, navigate to any folder under user storage, tick several folders/files across several directories, and see them as removable sources in the calling screen — with no extra install, no FUSE, no native dialog. The picker is a module-screen feature: desktop app (or the computer running SpaceMaker) only, never other devices on the LAN (only QR/Wi-Fi transfer and gallery endpoints are LAN-visible). Picks are stored as device-relative paths (user-storage prefix stripped), identical to today’s Browse extras, so the existing transfer/extract pipelines and idempotency are unchanged. iPhone (AFC) lists through the same screen. |
-| **Failure handling** | Per directory, the picker shows one of: loading, empty, permission denied (e.g. `Android/data` on Android 11+), device unauthorized, device unplugged/offline, listing timed out, generic error — each with Retry or Go up where it helps. Failures never clear ticked items. A failed listing leaves the previous directory’s selection and path intact. Closing the picker (Cancel) discards picks; Add returns them. Nothing is copied by the picker. |
-| **Performance & resource budget** | One `adb shell` call (or one AFC directory read) per directory opened; never recurse; sub-folders of a ticked folder are not expanded in the picker. Directory listing of ~5 000 entries returns the first page in ≤ 2 s on USB 2; the UI renders at most 500 rows at a time (“Show N more”) and filters client-side over the loaded page set. The server holds no persistent connection and keeps at most a short-lived (≤ 30 s) listing cache per `(device, path)`. Entry payload ≤ ~150 bytes/entry. Listing is cancelled (superseded) when the user navigates away. |
-| **Trust boundary** | Untrusted input: the `path` sent by the web client (including a LAN client probing the endpoint) and file names returned by the phone (arbitrary unicode, spaces, quotes, newlines, `$`, backticks). The inbound route validates and normalizes `path` (no `..`, no NUL, no absolute escape, must resolve under the user-storage root) before the adapter runs; the ADB adapter passes the path as a single `shlex`-quoted argument and never builds shell from phone-provided names. File names from the phone are rendered with `textContent` only. `POST /api/device/list` and the extras routes are loopback-only like every other module-screen API (403 `desktop-only` for LAN clients; the network-passcode gate still answers first when a passcode is set — [network-passcode](../network-passcode/SPEC.md)). The picker only lists; copying/moving remains in the transfer/extract use cases. |
+| **Failure handling** | Per directory, the picker shows one of: loading, empty, permission denied (e.g. `Android/data` on Android 11+), device unauthorized, device unplugged/offline, listing timed out, generic error — each with Retry or Go up where it helps. Failures never clear ticked items. A failed **next-page** fetch keeps every loaded row and tick and shows an inline “Couldn’t load more items.” row with **Retry** at the bottom of the list (no full-panel error); an invalid or expired cursor is answered 400 `invalid_cursor` and the client silently restarts from page 1 (ticks kept). A failed listing leaves the previous directory’s selection and path intact. Closing the picker (Cancel) discards picks; Add returns them. Nothing is copied by the picker. |
+| **Performance & resource budget** | One `adb shell` call (or one AFC directory read) per directory opened, plus one per explicit refresh (**Retry**) or cache expiry; never recurse; sub-folders of a ticked folder are not expanded in the picker. Results are served in pages of 100 entries (request `limit` bounded 1..500). The application layer holds a listing cache `DeviceListingCache`: TTL 30 s, LRU ≤ 8 directories, keyed `(method, device_id, path)`, errors are never cached, `refresh: true` bypasses it; later pages, filter changes and the hidden toggle are served from the cached sorted listing with no device call. Filter and **Show hidden** are applied server-side over that listing — the client never downloads all pages to filter. The UI appends rows as pages arrive and never re-renders existing rows. Directory listing of ~5 000 entries returns the first page in ≤ 2 s on USB 2. The server holds no persistent connection. Entry payload ≤ ~150 bytes/entry (a 100-entry page ≈ 15 KB). Stale responses are dropped when the user navigates away, filters or toggles (request id); a superseded listing is not awaited. |
+| **Trust boundary** | Untrusted input: the `path` sent by the web client (including a LAN client probing the endpoint) and file names returned by the phone (arbitrary unicode, spaces, quotes, newlines, `$`, backticks). The inbound route validates and normalizes `path` (no `..`, no NUL, no absolute escape, must resolve under the user-storage root) before the adapter runs; `cursor` is an opaque string decoded and validated server-side (malformed, tampered or not-a-cursor → 400 `invalid_cursor`, never reaches the adapter); `query` is a plain case-insensitive substring, length-bounded (≤ 200 chars, longer → 400), matched in Python over the cached listing and never sent to the device shell; `limit` is bounded 1..500 (out of range, or a `query` over 200 characters, is rejected by request validation with 422, not silently clamped) and `show_hidden` / `refresh` are booleans; the ADB adapter passes the path as a single `shlex`-quoted argument and never builds shell from phone-provided names. File names from the phone are rendered with `textContent` only. `POST /api/device/list` and the extras routes are loopback-only like every other module-screen API (403 `desktop-only` for LAN clients; the network-passcode gate still answers first when a passcode is set — [network-passcode](../network-passcode/SPEC.md)). The picker only lists; copying/moving remains in the transfer/extract use cases. |
 
 ## Triggers & routing
 
 - **Open:** from a caller button; the SPA navigates to `#view-device-picker` with a caller context `{ origin, kind: "files" | "folders", method: "adb" | "afc", mediaOnly }`. Opening does not start a server-side session; each directory read is one stateless request.
 - **Breadcrumb:** `Home / <origin module> / Pick folders` (or `Pick files`). The origin crumb returns to the caller without picks.
-- **API (inbound, JSON):** `POST /api/device/list` with `{ method, device_id, path, cursor? }` → `{ path, entries: [{ name, is_dir, size, mtime }], next_cursor, total, error? }`. `path` is storage-relative (`""` = **Phone storage** root = `/sdcard` canonical). Pages are ≤ 500 entries, folders first then files, case-insensitive name order, hidden (dot) entries included in the data (client toggles visibility).
+- **API (inbound, JSON):** `POST /api/device/list` with `{ method, device_id, path, cursor?: string | null, limit?: int, query?: string, show_hidden?: bool, refresh?: bool }` → `{ path, entries: [{ name, is_dir, size, mtime }], next_cursor: string | null, total, total_unfiltered, error? }`. `path` is storage-relative (`""` = **Phone storage** root = `/sdcard` canonical). `limit` defaults to 100 (bounded 1..500); `show_hidden` defaults to false; `refresh` defaults to false and bypasses the listing cache. Entries are folders first then files, case-insensitive name order (ties broken by exact name). `total` is the count after `query` / `show_hidden` filtering; `total_unfiltered` is the directory’s full count. `next_cursor` is `null` on the last page. The cursor is **keyset**: it encodes the sort key of the last returned entry (folders first, casefold name, name), so continuing after the cache expired and the folder changed on the phone neither skips nor duplicates entries. `show_hidden` moves hidden (dot) filtering to the server — before this revision the client filtered; hidden entries are excluded from pages, `total` and `next_cursor` unless `show_hidden` is true. An invalid cursor returns 400 `invalid_cursor`.
 - **Return:** on **Add N items** the SPA hands the ticked `[{ path, is_dir }]` to the caller; the caller posts them with its existing extras endpoint (`set_usb_transfer_extra_paths` for USB file transfer; a new equivalent for extract extras).
 - **Methods:** ADB (all OS). AFC (Linux, same as today): `list_directory` reads one directory under the ifuse mount owned by the session. Root for AFC is the device root (**iPhone**), typically only `DCIM`.
 
@@ -34,7 +35,7 @@ _Proposed — confirm or adjust at spec review._
 - Path trail (clickable crumbs, root shown as **Phone storage** — reuse `strip_android_user_storage_prefix` naming, never `/sdcard`, `storage/emulated/0` or `storage/self/primary`).
 - Toolbar: **↑ Up** (disabled at root), **Select this folder** (hidden for `kind: "files"`, disabled at root), name **filter**, **Show hidden** toggle (off by default; dot-entries dimmed when shown).
 - List: header row Name / Size / Modified; checkbox per row; folder name is a button that opens the folder (checkbox only selects); file rows are not links; in `kind: "folders"` file rows are visible but their checkbox is disabled; in `mediaOnly` non-media files are dimmed. Size `—` for folders. Modified column hidden at ≤ 520 px.
-- Pagination footer inside the list: “Showing N of M items” + **Show 500 more**; hidden when everything is shown.
+- Pagination: the next 100 rows load automatically when the end of the list nears the viewport (an `IntersectionObserver` sentinel is the last list item). While a page is in flight the list ends with a “Loading more…” row (spinner static under `prefers-reduced-motion`, `role="status"`). A footer inside the list reads “Showing N of M items” (M = filtered total) with a **Load more** button — the keyboard / no-`IntersectionObserver` fallback, disabled while a page is loading; the footer is hidden when everything is loaded. A failed next page replaces the “Loading more…” row with “Couldn’t load more items.” + **Retry** (`role="alert"`); loaded rows and ticks stay.
 - States replace the list: loading spinner, empty, no filter match, permission denied (**Go up**), unauthorized (**Retry**), unplugged (**Retry**, ticked items kept).
 - Sticky footer: selected count (`aria-live`), **Cancel**, **Add N items** (disabled at 0). Selection persists across folders within one picker session.
 - Hint under the list when a folder is ticked: ticked folders are added whole, sub-folders included, when the job starts.
@@ -43,11 +44,12 @@ _Proposed — confirm or adjust at spec review._
 
 ## Behaviour details
 
+- **Restart semantics:** opening a folder (or Up / breadcrumb) starts at page 1 with the full-panel loading state and clears the filter. Typing in the filter restarts at page 1 after a 200 ms debounce (one request carrying `query`); toggling **Show hidden** restarts immediately. On filter/toggle restarts the existing list stays visible but dimmed until page 1 arrives (no full-panel spinner), then is replaced and scrolled to top. Ticks are keyed by path and survive every restart. Any restart supersedes in-flight requests (request id) — their responses are dropped. When a filter is typed and `total` = 0 the **No match** state shows; otherwise a page with no rows shows the **empty** state (e.g. a folder holding only hidden entries while **Show hidden** is off).
 - **Selected set:** keyed by storage-relative path. Ticking a folder and one of its descendants keeps both; the caller’s `merge_extra_paths` dedupes (parent wins).
 - **Select this folder** adds the current directory as a whole-folder pick and refreshes the row/ footer state.
 - **Photo backup extras:** the extract job queue = preset folders ∪ extras, filtered to media extensions (same filter as `list_media_paths`); destination stays `originals/` with stable relative paths. **Start extract** is enabled when ≥ 1 preset **or** ≥ 1 extra is selected. Extras are cleared on method change, Home exit, and library-root change, like USB file transfer extras.
-- **Preset exist-probe** (USB file transfer): becomes one `list_directory("")` call — a preset shows only if a top-level directory of that name is in the listing. No FUSE walk.
-- **Hidden entries:** `.thumbnails`, `.nomedia`, etc. are returned but hidden by default; `SKIPPED_LIBRARY_DIR_NAMES` still apply when expanding ticked folders.
+- **Preset exist-probe** (USB file transfer): becomes one `list_directory("")` call — a preset shows only if a top-level directory of that name is in the listing. No FUSE walk. The probe goes through the same listing cache (so it and a picker open of the root within 30 s cost one device call between them) and requests `limit` 500 so a root with more than 100 folders is not truncated.
+- **Hidden entries:** `.thumbnails`, `.nomedia`, etc. are kept in the cached listing but filtered out server-side by default (`show_hidden: false`); `SKIPPED_LIBRARY_DIR_NAMES` still apply when expanding ticked folders.
 - **Android listing command:** implementation-defined (adapter picks the most robust of `toybox stat`/`find -printf`/`ls -la` with fallback for old Android), but must be NUL- or otherwise unambiguously delimited so names with spaces/newlines parse correctly, and must return size and mtime. Symlinks resolve to their target type when cheap; otherwise are listed as files.
 - **Device gone mid-browse:** next list request returns `error: "unplugged"`; the UI shows the unplugged state; Retry re-runs the same directory.
 
@@ -120,19 +122,82 @@ _Proposed — confirm or adjust at spec review._
 
 ### Scenario: Large folder stays responsive
 
-- **Given** `DCIM/Camera` contains 3 412 files
+- **Given** `DCIM/Camera` contains 3,412 files
 - **When** the user opens it
-- **Then** one directory listing is requested and at most 500 rows are rendered
-- **And** the footer reads “Showing 500 of 3,412 items”
-- **When** the user activates **Show 500 more**
-- **Then** 500 more rows render without a new device call when already loaded
+- **Then** one directory listing is requested on the device and 100 rows are rendered
+- **And** the footer reads “Showing 100 of 3,412 items”
 - **And** no sub-folder is listed recursively
+
+### Scenario: Scrolling loads the next page from the cache
+
+- **Given** the first 100 of 3,412 items are shown
+- **When** the user scrolls to the bottom of the list
+- **Then** a “Loading more…” row appears and the next 100 rows are appended
+- **And** no new device call is made (the listing cache is hit) and existing rows are not re-rendered
+- **And** the footer reads “Showing 200 of 3,412 items”
+- **When** all 3,412 items are loaded
+- **Then** the footer is hidden
+
+### Scenario: Load more by keyboard
+
+- **Given** the first page is shown and the footer is visible
+- **When** the user focuses **Load more** and activates it with Enter or Space (or the browser has no `IntersectionObserver`)
+- **Then** the next 100 rows are appended exactly as when scrolling
+
+### Scenario: Next page fails
+
+- **Given** two pages are loaded and some rows are ticked
+- **When** fetching the next page fails
+- **Then** the loaded rows and ticks are unchanged and the list ends with “Couldn’t load more items.” and **Retry**
+- **When** the user activates **Retry**
+- **Then** the same page is requested again (bypassing the listing cache), appended on success, and the Retry row disappears
+
+### Scenario: Folder changes on the phone between pages
+
+- **Given** page 1 of a folder is shown and the listing cache has expired
+- **And** a file sorting before the last shown row was added or removed on the phone
+- **When** the next page is requested with the cursor from page 1
+- **Then** the folder is re-listed once and the page continues after the last shown entry
+- **And** no row is duplicated or skipped relative to the entries after that cursor
+
+### Scenario: Invalid cursor
+
+- **Given** a list request whose `cursor` is not a cursor issued by the server
+- **When** the route handles it
+- **Then** it returns 400 `invalid_cursor` and no `adb` process is started
+- **And** when the picker receives it, it restarts from page 1 keeping the ticks
+
+### Scenario: Navigating away drops stale responses
+
+- **Given** a next-page or filter request is in flight
+- **When** the user opens another folder
+- **Then** the late response is ignored and never appended to the new folder’s list
 
 ### Scenario: Filter
 
-- **Given** a loaded directory
-- **When** the user types in the filter box
-- **Then** only matching names show; with no match the **No match** state appears
+- **Given** `DCIM/Camera` contains 3,412 files
+- **When** the user types in the filter box and pauses for 200 ms
+- **Then** exactly one request is sent, carrying `query`, and the other pages are not loaded
+- **And** only matching names show, the list dims until the response arrives, and the footer total is the filtered total
+- **When** no name matches
+- **Then** the **No match** state appears
+
+### Scenario: Hidden toggle restarts server-side
+
+- **Given** a directory with 150 visible and 10 hidden entries, scrolled to page 2
+- **When** the user ticks **Show hidden**
+- **Then** a request with `show_hidden: true` restarts at page 1 immediately (no debounce), served from the cache, and the footer total becomes 160
+
+### Scenario: Listing cache
+
+- **Given** the user opened `DCIM/Camera`
+- **When** the same folder is opened again within 30 s
+- **Then** no device call is made
+- **When** it is opened again after 30 s
+- **Then** the folder is listed on the device again
+- **When** the user activates **Retry** or a request carries `refresh: true`
+- **Then** the cache is bypassed and the folder is listed on the device
+- **And** a failed listing is never cached, and at most 8 directories are kept (least recently used evicted)
 
 ### Scenario: Permission denied
 
@@ -185,7 +250,7 @@ _Proposed — confirm or adjust at spec review._
 
 - **Given** ADB is selected and the phone root contains `Download` and `Documents` but not `Music`
 - **When** USB file transfer builds its preset checklist
-- **Then** exactly one root directory listing is made and only Download and Documents appear
+- **Then** exactly one root directory listing is made (it may be served from the listing cache) and only Download and Documents appear
 
 ### Scenario: Picked paths are device-relative
 
@@ -239,3 +304,5 @@ _Proposed — confirm or adjust at spec review._
 - Wi‑Fi connection method (it already uses the phone’s own browser upload).
 - macOS/Windows iPhone (AFC remains Linux-only; see usb-file-transfer).
 - Picking the destination folder (PC side).
+- Device-side lazy stat (names-first listing, e.g. `ls -1Ap`, then `stat` only the visible page): a possible follow-up for 10k+ folders, deferred until cache + scroll paging is measured on a real phone. toybox `ls` cannot safely represent names containing newlines, so it would need a fallback path.
+- Changing the `DeviceRepositoryPort` contract; gallery pagination; sort controls.

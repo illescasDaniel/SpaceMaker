@@ -34,6 +34,8 @@ const MEDIA_EXTENSIONS = new Set([
 	"mts",
 	"webm",
 ]);
+const PAGE_SIZE = 100;
+const FILTER_DEBOUNCE_MS = 200;
 let session = null;
 function el(id) {
 	return document.getElementById(id);
@@ -97,6 +99,12 @@ function stateKindForError(error) {
 		default:
 			return "failed";
 	}
+}
+function makeSentinel() {
+	const sentinel = document.createElement("li");
+	sentinel.className = "dp-sentinel";
+	sentinel.setAttribute("aria-hidden", "true");
+	return sentinel;
 }
 function showState(kind) {
 	if (!session) {
@@ -222,19 +230,6 @@ function renderTrail() {
 		up.disabled = session.cwd === "";
 	}
 }
-function visibleRows() {
-	if (!session) {
-		return [];
-	}
-	const showHidden = !!el("dp-hidden-toggle")?.checked;
-	const query = (el("dp-filter")?.value ?? "").trim().toLowerCase();
-	return session.entries.filter((entry) => {
-		if (!showHidden && entry.name.startsWith(".")) {
-			return false;
-		}
-		return !query || entry.name.toLowerCase().includes(query);
-	});
-}
 function updateFooter() {
 	if (!session) {
 		return;
@@ -258,23 +253,202 @@ function updateFooter() {
 			: "";
 	}
 }
-function renderRows() {
-	if (!session) {
+function makeRow(entry) {
+	const active = session;
+	const { kind, mediaOnly } = active.options;
+	const path = joinPath(active.cwd, entry.name);
+	const li = document.createElement("li");
+	li.className =
+		"dp-row" +
+		(entry.name.startsWith(".") ? " is-hidden-file" : "") +
+		(active.selected.has(path) ? " is-selected" : "");
+	const box = document.createElement("input");
+	box.type = "checkbox";
+	box.checked = active.selected.has(path);
+	box.setAttribute("aria-label", "Select " + entry.name);
+	box.disabled = (kind === "folders" && !entry.is_dir) || (kind === "files" && entry.is_dir);
+	box.addEventListener("change", () => {
+		if (!session) {
+			return;
+		}
+		if (box.checked) {
+			session.selected.set(path, { path, isDir: entry.is_dir });
+		} else {
+			session.selected.delete(path);
+		}
+		li.classList.toggle("is-selected", box.checked);
+		updateFooter();
+	});
+	let name;
+	if (entry.is_dir) {
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.addEventListener("click", () => {
+			void navigate(path);
+		});
+		name = btn;
+	} else {
+		name = document.createElement("span");
+		if (mediaOnly && !isMediaName(entry.name)) {
+			li.style.opacity = "0.55";
+		}
+	}
+	name.className = "dp-name";
+	const icon = document.createElement("span");
+	icon.className = "dp-ico";
+	icon.setAttribute("aria-hidden", "true");
+	icon.textContent = entry.is_dir ? "📁" : "📄";
+	const label = document.createElement("span");
+	label.className = "dp-label";
+	label.textContent = entry.name;
+	name.appendChild(icon);
+	name.appendChild(label);
+	const size = document.createElement("span");
+	size.className = "dp-size";
+	size.textContent = entry.is_dir ? "—" : formatSize(entry.size);
+	const date = document.createElement("span");
+	date.className = "dp-date";
+	date.textContent = formatDate(entry.mtime);
+	li.appendChild(box);
+	li.appendChild(name);
+	li.appendChild(size);
+	li.appendChild(date);
+	return li;
+}
+function clearTail() {
+	if (session?.tail) {
+		session.tail.remove();
+		session.tail = null;
+	}
+}
+function setTail(kind) {
+	clearTail();
+	const list = el("dp-list");
+	if (!session || !kind || !list) {
 		return;
 	}
+	const tail = document.createElement("li");
+	tail.className = "dp-tail-row" + (kind === "error" ? " is-error" : "");
+	if (kind === "loading") {
+		tail.setAttribute("role", "status");
+		const spinner = document.createElement("span");
+		spinner.className = "dp-spinner";
+		spinner.setAttribute("aria-hidden", "true");
+		const text = document.createElement("span");
+		text.textContent = "Loading more…";
+		tail.appendChild(spinner);
+		tail.appendChild(text);
+	} else {
+		tail.setAttribute("role", "alert");
+		const text = document.createElement("span");
+		text.textContent = "Couldn’t load more items.";
+		const retry = document.createElement("button");
+		retry.type = "button";
+		retry.className = "btn btn-secondary";
+		retry.setAttribute("data-dp-tail", "retry");
+		retry.textContent = "Retry";
+		retry.addEventListener("click", () => {
+			void loadNext(true);
+		});
+		tail.appendChild(text);
+		tail.appendChild(retry);
+	}
+	session.tail = tail;
+	list.appendChild(tail);
+}
+function disconnectObserver() {
+	if (session?.observer) {
+		session.observer.disconnect();
+		session.observer = null;
+	}
+}
+function ensureObserver(list) {
+	if (!session) {
+		return null;
+	}
+	if (!session.observer && typeof IntersectionObserver !== "undefined") {
+		session.observer = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((entry) => entry.isIntersecting)) {
+					void loadNext(false);
+				}
+			},
+			{ root: list, rootMargin: "0px 0px 120px 0px" },
+		);
+	}
+	return session.observer;
+}
+/** Keep the sentinel as the last child while more pages exist; re-observe so it fires even if still in view. */
+function placeSentinel() {
+	const list = el("dp-list");
+	if (!session || !list) {
+		return;
+	}
+	const { sentinel } = session;
+	session.observer?.unobserve(sentinel);
+	if (session.nextCursor === null) {
+		sentinel.remove();
+		return;
+	}
+	list.appendChild(sentinel);
+	if (!session.loadError) {
+		ensureObserver(list)?.observe(sentinel);
+	}
+}
+function updateMore() {
+	const more = el("dp-more");
+	const moreText = el("dp-more-text");
+	const btn = el("btn-dp-more");
+	const list = el("dp-list");
+	if (!session || !more || !moreText || !list) {
+		return;
+	}
+	more.hidden = session.nextCursor === null || list.hidden;
+	moreText.textContent =
+		"Showing " + session.loaded.toLocaleString("en-US") + " of " + session.total.toLocaleString("en-US") + " items";
+	if (btn) {
+		btn.disabled = session.loadingMore;
+	}
+}
+function currentQuery() {
+	return (el("dp-filter")?.value ?? "").trim().slice(0, 200);
+}
+async function fetchPage(cursor, refresh) {
+	if (!session) {
+		throw new Error("picker closed");
+	}
+	const { method, deviceId } = session.options;
+	const body = {
+		method,
+		device_id: deviceId,
+		path: session.cwd,
+		cursor,
+		limit: PAGE_SIZE,
+		show_hidden: !!el("dp-hidden-toggle")?.checked,
+	};
+	const query = currentQuery();
+	if (query) {
+		body.query = query;
+	}
+	if (refresh) {
+		body.refresh = true;
+	}
+	return apiSend("POST", "/api/device/list", body);
+}
+function renderFirstPage(page) {
 	const list = el("dp-list");
 	const stateEl = el("dp-state");
 	const head = document.querySelector("#dp-list-wrap .dp-head");
-	const more = el("dp-more");
-	const moreText = el("dp-more-text");
-	if (!list || !stateEl || !head || !more || !moreText) {
+	if (!session || !list || !stateEl || !head) {
 		return;
 	}
 	renderTrail();
-	const rows = visibleRows();
-	if (rows.length === 0 && session.nextCursor === null) {
-		const query = (el("dp-filter")?.value ?? "").trim();
-		showState(query ? "nomatch" : "empty");
+	session.loaded = page.entries.length;
+	session.total = page.total;
+	session.nextCursor = page.next_cursor;
+	if (page.entries.length === 0) {
+		session.nextCursor = null;
+		showState(currentQuery() ? "nomatch" : "empty");
 		updateFooter();
 		return;
 	}
@@ -284,159 +458,122 @@ function renderRows() {
 	list.hidden = false;
 	head.hidden = false;
 	list.textContent = "";
-	const { kind, mediaOnly } = session.options;
-	for (const entry of rows) {
-		const path = joinPath(session.cwd, entry.name);
-		const li = document.createElement("li");
-		li.className =
-			"dp-row" +
-			(entry.name.startsWith(".") ? " is-hidden-file" : "") +
-			(session.selected.has(path) ? " is-selected" : "");
-		const box = document.createElement("input");
-		box.type = "checkbox";
-		box.checked = session.selected.has(path);
-		box.setAttribute("aria-label", "Select " + entry.name);
-		box.disabled = (kind === "folders" && !entry.is_dir) || (kind === "files" && entry.is_dir);
-		box.addEventListener("change", () => {
-			if (!session) {
-				return;
-			}
-			if (box.checked) {
-				session.selected.set(path, { path, isDir: entry.is_dir });
-			} else {
-				session.selected.delete(path);
-			}
-			li.classList.toggle("is-selected", box.checked);
-			updateFooter();
-		});
-		let name;
-		if (entry.is_dir) {
-			const btn = document.createElement("button");
-			btn.type = "button";
-			btn.addEventListener("click", () => {
-				void navigate(path);
-			});
-			name = btn;
-		} else {
-			name = document.createElement("span");
-			if (mediaOnly && !isMediaName(entry.name)) {
-				li.style.opacity = "0.55";
-			}
-		}
-		name.className = "dp-name";
-		const icon = document.createElement("span");
-		icon.className = "dp-ico";
-		icon.setAttribute("aria-hidden", "true");
-		icon.textContent = entry.is_dir ? "📁" : "📄";
-		const label = document.createElement("span");
-		label.className = "dp-label";
-		label.textContent = entry.name;
-		name.appendChild(icon);
-		name.appendChild(label);
-		const size = document.createElement("span");
-		size.className = "dp-size";
-		size.textContent = entry.is_dir ? "—" : formatSize(entry.size);
-		const date = document.createElement("span");
-		date.className = "dp-date";
-		date.textContent = formatDate(entry.mtime);
-		li.appendChild(box);
-		li.appendChild(name);
-		li.appendChild(size);
-		li.appendChild(date);
-		list.appendChild(li);
+	session.tail = null;
+	for (const entry of page.entries) {
+		list.appendChild(makeRow(entry));
 	}
-	if (session.nextCursor !== null) {
-		more.hidden = false;
-		moreText.textContent =
-			"Showing " +
-			session.entries.length.toLocaleString("en-US") +
-			" of " +
-			session.total.toLocaleString("en-US") +
-			" items";
-	} else {
-		more.hidden = true;
-	}
+	list.scrollTop = 0;
+	placeSentinel();
+	updateMore();
 	updateFooter();
 }
-async function fetchPage(path, cursor) {
-	if (!session) {
-		throw new Error("picker closed");
-	}
-	const { method, deviceId } = session.options;
-	return apiSend("POST", "/api/device/list", { method, device_id: deviceId, path, cursor });
-}
-async function navigate(path) {
+/** Restart at page 1 (open folder, filter, hidden toggle). `blank` swaps the list for the loading panel. */
+async function startListing(blank, refresh) {
 	if (!session) {
 		return;
 	}
-	session.cwd = path;
-	session.entries = [];
-	session.total = 0;
-	session.nextCursor = null;
 	session.requestId += 1;
 	const mine = session.requestId;
-	const filter = el("dp-filter");
-	if (filter) {
-		filter.value = "";
-	}
+	session.loadingMore = false;
+	session.loadError = false;
+	session.nextCursor = null;
+	session.observer?.unobserve(session.sentinel);
+	clearTail();
+	const list = el("dp-list");
 	renderTrail();
-	showState("loading");
+	if (blank) {
+		list?.classList.remove("is-refreshing");
+		showState("loading");
+	} else {
+		list?.classList.add("is-refreshing");
+	}
 	try {
-		const page = await fetchPage(path, 0);
+		const page = await fetchPage(null, refresh);
 		if (!session || session.requestId !== mine) {
 			return;
 		}
-		session.entries = page.entries;
-		session.total = page.total;
-		session.nextCursor = page.next_cursor;
-		renderRows();
+		list?.classList.remove("is-refreshing");
+		renderFirstPage(page);
 	} catch (err) {
 		if (!session || session.requestId !== mine) {
 			return;
 		}
+		list?.classList.remove("is-refreshing");
 		renderTrail();
 		showState(stateKindForError(listError(err).error));
 	}
 }
-async function loadMore(all) {
-	if (!session || session.nextCursor === null) {
+/** Next page: append rows only; never rebuild existing `<li>`s. */
+async function loadNext(refresh) {
+	const list = el("dp-list");
+	if (!session || !list || session.loadingMore || session.nextCursor === null) {
 		return;
 	}
+	const cursor = session.nextCursor;
 	const mine = session.requestId;
-	const btn = el("btn-dp-more");
-	if (btn) {
-		btn.disabled = true;
-	}
+	session.loadingMore = true;
+	session.loadError = false;
+	setTail("loading");
+	placeSentinel();
+	updateMore();
 	try {
-		while (session && session.requestId === mine && session.nextCursor !== null) {
-			const page = await fetchPage(session.cwd, session.nextCursor);
-			if (!session || session.requestId !== mine) {
-				return;
-			}
-			session.entries = session.entries.concat(page.entries);
-			session.total = page.total;
-			session.nextCursor = page.next_cursor;
-			if (!all) {
-				break;
-			}
+		const page = await fetchPage(cursor, refresh);
+		if (!session || session.requestId !== mine) {
+			return;
 		}
-		renderRows();
+		clearTail();
+		for (const entry of page.entries) {
+			list.appendChild(makeRow(entry));
+		}
+		session.loaded += page.entries.length;
+		session.total = page.total;
+		session.nextCursor = page.next_cursor;
+		session.loadingMore = false;
+		placeSentinel();
+		updateMore();
 	} catch (err) {
-		if (session && session.requestId === mine) {
-			showState(stateKindForError(listError(err).error));
+		if (!session || session.requestId !== mine) {
+			return;
 		}
-	} finally {
-		if (btn) {
-			btn.disabled = false;
+		session.loadingMore = false;
+		if (listError(err).error === "invalid_cursor") {
+			void startListing(false, false);
+			return;
 		}
+		session.loadError = true;
+		setTail("error");
+		placeSentinel();
+		updateMore();
 	}
+}
+async function navigate(path, refresh = false) {
+	if (!session) {
+		return;
+	}
+	session.cwd = path;
+	session.total = 0;
+	session.loaded = 0;
+	if (session.filterTimer !== null) {
+		window.clearTimeout(session.filterTimer);
+		session.filterTimer = null;
+	}
+	disconnectObserver();
+	const filter = el("dp-filter");
+	if (filter) {
+		filter.value = "";
+	}
+	await startListing(true, refresh);
 }
 function finish(commit) {
 	const current = session;
-	session = null;
 	if (!current) {
 		return;
 	}
+	if (current.filterTimer !== null) {
+		window.clearTimeout(current.filterTimer);
+	}
+	current.observer?.disconnect();
+	session = null;
 	showView(current.options.origin, { skipHistory: true });
 	if (commit) {
 		current.options.onAdd([...current.selected.values()]);
@@ -447,12 +584,18 @@ function openDevicePicker(options) {
 	session = {
 		options,
 		cwd: "",
-		entries: [],
+		loaded: 0,
 		total: 0,
 		nextCursor: null,
 		selected: new Map(),
 		requestId: 0,
 		stateKind: null,
+		loadingMore: false,
+		loadError: false,
+		observer: null,
+		sentinel: makeSentinel(),
+		tail: null,
+		filterTimer: null,
 	};
 	const origin = el("dp-bc-origin");
 	if (origin) {
@@ -509,23 +652,37 @@ function bindDevicePicker() {
 		session.selected.set(session.cwd, { path: session.cwd, isDir: true });
 		const hint = el("dp-hint");
 		const name = session.cwd.split("/").pop() ?? session.cwd;
-		renderRows();
+		updateFooter();
 		if (hint) {
 			hint.textContent = "Added “" + name + "” as a whole folder.";
 		}
 	});
 	el("dp-hidden-toggle")?.addEventListener("change", () => {
-		renderRows();
-	});
-	el("dp-filter")?.addEventListener("input", () => {
-		if (session?.nextCursor !== null && session && (el("dp-filter")?.value ?? "").trim()) {
-			void loadMore(true);
+		if (!session) {
 			return;
 		}
-		renderRows();
+		if (session.filterTimer !== null) {
+			window.clearTimeout(session.filterTimer);
+			session.filterTimer = null;
+		}
+		void startListing(false, false);
+	});
+	el("dp-filter")?.addEventListener("input", () => {
+		if (!session) {
+			return;
+		}
+		if (session.filterTimer !== null) {
+			window.clearTimeout(session.filterTimer);
+		}
+		session.filterTimer = window.setTimeout(() => {
+			if (session) {
+				session.filterTimer = null;
+				void startListing(false, false);
+			}
+		}, FILTER_DEBOUNCE_MS);
 	});
 	onClick("btn-dp-more", () => {
-		void loadMore(false);
+		void loadNext(!!session?.loadError);
 	});
 	el("dp-state")?.addEventListener("click", (ev) => {
 		const target = ev.target;
@@ -533,7 +690,7 @@ function bindDevicePicker() {
 		if (!session || !act) {
 			return;
 		}
-		void navigate(act === "up" ? parentPath(session.cwd) : session.cwd);
+		void navigate(act === "up" ? parentPath(session.cwd) : session.cwd, act === "retry");
 	});
 }
 

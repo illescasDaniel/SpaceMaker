@@ -8,7 +8,7 @@ from spacemaker.adapters.inbound.web.client_access import require_loopback
 from spacemaker.adapters.inbound.web.models import DeviceListBody
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.domain.connection import ConnectionMethod
-from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind
+from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, DeviceBrowseQuery
 
 
 _STATUS_BY_KIND: dict[DeviceBrowseErrorKind, int] = {
@@ -19,6 +19,7 @@ _STATUS_BY_KIND: dict[DeviceBrowseErrorKind, int] = {
 	DeviceBrowseErrorKind.UNPLUGGED: 409,
 	DeviceBrowseErrorKind.TIMEOUT: 504,
 	DeviceBrowseErrorKind.FAILED: 502,
+	DeviceBrowseErrorKind.INVALID_CURSOR: 400,
 }
 
 
@@ -40,7 +41,18 @@ def build_device_router(services: AppServices) -> APIRouter:
 		if not body.device_id.strip():
 			raise HTTPException(status_code=400, detail="select a device")
 		try:
-			page = services.list_device_directory(method, body.device_id, body.path, max(0, body.cursor))
+			page = services.list_device_directory(
+				method,
+				body.device_id,
+				body.path,
+				DeviceBrowseQuery(
+					cursor=body.cursor,
+					limit=body.limit,
+					query=body.query,
+					show_hidden=body.show_hidden,
+					refresh=body.refresh,
+				),
+			)
 		except DeviceBrowseError as exc:
 			status = _STATUS_BY_KIND[exc.kind]
 			raise HTTPException(status_code=status, detail={"error": exc.kind.value, "message": exc.detail}) from exc
@@ -49,6 +61,7 @@ def build_device_router(services: AppServices) -> APIRouter:
 			"entries": [{"name": e.name, "is_dir": e.is_dir, "size": e.size, "mtime": e.mtime} for e in page.entries],
 			"next_cursor": page.next_cursor,
 			"total": page.total,
+			"total_unfiltered": page.total_unfiltered,
 		}
 
 	return router

@@ -584,6 +584,23 @@
 			color: var(--muted);
 		}
 
+		.dp-sentinel { height: 1px; padding: 0; list-style: none; }
+
+		.dp-tail-row {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.6rem;
+			padding: 0.6rem 0.65rem;
+			font-size: 0.85rem;
+			color: var(--muted);
+			list-style: none;
+		}
+
+		.dp-tail-row .btn { margin-top: 0; padding: 0.25rem 0.65rem; font-size: 0.82rem; }
+		.dp-tail-row.is-error { color: var(--text); }
+		.dp-list.is-refreshing { opacity: 0.55; }
+
 		.dp-more[hidden], .dp-state[hidden], .dp-list[hidden], .dp-head[hidden] { display: none; }
 
 		.dp-more .btn { margin-top: 0; padding: 0.3rem 0.7rem; font-size: 0.82rem; }
@@ -610,6 +627,8 @@
 
 		@keyframes dp-spin { to { transform: rotate(360deg); } }
 		@media (prefers-reduced-motion: reduce) { .dp-spinner { animation: none; } }
+
+		.dp-tail-row .dp-spinner { width: 1rem; height: 1rem; margin: 0; border-width: 2px; }
 
 		.dp-footer {
 			position: sticky;
@@ -2955,7 +2974,7 @@
 				<div class="dp-state" id="dp-state" hidden></div>
 				<div class="dp-more" id="dp-more" hidden>
 					<span id="dp-more-text"></span>
-					<button type="button" class="btn btn-secondary" id="btn-dp-more">Show 500 more</button>
+					<button type="button" class="btn btn-secondary" id="btn-dp-more">Load more</button>
 				</div>
 			</div>
 			<p class="folder-hint" id="dp-hint" style="margin: 0;"></p>
@@ -2969,7 +2988,13 @@
 				<button type="button" data-dp-state="unauthorized">Unauthorized</button>
 				<button type="button" data-dp-state="unplugged">Unplugged</button>
 				<button type="button" data-dp-state="big">Big folder (3,412)</button>
+				<label style="margin-left: 0.5rem;"><input type="checkbox" id="dp-demo-next-error" /> Simulate next-page error (uncheck, then Retry)</label>
 			</p>
+
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				Pages of 100 load automatically as you scroll; filter and hidden toggle are applied on the server. Try it: open <b>Big folder (3,412)</b> and scroll the list — a “Loading more…” row appears at the bottom while the next 100 arrive (~0.3 s). The footer button <b>Load more</b> is the keyboard / no-IntersectionObserver fallback. Tick <b>Simulate next-page error</b> and scroll to see the inline retry row (already-loaded rows and ticks stay).
+			</aside>
 		</article>
 
 		<div class="dp-footer" id="dp-footer">
@@ -4766,10 +4791,16 @@
 				'DCIM/101APPLE': [f('IMG_1001.HEIC', 2.6 * M)]
 			};
 
-			var PAGE = 500;
+			var PAGE = 100;
 			var ctx = null;
 			var cwd = '';
-			var shown = PAGE;
+			var reqId = 0;
+			var nextCursor = null;
+			var totalCount = 0;
+			var loadedCount = 0;
+			var loadingMore = false;
+			var loadError = false;
+			var filterTimer = 0;
 			var selected = {};
 			var forced = null;
 			var listEl = document.getElementById('dp-list');
@@ -4783,6 +4814,13 @@
 			var filterEl = document.getElementById('dp-filter');
 			var headEl = document.querySelector('#dp-list-wrap .dp-head');
 			var hintEl = document.getElementById('dp-hint');
+			var errToggle = document.getElementById('dp-demo-next-error');
+			var btnMore = document.getElementById('btn-dp-more');
+			var sentinelEl = document.createElement('li');
+			sentinelEl.className = 'dp-sentinel';
+			sentinelEl.setAttribute('aria-hidden', 'true');
+			var tailEl = null;
+			var observer = null;
 
 			(function () {
 				var btn = document.getElementById('btn-dp-info');
@@ -4861,81 +4899,187 @@
 				st.classList.toggle('connected', kind !== 'unauthorized' && kind !== 'unplugged');
 			}
 
-			function render() {
-				renderTrail();
-				var data = forced && forced !== 'ok' && forced !== 'big' ? forced : t()[cwd];
-				if (forced === 'big') { data = tree['DCIM/Camera']; }
-				document.getElementById('btn-dp-up').disabled = cwd === '' && forced !== 'big';
-				if (data === undefined) { data = []; }
-				if (typeof data === 'string') {
-					showState(data);
-					return;
-				}
-				var q = filterEl.value.trim().toLowerCase();
-				var rows = data.filter(function (e) {
-					if (!hiddenToggle.checked && e.name.charAt(0) === '.') { return false; }
-					return !q || e.name.toLowerCase().indexOf(q) >= 0;
+			/* Fake server: sort (folders first, then case-insensitive name), filter, keyset page. */
+			function cmpEntry(a, b) {
+				if (a.dir !== b.dir) { return a.dir ? -1 : 1; }
+				return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+			}
+			function fetchPage(path, cursor, query, showHidden) {
+				return new Promise(function (resolve, reject) {
+					window.setTimeout(function () {
+						if (cursor !== null && errToggle.checked) { reject(new Error('simulated next-page error')); return; }
+						var data = forced === 'big' ? tree['DCIM/Camera'] : forced && forced !== 'ok' ? forced : t()[path];
+						if (data === undefined) { data = []; }
+						if (typeof data === 'string') { resolve({ state: data }); return; }
+						var q = query.trim().toLowerCase();
+						var rows = data.filter(function (e) {
+							if (!showHidden && e.name.charAt(0) === '.') { return false; }
+							return !q || e.name.toLowerCase().indexOf(q) >= 0;
+						}).sort(cmpEntry);
+						var start = 0;
+						if (cursor !== null) {
+							start = rows.findIndex(function (e) { return cmpEntry(e, cursor) > 0; });
+							if (start < 0) { start = rows.length; }
+						}
+						var page = rows.slice(start, start + PAGE);
+						var last = page[page.length - 1];
+						resolve({
+							entries: page,
+							total: rows.length,
+							next_cursor: last && start + PAGE < rows.length ? { dir: last.dir, name: last.name } : null
+						});
+					}, 300);
 				});
-				rows.sort(function (a, b) {
-					if (a.dir !== b.dir) { return a.dir ? -1 : 1; }
-					return a.name.localeCompare(b.name);
+			}
+
+			function makeRow(e) {
+				var path = join(cwd, e.name);
+				var li = document.createElement('li');
+				li.className = 'dp-row' + (e.name.charAt(0) === '.' ? ' is-hidden-file' : '') + (selected[path] ? ' is-selected' : '');
+				var cb = document.createElement('input');
+				cb.type = 'checkbox';
+				cb.checked = !!selected[path];
+				cb.setAttribute('aria-label', 'Select ' + e.name);
+				var forbidFile = ctx && ((ctx.kind === 'folders' && !e.dir) || (ctx.kind === 'files' && e.dir));
+				cb.disabled = !!forbidFile;
+				cb.addEventListener('change', function () {
+					if (cb.checked) { selected[path] = { path: path, isDir: e.dir }; } else { delete selected[path]; }
+					li.classList.toggle('is-selected', cb.checked);
+					updateFooter();
 				});
-				if (!rows.length) {
-					showState(q ? 'nomatch' : 'empty');
-					return;
-				}
-				document.getElementById('dp-device-status').classList.add('connected');
-				stateEl.hidden = true;
-				listEl.hidden = false;
-				headEl.hidden = false;
-				listEl.innerHTML = '';
-				var slice = rows.slice(0, shown);
-				slice.forEach(function (e) {
-					var path = join(cwd, e.name);
-					var li = document.createElement('li');
-					li.className = 'dp-row' + (e.name.charAt(0) === '.' ? ' is-hidden-file' : '') + (selected[path] ? ' is-selected' : '');
-					var cb = document.createElement('input');
-					cb.type = 'checkbox';
-					cb.checked = !!selected[path];
-					cb.setAttribute('aria-label', 'Select ' + e.name);
-					var forbidFile = ctx && ((ctx.kind === 'folders' && !e.dir) || (ctx.kind === 'files' && e.dir));
-					cb.disabled = !!forbidFile;
-					cb.addEventListener('change', function () {
-						if (cb.checked) { selected[path] = { path: path, isDir: e.dir }; } else { delete selected[path]; }
-						li.classList.toggle('is-selected', cb.checked);
-						updateFooter();
-					});
-					var name;
-					if (e.dir) {
-						name = document.createElement('button');
-						name.type = 'button';
-						name.addEventListener('click', function () { go(path); });
-					} else {
-						name = document.createElement('span');
-						if (ctx && ctx.mediaOnly && e.media === false) { li.style.opacity = '0.55'; }
-					}
-					name.className = 'dp-name';
-					name.innerHTML = '<span class="dp-ico" aria-hidden="true">' + (e.dir ? '📁' : '📄') + '</span><span class="dp-label"></span>';
-					name.querySelector('.dp-label').textContent = e.name;
-					var size = document.createElement('span');
-					size.className = 'dp-size';
-					size.textContent = e.dir ? '—' : fmtSize(e.size);
-					var date = document.createElement('span');
-					date.className = 'dp-date';
-					date.textContent = e.mtime;
-					li.appendChild(cb);
-					li.appendChild(name);
-					li.appendChild(size);
-					li.appendChild(date);
-					listEl.appendChild(li);
-				});
-				if (rows.length > shown) {
-					moreEl.hidden = false;
-					moreText.textContent = 'Showing ' + shown.toLocaleString('en-US') + ' of ' + rows.length.toLocaleString('en-US') + ' items';
+				var name;
+				if (e.dir) {
+					name = document.createElement('button');
+					name.type = 'button';
+					name.addEventListener('click', function () { go(path); });
 				} else {
-					moreEl.hidden = true;
+					name = document.createElement('span');
+					if (ctx && ctx.mediaOnly && e.media === false) { li.style.opacity = '0.55'; }
 				}
-				updateFooter();
+				name.className = 'dp-name';
+				name.innerHTML = '<span class="dp-ico" aria-hidden="true">' + (e.dir ? '📁' : '📄') + '</span><span class="dp-label"></span>';
+				name.querySelector('.dp-label').textContent = e.name;
+				var size = document.createElement('span');
+				size.className = 'dp-size';
+				size.textContent = e.dir ? '—' : fmtSize(e.size);
+				var date = document.createElement('span');
+				date.className = 'dp-date';
+				date.textContent = e.mtime;
+				li.appendChild(cb);
+				li.appendChild(name);
+				li.appendChild(size);
+				li.appendChild(date);
+				return li;
+			}
+
+			function clearTail() {
+				if (tailEl) { tailEl.remove(); tailEl = null; }
+			}
+			function setTail(kind) {
+				clearTail();
+				if (!kind) { return; }
+				tailEl = document.createElement('li');
+				tailEl.className = 'dp-tail-row' + (kind === 'error' ? ' is-error' : '');
+				if (kind === 'loading') {
+					tailEl.setAttribute('role', 'status');
+					tailEl.innerHTML = '<span class="dp-spinner" aria-hidden="true"></span><span>Loading more…</span>';
+				} else {
+					tailEl.setAttribute('role', 'alert');
+					tailEl.innerHTML = '<span>Couldn’t load more items.</span><button type="button" class="btn btn-secondary" data-dp-tail="retry">Retry</button>';
+					tailEl.querySelector('button').addEventListener('click', function () { loadNext(); });
+				}
+				listEl.appendChild(tailEl);
+			}
+
+			/* Keep the sentinel as the last child while more pages exist; re-observe so it fires even if still in view. */
+			function placeSentinel() {
+				if (observer) { observer.unobserve(sentinelEl); }
+				if (!nextCursor) { sentinelEl.remove(); return; }
+				listEl.appendChild(sentinelEl);
+				if (observer && !loadError) { observer.observe(sentinelEl); }
+			}
+
+			function updateMore() {
+				var more = !!nextCursor;
+				moreEl.hidden = !more || listEl.hidden;
+				moreText.textContent = 'Showing ' + loadedCount.toLocaleString('en-US') + ' of ' + totalCount.toLocaleString('en-US') + ' items';
+				btnMore.disabled = loadingMore;
+			}
+
+			function updateUp() {
+				document.getElementById('btn-dp-up').disabled = cwd === '' && forced !== 'big';
+			}
+
+			/* Restart at page 1 (open folder, filter, hidden toggle). blank=true hides the old list behind a spinner. */
+			function loadFirst(blank) {
+				reqId += 1;
+				var id = reqId;
+				loadingMore = false;
+				loadError = false;
+				nextCursor = null;
+				updateUp();
+				if (blank) { showState('loading'); } else { listEl.classList.add('is-refreshing'); }
+				var query = filterEl.value;
+				fetchPage(cwd, null, query, hiddenToggle.checked).then(function (res) {
+					if (id !== reqId) { return; }
+					listEl.classList.remove('is-refreshing');
+					renderTrail();
+					if (res.state) { showState(res.state); return; }
+					if (!res.entries.length) { showState(query.trim() ? 'nomatch' : 'empty'); return; }
+					document.getElementById('dp-device-status').classList.add('connected');
+					stateEl.hidden = true;
+					listEl.hidden = false;
+					headEl.hidden = false;
+					listEl.innerHTML = '';
+					tailEl = null;
+					res.entries.forEach(function (e) { listEl.appendChild(makeRow(e)); });
+					listEl.scrollTop = 0;
+					loadedCount = res.entries.length;
+					totalCount = res.total;
+					nextCursor = res.next_cursor;
+					placeSentinel();
+					updateMore();
+					updateFooter();
+				}).catch(function () {
+					if (id !== reqId) { return; }
+					listEl.classList.remove('is-refreshing');
+					showState('unplugged');
+				});
+			}
+
+			/* Next page: append rows only; never rebuild existing <li>s. */
+			function loadNext() {
+				if (loadingMore || !nextCursor || !ctx) { return; }
+				loadingMore = true;
+				loadError = false;
+				var id = reqId;
+				setTail('loading');
+				placeSentinel();
+				updateMore();
+				fetchPage(cwd, nextCursor, filterEl.value, hiddenToggle.checked).then(function (res) {
+					if (id !== reqId) { return; }
+					clearTail();
+					res.entries.forEach(function (e) { listEl.appendChild(makeRow(e)); });
+					loadedCount += res.entries.length;
+					totalCount = res.total;
+					nextCursor = res.next_cursor;
+					loadingMore = false;
+					placeSentinel();
+					updateMore();
+				}).catch(function () {
+					if (id !== reqId) { return; }
+					loadingMore = false;
+					loadError = true;
+					setTail('error');
+					placeSentinel();
+					updateMore();
+				});
+			}
+
+			if (typeof IntersectionObserver !== 'undefined') {
+				observer = new IntersectionObserver(function (entries) {
+					if (entries.some(function (en) { return en.isIntersecting; })) { loadNext(); }
+				}, { root: listEl, rootMargin: '0px 0px 120px 0px' });
 			}
 
 			function updateFooter() {
@@ -4949,12 +5093,10 @@
 
 			function go(path) {
 				cwd = path;
-				shown = PAGE;
 				forced = null;
 				filterEl.value = '';
-				showState('loading');
 				renderTrail();
-				window.setTimeout(render, 350);
+				loadFirst(true);
 			}
 
 			function openPicker(opts) {
@@ -4995,12 +5137,14 @@
 				var parts = cwd.split('/');
 				selected[cwd] = { path: cwd, isDir: true };
 				updateFooter();
-				render();
 				hintEl.textContent = 'Added “' + parts[parts.length - 1] + '” as a whole folder.';
 			});
-			hiddenToggle.addEventListener('change', function () { shown = PAGE; render(); });
-			filterEl.addEventListener('input', function () { shown = PAGE; render(); });
-			document.getElementById('btn-dp-more').addEventListener('click', function () { shown += PAGE; render(); });
+			hiddenToggle.addEventListener('change', function () { window.clearTimeout(filterTimer); loadFirst(false); });
+			filterEl.addEventListener('input', function () {
+				window.clearTimeout(filterTimer);
+				filterTimer = window.setTimeout(function () { loadFirst(false); }, 200);
+			});
+			btnMore.addEventListener('click', function () { loadNext(); });
 			stateEl.addEventListener('click', function (ev) {
 				var act = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-dp-act');
 				if (act === 'up') {
@@ -5015,12 +5159,12 @@
 				b.addEventListener('click', function () {
 					var k = b.getAttribute('data-dp-state');
 					if (!ctx) { openPicker({ origin: 'usb-file-transfer', originLabel: 'USB file transfer', method: 'adb', kind: 'files', onAdd: null }); }
-					shown = PAGE;
 					if (k === 'ok') { go(''); return; }
 					forced = k;
 					if (k === 'big') { cwd = 'DCIM/Camera'; }
-					if (k === 'loading') { renderTrail(); showState('loading'); return; }
-					render();
+					renderTrail();
+					if (k === 'loading') { reqId += 1; loadingMore = false; updateUp(); showState('loading'); return; }
+					loadFirst(true);
 				});
 			});
 
