@@ -29,7 +29,8 @@ class SnapshotMixin:
 		base = self.session.snapshot()
 		with self.session._lock:
 			folders = list(self.session.source_folders)
-			has_folders = len(folders) > 0
+			extract_extras = list(self.session.extract_extra_paths)
+			has_folders = len(folders) > 0 or len(extract_extras) > 0
 			has_device = bool(self.session.device_id)
 			extract_phase = self.session.extract_phase
 			convert_phase = self.session.convert_phase
@@ -110,6 +111,7 @@ class SnapshotMixin:
 		) or self._documents_receive_file_count() > 0
 		browse = self._usb_browse_snapshot(usb_method, usb_device_id)
 		base["usb_transfer_browse"] = browse
+		base["extract_extra_paths"] = extract_extras
 		base["usb_transfer_available_folders"] = browse["available_folders"]
 		base["transfer_extra_paths"] = usb_extras
 		if library_root:

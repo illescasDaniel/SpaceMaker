@@ -98,6 +98,8 @@ def build_settings_router(services: AppServices) -> APIRouter:
 				if library_root and not is_absolute_library_path(library_root):
 					raise HTTPException(status_code=400, detail="library_root must be an absolute path")
 				previous_method = services.session.connection_method
+				if library_root != services.session.library_root:
+					services.session.extract_extra_paths = []
 				services.session.library_root = library_root
 				services.session.connection_method = body.connection_method
 				if body.connection_method is ConnectionMethod.WIFI:
@@ -109,6 +111,7 @@ def build_settings_router(services: AppServices) -> APIRouter:
 					services.session.device_id = ""
 					services.session.device_label = ""
 					services.session.transfer_extra_paths = []
+					services.session.extract_extra_paths = []
 					if services.session.active_module is AppModule.USB_FILE_TRANSFER and body.transfer_folders is None:
 						services.session.transfer_folders = sorted(
 							f.value for f in default_transfer_folders(body.connection_method)

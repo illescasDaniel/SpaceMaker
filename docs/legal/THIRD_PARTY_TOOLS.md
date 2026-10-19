@@ -7,7 +7,6 @@ Machine-readable manifest: [packaging/third-party-manifest.yaml](https://github.
 | Tool | Purpose in SpaceMaker | Project home |
 |------|------------------------|--------------|
 | **adb** | Copy/move files from Android (ADB mode) | https://developer.android.com/tools/releases/platform-tools |
-| **adbfs** | USB file transfer Add files/folder + exist-probe mount (PATH only; e.g. `adbfs-rootless-git`) | https://github.com/spion/adbfs-rootless |
 | **idevice_id**, **idevicepair**, **ideviceinfo**, **ifuse** (libimobiledevice) | iPhone USB / DCIM (Linux, system `PATH` only) | https://libimobiledevice.org/ |
 | **ffmpeg** | Encode video to AV1 / H.264 | https://ffmpeg.org/ |
 | **ffprobe** | Validate videos; read bitrate/duration | https://ffmpeg.org/ |
@@ -20,7 +19,6 @@ Machine-readable manifest: [packaging/third-party-manifest.yaml](https://github.
 License texts shipped inside upstream archives are stored next to the downloaded binaries when available. Summaries:
 
 - **adb / platform-tools:** Android SDK Platform Tools License (Google)
-- **adbfs-rootless:** BSD-3-Clause (system package; not catalog-downloaded)
 - **libimobiledevice / ifuse:** LGPL-2.1+
 - **FFmpeg / ffprobe:** LGPL or GPL depending on build configuration (documented per release)
 - **ImageMagick:** ImageMagick License

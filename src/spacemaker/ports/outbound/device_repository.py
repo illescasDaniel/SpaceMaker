@@ -22,11 +22,7 @@ class DeviceRepositoryPort(Protocol):
 		...
 
 	def list_extra_file_paths(self, device_id: str, extras: frozenset[str]) -> list[str]:
-		"""Expand Browse extras (mount-relative folders/files) to device file paths."""
-		...
-
-	def browse_root(self, device_id: str) -> str | None:
-		"""Host filesystem path for Browse / exist-probe, or None if not mount-backed."""
+		"""Expand picker extras (storage-relative folders/files) to device file paths."""
 		...
 
 	def list_directory(self, device_id: str, path: str) -> list[DeviceEntry]:

@@ -10,6 +10,7 @@ from fastapi.responses import Response
 
 from spacemaker.adapters.inbound.web.client_access import require_loopback
 from spacemaker.adapters.inbound.web.media_paths import _session_library_root
+from spacemaker.adapters.inbound.web.models import UsbTransferExtrasBody
 from spacemaker.adapters.inbound.web.qr_svg import qr_svg_response
 from spacemaker.bootstrap.lan import lan_ip
 from spacemaker.bootstrap.paths import is_absolute_library_path
@@ -121,9 +122,23 @@ def build_extract_router(services: AppServices) -> APIRouter:
 			return services.enriched_snapshot()
 		if not services.session.device_id:
 			raise HTTPException(status_code=400, detail="select a device")
-		if not services.session.source_folders:
-			raise HTTPException(status_code=400, detail="select at least one source folder")
+		if not services.session.source_folders and not services.session.extract_extra_paths:
+			raise HTTPException(status_code=400, detail="select at least one source folder or added item")
 		services.start_extract()
+		return services.enriched_snapshot()
+
+	@router.post("/api/extract/extras")
+	def extract_set_extras(request: Request, body: UsbTransferExtrasBody) -> dict[str, object]:
+		require_loopback(request)
+		services.set_extract_extra_paths(body.paths)
+		services.push_state()
+		return services.enriched_snapshot()
+
+	@router.delete("/api/extract/extras")
+	def extract_clear_extras(request: Request) -> dict[str, object]:
+		require_loopback(request)
+		services.set_extract_extra_paths([])
+		services.push_state()
 		return services.enriched_snapshot()
 
 	@router.post("/api/extract/pause")

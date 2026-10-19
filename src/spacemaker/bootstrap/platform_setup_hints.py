@@ -101,7 +101,6 @@ _LINUX_ARCH_PACKAGES: dict[str, str] = {
 	"idevicepair": "libimobiledevice",
 	"ideviceinfo": "libimobiledevice",
 	"ifuse": "ifuse",
-	"adbfs": "adbfs-rootless-git",
 }
 
 

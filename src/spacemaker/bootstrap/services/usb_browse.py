@@ -5,16 +5,18 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from spacemaker.application.usb_transfer_browse import (
-	device_relative_paths_from_host_picks,
-	probe_existing_transfer_folders,
-)
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.device_browse import DeviceBrowseError, DeviceDirectoryPage
 from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import JobProgress, TransferMode
-from spacemaker.domain.transfer_folders import TransferFolder, merge_extra_paths, parse_transfer_folders
+from spacemaker.domain.transfer_folders import (
+	TransferFolder,
+	existing_transfer_folders_from_dir_names,
+	merge_extra_paths,
+	parse_transfer_folders,
+)
 
 
 if TYPE_CHECKING:
@@ -30,140 +32,48 @@ class UsbBrowseMixin:
 		return future is not None and not future.done()
 
 	def _usb_browse_snapshot(self: AppServices, method: ConnectionMethod, device_id: str) -> dict[str, object]:
+		"""Picker availability plus preset exist-probe from ONE shallow listing of the storage root."""
 		with self.session._lock:
 			active = self.session.active_module
-		# Never mount FUSE from photo-backup / other modules — that froze ADB device
-		# selection on the wizard when enriched_snapshot ran after auto-select.
+		# Only list from USB file transfer — never from other modules (a listing on every
+		# wizard snapshot froze device selection once).
 		if active is not AppModule.USB_FILE_TRANSFER:
-			return {
-				"mount_available": False,
-				"mount_root": "",
-				"available_folders": None,
-				"hint": "",
-			}
+			return {"picker_available": False, "available_folders": None, "hint": ""}
 		if method is ConnectionMethod.WIFI or not device_id:
 			return {
-				"mount_available": False,
-				"mount_root": "",
+				"picker_available": False,
 				"available_folders": None,
-				"hint": "Connect a device to browse phone folders.",
+				"hint": "Add files/folder needs a connected, authorized device.",
 			}
 		try:
-			repo = self.devices_for(method)
+			entries = self.list_device_directory_use_case(method).execute(device_id, "").entries
+		except DeviceBrowseError:
+			return {"picker_available": True, "available_folders": None, "hint": ""}
 		except Exception:
-			repo = None
-		if method is ConnectionMethod.ADB and repo is not None:
-			return self._adb_browse_snapshot(repo, device_id)
-		# AFC (and any other mount-backed method): mount when needed for exist-probe.
-		try:
-			mount = repo.browse_root(device_id) if repo is not None else None
-		except Exception:
-			mount = None
-			repo = None
-		if mount:
-			existing = probe_existing_transfer_folders(mount)
-			return {
-				"mount_available": True,
-				"mount_root": mount,
-				"available_folders": sorted(f.value for f in existing),
-				"hint": "",
-			}
-		if method is ConnectionMethod.AFC:
-			hint = "Add files/folder needs an ifuse mount for iPhone USB. Desktop app only."
-		else:
-			hint = "Add files/folder needs a mounted phone. Desktop app only."
+			logger.exception("preset exist-probe failed")
+			return {"picker_available": True, "available_folders": None, "hint": ""}
+		existing = existing_transfer_folders_from_dir_names(e.name for e in entries if e.is_dir)
 		return {
-			"mount_available": False,
-			"mount_root": "",
-			"available_folders": None,
-			"hint": hint,
+			"picker_available": True,
+			"available_folders": sorted(f.value for f in existing),
+			"hint": "",
 		}
 
-	def _adb_browse_snapshot(self: AppServices, repo: object, device_id: str) -> dict[str, object]:
-		"""ADB presets via shell; FUSE only if already mounted (Add mounts lazily)."""
-		available: list[str] | None = None
-		probe = getattr(repo, "probe_existing_transfer_folders", None)
-		if callable(probe):
-			try:
-				existing = probe(device_id)
-				available = sorted(f.value for f in existing)
-			except Exception:
-				available = None
-		backend = getattr(repo, "browse_backend_available", None)
-		backend_ok = bool(backend()) if callable(backend) else False
-		peek = getattr(repo, "peek_browse_root", None)
-		mount = peek(device_id) if callable(peek) else None
-		if mount:
-			# Prefer shallow mount names when a live mount already exists.
-			with contextlib.suppress(Exception):
-				from_mount = probe_existing_transfer_folders(mount)
-				available = sorted(f.value for f in from_mount)
-			return {
-				"mount_available": True,
-				"mount_root": mount,
-				"available_folders": available,
-				"hint": "",
-			}
-		if backend_ok:
-			return {
-				"mount_available": True,
-				"mount_root": "",
-				"available_folders": available,
-				"hint": "",
-			}
-		hint = (
-			"Add files/folder needs adbfs on PATH (e.g. AUR adbfs-rootless-git). "
-			"Preset folders can still appear via ADB. Desktop app only."
-		)
-		return {
-			"mount_available": False,
-			"mount_root": "",
-			"available_folders": available,
-			"hint": hint,
-		}
-
-	def ensure_usb_browse_mount(self: AppServices) -> str:
-		"""Mount the phone for Add files/folder (lazy). Raises ValueError on failure."""
-		with self.session._lock:
-			method = self.session.connection_method
-			device_id = self.session.device_id
-			active = self.session.active_module
-		if active is not AppModule.USB_FILE_TRANSFER:
-			raise ValueError("Add files/folder is only available in USB file transfer")
-		if method is ConnectionMethod.WIFI or not device_id:
-			raise ValueError("select a USB device first")
-		repo = self.devices_for(method)
-		cleanup = getattr(repo, "cleanup_orphan_mounts", None)
-		if callable(cleanup):
-			with contextlib.suppress(Exception):
-				cleanup()
-		mount = repo.browse_root(device_id)
-		if not mount:
-			if method is ConnectionMethod.ADB:
-				raise ValueError("Could not mount with adbfs. Install adbfs-rootless-git (or similar) and retry.")
-			raise ValueError("phone mount not available for Add files/folder")
-		return mount
-
-	def add_usb_transfer_extras_from_host(self: AppServices, host_paths: list[str]) -> list[str]:
-		with self.session._lock:
-			method = self.session.connection_method
-			device_id = self.session.device_id
-			existing = list(self.session.transfer_extra_paths)
-		if method is ConnectionMethod.WIFI or not device_id:
-			raise ValueError("select a USB device first")
-		mount = self.ensure_usb_browse_mount()
-		accepted = device_relative_paths_from_host_picks(mount, host_paths)
-		if not accepted:
-			raise ValueError("selected paths must be under the phone mount")
-		merged = merge_extra_paths(existing, accepted)
-		with self.session._lock:
-			self.session.transfer_extra_paths = merged
-		return merged
+	def list_device_directory(
+		self: AppServices, method: ConnectionMethod, device_id: str, path: str, cursor: int = 0
+	) -> DeviceDirectoryPage:
+		return self.list_device_directory_use_case(method).execute(device_id, path, cursor)
 
 	def set_usb_transfer_extra_paths(self: AppServices, paths: list[str]) -> list[str]:
 		merged = merge_extra_paths([], paths)
 		with self.session._lock:
 			self.session.transfer_extra_paths = merged
+		return merged
+
+	def set_extract_extra_paths(self: AppServices, paths: list[str]) -> list[str]:
+		merged = merge_extra_paths([], paths)
+		with self.session._lock:
+			self.session.extract_extra_paths = merged
 		return merged
 
 	def clear_usb_transfer_extras(self: AppServices) -> None:

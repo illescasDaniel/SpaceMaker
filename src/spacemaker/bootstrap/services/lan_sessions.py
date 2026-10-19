@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
 	from spacemaker.bootstrap.services.core import AppServices
 
-import contextlib
 import os
 import secrets
 import shutil
@@ -152,6 +151,7 @@ class LanSessionMixin:
 				self.session.transfer_mode = TransferMode.COPY
 				self.session.transfer_folders = sorted(f.value for f in default_transfer_folders(ConnectionMethod.ADB))
 				self.session.transfer_extra_paths = []
+				self.session.extract_extra_paths = []
 				self.session.device_id = ""
 				self.session.device_label = ""
 				self.session.usb_transfer_phase = JobPhase.IDLE
@@ -167,10 +167,6 @@ class LanSessionMixin:
 			self._clear_share_session()
 		elif module is AppModule.USB_FILE_TRANSFER:
 			self.reconcile_device_selection(ConnectionMethod.ADB)
-			with contextlib.suppress(Exception):
-				cleanup = getattr(self.devices_for(ConnectionMethod.ADB), "cleanup_orphan_mounts", None)
-				if callable(cleanup):
-					cleanup()
 		elif module is AppModule.TRANSFER_FILES:
 			self.start_transfer_files_session()
 
@@ -183,6 +179,7 @@ class LanSessionMixin:
 		with self.session._lock:
 			self.session.active_module = AppModule.HOME
 			self.session.transfer_extra_paths = []
+			self.session.extract_extra_paths = []
 
 	def start_transfer_files_session(self: AppServices) -> None:
 

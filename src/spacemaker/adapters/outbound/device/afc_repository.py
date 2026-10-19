@@ -11,6 +11,7 @@ from pathlib import Path
 from spacemaker.adapters.outbound.device.mount_dirs import remove_empty_mount_dir
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
 from spacemaker.bootstrap.bundled_tools import BundledTool
+from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, DeviceEntry
 from spacemaker.domain.library_paths import SKIPPED_LIBRARY_DIR_NAMES, skip_media_path
 from spacemaker.domain.media import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from spacemaker.ports.outbound.device_repository import DeviceInfo
@@ -107,14 +108,30 @@ class AfcDeviceRepository:
 				continue
 		return sorted(found)
 
-	def browse_root(self, device_id: str) -> str | None:
+	def list_directory(self, device_id: str, path: str) -> list[DeviceEntry]:
+		"""One directory under the ifuse mount (never recursive); ``path`` is mount-relative."""
 		try:
 			mount = self._mount_path(device_id)
-		except RuntimeError:
-			return None
-		if mount.is_dir():
-			return str(mount.resolve())
-		return None
+		except RuntimeError as exc:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.UNPLUGGED, str(exc)) from exc
+		target = mount / path if path else mount
+		entries: list[DeviceEntry] = []
+		try:
+			with os.scandir(target) as it:
+				for item in it:
+					try:
+						info = item.stat()
+						is_dir = item.is_dir()
+					except OSError:
+						continue
+					entries.append(DeviceEntry(item.name, is_dir, 0 if is_dir else info.st_size, int(info.st_mtime)))
+		except PermissionError as exc:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.PERMISSION_DENIED, str(exc)) from exc
+		except (FileNotFoundError, NotADirectoryError) as exc:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.NOT_FOUND, str(exc)) from exc
+		except OSError as exc:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.FAILED, str(exc)) from exc
+		return entries
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		mount = self._mount_path(device_id)

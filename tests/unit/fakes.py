@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, DeviceEntry
 from spacemaker.domain.gallery import GalleryItem
 from spacemaker.domain.gallery_batch import ArchiveEntry, TrashError, VideoExportEncoder
 from spacemaker.domain.gallery_index import FileStat, GalleryCursor, GalleryIndexRow, GalleryPage
@@ -120,7 +121,9 @@ class FakeDeviceRepository:
 	sizes: dict[str, int] = field(default_factory=dict)
 	pulled: list[tuple[str, str, str]] = field(default_factory=list)
 	deleted: list[tuple[str, str]] = field(default_factory=list)
-	mount_root: str | None = None
+	tree: dict[str, list[DeviceEntry]] = field(default_factory=dict)
+	browse_errors: dict[str, DeviceBrowseErrorKind] = field(default_factory=dict)
+	list_directory_calls: list[str] = field(default_factory=list)
 
 	def list_devices(self) -> list[DeviceInfo]:
 		return list(self.devices)
@@ -140,9 +143,12 @@ class FakeDeviceRepository:
 
 		return [p for p in self.list_file_paths(device_id) if path_matches_extra_sources(p, extras)]
 
-	def browse_root(self, device_id: str) -> str | None:
+	def list_directory(self, device_id: str, path: str) -> list[DeviceEntry]:
 		_ = device_id
-		return self.mount_root
+		self.list_directory_calls.append(path)
+		if path in self.browse_errors:
+			raise DeviceBrowseError(self.browse_errors[path])
+		return list(self.tree.get(path, []))
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		_ = device_id

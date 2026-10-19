@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from spacemaker.adapters.inbound.web.routes.convert import build_convert_router
+from spacemaker.adapters.inbound.web.routes.device import build_device_router
 from spacemaker.adapters.inbound.web.routes.extract import build_extract_router
 from spacemaker.adapters.inbound.web.routes.gallery import build_gallery_router
 from spacemaker.adapters.inbound.web.routes.lan import build_lan_router
@@ -21,6 +22,7 @@ def register_routes(app: FastAPI, services: AppServices) -> None:
 	app.include_router(build_passcode_router(services))
 	app.include_router(build_settings_router(services))
 	app.include_router(build_lan_router(services))
+	app.include_router(build_device_router(services))
 	app.include_router(build_extract_router(services))
 	app.include_router(build_usb_transfer_router(services))
 	app.include_router(build_convert_router(services))

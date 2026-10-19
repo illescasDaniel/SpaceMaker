@@ -24,6 +24,7 @@ class AppSession:
 	source_folders: list[str] = field(default_factory=lambda: ["dcim", "pictures", "movies"])
 	transfer_folders: list[str] = field(default_factory=list)
 	transfer_extra_paths: list[str] = field(default_factory=list)
+	extract_extra_paths: list[str] = field(default_factory=list)
 	extract_phase: JobPhase = JobPhase.IDLE
 	convert_phase: JobPhase = JobPhase.IDLE
 	usb_transfer_phase: JobPhase = JobPhase.IDLE

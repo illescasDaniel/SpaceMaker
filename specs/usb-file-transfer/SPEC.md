@@ -11,20 +11,20 @@
 - **Ports:** outbound `DeviceRepositoryPort` (+ `list_file_paths`, `list_extra_file_paths`, `browse_root` / exist probe); `FileSystemPort`; destination `documents_directory()/SpaceMaker/` (not photo library `originals/`)
 - **Domain:** `TransferFolder`, `usb_file_transfer` helpers (`documents_transfer_destination`, Android prefix strip); session extras as flattened device-relative paths; `AppModule.USB_FILE_TRANSFER`
 
-> **Superseded 2026-10-19 (pending spec approval):** Browse via adbfs/native dialog is replaced by the in-app picker — see [device-file-picker](../device-file-picker/SPEC.md). Where this file mentions adbfs, a mount for ADB Browse, the native dialog, or “Desktop app only”, the picker spec wins; ADB preset exist-probe becomes one `list_directory` call; iPhone keeps ifuse and lists through the same picker. Sections are rewritten when the picker is implemented.
+> **Superseded 2026-10-19:** Browse via adbfs/native dialog is replaced by the in-app picker — see [device-file-picker](../device-file-picker/SPEC.md). ADB preset exist-probe is one `list_directory` call; iPhone keeps ifuse (listing, pull) and uses the same picker. adbfs is removed; remaining historical wording below (**Browse…**) means the picker's **Add files… / Add folder…**.
 
 ## Triggers & routing
 
 - **Entry:** Home hub → **USB file transfer** → `POST /api/module/enter` with `{ "module": "usb_file_transfer" }`.
 - **View:** `#view-usb-file-transfer` (single Transfer card — not the three-step USB photo backup wizard).
-- **Exit:** Breadcrumb or header **Home** → `POST /api/module/home` (stops any in-flight transfer job gracefully: finish current file, then stop; clears Browse extras; unmounts AFC/adbfs mounts owned by this session).
+- **Exit:** Breadcrumb or header **Home** → `POST /api/module/home` (stops any in-flight transfer job gracefully: finish current file, then stop; clears Browse extras; unmounts the AFC ifuse mount owned by this session).
 - **Not entered via:** Wi‑Fi QR, Photo backup, USB photo backup, Receive files, or Send files.
 
 ## Connection methods
 
 | Method | UI label | Default | Platforms | Notes |
 |--------|----------|---------|-----------|--------|
-| **ADB** | `ADB (cable)` | **Yes** | All | USB debugging + authorize. Prefer for Move / full folder access. Browse/exist-probe when **adbfs** mounts (PATH-only; see Mount backends). |
+| **ADB** | `ADB (cable)` | **Yes** | All | USB debugging + authorize. Prefer for Move / full folder access. Add files/folder and the preset exist-probe use `adb shell` listing (no mount). |
 | **AFC** | `iPhone (USB)` | No | **Linux only** (v1) | Apple File Conduit — limited exposed folders (typically Camera / DCIM). Browse/exist-probe via **ifuse** mount. |
 
 - Exactly one method selected via segmented toggle (same visual language as USB photo backup Extract — **no MTP**).
@@ -36,10 +36,10 @@
 
 | Backend | Mount | Tooling | Notes |
 |---------|-------|---------|--------|
-| **ADB** | Session-owned **adbfs** FUSE mount under a temp dir | `adbfs` on **PATH** (e.g. AUR `adbfs-rootless-git`); no catalog download in v1 | Mount when a device is selected / Browse or exist-probe needs a host path; unmount on method change, Home exit, or app shutdown. Hint when `adbfs` missing or mount fails. |
-| **AFC** | Session-owned **ifuse** temp mount (existing adapter pattern) | `ifuse` (+ libimobiledevice) on **PATH** | Same mount used for list/pull/Browse/exist-probe. Unmount with session cleanup as today. |
+| **ADB** | None — one `adb shell` listing per directory (picker) | bundled/PATH `adb` | No FUSE mount; works on Linux, macOS and Windows. |
+| **AFC** | Session-owned **ifuse** temp mount (existing adapter pattern) | `ifuse` (+ libimobiledevice) on **PATH** | Same mount used for list/pull/picker listing/exist-probe. Unmount with session cleanup as today. |
 
-Without a usable mount: **Browse…** disabled with a clear hint (method-specific: adbfs vs ifuse; and `--server-only` / no desktop dialog bridge). Preset checklist may be empty with the empty-presets hint. Non-Linux phone Browse is out of scope for v1.
+Without a connected, authorized device: **Add files…** / **Add folder…** are disabled with the hint “needs a connected, authorized device”. Preset checklist may be empty with the empty-presets hint. iPhone USB stays Linux only.
 
 **Out of product:** MTP / GVFS / libmtp — removed from SpaceMaker entirely (UI, adapters, packaging, docs). Users who want Explorer/Dolphin-style phone browsing use the OS file manager separately; this module uses ADB or iPhone USB only.
 
@@ -82,7 +82,7 @@ Multi-select checklist of common labels. The UI lists a preset **only if that fo
 
 Queue includes **any file type** under selected roots (not media-only).
 
-**Exist-probe (ADB):** Prefer probing under the adbfs mount when available. If adbfs is missing, the adapter may probe via `adb shell` (directory exists) so common presets can still appear and transfer can run with `adb pull` — **Browse…** still requires the FUSE mount.
+**Exist-probe (ADB):** one `list_directory("")` call on the storage root; directory names are matched to presets.
 
 #### iPhone (AFC)
 
@@ -122,7 +122,6 @@ Strip these **user-storage prefixes** (case-insensitive, longest match first) fr
 - Apply the same strip when storing Browse extras and when computing destination for preset or extra files.
 - Remaining path segments after the strip are preserved (e.g. `WhatsApp/Media/…`).
 - Reject `..` / absolute escapes after normalization.
-- ADB Browse mounts prefer `adbfs` `subdir=` at one of those roots so the native dialog opens on `Download` / `DCIM` / etc. directly when possible.
 
 ## Destination
 
@@ -204,14 +203,14 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 
 ### Scenario: Missing preset folders are hidden
 
-- **Given** ADB is selected, adbfs has mounted the device, and the mount has Download and Documents but not Music
+- **Given** ADB is selected and the storage root listing has Download and Documents but not Music
 - **When** the folder checklist is shown
 - **Then** **Download** and **Documents** are listed (**unchecked** by default)
 - **And** **Music** is not listed
 
 ### Scenario: No common folders shows empty hint
 
-- **Given** a connected device whose mount has none of the preset folders
+- **Given** a connected device whose root listing has none of the preset folders
 - **When** the sources section renders
 - **Then** the checklist is empty
 - **And** a short hint tells the user to use Add files… or Add folder…
@@ -219,35 +218,17 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 
 ### Scenario: Android folders include Download and Documents when present
 
-- **Given** ADB is selected, adbfs mount is available, and Download and Documents exist
+- **Given** ADB is selected, the device is authorized, and Download and Documents exist
 - **When** the folder checklist is shown
 - **Then** **Download** and **Documents** are available and **unchecked**
 - **And** other present media folders (Camera, Pictures, Movies, Music) are available unchecked
 - **And** **Start transfer** stays disabled until the user checks a preset and/or adds an extra
 
-### Scenario: ADB Browse mounts via adbfs
-
-- **Given** ADB is selected, an authorized device is connected, and `adbfs` is on PATH
-- **When** the desktop app needs a host mount (exist-probe or Add files/folder)
-- **Then** SpaceMaker mounts the device with adbfs under a session temp directory
-- **And** prefers a user-storage `subdir=` (`storage/self/primary`, `storage/emulated/0`, or `sdcard`) so the dialog root shows `Download` / `DCIM` near the top
-- **And** `browse_root` returns that mount path
-- **And** **Add files…** and **Add folder…** are enabled
-
-### Scenario: ADB Browse unavailable without adbfs
-
-- **Given** ADB is selected and `adbfs` is missing from PATH (or mount fails)
-- **When** the transfer form is shown
-- **Then** **Add files…** and **Add folder…** are disabled
-- **And** a hint names **adbfs** (install e.g. `adbfs-rootless-git` on Arch) and/or desktop app as applicable
-- **And** preset exist-probe may still list folders via `adb shell` when the device is authorized
-- **And** **Start transfer** remains available when ≥1 checked preset (or extras) exists — transfer uses `adb pull`, not the FUSE mount
-
-### Scenario: iPhone Browse uses ifuse mount
+### Scenario: iPhone picker lists through the ifuse mount
 
 - **Given** iPhone (USB) is selected on Linux, the device is trusted, and ifuse succeeds
-- **When** the desktop app needs a host mount
-- **Then** `browse_root` returns the ifuse mount path
+- **When** the picker or exist-probe needs a listing
+- **Then** `list_directory` reads one directory under the ifuse mount
 - **And** **Add files…** and **Add folder…** are enabled
 - **And** exist-probe uses that same mount
 
@@ -290,10 +271,10 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 
 ### Scenario: Add unavailable without mount
 
-- **Given** the selected backend has no usable host mount (e.g. ADB without adbfs, or ifuse failed)
+- **Given** no device is connected or authorized (or the ifuse mount failed)
 - **When** the transfer form is shown
 - **Then** **Add files…** and **Add folder…** are disabled
-- **And** a hint explains the missing mount tool or condition
+- **And** a hint says it needs a connected, authorized device
 
 ### Scenario: Remove Add extra
 
@@ -309,7 +290,7 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 - **Then** the in-flight file is allowed to finish
 - **And** the transfer job stops
 - **And** Add extras are cleared
-- **And** session-owned AFC/adbfs mounts are unmounted
+- **And** the session-owned AFC mount is unmounted
 - **And** the Home hub is shown
 
 ### Scenario: Transfer any file type to Documents
@@ -387,7 +368,6 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 - Single native dialog that selects files and folders together (OS limitation; two buttons instead)
 - Replacing the preset checklist with Add-only
 - In-app virtual file tree UI
-- Bundling or catalog-downloading **adbfs** (PATH / system package only in v1)
 - Windows/macOS phone Browse parity in v1
 - Network AFP (Apple Filing Protocol) — v1 uses **AFC** for iPhone USB only
 - Pushing files PC → phone over USB

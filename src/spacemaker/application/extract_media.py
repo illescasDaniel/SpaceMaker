@@ -6,6 +6,7 @@ from spacemaker.application.verified_move import delete_device_file_after_verifi
 from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.library import JobProgress, LibraryFolder, TransferMode
 from spacemaker.domain.library_paths import skip_media_path
+from spacemaker.domain.media import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from spacemaker.domain.source_folders import ALL_SOURCE_FOLDERS, SourceFolder, path_matches_source_folders
 from spacemaker.ports.outbound.device_repository import DeviceRepositoryPort
 from spacemaker.ports.outbound.filesystem import FileSystemPort
@@ -27,16 +28,27 @@ class ExtractMedia:
 		mode: TransferMode,
 		*,
 		source_folders: frozenset[SourceFolder] | None = None,
+		extra_paths: frozenset[str] = frozenset(),
 		control: ExtractJobControl | None = None,
 		on_progress: Callable[[JobProgress], None] | None = None,
 	) -> JobProgress:
 		self._filesystem.ensure_library_folders(library_root)
-		selected = source_folders or ALL_SOURCE_FOLDERS
-		paths = sorted(
-			p
-			for p in self._devices.list_media_paths(device_id)
-			if path_matches_source_folders(p, selected) and not skip_media_path(p)
-		)
+		# None keeps the legacy "all presets" default; an explicit empty set means extras only.
+		selected = ALL_SOURCE_FOLDERS if source_folders is None else source_folders
+		found: set[str] = set()
+		if selected:
+			found.update(
+				p
+				for p in self._devices.list_media_paths(device_id)
+				if path_matches_source_folders(p, selected) and not skip_media_path(p)
+			)
+		if extra_paths:
+			found.update(
+				p
+				for p in self._devices.list_extra_file_paths(device_id, extra_paths)
+				if _is_media_path(p) and not skip_media_path(p)
+			)
+		paths = sorted(found)
 		if control is not None and control.was_stopped():
 			return JobProgress(completed=0, total=len(paths))
 		total = len(paths)
@@ -77,3 +89,10 @@ class ExtractMedia:
 	) -> None:
 		if on_progress is not None:
 			on_progress(JobProgress(completed=completed, total=total))
+
+
+_MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+
+
+def _is_media_path(path: str) -> bool:
+	return "." in path and path.rsplit(".", 1)[-1].lower() in _MEDIA_EXTENSIONS

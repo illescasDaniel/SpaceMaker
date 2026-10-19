@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from spacemaker.domain.transfer_folders import strip_android_user_storage_prefix
+
 
 BROWSE_PAGE_SIZE = 500
 
@@ -54,21 +56,32 @@ def normalize_browse_path(path: str) -> str:
 	"""Storage-relative path for the picker (``""`` = Phone storage root).
 
 	Strips Android user-storage prefixes; raises ``DeviceBrowseError(INVALID_PATH)`` for
-	NUL bytes, ``..`` segments or backslashes-as-escapes. Never returns a leading ``/``.
+	NUL bytes or ``..`` segments (backslashes count as separators). Never returns a leading ``/``.
 	"""
-	raise NotImplementedError
+	if "\x00" in path:
+		raise DeviceBrowseError(DeviceBrowseErrorKind.INVALID_PATH, "NUL in path")
+	text = path.replace("\\", "/")
+	if any(part == ".." for part in text.split("/")):
+		raise DeviceBrowseError(DeviceBrowseErrorKind.INVALID_PATH, "path escapes user storage")
+	return strip_android_user_storage_prefix(text)
 
 
 def sort_entries(entries: list[DeviceEntry]) -> list[DeviceEntry]:
 	"""Folders first, then case-insensitive name."""
-	raise NotImplementedError
+	return sorted(entries, key=lambda e: (not e.is_dir, e.name.casefold(), e.name))
 
 
 def page_entries(
 	path: str, entries: list[DeviceEntry], cursor: int = 0, limit: int = BROWSE_PAGE_SIZE
 ) -> DeviceDirectoryPage:
 	"""Sort ``entries`` and return the ``[cursor, cursor+limit)`` slice."""
-	raise NotImplementedError
+	ordered = sort_entries(entries)
+	start = max(cursor, 0)
+	end = start + max(limit, 1)
+	next_cursor = end if end < len(ordered) else None
+	return DeviceDirectoryPage(
+		path=path, entries=tuple(ordered[start:end]), total=len(ordered), next_cursor=next_cursor
+	)
 
 
 __all__ = [

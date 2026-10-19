@@ -57,9 +57,10 @@ def test_given_index_html_when_looking_for_url_inputs_then_each_is_a_readonly_in
 	for input_id in URL_INPUT_IDS:
 		holder = [f for f in fields if f'id="{input_id}"' in f]
 		assert holder, f"#{input_id} is not inside a .url-field"
-		assert re.search(rf'<input\b[^>]*\bid="{input_id}"[^>]*\breadonly\b|<input\b[^>]*\breadonly\b[^>]*\bid="{input_id}"', holder[0]), (
-			f"#{input_id} must be a readonly <input>"
-		)
+		assert re.search(
+			rf'<input\b[^>]*\bid="{input_id}"[^>]*\breadonly\b|<input\b[^>]*\breadonly\b[^>]*\bid="{input_id}"',
+			holder[0],
+		), f"#{input_id} must be a readonly <input>"
 		assert 'class="url-copy"' in holder[0], f"#{input_id} needs a .url-copy button"
 
 

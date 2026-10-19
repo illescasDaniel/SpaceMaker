@@ -39,6 +39,7 @@ from spacemaker.application.file_share_manifest import (
 )
 from spacemaker.application.generate_gallery import GenerateGallery
 from spacemaker.application.get_gallery_item import GetGalleryItem
+from spacemaker.application.list_device_directory import ListDeviceDirectory
 from spacemaker.application.network_passcode import NetworkPasscode
 from spacemaker.application.promote_originals import PromoteOriginalsToProcessed
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
@@ -197,6 +198,9 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 
 	def extract_use_case(self, method: ConnectionMethod) -> ExtractMedia:
 		return ExtractMedia(self.devices_for(method), self.filesystem)
+
+	def list_device_directory_use_case(self, method: ConnectionMethod) -> ListDeviceDirectory:
+		return ListDeviceDirectory(self.devices_for(method))
 
 	def usb_transfer_use_case(self, method: ConnectionMethod) -> TransferUsbFiles:
 		return TransferUsbFiles(self.devices_for(method), self.filesystem)

@@ -29,25 +29,9 @@ def build_usb_transfer_router(services: AppServices) -> APIRouter:
 		return services.enriched_snapshot()
 
 	@router.post("/api/usb-transfer/extras")
-	def usb_transfer_add_extras(request: Request, body: UsbTransferExtrasBody) -> dict[str, object]:
+	def usb_transfer_set_extras(request: Request, body: UsbTransferExtrasBody) -> dict[str, object]:
 		require_loopback(request)
-		try:
-			services.add_usb_transfer_extras_from_host(body.host_paths)
-		except ValueError as exc:
-			raise HTTPException(status_code=400, detail=str(exc)) from exc
-		services.push_state()
-		return services.enriched_snapshot()
-
-	@router.post("/api/usb-transfer/mount")
-	def usb_transfer_mount(request: Request) -> dict[str, object]:
-		"""Lazy adbfs/ifuse mount for Browse (avoids mounting on every state snapshot)."""
-		require_loopback(request)
-		try:
-			services.ensure_usb_browse_mount()
-		except ValueError as exc:
-			raise HTTPException(status_code=400, detail=str(exc)) from exc
-		except RuntimeError as exc:
-			raise HTTPException(status_code=503, detail=str(exc)) from exc
+		services.set_usb_transfer_extra_paths(body.paths)
 		services.push_state()
 		return services.enriched_snapshot()
 

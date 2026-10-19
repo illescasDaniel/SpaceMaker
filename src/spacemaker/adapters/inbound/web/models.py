@@ -68,4 +68,11 @@ class SettingsBody(BaseModel):
 
 
 class UsbTransferExtrasBody(BaseModel):
-	host_paths: list[str] = []
+	paths: list[str] = []
+
+
+class DeviceListBody(BaseModel):
+	method: str
+	device_id: str
+	path: str = ""
+	cursor: int = 0

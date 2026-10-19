@@ -1,9 +1,11 @@
 from pathlib import Path
 
+import pytest
 from tests.unit.fakes import FakeFileSystem
 
 from spacemaker.adapters.outbound.device.afc_repository import AfcDeviceRepository
 from spacemaker.application.extract_media import ExtractMedia
+from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind
 from spacemaker.domain.library import LibraryFolder, TransferMode
 from spacemaker.domain.source_folders import SourceFolder
 
@@ -91,3 +93,26 @@ def test_given_afc_mount_when_extract_dcim_then_copies_to_originals(tmp_path: Pa
 	assert progress.completed == 1
 	dest = fs.library_path(library, LibraryFolder.ORIGINALS, "DCIM/100APPLE/IMG_1.heic")
 	assert Path(dest).read_bytes() == b"heic"
+
+
+def test_given_mount_when_list_directory_then_one_level_with_dirs_and_sizes(tmp_path: Path) -> None:
+	# given
+	mount = tmp_path / "mnt"
+	(mount / "DCIM" / "100APPLE").mkdir(parents=True)
+	(mount / "DCIM" / "note.txt").write_bytes(b"abc")
+	repo = AfcDeviceRepository(test_mounts={"udid": mount})
+	# when
+	root = repo.list_directory("udid", "")
+	dcim = repo.list_directory("udid", "DCIM")
+	# then
+	assert [(e.name, e.is_dir) for e in root] == [("DCIM", True)]
+	assert {(e.name, e.is_dir, e.size) for e in dcim} == {("100APPLE", True, 0), ("note.txt", False, 3)}
+
+
+def test_given_missing_directory_when_list_directory_then_not_found(tmp_path: Path) -> None:
+	# given
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		repo.list_directory("udid", "Nope")
+	assert exc.value.kind is DeviceBrowseErrorKind.NOT_FOUND

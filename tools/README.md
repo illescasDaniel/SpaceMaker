@@ -8,7 +8,7 @@ SpaceMaker resolves third-party binaries in this order:
 
 On macOS, GUI launches often lack Homebrew’s bin dir. SpaceMaker prepends `/opt/homebrew/bin` and `/usr/local/bin` (when they exist) so brew-installed tools resolve after Continue.
 
-Required tool names: `adb`, `ffmpeg`, `ffprobe`, `magick`, `exiftool`. Optional for USB Browse: `adbfs` (PATH). Optional for iPhone USB: `idevice_id`, `idevicepair`, `ideviceinfo`, `ifuse`.
+Required tool names: `adb`, `ffmpeg`, `ffprobe`, `magick`, `exiftool`. Optional for iPhone USB: `idevice_id`, `idevicepair`, `ideviceinfo`, `ifuse`.
 
 Optional override for tests or custom layouts: `SPACEMAKER_TOOLS_DIR=/path/to/tools`.
 

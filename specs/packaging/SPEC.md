@@ -51,7 +51,6 @@ A failed download for one tool must **not** block setup for other tools.
 | Tool | Role |
 |------|------|
 | `adb` | ADB extract / USB file transfer |
-| `adbfs` | USB file transfer Browse / exist-probe mount (PATH only — e.g. `adbfs-rootless-git`; not catalog-downloaded) |
 | `idevice_id`, `idevicepair`, `ideviceinfo`, `ifuse` | iPhone USB extract + USB file transfer Browse (AFC; **Linux only** — `PATH` packages **usbmuxd**, **libimobiledevice**, **ifuse**). **Not** tracked on Components for macOS/Windows. |
 | `ffmpeg`, `ffprobe` | Video encode + validation |
 | `magick` | Image auto-orient, thumbs, friendly JPEG, AVIF identify / non-progressive AVIF fallback |
@@ -189,7 +188,6 @@ Only show the PM step when the probe fails **and** a known display command exist
 | `adb` | `brew install android-platform-tools` | `winget install -e --id Google.PlatformTools` | `sudo apt install adb` | `sudo dnf install android-tools` | `… -S android-tools` |
 | `idevice_id` / `idevicepair` / `ideviceinfo` | — (AFC Linux-only; not on Components) | — | `sudo apt install libimobiledevice-utils` | `sudo dnf install libimobiledevice` | `… -S libimobiledevice` |
 | `ifuse` | — (AFC Linux-only; not on Components) | — | `sudo apt install ifuse` | `sudo dnf install ifuse` | `… -S ifuse` |
-| `adbfs` (PATH only; USB Browse) | — | — | — | — | `paru`/`yay` `-S adbfs-rootless-git` (AUR) |
 
 **Bulk command:** union of packages for currently missing tools, deduped (one `ffmpeg` package for ffmpeg+ffprobe; one `libimobiledevice` for idevice_*). macOS/apt/dnf/arch: single line. Windows winget: one `winget install …` per distinct id, newline-separated.
 

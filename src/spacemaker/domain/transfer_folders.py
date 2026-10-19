@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from enum import StrEnum
-from pathlib import Path
 
 
 class TransferFolder(StrEnum):
@@ -98,20 +97,6 @@ def normalize_device_relative_path(path: str) -> str | None:
 	if not parts or any(p == ".." for p in parts):
 		return None
 	return "/".join(parts)
-
-
-def host_path_to_device_relative(mount_root: str, host_path: str) -> str | None:
-	"""Map a host path under the phone mount to a device-relative path."""
-	try:
-		mount = Path(mount_root).resolve()
-		target = Path(host_path).resolve()
-	except OSError:
-		return None
-	try:
-		relative = target.relative_to(mount)
-	except ValueError:
-		return None
-	return normalize_device_relative_path(relative.as_posix())
 
 
 def existing_transfer_folders_from_dir_names(dir_names: Iterable[str]) -> frozenset[TransferFolder]:

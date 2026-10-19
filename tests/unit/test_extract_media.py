@@ -51,3 +51,52 @@ def test_given_copy_mode_when_extract_then_file_stays_on_device():
 	use_case.run("/lib", "dev1", TransferMode.COPY)
 	# then
 	assert devices.deleted == []
+
+
+def test_given_extras_when_extract_then_only_media_under_extras_are_pulled():
+	# given
+	fs = FakeFileSystem()
+	devices = FakeDeviceRepository()
+	devices.bind_filesystem(fs)
+	devices.devices = [DeviceInfo(device_id="dev1", label="Pixel")]
+	devices.file_paths = [
+		"/sdcard/WhatsApp/Media/IMG-1.jpg",
+		"/sdcard/WhatsApp/Media/VID-1.mp4",
+		"/sdcard/WhatsApp/Media/ticket.pdf",
+		"/sdcard/Other/skip.jpg",
+	]
+	use_case = ExtractMedia(devices, fs)
+	# when
+	result = use_case.run(
+		"/lib",
+		"dev1",
+		TransferMode.COPY,
+		source_folders=frozenset(),
+		extra_paths=frozenset({"WhatsApp/Media"}),
+	)
+	# then
+	assert result.total == 2
+	assert sorted(p[1] for p in devices.pulled) == [
+		"/sdcard/WhatsApp/Media/IMG-1.jpg",
+		"/sdcard/WhatsApp/Media/VID-1.mp4",
+	]
+
+
+def test_given_presets_and_extras_when_extract_then_union_without_duplicates():
+	# given
+	fs = FakeFileSystem()
+	devices = FakeDeviceRepository()
+	devices.bind_filesystem(fs)
+	devices.devices = [DeviceInfo(device_id="dev1", label="Pixel")]
+	devices.media_paths = ["/sdcard/DCIM/a.jpg"]
+	devices.file_paths = ["/sdcard/DCIM/a.jpg", "/sdcard/WhatsApp/Media/b.jpg"]
+	use_case = ExtractMedia(devices, fs)
+	# when
+	result = use_case.run(
+		"/lib",
+		"dev1",
+		TransferMode.COPY,
+		extra_paths=frozenset({"DCIM", "WhatsApp/Media"}),
+	)
+	# then
+	assert result.total == 2

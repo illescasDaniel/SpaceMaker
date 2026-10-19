@@ -265,7 +265,8 @@ class JobsMixin:
 				library_root = self.session.library_root
 				self.filesystem.ensure_library_folders(library_root)
 			else:
-				if not self.session.source_folders:
+				extras = frozenset(self.session.extract_extra_paths)
+				if not self.session.source_folders and not extras:
 					return
 				library_root = self.session.library_root
 				device_id = self.session.device_id
@@ -286,6 +287,7 @@ class JobsMixin:
 			method,
 			mode,
 			folders,
+			extras,
 		)
 
 	def _on_extract_paused(self: AppServices) -> None:
@@ -361,6 +363,7 @@ class JobsMixin:
 		method: ConnectionMethod,
 		mode: TransferMode,
 		folders: frozenset[SourceFolder],
+		extra_paths: frozenset[str],
 	) -> None:
 		control = self._extract_control
 		try:
@@ -376,6 +379,7 @@ class JobsMixin:
 				device_id,
 				mode,
 				source_folders=folders,
+				extra_paths=extra_paths,
 				control=control,
 				on_progress=on_progress,
 			)
