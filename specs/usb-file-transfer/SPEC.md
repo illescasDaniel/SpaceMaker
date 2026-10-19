@@ -33,6 +33,18 @@
 - Changing method while idle re-runs device detection for that backend, re-probes existing presets, clears Browse extras, and unmounts the previous method’s session mount.
 - Transfer must not start if the chosen backend reports no usable device.
 
+### Automatic re-detection (empty device list)
+
+*Approved 2026-10-19 (chat).* Shared with [extract-media](../extract-media/SPEC.md#automatic-re-detection-empty-device-list); same helper, same numbers.
+
+- **Success criteria:** a device that is plugged in but missed by the first listing (adb daemon still starting, authorization still settling) appears without the user switching method.
+- **Trigger:** a device listing for **ADB** or **iPhone (USB)** returns an empty list (not an error), while the module's view is open and the method is unchanged.
+- **Budget:** one automatic retry every **3 s**, at most **5 retries** (~15 s after the first listing); then stop and keep the normal "No device found" status. Retries are silent apart from the status text; no banner.
+- **Stops early** on: a non-empty list, the user switching method, leaving the module, or the user starting a transfer/extract. A manual method click always starts a fresh budget.
+- **Failure handling:** a listing that **errors** (e.g. iPhone USB on non-Linux) is not retried; the existing error banner shows. A retry that errors stops the retries.
+- **Resource budget:** at most one listing in flight per module; no polling after the budget is spent (no background loop).
+- **Trust boundary:** none new — same `GET /api/devices` call as today.
+
 ### Listing backends (Browse + exist-probe) — both required this revision
 
 | Backend | Mount | Tooling | Notes |
@@ -358,6 +370,23 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 - **When** the user attempts **Start transfer**
 - **Then** transfer does not start
 - **And** a clear disconnected / no-device status is shown
+
+### Scenario: Empty device list is retried automatically
+
+- **Given** the user is in USB file transfer with ADB or iPhone (USB) selected
+- **And** the first device listing returns no device
+- **When** 3 seconds pass without the user acting
+- **Then** the device list is requested again
+- **And** the status reads "Searching for device…" while retries remain
+- **And** a device that appears is selected and shown as connected without switching method
+
+### Scenario: Retries are bounded and cancellable
+
+- **Given** automatic re-detection is running
+- **When** 5 retries return no device
+- **Then** retrying stops and the status reads "No device found"
+- **And** retrying also stops when the user switches method, leaves the module, or starts a transfer/extract
+- **And** a listing error is shown once and is not retried
 
 ### Scenario: iPhone USB unavailable on non-Linux
 

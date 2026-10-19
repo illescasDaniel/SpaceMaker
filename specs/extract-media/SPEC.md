@@ -70,6 +70,18 @@ Copy is concise; link to future docs page optional.
 - **Daemon:** If `/run/usbmuxd` (or `/var/run/usbmuxd`) is missing, surface **usbmuxd not running** with hint to plug in the iPhone (udev) or `systemctl start usbmuxd` — not `enable`, and not a failed download.
 - **Move:** Delete on device via mounted path when supported; if delete fails, log error, keep PC copy, count file as failed move.
 
+### Automatic re-detection (empty device list)
+
+*Approved 2026-10-19 (chat).* Shared with [usb-file-transfer](../usb-file-transfer/SPEC.md#automatic-re-detection-empty-device-list); same helper, same numbers.
+
+- **Success criteria:** a device that is plugged in but missed by the first listing (adb daemon still starting, authorization still settling) appears without the user switching method.
+- **Trigger:** a device listing for **ADB** or **iPhone (USB)** (never Wi‑Fi) returns an empty list (not an error), while Step 1 is open and the method is unchanged.
+- **Budget:** one automatic retry every **3 s**, at most **5 retries** (~15 s after the first listing); then stop and keep the normal "No device found" status. Retries are silent apart from the status text; no banner.
+- **Stops early** on: a non-empty list, the user switching method, leaving Step 1, or the user starting an extract. A manual method click always starts a fresh budget.
+- **Failure handling:** a listing that **errors** (e.g. iPhone USB on non-Linux) is not retried; the existing error banner shows. A retry that errors stops the retries.
+- **Resource budget:** at most one listing in flight per module; no polling after the budget is spent (no background loop).
+- **Trust boundary:** none new — same `GET /api/devices` call as today.
+
 ## Source folders (device scope)
 
 Users choose **which device folders** to include before extract. v1 uses a **multi-select checklist** on Step 1 (not a free-text path editor).
@@ -178,6 +190,23 @@ Move requires backend support (**ADB** usually supports delete; **AFC** may not 
 - **When** the user selects **ADB (cable)**
 - **Then** device status is refreshed using the ADB backend
 - **And** an authorized ADB device shows as connected when present
+
+### Scenario: Empty device list is retried automatically
+
+- **Given** the user is in Step 1 with ADB or iPhone (USB) selected
+- **And** the first device listing returns no device
+- **When** 3 seconds pass without the user acting
+- **Then** the device list is requested again
+- **And** the status reads "Searching for device…" while retries remain
+- **And** a device that appears is selected and shown as connected without switching method
+
+### Scenario: Retries are bounded and cancellable
+
+- **Given** automatic re-detection is running
+- **When** 5 retries return no device
+- **Then** retrying stops and the status reads "No device found"
+- **And** retrying also stops when the user switches method, leaves Step 1, or starts an extract
+- **And** a listing error is shown once and is not retried
 
 ### Scenario: Info button explains setup
 

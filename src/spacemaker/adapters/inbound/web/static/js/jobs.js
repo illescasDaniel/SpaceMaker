@@ -1,4 +1,5 @@
 import { apiSend } from "./api.js";
+import { isScreenActive, showDeviceSearching, startDeviceRetry } from "./device-retry.js";
 import { clearFormBanner, errorMessage, setStatusLine, showFormBanner } from "./dom.js";
 import { selectedConnectionMethod, selectedFolders, updateDeviceStatus, updateWifiUploadPanel } from "./home.js";
 import { applyState } from "./shell.js";
@@ -227,20 +228,17 @@ function updateWarnings(next) {
 		}
 	}
 }
-function loadDevices() {
-	const method = selectedConnectionMethod();
-	if (method === "wifi") {
-		return Promise.resolve();
-	}
+function listDevices(method) {
 	return apiSend("GET", "/api/devices?connection_method=" + method)
 		.then((devices) => {
 			S.deviceLabels = {};
 			devices.forEach((d) => {
 				S.deviceLabels[d.device_id] = d.label;
 			});
+			const outcome = devices.length ? "found" : "empty";
 			const sel = document.getElementById("select-device");
 			if (!(sel instanceof HTMLSelectElement)) {
-				return undefined;
+				return outcome;
 			}
 			const previous = sel.value;
 			sel.innerHTML = "";
@@ -259,13 +257,13 @@ function loadDevices() {
 					sel.value = devices[0]?.device_id ?? "";
 				}
 				if (!S.state?.device_id) {
-					return pushSettings().then(() => undefined);
+					return pushSettings().then(() => outcome);
 				}
 			}
 			if (S.state) {
 				updateDeviceStatus(S.state);
 			}
-			return undefined;
+			return outcome;
 		})
 		.catch((err) => {
 			S.deviceLabels = {};
@@ -277,7 +275,43 @@ function loadDevices() {
 				updateDeviceStatus(S.state);
 			}
 			showFormBanner(errorMessage(err, "Could not list devices."));
+			return "error";
 		});
+}
+let deviceRetry;
+/** Lists devices; an empty ADB/iPhone result starts the bounded auto re-detection (fresh budget per call). */
+function loadDevices() {
+	deviceRetry?.cancel();
+	deviceRetry = undefined;
+	const method = selectedConnectionMethod();
+	if (method === "wifi") {
+		return Promise.resolve();
+	}
+	return listDevices(method).then((outcome) => {
+		if (outcome !== "empty") {
+			return;
+		}
+		const isActive = () =>
+			isScreenActive("view-wizard") &&
+			selectedConnectionMethod() === method &&
+			!["running", "paused"].includes(S.state?.extract?.phase ?? "");
+		deviceRetry = startDeviceRetry({
+			isActive,
+			list: () =>
+				listDevices(method).then((next) => {
+					if (next === "empty" && isActive()) {
+						showDeviceSearching("device-status", "device-status-text");
+					}
+					return next;
+				}),
+			onSearching: () => showDeviceSearching("device-status", "device-status-text"),
+			onGiveUp: () => {
+				if (S.state) {
+					updateDeviceStatus(S.state);
+				}
+			},
+		});
+	});
 }
 function libraryRootForSave() {
 	const lib = document.getElementById("input-library-root");

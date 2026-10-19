@@ -1,5 +1,12 @@
 import { apiSend } from "./api.ts";
 import { openDevicePicker } from "./device-picker.ts";
+import {
+	type DeviceListOutcome,
+	type DeviceRetryRun,
+	isScreenActive,
+	showDeviceSearching,
+	startDeviceRetry,
+} from "./device-retry.ts";
 import { clearFormBanner, errorMessage, onClick, showFormBanner } from "./dom.ts";
 import { renderExtraSources } from "./extra-sources.ts";
 import { libraryRootForSave } from "./jobs.ts";
@@ -142,13 +149,13 @@ function updateUsbTransferDeviceStatus(next: AppSnapshot): void {
 		textEl.textContent = "No device found · Check USB and " + methodLabel + " setup";
 	}
 }
-function refreshUsbTransferDevices(method: string): Promise<void> {
+function listUsbTransferDevices(method: string): Promise<DeviceListOutcome> {
 	return apiSend<DeviceRow[]>("GET", "/api/devices?connection_method=" + encodeURIComponent(method || "adb"))
-		.then((devices) => {
+		.then((devices): Promise<DeviceListOutcome> | DeviceListOutcome => {
 			uftDeviceLabels = {};
 			const sel = document.getElementById("uft-select-device");
 			if (!(sel instanceof HTMLSelectElement)) {
-				return undefined;
+				return "found";
 			}
 			const previous = sel.value;
 			sel.innerHTML = "";
@@ -178,19 +185,52 @@ function refreshUsbTransferDevices(method: string): Promise<void> {
 					device_label: selLabel || S.state.device_label || "",
 				});
 			}
+			const outcome: DeviceListOutcome = devices.length ? "found" : "empty";
 			if (sel.value && sel.value !== (S.state?.device_id || "")) {
-				return pushUsbTransferSettings().then(() => undefined);
+				return pushUsbTransferSettings().then(() => outcome);
 			}
-			return undefined;
+			return outcome;
 		})
-		.catch((err: unknown) => {
+		.catch((err: unknown): DeviceListOutcome => {
 			uftDeviceLabels = {};
 			const sel = document.getElementById("uft-select-device");
 			if (sel instanceof HTMLSelectElement) {
 				sel.innerHTML = '<option value="">No device</option>';
 			}
 			showFormBanner(errorMessage(err, "Could not list devices."), "uft-form-banner");
+			return "error";
 		});
+}
+let uftDeviceRetry: DeviceRetryRun | undefined;
+/** Lists devices; an empty ADB/iPhone result starts the bounded auto re-detection (fresh budget per call). */
+function refreshUsbTransferDevices(method: string): Promise<void> {
+	uftDeviceRetry?.cancel();
+	uftDeviceRetry = undefined;
+	return listUsbTransferDevices(method).then((outcome) => {
+		if (outcome !== "empty") {
+			return;
+		}
+		const isActive = (): boolean =>
+			isScreenActive("view-usb-file-transfer") &&
+			selectedUsbTransferMethod() === (method || "adb") &&
+			!["running", "paused"].includes(S.state?.usb_transfer?.phase ?? "");
+		uftDeviceRetry = startDeviceRetry({
+			isActive,
+			list: () =>
+				listUsbTransferDevices(method).then((next) => {
+					if (next === "empty" && isActive()) {
+						showDeviceSearching("uft-device-status", "uft-device-status-text");
+					}
+					return next;
+				}),
+			onSearching: () => showDeviceSearching("uft-device-status", "uft-device-status-text"),
+			onGiveUp: () => {
+				if (S.state) {
+					updateUsbTransferDeviceStatus(S.state);
+				}
+			},
+		});
+	});
 }
 /** Destination edit waiting to be sent with the next settings PUT ("" = restore default); null = leave unchanged. */
 let uftDestPending: string | null = null;

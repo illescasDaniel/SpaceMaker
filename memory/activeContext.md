@@ -6,6 +6,8 @@ _Last updated: 2026-10-19 (Components Copy button fix, committed)_
 
 ## Current focus
 
+Auto-retry of empty ADB/AFC device lists (3 s, max 5 retries; specs `usb-file-transfer` + `extract-media` "Automatic re-detection", approved): Phases 0-4 done. `web/src/device-retry.ts` (+ `isActive` guard) wired into `usb.ts` / `jobs.ts`, 10 vitest tests, gate green, grader round 1 fixed. Not tried with a real phone; uncommitted.
+
 Branch `claude/device-file-picker-48a91d`: phone picker (desktop-only, grader PASS), USB transfer destination selector (`usb_transfer_destination`, persisted in preferences JSON), and LAN access policy (`web/lan_policy.py` default-deny allow-list middleware, registered inside the passcode guard so LAN gets 401 before 403; shell keyed on TCP peer, not Host; `GET /` for LAN = notice page with Open gallery). Gate green. Next: Phase 5 grader on lan-access, then report to parent session. Known edge: same-machine browser via its own LAN IP sees the notice page (use `localhost`).
 
 Previous:

@@ -99,3 +99,5 @@ Open items only. Finished work: `memory/archive.md`.
 - 2026-10-18: Batch zip now uses `spacemaker-media-<job id>.zip` with `YYYY/MM/<file>` entries (capture date via probe, mtime fallback, `_2` suffix on same-name collisions); spec updated, tests green.
 
 - [x] **LAN access policy + USB destination selector** (2026-10-19) — `specs/lan-access/SPEC.md` (route audit test `tests/integration/test_lan_access.py`), `specs/usb-file-transfer/SPEC.md` destination rules. Gate green. Not verified on a real phone or in a browser pane visually.
+
+- [x] **Auto re-detect empty device list** (2026-10-19) — retry every 3 s, max 5, in USB transfer and photo Step 1. Gate green; not verified with a real phone.
