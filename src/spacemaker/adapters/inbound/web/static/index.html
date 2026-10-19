@@ -426,10 +426,26 @@
 				<button type="button" class="btn btn-secondary" id="btn-dp-select-folder">Select this folder</button>
 				<input class="field" type="search" id="dp-filter" placeholder="Filter this folder by name" aria-label="Filter this folder by name" />
 				<label class="dp-toggle"><input type="checkbox" id="dp-hidden-toggle" /> Show hidden</label>
+				<label class="dp-sort-select">Sort
+					<select class="field" id="dp-sort-select" aria-label="Sort this folder">
+						<option value="name:asc">Name, A → Z</option>
+						<option value="name:desc">Name, Z → A</option>
+						<option value="mtime:desc">Newest first</option>
+						<option value="mtime:asc">Oldest first</option>
+						<option value="size:desc">Largest first</option>
+						<option value="size:asc">Smallest first</option>
+					</select>
+				</label>
 			</div>
 
 			<div class="dp-list-wrap" id="dp-list-wrap">
-				<div class="dp-head" aria-hidden="true"><span></span><span>Name</span><span style="text-align: right;">Size</span><span class="dp-date">Modified</span></div>
+				<div class="dp-head">
+					<span></span>
+					<span><button type="button" class="dp-sort" data-dp-sort="name">Name <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
+					<span class="dp-sort-size"><button type="button" class="dp-sort" data-dp-sort="size">Size <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
+					<span class="dp-date"><button type="button" class="dp-sort" data-dp-sort="mtime">Modified <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
+				</div>
+				<p class="sr-only" id="dp-sort-status" aria-live="polite"></p>
 				<ul class="dp-list" id="dp-list" aria-label="Phone folder contents"></ul>
 				<div class="dp-state" id="dp-state" hidden></div>
 				<div class="dp-more" id="dp-more" hidden>

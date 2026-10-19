@@ -5,9 +5,6 @@ from spacemaker.domain.device_browse import (
 	DeviceBrowseErrorKind,
 	DeviceBrowseQuery,
 	DeviceEntry,
-	browse_sort_key,
-	decode_browse_cursor,
-	encode_browse_cursor,
 	normalize_browse_path,
 	scroll_page,
 	sort_entries,
@@ -65,48 +62,17 @@ def _mixed_entries(count: int = 250) -> list[DeviceEntry]:
 	return entries
 
 
-def _walk(
-	entries: list[DeviceEntry], limit: int = 100, query: str = "", show_hidden: bool = False
-) -> list[list[str]]:
+def _walk(entries: list[DeviceEntry], limit: int = 100, query: str = "", show_hidden: bool = False) -> list[list[str]]:
 	pages: list[list[str]] = []
 	cursor: str | None = None
 	while True:
-		page = scroll_page("p", entries, DeviceBrowseQuery(cursor=cursor, limit=limit, query=query, show_hidden=show_hidden))
+		page = scroll_page(
+			"p", entries, DeviceBrowseQuery(cursor=cursor, limit=limit, query=query, show_hidden=show_hidden)
+		)
 		pages.append([e.name for e in page.entries])
 		cursor = page.next_cursor
 		if cursor is None:
 			return pages
-
-
-@pytest.mark.parametrize("name", ["a", "Zoë", "line\nbreak", "日本語 file.txt", 'q"uo/te\\', "x" * 300])
-def test_given_entry_when_cursor_round_trip_then_sort_key_restored(name: str) -> None:
-	# given
-	entry = DeviceEntry(name, True)
-	# when
-	decoded = decode_browse_cursor(encode_browse_cursor(entry))
-	# then
-	assert decoded == browse_sort_key(entry)
-
-
-def test_given_entry_when_encode_cursor_then_url_safe_and_versioned() -> None:
-	# given
-	# when
-	cursor = encode_browse_cursor(DeviceEntry("a/b+c", False))
-	# then
-	assert cursor.startswith("v1.")
-	assert all(ch.isalnum() or ch in "-_.=" for ch in cursor)
-
-
-@pytest.mark.parametrize(
-	"raw", ["", "garbage", "5", "v1.", "v1.!!!", "v0.W3RydWUsImEiLCJhIl0=", "v1.bm90LWpzb24", "v1.WzEsMiwzXQ", "v1.e30"]
-)
-def test_given_foreign_cursor_when_decode_then_invalid_cursor(raw: str) -> None:
-	# given
-	# when
-	# then
-	with pytest.raises(DeviceBrowseError) as exc:
-		decode_browse_cursor(raw)
-	assert exc.value.kind is DeviceBrowseErrorKind.INVALID_CURSOR
 
 
 def test_given_bad_cursor_when_scroll_then_invalid_cursor() -> None:

@@ -11,7 +11,12 @@ const MARKUP = `
 <span id="dp-device-status-text"></span><div id="dp-device-status"></div><div id="dp-media-note" hidden></div>
 <nav id="dp-trail"></nav><button id="btn-dp-up"></button><button id="btn-dp-select-folder"></button>
 <input id="dp-filter" /><input type="checkbox" id="dp-hidden-toggle" />
-<div id="dp-list-wrap"><div class="dp-head"></div><ul id="dp-list"></ul><div id="dp-state" hidden></div>
+<select id="dp-sort-select"><option value="name:asc">Name, A → Z</option><option value="name:desc">Name, Z → A</option><option value="mtime:desc">Newest first</option><option value="mtime:asc">Oldest first</option><option value="size:desc">Largest first</option><option value="size:asc">Smallest first</option></select>
+<div id="dp-list-wrap"><div class="dp-head"><span></span>
+<span><button type="button" class="dp-sort" data-dp-sort="name">Name <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
+<span><button type="button" class="dp-sort" data-dp-sort="size">Size <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
+<span class="dp-date"><button type="button" class="dp-sort" data-dp-sort="mtime">Modified <span class="dp-sort-arrow" aria-hidden="true"></span></button></span></div>
+<p class="sr-only" id="dp-sort-status" aria-live="polite"></p><ul id="dp-list"></ul><div id="dp-state" hidden></div>
 <div id="dp-more" hidden><span id="dp-more-text"></span><button id="btn-dp-more"></button></div></div>
 <p id="dp-hint"></p><span id="dp-count"></span><button id="btn-dp-cancel"></button><button id="btn-dp-add"></button>`;
 
@@ -22,6 +27,8 @@ interface ListBody {
 	query?: string;
 	show_hidden?: boolean;
 	refresh?: boolean;
+	sort?: string;
+	order?: string;
 }
 type Reply = DeviceListPage | { status: number; detail: unknown };
 
@@ -30,8 +37,10 @@ function page(
 	names: Array<[string, boolean]>,
 	next: string | null = null,
 	total?: number,
-): DeviceListPage {
+	echo?: { sort: string; order: string },
+): DeviceListPage & { sort?: string; order?: string } {
 	return {
+		...echo,
 		path,
 		entries: names.map(([name, is_dir]) => ({ name, is_dir, size: 10, mtime: 0 })),
 		next_cursor: next,
@@ -533,5 +542,218 @@ describe("device picker filter and hidden toggle", () => {
 		await flush();
 		expect(labels()).toEqual([".thumbnails", "a.txt"]);
 		expect((document.querySelectorAll("#dp-list input")[1] as HTMLInputElement).checked).toBe(true);
+	});
+});
+
+describe("device picker sorting", () => {
+	const arrow = (key: string): string | null =>
+		document.querySelector(`[data-dp-sort="${key}"] .dp-sort-arrow`)?.textContent ?? null;
+	const header = (key: string): HTMLButtonElement =>
+		document.querySelector(`[data-dp-sort="${key}"]`) as HTMLButtonElement;
+	const select = (): HTMLSelectElement => document.getElementById("dp-sort-select") as HTMLSelectElement;
+	const echoFor = (body: ListBody): { sort: string; order: string } => ({
+		sort: body.sort ?? "name",
+		order: body.order ?? "asc",
+	});
+
+	it("given no stored sort when opened then no sort is sent and the echoed name/asc shows on the header and menu", async () => {
+		const calls = mockApi((body) => page(body.path, [["a.txt", false]], null, 1, { sort: "name", order: "asc" }));
+		open();
+		await flush();
+		expect(calls[0]?.sort).toBeUndefined();
+		expect(calls[0]?.order).toBeUndefined();
+		expect(arrow("name")).toBe("▲");
+		expect(arrow("size")).toBe("");
+		expect(arrow("mtime")).toBe("");
+		expect(select().value).toBe("name:asc");
+	});
+
+	it("given a remembered size/desc then paging and folder opens carry it", async () => {
+		const calls = mockApi((body) =>
+			body.path === "" && body.cursor === null
+				? page("", [["Docs", true], ...files("a", 2)], "c1", 6, { sort: "size", order: "desc" })
+				: page(body.path, [["x.txt", false]], null, 6, echoFor(body)),
+		);
+		open();
+		await flush();
+		expect(arrow("size")).toBe("▼");
+		expect(select().value).toBe("size:desc");
+		fireIntersect();
+		await flush();
+		expect(calls.at(-1)).toMatchObject({ cursor: "c1", sort: "size", order: "desc" });
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		await flush();
+		expect(calls.at(-1)).toMatchObject({ path: "Docs", sort: "size", order: "desc" });
+	});
+
+	it("given the Modified header then it sorts newest first, keeps filter, hidden and ticks, and flips on a second click", async () => {
+		vi.useFakeTimers();
+		const calls = mockApi((body) =>
+			page(
+				body.path,
+				[
+					["a.txt", false],
+					["b.txt", false],
+				],
+				null,
+				2,
+				echoFor(body),
+			),
+		);
+		open();
+		await vi.advanceTimersByTimeAsync(0);
+		const filter = document.getElementById("dp-filter") as HTMLInputElement;
+		filter.value = "txt";
+		filter.dispatchEvent(new Event("input"));
+		await vi.advanceTimersByTimeAsync(200);
+		const toggle = document.getElementById("dp-hidden-toggle") as HTMLInputElement;
+		toggle.checked = true;
+		toggle.dispatchEvent(new Event("change"));
+		await vi.advanceTimersByTimeAsync(0);
+		tick(1);
+		const before = calls.length;
+		header("mtime").click();
+		expect(calls).toHaveLength(before + 1);
+		expect(calls.at(-1)).toMatchObject({
+			cursor: null,
+			sort: "mtime",
+			order: "desc",
+			query: "txt",
+			show_hidden: true,
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(arrow("mtime")).toBe("▼");
+		expect((document.querySelectorAll("#dp-list input")[1] as HTMLInputElement).checked).toBe(true);
+		header("mtime").click();
+		expect(calls.at(-1)).toMatchObject({ sort: "mtime", order: "asc" });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(arrow("mtime")).toBe("▲");
+	});
+
+	it("given inactive Size and Name headers then their first click uses the natural direction", async () => {
+		const calls = mockApi((body) => page(body.path, [["a.txt", false]], null, 1, echoFor(body)));
+		open();
+		await flush();
+		header("size").click();
+		await flush();
+		expect(calls.at(-1)).toMatchObject({ sort: "size", order: "desc" });
+		header("name").click();
+		await flush();
+		expect(calls.at(-1)).toMatchObject({ sort: "name", order: "asc" });
+	});
+
+	it("given a sort restart in flight then the list is dimmed but stays visible", async () => {
+		let release: (reply: Reply) => void = () => undefined;
+		mockApi((body) =>
+			body.sort
+				? new Promise<Reply>((resolve) => {
+						release = resolve;
+					})
+				: page("", [["a.txt", false]], null, 1, { sort: "name", order: "asc" }),
+		);
+		open();
+		await flush();
+		header("size").click();
+		await flush();
+		const list = document.getElementById("dp-list") as HTMLElement;
+		expect(list.classList.contains("is-refreshing")).toBe(true);
+		expect(list.hidden).toBe(false);
+		expect(labels()).toEqual(["a.txt"]);
+		release(page("", [["b.txt", false]], null, 1, { sort: "size", order: "desc" }));
+		await flush();
+		expect(list.classList.contains("is-refreshing")).toBe(false);
+		expect(labels()).toEqual(["b.txt"]);
+	});
+
+	it("given the Sort menu changed to mtime:desc then it behaves like the Modified header", async () => {
+		const calls = mockApi((body) => page(body.path, [["a.txt", false]], null, 1, echoFor(body)));
+		open();
+		await flush();
+		const before = calls.length;
+		select().value = "mtime:desc";
+		select().dispatchEvent(new Event("change"));
+		expect(calls).toHaveLength(before + 1);
+		expect(calls.at(-1)).toMatchObject({ cursor: null, sort: "mtime", order: "desc" });
+		await flush();
+		expect(arrow("mtime")).toBe("▼");
+	});
+
+	it("given a pending filter debounce when a sort header is clicked then one request carries both and no more follow", async () => {
+		vi.useFakeTimers();
+		const calls = mockApi((body) => page(body.path, [["a.txt", false]], null, 1, echoFor(body)));
+		open();
+		await vi.advanceTimersByTimeAsync(0);
+		const before = calls.length;
+		const filter = document.getElementById("dp-filter") as HTMLInputElement;
+		filter.value = "img";
+		filter.dispatchEvent(new Event("input"));
+		await vi.advanceTimersByTimeAsync(50);
+		header("mtime").click();
+		expect(calls).toHaveLength(before + 1);
+		expect(calls.at(-1)).toMatchObject({ query: "img", sort: "mtime", order: "desc" });
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(calls).toHaveLength(before + 1);
+	});
+
+	it("given a sort then opening another folder keeps the sort but clears the filter", async () => {
+		vi.useFakeTimers();
+		const calls = mockApi((body) =>
+			body.path === ""
+				? page("", [["Docs", true]], null, 1, echoFor(body))
+				: page(body.path, [["x.txt", false]], null, 1, echoFor(body)),
+		);
+		open();
+		await vi.advanceTimersByTimeAsync(0);
+		header("size").click();
+		await vi.advanceTimersByTimeAsync(0);
+		const filter = document.getElementById("dp-filter") as HTMLInputElement;
+		filter.value = "Do";
+		filter.dispatchEvent(new Event("input"));
+		await vi.advanceTimersByTimeAsync(200);
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(calls.at(-1)).toMatchObject({ path: "Docs", sort: "size", order: "desc" });
+		expect(calls.at(-1)?.query ?? "").toBe("");
+		expect(filter.value).toBe("");
+	});
+
+	it("given a late response from before a sort change then it is dropped", async () => {
+		const releases: Array<(reply: Reply) => void> = [];
+		mockApi((body) =>
+			body.sort
+				? new Promise<Reply>((resolve) => {
+						releases.push(resolve);
+					})
+				: page("", [["a.txt", false]], null, 1, { sort: "name", order: "asc" }),
+		);
+		open();
+		await flush();
+		header("size").click();
+		header("mtime").click();
+		await flush();
+		expect(releases).toHaveLength(2);
+		releases[1]?.(page("", [["new.txt", false]], null, 1, { sort: "mtime", order: "desc" }));
+		await flush();
+		releases[0]?.(page("", [["old.txt", false]], null, 1, { sort: "size", order: "desc" }));
+		await flush();
+		expect(labels()).toEqual(["new.txt"]);
+	});
+
+	it("given sort changes then header labels and the live region describe the order", async () => {
+		mockApi((body) => page(body.path, [["a.txt", false]], null, 1, echoFor(body)));
+		open();
+		await flush();
+		expect(header("size").getAttribute("aria-label")).toBe("Size. Sort largest first.");
+		header("mtime").click();
+		await flush();
+		expect(header("mtime").getAttribute("aria-label")).toBe("Modified, sorted newest first. Sort oldest first.");
+		expect(document.getElementById("dp-sort-status")?.textContent).toBe("Sorted newest first. Folders stay first.");
+	});
+
+	it("given a file with unknown mtime then its Modified cell shows a dash", async () => {
+		mockApi((body) => page(body.path, [["a.txt", false]]));
+		open();
+		await flush();
+		expect(document.querySelector("#dp-list .dp-date")?.textContent).toBe("—");
 	});
 });

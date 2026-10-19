@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 from spacemaker.domain.app_module import AppModule
 from spacemaker.domain.connection import ConnectionMethod
@@ -82,3 +84,11 @@ class DeviceListBody(BaseModel):
 	query: str = Field("", max_length=BROWSE_QUERY_MAX)
 	show_hidden: bool = False
 	refresh: bool = False
+	sort: Literal["name", "mtime", "size"] | None = None
+	order: Literal["asc", "desc"] | None = None
+
+	@model_validator(mode="after")
+	def _sort_and_order_together(self) -> DeviceListBody:
+		if (self.sort is None) != (self.order is None):
+			raise ValueError("sort and order must be sent together")
+		return self

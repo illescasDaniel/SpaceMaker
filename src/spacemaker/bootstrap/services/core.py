@@ -205,7 +205,9 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		return ExtractMedia(self.devices_for(method), self.filesystem)
 
 	def list_device_directory_use_case(self, method: ConnectionMethod) -> ListDeviceDirectory:
-		return ListDeviceDirectory(self.devices_for(method), cache=self.device_listing_cache)
+		return ListDeviceDirectory(
+			self.devices_for(method), cache=self.device_listing_cache, preferences=self.user_preferences
+		)
 
 	def usb_transfer_use_case(self, method: ConnectionMethod) -> TransferUsbFiles:
 		return TransferUsbFiles(self.devices_for(method), self.filesystem)

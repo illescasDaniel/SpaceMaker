@@ -125,6 +125,9 @@ export interface DeviceEntryRow {
 	mtime: number;
 }
 
+export type DeviceSortKey = "name" | "mtime" | "size";
+export type DeviceSortOrder = "asc" | "desc";
+
 export interface DeviceListPage {
 	path: string;
 	entries: DeviceEntryRow[];
@@ -134,6 +137,10 @@ export interface DeviceListPage {
 	total: number;
 	/** Entries in the folder ignoring the filter. */
 	total_unfiltered: number;
+	/** Sort the server applied (a `DeviceSortKey`; narrowed by the picker, as the wire value is unchecked). */
+	sort?: string;
+	/** Order the server applied (a `DeviceSortOrder`). */
+	order?: string;
 }
 
 /** `detail` of a failed `POST /api/device/list` (`DeviceBrowseErrorKind` value plus device text). */

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from spacemaker.domain.device_browse import DeviceBrowseSort
+
 
 class UserPreferencesPort(Protocol):
 	"""Disk-backed user preferences that survive app relaunch.
@@ -20,6 +22,16 @@ class UserPreferencesPort(Protocol):
 
 	def set_usb_transfer_destination(self, path: str | None) -> None:
 		"""Store the chosen destination; ``None`` (or empty) restores the default."""
+		...
+
+	def get_device_picker_sort(self) -> DeviceBrowseSort | None:
+		"""Last sort used in the phone picker, or ``None`` when never saved or unreadable (caller applies
+		``DEFAULT_BROWSE_SORT``). Stored values are re-validated with ``parse_device_browse_sort``.
+		"""
+		...
+
+	def set_device_picker_sort(self, sort: DeviceBrowseSort | None) -> None:
+		"""Store the picker sort (key ``device_picker_sort``); ``None`` restores the default."""
 		...
 
 	def clear(self) -> None:

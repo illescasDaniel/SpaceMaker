@@ -536,6 +536,28 @@
 			border-bottom: 1px solid var(--border);
 		}
 
+		/* Sortable column headers (folders always stay first; see reviewer note). */
+		.dp-sort {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.25rem;
+			background: none;
+			border: none;
+			padding: 0.1rem 0.2rem;
+			margin: -0.1rem -0.2rem;
+			font: inherit;
+			color: inherit;
+			cursor: pointer;
+			border-radius: 4px;
+		}
+		.dp-sort:hover { color: var(--text); }
+		.dp-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+		.dp-sort.is-active { color: var(--text); }
+		.dp-sort .dp-sort-arrow { font-size: 0.7rem; min-width: 0.7rem; }
+		.dp-head .dp-sort-size { justify-self: end; }
+		.dp-sort-select { display: none; }
+		.dp-sort-select select { border-style: solid; padding: 0.35rem 0.5rem; font-size: 0.85rem; width: auto; }
+
 		.dp-list {
 			list-style: none;
 			margin: 0;
@@ -652,6 +674,8 @@
 		@media (max-width: 520px) {
 			.dp-head, .dp-row { grid-template-columns: 1.6rem minmax(0, 1fr) 4.2rem; }
 			.dp-date { display: none; }
+			/* Modified column is hidden: keep every sort reachable from the toolbar. */
+			.dp-sort-select { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
 		}
 
 		.extract-actions {
@@ -661,7 +685,7 @@
 			margin-top: 0.25rem;
 		}
 
-		legend.sr-only {
+		.sr-only {
 			position: absolute;
 			width: 1px;
 			height: 1px;
@@ -2966,10 +2990,26 @@
 				<button type="button" class="btn btn-secondary" id="btn-dp-select-folder">Select this folder</button>
 				<input class="field" type="search" id="dp-filter" placeholder="Filter this folder by name" aria-label="Filter this folder by name" />
 				<label class="dp-toggle"><input type="checkbox" id="dp-hidden-toggle" /> Show hidden</label>
+				<label class="dp-sort-select">Sort
+					<select class="field" id="dp-sort-select" aria-label="Sort this folder">
+						<option value="name:asc">Name, A → Z</option>
+						<option value="name:desc">Name, Z → A</option>
+						<option value="mtime:desc">Newest first</option>
+						<option value="mtime:asc">Oldest first</option>
+						<option value="size:desc">Largest first</option>
+						<option value="size:asc">Smallest first</option>
+					</select>
+				</label>
 			</div>
 
 			<div class="dp-list-wrap" id="dp-list-wrap">
-				<div class="dp-head" aria-hidden="true"><span></span><span>Name</span><span style="text-align: right;">Size</span><span class="dp-date">Modified</span></div>
+				<div class="dp-head">
+					<span></span>
+					<span><button type="button" class="dp-sort" data-dp-sort="name">Name <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
+					<span class="dp-sort-size"><button type="button" class="dp-sort" data-dp-sort="size">Size <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
+					<span class="dp-date"><button type="button" class="dp-sort" data-dp-sort="mtime">Modified <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
+				</div>
+				<p class="sr-only" id="dp-sort-status" aria-live="polite"></p>
 				<ul class="dp-list" id="dp-list" aria-label="Phone folder contents"></ul>
 				<div class="dp-state" id="dp-state" hidden></div>
 				<div class="dp-more" id="dp-more" hidden>
@@ -2993,6 +3033,7 @@
 
 			<aside class="wf-note" data-for="reviewer">
 				<span class="wf-note-badge">Review only</span>
+				<b>Sorting (new):</b> click <b>Name</b>, <b>Size</b> or <b>Modified</b> in the list header. The first click on a column uses its natural direction (Name A → Z, Modified newest first, Size largest first); clicking the active column flips it (▲ ascending / ▼ descending). <b>Folders always stay above files</b> — folders sort among themselves by the same key (by name for Size, since folders have no size); ties fall back to name. Changing the sort restarts at the first 100 rows on the server (list dims, no spinner, no new phone call), keeps the filter, hidden toggle and every tick. The choice is remembered for the next time the picker opens (default Name A → Z). Below 520 px wide, where Modified is hidden, a <b>Sort</b> menu appears in the toolbar with the same six options. Try <b>Big folder (3,412)</b> → Modified.<br><br>
 				Pages of 100 load automatically as you scroll; filter and hidden toggle are applied on the server. Try it: open <b>Big folder (3,412)</b> and scroll the list — a “Loading more…” row appears at the bottom while the next 100 arrive (~0.3 s). The footer button <b>Load more</b> is the keyboard / no-IntersectionObserver fallback. Tick <b>Simulate next-page error</b> and scroll to see the inline retry row (already-loaded rows and ticks stay).
 			</aside>
 		</article>
@@ -4821,6 +4862,17 @@
 			sentinelEl.setAttribute('aria-hidden', 'true');
 			var tailEl = null;
 			var observer = null;
+			/* Sort: remembered across picker opens (the real app stores it in preferences). */
+			var SORT_DEFAULT_DIR = { name: 'asc', mtime: 'desc', size: 'desc' };
+			var SORT_LABEL = {
+				'name:asc': 'Name, A to Z', 'name:desc': 'Name, Z to A',
+				'mtime:desc': 'Newest first', 'mtime:asc': 'Oldest first',
+				'size:desc': 'Largest first', 'size:asc': 'Smallest first'
+			};
+			var COLUMN_LABEL = { name: 'Name', mtime: 'Modified', size: 'Size' };
+			var sort = { key: 'name', dir: 'asc' };
+			var sortSelect = document.getElementById('dp-sort-select');
+			var sortStatus = document.getElementById('dp-sort-status');
 
 			(function () {
 				var btn = document.getElementById('btn-dp-info');
@@ -4899,10 +4951,16 @@
 				st.classList.toggle('connected', kind !== 'unauthorized' && kind !== 'unplugged');
 			}
 
-			/* Fake server: sort (folders first, then case-insensitive name), filter, keyset page. */
+			/* Fake server: folders first, then the chosen key/direction, ties by case-insensitive name; filter; keyset page. */
+			function cmpName(a, b) { return a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0); }
 			function cmpEntry(a, b) {
 				if (a.dir !== b.dir) { return a.dir ? -1 : 1; }
-				return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+				var sign = sort.dir === 'desc' ? -1 : 1;
+				var c = 0;
+				if (sort.key === 'mtime') { c = a.mtime < b.mtime ? -1 : a.mtime > b.mtime ? 1 : 0; }
+				else if (sort.key === 'size' && !a.dir) { c = a.size - b.size; }
+				if (c !== 0) { return c * sign; }
+				return sort.key === 'name' ? cmpName(a, b) * sign : cmpName(a, b);
 			}
 			function fetchPage(path, cursor, query, showHidden) {
 				return new Promise(function (resolve, reject) {
@@ -4926,7 +4984,7 @@
 						resolve({
 							entries: page,
 							total: rows.length,
-							next_cursor: last && start + PAGE < rows.length ? { dir: last.dir, name: last.name } : null
+							next_cursor: last && start + PAGE < rows.length ? { dir: last.dir, name: last.name, size: last.size, mtime: last.mtime } : null
 						});
 					}, 300);
 				});
@@ -5081,6 +5139,42 @@
 					if (entries.some(function (en) { return en.isIntersecting; })) { loadNext(); }
 				}, { root: listEl, rootMargin: '0px 0px 120px 0px' });
 			}
+
+			function renderSort() {
+				var value = sort.key + ':' + sort.dir;
+				sortSelect.value = value;
+				document.querySelectorAll('[data-dp-sort]').forEach(function (b) {
+					var key = b.getAttribute('data-dp-sort');
+					var active = key === sort.key;
+					b.classList.toggle('is-active', active);
+					b.querySelector('.dp-sort-arrow').textContent = active ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+					var next = active ? (sort.dir === 'asc' ? 'desc' : 'asc') : SORT_DEFAULT_DIR[key];
+					b.setAttribute('aria-label', COLUMN_LABEL[key] + (active ? ', sorted ' + SORT_LABEL[value].toLowerCase() : '') + '. Sort ' + SORT_LABEL[key + ':' + next].toLowerCase() + '.');
+				});
+			}
+
+			/* Sort change: same restart as filter/hidden (dimmed list, page 1, ticks and filter kept). */
+			function setSort(key, dir) {
+				if (key === sort.key && dir === sort.dir) { return; }
+				sort = { key: key, dir: dir };
+				renderSort();
+				sortStatus.textContent = 'Sorted ' + SORT_LABEL[key + ':' + dir].toLowerCase() + '. Folders stay first.';
+				window.clearTimeout(filterTimer);
+				if (!listEl.hidden) { loadFirst(false); }
+			}
+
+			document.querySelectorAll('[data-dp-sort]').forEach(function (b) {
+				b.addEventListener('click', function () {
+					var key = b.getAttribute('data-dp-sort');
+					var dir = key === sort.key ? (sort.dir === 'asc' ? 'desc' : 'asc') : SORT_DEFAULT_DIR[key];
+					setSort(key, dir);
+				});
+			});
+			sortSelect.addEventListener('change', function () {
+				var parts = sortSelect.value.split(':');
+				setSort(parts[0], parts[1]);
+			});
+			renderSort();
 
 			function updateFooter() {
 				var n = selCount();

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
-from tests.unit.fakes import FakeDeviceRepository
+from tests.unit.fakes import FakeDeviceRepository, FakeUserPreferences
 from tests.unit.passcode_fakes import FakeClock, FakePasscodeCrypto, FakePasscodeStore
 
 from spacemaker.application.network_passcode import NetworkPasscode
@@ -15,10 +15,17 @@ from spacemaker.domain.device_browse import DeviceBrowseErrorKind, DeviceEntry
 pytestmark = pytest.mark.integration
 
 
-def _app_with_fake() -> tuple[FastAPI, FakeDeviceRepository]:
+def _app_with_fake_and_prefs() -> tuple[FastAPI, FakeDeviceRepository, FakeUserPreferences]:
 	app = create_app()
 	devices = FakeDeviceRepository()
+	prefs = FakeUserPreferences()
 	app.state.services._device_repos[ConnectionMethod.ADB] = devices
+	app.state.services.user_preferences = prefs
+	return app, devices, prefs
+
+
+def _app_with_fake() -> tuple[FastAPI, FakeDeviceRepository]:
+	app, devices, _prefs = _app_with_fake_and_prefs()
 	return app, devices
 
 
@@ -219,3 +226,101 @@ def test_given_extract_extras_when_snapshot_then_start_gate_counts_them() -> Non
 	# then
 	assert response.status_code == 200
 	assert response.json()["extract_extra_paths"] == ["WhatsApp/Media"]
+
+
+def _sort_tree(devices: FakeDeviceRepository) -> None:
+	devices.tree[""] = [
+		DeviceEntry("a.txt", False, 10, 300),
+		DeviceEntry("b.txt", False, 5000, 100),
+		DeviceEntry("c.txt", False, 200, 900),
+	]
+
+
+def test_given_no_sort_when_post_list_then_default_name_asc_echoed() -> None:
+	# given
+	app, devices = _app_with_fake()
+	_sort_tree(devices)
+	client = TestClient(app)
+	# when
+	data = client.post("/api/device/list", json=_body()).json()
+	# then
+	assert (data["sort"], data["order"]) == ("name", "asc")
+	assert [e["name"] for e in data["entries"]] == ["a.txt", "b.txt", "c.txt"]
+
+
+def test_given_mtime_desc_when_post_list_then_newest_first_and_echoed() -> None:
+	# given
+	app, devices = _app_with_fake()
+	_sort_tree(devices)
+	client = TestClient(app)
+	# when
+	data = client.post("/api/device/list", json=_body(sort="mtime", order="desc")).json()
+	# then
+	assert [e["name"] for e in data["entries"]] == ["c.txt", "a.txt", "b.txt"]
+	assert (data["sort"], data["order"]) == ("mtime", "desc")
+
+
+@pytest.mark.parametrize(
+	"extra",
+	[
+		{"sort": "type", "order": "asc"},
+		{"sort": "name", "order": "up"},
+		{"sort": "name"},
+		{"order": "asc"},
+	],
+)
+def test_given_invalid_sort_input_when_post_list_then_422_and_no_device_call(extra: dict[str, object]) -> None:
+	# given
+	app, devices = _app_with_fake()
+	client = TestClient(app)
+	# when
+	response = client.post("/api/device/list", json=_body(**extra))
+	# then
+	assert response.status_code == 422
+	assert devices.list_directory_calls == []
+
+
+def test_given_cursor_from_default_sort_when_post_list_with_other_sort_then_400_invalid_cursor() -> None:
+	# given
+	app, devices = _app_with_fake()
+	devices.tree[""] = [DeviceEntry(f"f{i:03d}.txt", False, i, i) for i in range(5)]
+	client = TestClient(app)
+	first = client.post("/api/device/list", json=_body(limit=2)).json()
+	calls_before = list(devices.list_directory_calls)
+	# when
+	response = client.post(
+		"/api/device/list", json=_body(cursor=first["next_cursor"], limit=2, sort="mtime", order="desc")
+	)
+	# then
+	assert response.status_code == 400
+	assert response.json()["detail"]["error"] == "invalid_cursor"
+	assert devices.list_directory_calls == calls_before
+
+
+def test_given_explicit_sort_then_no_sort_when_post_list_then_remembered_sort_used() -> None:
+	# given
+	app, devices, prefs = _app_with_fake_and_prefs()
+	_sort_tree(devices)
+	client = TestClient(app)
+	client.post("/api/device/list", json=_body(sort="size", order="desc"))
+	# when
+	data = client.post("/api/device/list", json=_body()).json()
+	# then
+	assert [e["name"] for e in data["entries"]] == ["b.txt", "c.txt", "a.txt"]
+	assert (data["sort"], data["order"]) == ("size", "desc")
+	assert prefs.device_picker_sort is not None
+	assert prefs.device_picker_sort.key.value == "size"
+	assert prefs.device_picker_sort.order.value == "desc"
+
+
+def test_given_listing_error_with_explicit_sort_when_post_list_then_nothing_stored() -> None:
+	# given
+	app, devices, prefs = _app_with_fake_and_prefs()
+	devices.browse_errors["Android/data"] = DeviceBrowseErrorKind.PERMISSION_DENIED
+	client = TestClient(app)
+	# when
+	response = client.post("/api/device/list", json=_body("Android/data", sort="size", order="desc"))
+	# then
+	assert response.status_code == 403
+	assert prefs.picker_sort_writes == []
+	assert prefs.device_picker_sort is None

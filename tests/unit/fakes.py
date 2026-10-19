@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, DeviceEntry
+from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, DeviceBrowseSort, DeviceEntry
 from spacemaker.domain.gallery import GalleryItem
 from spacemaker.domain.gallery_batch import ArchiveEntry, TrashError, VideoExportEncoder
 from spacemaker.domain.gallery_index import FileStat, GalleryCursor, GalleryIndexRow, GalleryPage
@@ -395,3 +395,37 @@ class FakeArchiveWriter:
 		self.written.append((destination, list(entries)))
 		Path(destination).parent.mkdir(parents=True, exist_ok=True)
 		Path(destination).write_bytes(b"zip")
+
+
+@dataclass
+class FakeUserPreferences:
+	"""In-memory ``UserPreferencesPort``; ``picker_sort_writes`` records every ``set_device_picker_sort``."""
+
+	compress_media: bool | None = None
+	usb_transfer_destination: str | None = None
+	device_picker_sort: DeviceBrowseSort | None = None
+	picker_sort_writes: list[DeviceBrowseSort | None] = field(default_factory=list)
+
+	def get_compress_media(self) -> bool | None:
+		return self.compress_media
+
+	def set_compress_media(self, enabled: bool) -> None:
+		self.compress_media = enabled
+
+	def get_usb_transfer_destination(self) -> str | None:
+		return self.usb_transfer_destination
+
+	def set_usb_transfer_destination(self, path: str | None) -> None:
+		self.usb_transfer_destination = path or None
+
+	def get_device_picker_sort(self) -> DeviceBrowseSort | None:
+		return self.device_picker_sort
+
+	def set_device_picker_sort(self, sort: DeviceBrowseSort | None) -> None:
+		self.picker_sort_writes.append(sort)
+		self.device_picker_sort = sort
+
+	def clear(self) -> None:
+		self.compress_media = None
+		self.usb_transfer_destination = None
+		self.device_picker_sort = None

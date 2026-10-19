@@ -1,19 +1,36 @@
 import pytest
-from tests.unit.fakes import FakeDeviceRepository
+from tests.unit.fakes import FakeDeviceRepository, FakeUserPreferences
 from tests.unit.passcode_fakes import FakeClock
 
 from spacemaker.application.device_listing_cache import DeviceListingCache
 from spacemaker.application.list_device_directory import ListDeviceDirectory
 from spacemaker.domain.device_browse import (
+	DEFAULT_BROWSE_SORT,
 	DeviceBrowseError,
 	DeviceBrowseErrorKind,
 	DeviceBrowseQuery,
+	DeviceBrowseSort,
+	DeviceBrowseSortKey,
 	DeviceEntry,
+	SortOrder,
 )
 
 
-def _cached(devices: FakeDeviceRepository) -> ListDeviceDirectory:
-	return ListDeviceDirectory(devices, cache=DeviceListingCache(FakeClock()))
+NAME_ASC = DeviceBrowseSort(DeviceBrowseSortKey.NAME, SortOrder.ASC)
+NEWEST = DeviceBrowseSort(DeviceBrowseSortKey.MTIME, SortOrder.DESC)
+LARGEST = DeviceBrowseSort(DeviceBrowseSortKey.SIZE, SortOrder.DESC)
+
+
+def _cached(devices: FakeDeviceRepository, preferences: FakeUserPreferences | None = None) -> ListDeviceDirectory:
+	return ListDeviceDirectory(devices, cache=DeviceListingCache(FakeClock()), preferences=preferences)
+
+
+def _files(devices: FakeDeviceRepository) -> None:
+	devices.tree[""] = [
+		DeviceEntry("a.txt", False, size=10, mtime=300),
+		DeviceEntry("b.txt", False, size=5000, mtime=100),
+		DeviceEntry("c.txt", False, size=200, mtime=900),
+	]
 
 
 def test_given_root_when_scroll_then_one_device_call_and_sorted() -> None:
@@ -120,3 +137,115 @@ def test_given_device_error_when_list_then_error_kind_propagates(kind: DeviceBro
 	with pytest.raises(DeviceBrowseError) as exc:
 		use_case.scroll("adb", "dev1", "Android/data", DeviceBrowseQuery())
 	assert exc.value.kind is kind
+
+
+def test_given_stored_size_desc_and_no_request_sort_when_scroll_then_largest_first_and_no_write() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	_files(devices)
+	prefs = FakeUserPreferences(device_picker_sort=LARGEST)
+	use_case = _cached(devices, prefs)
+	# when
+	page = use_case.scroll("adb", "dev1", "", DeviceBrowseQuery())
+	# then
+	assert [e.name for e in page.entries] == ["b.txt", "c.txt", "a.txt"]
+	assert page.sort == LARGEST
+	assert prefs.picker_sort_writes == []
+
+
+def test_given_no_preferences_object_and_no_request_sort_when_scroll_then_default_sort() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	_files(devices)
+	use_case = _cached(devices)
+	# when
+	page = use_case.scroll("adb", "dev1", "", DeviceBrowseQuery())
+	# then
+	assert page.sort == DEFAULT_BROWSE_SORT
+	assert [e.name for e in page.entries] == ["a.txt", "b.txt", "c.txt"]
+
+
+def test_given_explicit_sort_differing_from_stored_when_scroll_then_saved_once() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	_files(devices)
+	prefs = FakeUserPreferences(device_picker_sort=LARGEST)
+	use_case = _cached(devices, prefs)
+	# when
+	page = use_case.scroll("adb", "dev1", "", DeviceBrowseQuery(sort=NEWEST))
+	# then
+	assert [e.name for e in page.entries] == ["c.txt", "a.txt", "b.txt"]
+	assert prefs.picker_sort_writes == [NEWEST]
+
+
+def test_given_explicit_sort_equal_to_stored_when_scroll_then_no_write() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	_files(devices)
+	prefs = FakeUserPreferences(device_picker_sort=NEWEST)
+	use_case = _cached(devices, prefs)
+	# when
+	use_case.scroll("adb", "dev1", "", DeviceBrowseQuery(sort=NEWEST))
+	# then
+	assert prefs.picker_sort_writes == []
+
+
+def test_given_explicit_sort_and_device_error_when_scroll_then_nothing_saved() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	devices.browse_errors["Android/data"] = DeviceBrowseErrorKind.PERMISSION_DENIED
+	prefs = FakeUserPreferences()
+	use_case = _cached(devices, prefs)
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		use_case.scroll("adb", "dev1", "Android/data", DeviceBrowseQuery(sort=NEWEST))
+	assert exc.value.kind is DeviceBrowseErrorKind.PERMISSION_DENIED
+	assert prefs.picker_sort_writes == []
+
+
+def _first_page_cursor(devices: FakeDeviceRepository) -> str:
+	devices.tree[""] = [DeviceEntry(f"f{i:03d}.txt", False, size=i, mtime=i) for i in range(5)]
+	cursor = _cached(devices).scroll("adb", "dev1", "", DeviceBrowseQuery(limit=2, sort=NAME_ASC)).next_cursor
+	assert cursor is not None
+	devices.list_directory_calls.clear()
+	return cursor
+
+
+def test_given_cursor_from_other_sort_when_scroll_then_invalid_cursor_and_no_device_call() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	cursor = _first_page_cursor(devices)
+	use_case = _cached(devices, FakeUserPreferences())
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		use_case.scroll("adb", "dev1", "", DeviceBrowseQuery(cursor=cursor, sort=NEWEST))
+	assert exc.value.kind is DeviceBrowseErrorKind.INVALID_CURSOR
+	assert devices.list_directory_calls == []
+
+
+def test_given_cursor_and_stored_sort_differs_when_scroll_without_sort_then_invalid_cursor() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	cursor = _first_page_cursor(devices)
+	prefs = FakeUserPreferences(device_picker_sort=NEWEST)
+	use_case = _cached(devices, prefs)
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		use_case.scroll("adb", "dev1", "", DeviceBrowseQuery(cursor=cursor))
+	assert exc.value.kind is DeviceBrowseErrorKind.INVALID_CURSOR
+	assert devices.list_directory_calls == []
+	assert prefs.picker_sort_writes == []
+
+
+def test_given_two_pages_under_size_sort_when_sort_changes_then_single_device_call() -> None:
+	# given
+	devices = FakeDeviceRepository()
+	devices.tree[""] = [DeviceEntry(f"f{i:03d}.txt", False, size=i, mtime=i) for i in range(5)]
+	use_case = _cached(devices, FakeUserPreferences())
+	first = use_case.scroll("adb", "dev1", "", DeviceBrowseQuery(limit=2, sort=LARGEST))
+	use_case.scroll("adb", "dev1", "", DeviceBrowseQuery(limit=2, cursor=first.next_cursor, sort=LARGEST))
+	# when
+	page = use_case.scroll("adb", "dev1", "", DeviceBrowseQuery(limit=2, sort=NEWEST))
+	# then
+	assert [e.name for e in page.entries] == ["f004.txt", "f003.txt"]
+	assert devices.list_directory_calls == [""]

@@ -377,18 +377,6 @@
 			margin-top: 0.25rem;
 		}
 
-		legend.sr-only {
-			position: absolute;
-			width: 1px;
-			height: 1px;
-			padding: 0;
-			margin: -1px;
-			overflow: hidden;
-			clip: rect(0, 0, 0, 0);
-			white-space: nowrap;
-			border: 0;
-		}
-
 		.chip.selected {
 			border-color: var(--accent);
 			background: rgba(77, 171, 247, 0.15);
@@ -617,6 +605,40 @@
 			border-bottom: 1px solid var(--border);
 		}
 
+		/* Sortable column headers (folders always stay first). */
+		.dp-sort {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.25rem;
+			background: none;
+			border: none;
+			padding: 0.1rem 0.2rem;
+			margin: -0.1rem -0.2rem;
+			font: inherit;
+			color: inherit;
+			cursor: pointer;
+			border-radius: 4px;
+		}
+		.dp-sort:hover { color: var(--text); }
+		.dp-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+		.dp-sort.is-active { color: var(--text); }
+		.dp-sort .dp-sort-arrow { font-size: 0.7rem; min-width: 0.7rem; }
+		.dp-head .dp-sort-size { justify-self: end; }
+		.dp-sort-select { display: none; }
+		.dp-sort-select select { border-style: solid; padding: 0.35rem 0.5rem; font-size: 0.85rem; width: auto; }
+
+		.sr-only {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
+		}
+
 		.dp-list {
 			list-style: none;
 			margin: 0;
@@ -733,4 +755,6 @@
 		@media (max-width: 520px) {
 			.dp-head, .dp-row { grid-template-columns: 1.6rem minmax(0, 1fr) 4.2rem; }
 			.dp-date { display: none; }
+			/* Modified column is hidden: keep every sort reachable from the toolbar. */
+			.dp-sort-select { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
 		}

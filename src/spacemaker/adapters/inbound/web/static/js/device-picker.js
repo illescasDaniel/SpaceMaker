@@ -36,6 +36,16 @@ const MEDIA_EXTENSIONS = new Set([
 ]);
 const PAGE_SIZE = 100;
 const FILTER_DEBOUNCE_MS = 200;
+const SORT_NATURAL_ORDER = { name: "asc", mtime: "desc", size: "desc" };
+const COLUMN_LABEL = { name: "Name", mtime: "Modified", size: "Size" };
+const SORT_LABEL = {
+	"name:asc": "Name, A → Z",
+	"name:desc": "Name, Z → A",
+	"mtime:desc": "Newest first",
+	"mtime:asc": "Oldest first",
+	"size:desc": "Largest first",
+	"size:asc": "Smallest first",
+};
 let session = null;
 function el(id) {
 	return document.getElementById(id);
@@ -59,7 +69,7 @@ function formatSize(bytes) {
 }
 function formatDate(epochSeconds) {
 	if (!epochSeconds) {
-		return "";
+		return "—";
 	}
 	const d = new Date(epochSeconds * 1000);
 	const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -430,10 +440,65 @@ async function fetchPage(cursor, refresh) {
 	if (query) {
 		body.query = query;
 	}
+	if (session.sort) {
+		body.sort = session.sort.key;
+		body.order = session.sort.order;
+	}
 	if (refresh) {
 		body.refresh = true;
 	}
 	return apiSend("POST", "/api/device/list", body);
+}
+function isSortKey(value) {
+	return value === "name" || value === "mtime" || value === "size";
+}
+function isSortOrder(value) {
+	return value === "asc" || value === "desc";
+}
+function sortLabel(sort) {
+	return SORT_LABEL[sort.key + ":" + sort.order] ?? "";
+}
+function renderSort() {
+	const active = session?.sort ?? null;
+	const select = el("dp-sort-select");
+	if (select && active) {
+		select.value = active.key + ":" + active.order;
+	}
+	for (const button of document.querySelectorAll("[data-dp-sort]")) {
+		const key = button.getAttribute("data-dp-sort");
+		const isActive = active !== null && active.key === key;
+		button.classList.toggle("is-active", isActive);
+		const arrow = button.querySelector(".dp-sort-arrow");
+		if (arrow) {
+			arrow.textContent = isActive ? (active.order === "asc" ? "▲" : "▼") : "";
+		}
+		const next = isActive ? (active.order === "asc" ? "desc" : "asc") : SORT_NATURAL_ORDER[key];
+		const nextLabel = (SORT_LABEL[key + ":" + next] ?? "").toLowerCase();
+		button.setAttribute(
+			"aria-label",
+			COLUMN_LABEL[key] + (isActive ? ", sorted " + sortLabel(active).toLowerCase() : "") + ". Sort " + nextLabel + ".",
+		);
+	}
+}
+/** Sort change: same restart as the hidden toggle (dimmed list, page 1, ticks and filter kept). */
+function setSort(key, order) {
+	if (!session) {
+		return;
+	}
+	if (session.sort?.key === key && session.sort.order === order) {
+		return;
+	}
+	session.sort = { key, order };
+	renderSort();
+	const status = el("dp-sort-status");
+	if (status) {
+		status.textContent = "Sorted " + sortLabel(session.sort).toLowerCase() + ". Folders stay first.";
+	}
+	if (session.filterTimer !== null) {
+		window.clearTimeout(session.filterTimer);
+		session.filterTimer = null;
+	}
+	void startListing(!!el("dp-list")?.hidden, false);
 }
 function renderFirstPage(page) {
 	const list = el("dp-list");
@@ -443,6 +508,10 @@ function renderFirstPage(page) {
 		return;
 	}
 	renderTrail();
+	if (page.sort && page.order && isSortKey(page.sort) && isSortOrder(page.order)) {
+		session.sort = { key: page.sort, order: page.order };
+	}
+	renderSort();
 	session.loaded = page.entries.length;
 	session.total = page.total;
 	session.nextCursor = page.next_cursor;
@@ -596,7 +665,9 @@ function openDevicePicker(options) {
 		sentinel: makeSentinel(),
 		tail: null,
 		filterTimer: null,
+		sort: null,
 	};
+	renderSort();
 	const origin = el("dp-bc-origin");
 	if (origin) {
 		origin.textContent = options.originLabel;
@@ -666,6 +737,21 @@ function bindDevicePicker() {
 			session.filterTimer = null;
 		}
 		void startListing(false, false);
+	});
+	for (const button of document.querySelectorAll("[data-dp-sort]")) {
+		button.addEventListener("click", () => {
+			if (!session) {
+				return;
+			}
+			const key = button.getAttribute("data-dp-sort");
+			const current = session.sort ?? { key: "name", order: "asc" };
+			const order = current.key === key ? (current.order === "asc" ? "desc" : "asc") : SORT_NATURAL_ORDER[key];
+			setSort(key, order);
+		});
+	}
+	el("dp-sort-select")?.addEventListener("change", (ev) => {
+		const [key, order] = ev.target.value.split(":");
+		setSort(key, order);
 	});
 	el("dp-filter")?.addEventListener("input", () => {
 		if (!session) {

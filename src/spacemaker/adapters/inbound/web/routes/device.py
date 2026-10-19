@@ -8,7 +8,12 @@ from spacemaker.adapters.inbound.web.client_access import require_loopback
 from spacemaker.adapters.inbound.web.models import DeviceListBody
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.domain.connection import ConnectionMethod
-from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, DeviceBrowseQuery
+from spacemaker.domain.device_browse import (
+	DeviceBrowseError,
+	DeviceBrowseErrorKind,
+	DeviceBrowseQuery,
+	parse_device_browse_sort,
+)
 
 
 _STATUS_BY_KIND: dict[DeviceBrowseErrorKind, int] = {
@@ -40,6 +45,7 @@ def build_device_router(services: AppServices) -> APIRouter:
 			raise HTTPException(status_code=501, detail="iPhone USB is Linux only in this release")
 		if not body.device_id.strip():
 			raise HTTPException(status_code=400, detail="select a device")
+		sort = parse_device_browse_sort(body.sort, body.order)
 		try:
 			page = services.list_device_directory(
 				method,
@@ -51,6 +57,7 @@ def build_device_router(services: AppServices) -> APIRouter:
 					query=body.query,
 					show_hidden=body.show_hidden,
 					refresh=body.refresh,
+					sort=sort,
 				),
 			)
 		except DeviceBrowseError as exc:
@@ -62,6 +69,8 @@ def build_device_router(services: AppServices) -> APIRouter:
 			"next_cursor": page.next_cursor,
 			"total": page.total,
 			"total_unfiltered": page.total_unfiltered,
+			"sort": page.sort.key.value,
+			"order": page.sort.order.value,
 		}
 
 	return router

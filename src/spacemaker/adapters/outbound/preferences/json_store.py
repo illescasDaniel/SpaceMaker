@@ -5,6 +5,8 @@ import threading
 from pathlib import Path
 from typing import cast
 
+from spacemaker.domain.device_browse import DeviceBrowseSort, parse_device_browse_sort
+
 
 class JsonUserPreferences:
 	"""Disk-backed preferences JSON under the SpaceMaker data directory."""
@@ -39,6 +41,21 @@ class JsonUserPreferences:
 				data["usb_transfer_destination"] = path
 			else:
 				data.pop("usb_transfer_destination", None)
+			self._write_unlocked(data)
+
+	def get_device_picker_sort(self) -> DeviceBrowseSort | None:
+		value = self._read().get("device_picker_sort")
+		if not isinstance(value, dict):
+			return None
+		return parse_device_browse_sort(value.get("sort"), value.get("order"))
+
+	def set_device_picker_sort(self, sort: DeviceBrowseSort | None) -> None:
+		with self._lock:
+			data = self._read_unlocked()
+			if sort is None:
+				data.pop("device_picker_sort", None)
+			else:
+				data["device_picker_sort"] = {"sort": sort.key.value, "order": sort.order.value}
 			self._write_unlocked(data)
 
 	def clear(self) -> None:

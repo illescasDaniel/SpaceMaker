@@ -4,9 +4,11 @@ import base64
 import binascii
 import bisect
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import cmp_to_key
+from typing import Any, Protocol, cast
 
 from spacemaker.domain.transfer_folders import strip_android_user_storage_prefix
 
@@ -50,6 +52,36 @@ class DeviceEntry:
 		return self.name.startswith(".")
 
 
+class DeviceBrowseSortKey(StrEnum):
+	"""Column the picker sorts by. Folders are always listed before files whatever the key."""
+
+	NAME = "name"
+	MTIME = "mtime"
+	SIZE = "size"
+
+
+class SortOrder(StrEnum):
+	ASC = "asc"
+	DESC = "desc"
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceBrowseSort:
+	"""Picker listing order (folders first, then ``key`` in ``order``).
+
+	Ties under ``MTIME`` / ``SIZE`` fall back to name A→Z in both directions; under ``NAME`` / ``DESC``
+	the whole name order (exact-name tie-break included) is reversed. ``mtime`` 0 (unknown) counts as
+	the oldest. Under ``SIZE`` folders (no size) are ordered by name A→Z.
+	"""
+
+	key: DeviceBrowseSortKey = DeviceBrowseSortKey.NAME
+	order: SortOrder = SortOrder.ASC
+
+
+DEFAULT_BROWSE_SORT = DeviceBrowseSort()
+"""Name, A→Z — first run, after Clear preferences, or a corrupt stored value."""
+
+
 @dataclass(frozen=True, slots=True)
 class DeviceDirectoryScrollPage:
 	"""One keyset-paginated slice of a filtered, sorted listing.
@@ -63,6 +95,8 @@ class DeviceDirectoryScrollPage:
 	total: int
 	total_unfiltered: int
 	next_cursor: str | None
+	sort: DeviceBrowseSort = DEFAULT_BROWSE_SORT
+	"""The effective order of ``entries`` (echoed to the client)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +104,7 @@ class DeviceBrowseQuery:
 	"""Scroll-page request. Bounds: ``limit`` 1..``BROWSE_PAGE_MAX``; ``query`` at most ``BROWSE_QUERY_MAX`` chars.
 
 	``cursor`` is an opaque token from a previous page; ``refresh`` bypasses the listing cache.
+	``sort`` ``None`` means "use the stored picker preference" (resolved by the use case before paging).
 	"""
 
 	cursor: str | None = None
@@ -77,6 +112,7 @@ class DeviceBrowseQuery:
 	query: str = ""
 	show_hidden: bool = False
 	refresh: bool = False
+	sort: DeviceBrowseSort | None = None
 
 
 def normalize_browse_path(path: str) -> str:
@@ -93,47 +129,102 @@ def normalize_browse_path(path: str) -> str:
 	return strip_android_user_storage_prefix(text)
 
 
-def browse_sort_key(entry: DeviceEntry) -> tuple[bool, str, str]:
-	"""Total order for listings: folders first, then case-insensitive name, then exact name."""
-	return (not entry.is_dir, entry.name.casefold(), entry.name)
-
-
 def sort_entries(entries: list[DeviceEntry]) -> list[DeviceEntry]:
-	"""Folders first, then case-insensitive name."""
-	return sorted(entries, key=browse_sort_key)
+	"""Folders first, then case-insensitive name (the default order)."""
+	return sorted(entries, key=entry_order_key(DEFAULT_BROWSE_SORT))
 
 
-_CURSOR_PREFIX = "v1."
+def parse_device_browse_sort(key: object, order: object) -> DeviceBrowseSort | None:
+	"""``DeviceBrowseSort`` from raw values (request body or stored preference); ``None`` if either is not
+	a known ``DeviceBrowseSortKey`` / ``SortOrder`` value. Never raises.
+	"""
+	if not isinstance(key, str) or not isinstance(order, str):
+		return None
+	try:
+		return DeviceBrowseSort(DeviceBrowseSortKey(key), SortOrder(order))
+	except ValueError:
+		return None
 
 
-def encode_browse_cursor(entry: DeviceEntry) -> str:
-	"""Opaque, URL-safe cursor encoding the sort key of the last returned ``entry``."""
-	payload = json.dumps(list(browse_sort_key(entry)), separators=(",", ":"), ensure_ascii=False)
-	return _CURSOR_PREFIX + base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+class OrderKey(Protocol):
+	"""A sort key ``sorted`` / ``bisect`` can compare (tuple or ``functools.cmp_to_key`` object)."""
+
+	def __lt__(self, other: Any, /) -> bool: ...
 
 
-def decode_browse_cursor(text: str) -> tuple[bool, str, str]:
-	"""Inverse of ``encode_browse_cursor`` (a ``browse_sort_key`` tuple).
+def _compare(a: DeviceEntry, b: DeviceEntry, sort: DeviceBrowseSort) -> int:
+	if a.is_dir != b.is_dir:
+		return -1 if a.is_dir else 1
+	name_a = (a.name.casefold(), a.name)
+	name_b = (b.name.casefold(), b.name)
+	name_cmp = (name_a > name_b) - (name_a < name_b)
+	sign = -1 if sort.order is SortOrder.DESC else 1
+	if sort.key is DeviceBrowseSortKey.NAME:
+		return sign * name_cmp
+	if sort.key is DeviceBrowseSortKey.SIZE and a.is_dir:
+		return name_cmp
+	left, right = (a.mtime, b.mtime) if sort.key is DeviceBrowseSortKey.MTIME else (a.size, b.size)
+	number_cmp = (left > right) - (left < right)
+	return sign * number_cmp if number_cmp else name_cmp
 
-	Raises ``DeviceBrowseError(INVALID_CURSOR)`` for anything this module did not issue.
+
+def entry_order_key(sort: DeviceBrowseSort) -> Callable[[DeviceEntry], OrderKey]:
+	"""Sort key implementing ``sort`` as a total order (see ``DeviceBrowseSort``), usable with
+	``sorted`` and ``bisect`` so keyset paging neither skips nor duplicates entries.
+	"""
+	return cast(Callable[[DeviceEntry], OrderKey], cmp_to_key(lambda a, b: _compare(a, b, sort)))
+
+
+_SORTED_CURSOR_PREFIX = "v2."
+
+
+def encode_sorted_cursor(entry: DeviceEntry, sort: DeviceBrowseSort) -> str:
+	"""Opaque, URL-safe ``v2.`` cursor encoding ``sort`` and the ordering fields of the last returned ``entry``."""
+	payload = json.dumps(
+		{
+			"k": sort.key.value,
+			"o": sort.order.value,
+			"n": entry.name,
+			"d": entry.is_dir,
+			"s": entry.size,
+			"m": entry.mtime,
+		},
+		separators=(",", ":"),
+		ensure_ascii=False,
+	)
+	return _SORTED_CURSOR_PREFIX + base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+
+
+def _is_int(value: object) -> bool:
+	return isinstance(value, int) and not isinstance(value, bool)
+
+
+def decode_sorted_cursor(text: str, sort: DeviceBrowseSort) -> DeviceEntry:
+	"""The anchor entry of a ``v2.`` cursor; paging continues strictly after it under ``sort``.
+
+	Raises ``DeviceBrowseError(INVALID_CURSOR)`` for anything this module did not issue, a ``v1.`` cursor,
+	or a cursor issued under a different ``sort``.
 	"""
 	invalid = DeviceBrowseError(DeviceBrowseErrorKind.INVALID_CURSOR, "invalid cursor")
-	if not text.startswith(_CURSOR_PREFIX):
+	if not text.startswith(_SORTED_CURSOR_PREFIX):
 		raise invalid
 	try:
-		raw = base64.b64decode(text[len(_CURSOR_PREFIX) :].encode("ascii"), altchars=b"-_", validate=True)
+		raw = base64.b64decode(text[len(_SORTED_CURSOR_PREFIX) :].encode("ascii"), altchars=b"-_", validate=True)
 		data = json.loads(raw.decode("utf-8"))
 	except (ValueError, binascii.Error, UnicodeError) as exc:
 		raise invalid from exc
+	if not isinstance(data, dict):
+		raise invalid
+	name, is_dir, size, mtime = data.get("n"), data.get("d"), data.get("s"), data.get("m")
 	if (
-		not isinstance(data, list)
-		or len(data) != 3
-		or not isinstance(data[0], bool)
-		or not isinstance(data[1], str)
-		or not isinstance(data[2], str)
+		parse_device_browse_sort(data.get("k"), data.get("o")) != sort
+		or not isinstance(name, str)
+		or not isinstance(is_dir, bool)
+		or not _is_int(size)
+		or not _is_int(mtime)
 	):
 		raise invalid
-	return (data[0], data[1], data[2])
+	return DeviceEntry(name, is_dir, cast(int, size), cast(int, mtime))
 
 
 def scroll_page(path: str, entries: Sequence[DeviceEntry], request: DeviceBrowseQuery) -> DeviceDirectoryScrollPage:
@@ -142,16 +233,21 @@ def scroll_page(path: str, entries: Sequence[DeviceEntry], request: DeviceBrowse
 
 	``total`` = filtered count, ``total_unfiltered`` = ``len(entries)``. Raises
 	``DeviceBrowseError(INVALID_CURSOR)`` for a bad cursor.
+
+	Orders by ``request.sort`` (``None`` → ``DEFAULT_BROWSE_SORT``) via
+	``entry_order_key``, pages with ``encode_sorted_cursor`` / ``decode_sorted_cursor`` and sets ``page.sort``.
 	"""
-	after = decode_browse_cursor(request.cursor) if request.cursor is not None else None
+	sort = request.sort or DEFAULT_BROWSE_SORT
+	key = entry_order_key(sort)
+	after = decode_sorted_cursor(request.cursor, sort) if request.cursor is not None else None
 	needle = request.query.casefold()
 	visible = [
 		e for e in entries if (request.show_hidden or not e.is_hidden) and (not needle or needle in e.name.casefold())
 	]
-	ordered = sorted(visible, key=browse_sort_key)
+	ordered = sorted(visible, key=key)
 	start = 0
 	if after is not None:
-		start = bisect.bisect_right(ordered, after, key=browse_sort_key)
+		start = bisect.bisect_right(ordered, key(after), key=key)
 	window = ordered[start : start + request.limit]
 	has_more = start + request.limit < len(ordered)
 	return DeviceDirectoryScrollPage(
@@ -159,7 +255,8 @@ def scroll_page(path: str, entries: Sequence[DeviceEntry], request: DeviceBrowse
 		entries=tuple(window),
 		total=len(ordered),
 		total_unfiltered=len(entries),
-		next_cursor=encode_browse_cursor(window[-1]) if has_more and window else None,
+		next_cursor=encode_sorted_cursor(window[-1], sort) if has_more and window else None,
+		sort=sort,
 	)
 
 
@@ -167,15 +264,21 @@ __all__ = [
 	"BROWSE_PAGE_MAX",
 	"BROWSE_QUERY_MAX",
 	"BROWSE_SCROLL_PAGE_SIZE",
+	"DEFAULT_BROWSE_SORT",
 	"DeviceBrowseError",
 	"DeviceBrowseErrorKind",
 	"DeviceBrowseQuery",
+	"DeviceBrowseSort",
+	"DeviceBrowseSortKey",
 	"DeviceDirectoryScrollPage",
 	"DeviceEntry",
-	"browse_sort_key",
-	"decode_browse_cursor",
-	"encode_browse_cursor",
+	"OrderKey",
+	"SortOrder",
+	"decode_sorted_cursor",
+	"encode_sorted_cursor",
+	"entry_order_key",
 	"normalize_browse_path",
+	"parse_device_browse_sort",
 	"scroll_page",
 	"sort_entries",
 ]
