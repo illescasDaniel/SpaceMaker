@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -103,6 +104,8 @@ class UsbBrowseMixin:
 		dest_root = self.usb_transfer_destination()
 		try:
 			Path(dest_root).mkdir(parents=True, exist_ok=True)
+			if not os.access(dest_root, os.W_OK | os.X_OK):
+				raise PermissionError(f"{dest_root} is not writable")
 		except OSError as exc:
 			with self.session._lock:
 				self.session.usb_transfer_phase = JobPhase.ERROR

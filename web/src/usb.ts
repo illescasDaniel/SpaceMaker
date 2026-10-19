@@ -525,6 +525,7 @@ function bindUsbDesktop(): void {
 
 export {
 	bindUsbDesktop,
+	bindUsbDestination,
 	currentUsbExtraPaths,
 	isAbsoluteDestination,
 	pushUsbTransferSettings,

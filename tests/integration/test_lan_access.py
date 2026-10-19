@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from starlette.routing import WebSocketRoute
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 from tests.unit.passcode_fakes import FakeClock, FakePasscodeCrypto, FakePasscodeStore
 
 from spacemaker.adapters.inbound.web.lan_policy import is_lan_allowed
@@ -128,8 +129,8 @@ def test_given_lan_client_when_websocket_then_refused() -> None:
 	# given
 	client = _lan(create_app())
 	# when / then
-	with pytest.raises(Exception), client.websocket_connect("/ws"):  # noqa: B017, PT011
-		pass
+	with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws") as ws:
+		ws.receive_text()
 
 
 def test_given_every_registered_route_when_lan_client_then_allowed_or_403() -> None:

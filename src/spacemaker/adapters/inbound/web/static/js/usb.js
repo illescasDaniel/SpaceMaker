@@ -512,6 +512,7 @@ function bindUsbDesktop() {
 
 export {
 	bindUsbDesktop,
+	bindUsbDestination,
 	currentUsbExtraPaths,
 	isAbsoluteDestination,
 	pushUsbTransferSettings,
