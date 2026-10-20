@@ -21,7 +21,7 @@ class AppSession:
 	transfer_mode: TransferMode = TransferMode.COPY
 	device_id: str = ""
 	device_label: str = ""
-	source_folders: list[str] = field(default_factory=lambda: ["dcim", "pictures", "movies"])
+	source_folders: list[str] = field(default_factory=list)
 	transfer_folders: list[str] = field(default_factory=list)
 	transfer_extra_paths: list[str] = field(default_factory=list)
 	extract_extra_paths: list[str] = field(default_factory=list)

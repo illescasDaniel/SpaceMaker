@@ -146,6 +146,8 @@ class LanSessionMixin:
 				self.session.transfer_mode = TransferMode.COPY
 			elif module is AppModule.USB_PHOTO_BACKUP:
 				self.session.ui_mode = UiMode.ADVANCED
+				self.session.source_folders = []
+				self.session.extract_extra_paths = []
 			elif module is AppModule.USB_FILE_TRANSFER:
 				self.session.connection_method = ConnectionMethod.ADB
 				self.session.transfer_mode = TransferMode.COPY

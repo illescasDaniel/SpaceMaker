@@ -19,7 +19,7 @@ def parse_source_folders(values: list[str]) -> frozenset[SourceFolder]:
 			out.add(SourceFolder(raw.lower()))
 		except ValueError:
 			continue
-	return frozenset(out) if out else ALL_SOURCE_FOLDERS
+	return frozenset(out)
 
 
 def path_matches_source_folders(device_path: str, selected: frozenset[SourceFolder]) -> bool:
