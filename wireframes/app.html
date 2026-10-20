@@ -957,6 +957,40 @@
 			margin-top: 0;
 		}
 
+		/* One unified "Add more" button (files or folders): accent-tinted so it reads as the way to go beyond the presets. */
+		.btn-add-more {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.6rem;
+			width: 100%;
+			margin-top: 0.5rem;
+			padding: 0.7rem 1rem;
+			border: 2px solid var(--accent);
+			background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+			color: var(--accent);
+			font-weight: 700;
+			text-align: left;
+		}
+		.btn-add-more:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); }
+		.btn-add-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+		.btn-add-more:disabled { border-color: var(--border); background: var(--surface2); color: var(--muted); }
+		.btn-add-more .add-more-plus {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			width: 1.5rem;
+			height: 1.5rem;
+			border-radius: 50%;
+			background: var(--accent-dim);
+			color: #fff;
+			font-size: 1.1rem;
+			line-height: 1;
+		}
+		.btn-add-more:disabled .add-more-plus { background: var(--disabled, var(--muted)); }
+		.btn-add-more .add-more-sub { font-weight: 500; opacity: 0.85; }
+
 		.status-line {
 			font-size: 0.9rem;
 			color: var(--muted);
@@ -3078,7 +3112,7 @@
 			</fieldset>
 			<div class="info-panel" id="uft-connection-info-panel" aria-hidden="true">
 				<h4>ADB (cable) — Android default</h4>
-				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move. <strong>Add files…</strong> / <strong>Add folder…</strong> open SpaceMaker’s own phone browser — nothing extra to install.</p>
+				<p>Enable Developer options → USB debugging → accept the RSA prompt on the phone. SpaceMaker includes <code>adb</code> in the app — no separate Android SDK install. Best for full-folder access and Move. <strong>Add more</strong> opens SpaceMaker’s own phone browser — nothing extra to install.</p>
 				<h4>iPhone (USB)</h4>
 				<p><strong>Linux only</strong> in this release (Apple File Conduit / AFC via <code>usbmuxd</code>, <code>libimobiledevice</code>, <code>ifuse</code>). Unlock, tap <strong>Trust</strong>, keep unlocked. Access is limited — mostly <strong>Camera (DCIM)</strong>; other app sandboxes are not exposed. Files copy as-is (no HEIC→JPEG convert here).</p>
 			</div>
@@ -3101,10 +3135,10 @@
 			</div>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Sources to transfer</p>
-				<button type="button" class="info-btn" id="btn-uft-folders-info" title="Preset folders and Add files/folder" aria-expanded="false" aria-controls="uft-folders-info-panel">i</button>
+				<button type="button" class="info-btn" id="btn-uft-folders-info" title="Preset folders and Add more" aria-expanded="false" aria-controls="uft-folders-info-panel">i</button>
 			</div>
 			<div class="info-panel" id="uft-folders-info-panel" aria-hidden="true">
-				<p>Common folders appear only when they exist on the phone. <strong>Add files…</strong> and <strong>Add folder…</strong> open the in-app phone browser (starts at <em>Phone storage</em> — you see <code>Download</code>, <code>DCIM</code>, etc., not <code>/sdcard</code>). Each pick is added below as a removable extra. Works on Linux, macOS and Windows, and from a phone browser in <code>--server-only</code> mode — no mount, no native dialog.</p>
+				<p>Common folders appear only when they exist on the phone. <strong>Add more</strong> opens the in-app phone browser, where you can tick files, folders or both in one go (starts at <em>Phone storage</em> — you see <code>Download</code>, <code>DCIM</code>, etc., not <code>/sdcard</code>). Each pick is added below as a removable extra. Works on Linux, macOS and Windows, and from a phone browser in <code>--server-only</code> mode — no mount, no native dialog.</p>
 			</div>
 			<fieldset class="folder-picker" id="uft-folder-picker">
 				<legend class="sr-only">Device folders that exist on this phone</legend>
@@ -3115,13 +3149,21 @@
 				<label data-uft-preset="pictures"><input type="checkbox" /> Pictures</label>
 				<label data-uft-preset="movies"><input type="checkbox" /> Movies</label>
 			</fieldset>
-			<p class="folder-hint panel-hidden" id="uft-presets-empty">No common folders found on this device. Use Add files… or Add folder… to pick sources.</p>
-			<ul class="uft-extra-sources" id="uft-extra-sources" aria-label="Additional sources from Browse" hidden></ul>
-			<div class="uft-folder-actions">
-				<button type="button" class="btn btn-secondary" id="btn-uft-add-files">Add files…</button>
-				<button type="button" class="btn btn-secondary" id="btn-uft-add-folder">Add folder…</button>
-			</div>
-			<p class="folder-hint uft-browse-hint panel-hidden" id="uft-browse-unavailable">Add files/folder needs a connected, authorized device. Plug in the phone and accept the USB debugging prompt.</p>
+			<p class="folder-hint panel-hidden" id="uft-presets-empty">No common folders found on this device. Use Add more (files or folders) to pick sources.</p>
+			<button type="button" class="btn btn-add-more" id="btn-uft-add-more">
+				<span class="add-more-plus" aria-hidden="true">+</span>
+				<span>Add more <span class="add-more-sub">(files or folders)</span></span>
+			</button>
+			<p class="folder-hint uft-browse-hint panel-hidden" id="uft-browse-unavailable">Add more needs a connected, authorized device. Plug in the phone and accept the USB debugging prompt.</p>
+			<ul class="uft-extra-sources" id="uft-extra-sources" aria-label="Additional sources picked from the phone" hidden></ul>
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				<b>Unified “Add more” (changed):</b> the two buttons <i>Add files…</i> / <i>Add folder…</i> become one full-width button directly under the common-folders checklist, accent-outlined with a round “+” so it stands out from the grey secondary buttons (it is not a second primary: <b>Start transfer</b> stays the only solid blue one). It opens the same phone browser, but every row — folders and files — now has an enabled checkbox, and <b>Select this folder</b> is available; breadcrumb reads “Pick files or folders”. Picks still come back as removable extras (each tagged <i>file</i> / <i>folder</i>), listed just under the button. The same button replaces the two in <b>USB photo backup → Step 1</b> (media-only note unchanged). Try it: click <b>Add more</b>, tick a folder and a file, then Add.
+			</aside>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Picker caller context gains <code>kind: "both"</code> (alongside <code>files</code> / <code>folders</code>): no row checkbox disabled, <b>Select this folder</b> visible, lightbox <i>Selected</i> enabled. Disabled state (no authorized device) and the unavailable hint apply to the single button. Class <code>.btn-add-more</code> and <code>.add-more-plus</code> are product UI; this note is not.
+			</aside>
 			<div class="label-row">
 				<p class="label" style="margin: 0;">Destination</p>
 				<button type="button" class="info-btn" id="btn-uft-dest-info" title="Where files are saved" aria-expanded="false" aria-controls="uft-dest-info-panel">i</button>
@@ -3182,7 +3224,7 @@
 		</article>
 	</section>
 
-	<!-- PHONE FILE PICKER — in-app screen reached from USB file transfer (Add files/folder) and USB photo backup Step 1 (Add folder/files) -->
+	<!-- PHONE FILE PICKER — in-app screen reached from USB file transfer (Add more) and USB photo backup Step 1 (Add more) -->
 	<section id="view-device-picker" class="screen" aria-label="Pick from phone">
 		<nav class="module-breadcrumbs" aria-label="You are here">
 			<button type="button" class="breadcrumb-home">Home</button>
@@ -3490,15 +3532,17 @@
 						<label><input type="checkbox" checked /> Pictures</label>
 						<label><input type="checkbox" checked /> Movies</label>
 					</fieldset>
-					<ul class="uft-extra-sources" id="wz-extra-sources" aria-label="Additional folders and files" hidden></ul>
 					<div class="uft-folder-actions">
-						<button type="button" class="btn btn-secondary" id="btn-wz-add-folder">Add folder…</button>
-						<button type="button" class="btn btn-secondary" id="btn-wz-add-files">Add files…</button>
-						<button type="button" class="info-btn" id="btn-wz-add-info" title="About Add folder and Add files" aria-expanded="false" aria-controls="wz-add-info-panel">i</button>
+						<button type="button" class="btn btn-add-more" id="btn-wz-add-more" style="flex: 1 1 auto; width: auto; margin-top: 0;">
+							<span class="add-more-plus" aria-hidden="true">+</span>
+							<span>Add more <span class="add-more-sub">(files or folders)</span></span>
+						</button>
+						<button type="button" class="info-btn" id="btn-wz-add-info" title="About Add more" aria-expanded="false" aria-controls="wz-add-info-panel">i</button>
 					</div>
 					<div class="info-panel" id="wz-add-info-panel" aria-hidden="true">
-						<p>Back up folders that are not in the list above (e.g. <code>WhatsApp/Media</code>, <code>Telegram</code>) or single files. Opens SpaceMaker’s phone browser — no extra install, same on Linux, macOS and Windows. Only photos and videos are extracted; other files inside a picked folder are skipped.</p>
+						<p>Back up folders that are not in the list above (e.g. <code>WhatsApp/Media</code>, <code>Telegram</code>) or single files — tick files, folders or both in one go. Opens SpaceMaker’s phone browser — no extra install, same on Linux, macOS and Windows. Only photos and videos are extracted; other files inside a picked folder are skipped.</p>
 					</div>
+					<ul class="uft-extra-sources" id="wz-extra-sources" aria-label="Additional folders and files" hidden></ul>
 				</div>
 				<div id="panel-wifi" class="wifi-receive-block">
 					<p class="label" style="margin: 0;">Phone upload</p>
@@ -4840,8 +4884,7 @@
 			var folderPicker = document.getElementById('uft-folder-picker');
 			var presetsEmpty = document.getElementById('uft-presets-empty');
 			var extraList = document.getElementById('uft-extra-sources');
-			var btnAddFiles = document.getElementById('btn-uft-add-files');
-			var btnAddFolder = document.getElementById('btn-uft-add-folder');
+			var btnAddMore = document.getElementById('btn-uft-add-more');
 			var browseHint = document.getElementById('uft-browse-unavailable');
 			var chipCopy = document.getElementById('uft-chip-copy');
 			var chipMove = document.getElementById('uft-chip-move');
@@ -4921,8 +4964,7 @@
 
 			function setMountAvailable(ok) {
 				mountOk = ok;
-				btnAddFiles.disabled = !ok;
-				btnAddFolder.disabled = !ok;
+				btnAddMore.disabled = !ok;
 				browseHint.classList.toggle('panel-hidden', ok);
 			}
 
@@ -4978,17 +5020,11 @@
 				items.forEach(function (it) { addExtra(it.path, it.isDir ? 'folder' : 'file'); });
 			}
 
-			btnAddFiles.addEventListener('click', function () {
+			btnAddMore.addEventListener('click', function () {
 				if (!mountOk) {
 					return;
 				}
-				window.wfOpenPicker({ origin: 'usb-file-transfer', originLabel: 'USB file transfer', method: uftMethod, kind: 'files', onAdd: addPicked });
-			});
-			btnAddFolder.addEventListener('click', function () {
-				if (!mountOk) {
-					return;
-				}
-				window.wfOpenPicker({ origin: 'usb-file-transfer', originLabel: 'USB file transfer', method: uftMethod, kind: 'folders', onAdd: addPicked });
+				window.wfOpenPicker({ origin: 'usb-file-transfer', originLabel: 'USB file transfer', method: uftMethod, kind: 'both', onAdd: addPicked });
 			});
 
 			chipCopy.addEventListener('click', function () {
@@ -5675,7 +5711,7 @@
 				var isAfc = opts.method === 'afc';
 				document.getElementById('dp-bc-origin').textContent = opts.originLabel;
 				document.getElementById('dp-bc-origin').onclick = function () { showView(opts.origin); };
-				document.getElementById('dp-bc-title').textContent = opts.kind === 'folders' ? 'Pick folders' : 'Pick files';
+				document.getElementById('dp-bc-title').textContent = opts.kind === 'folders' ? 'Pick folders' : (opts.kind === 'files' ? 'Pick files' : 'Pick files or folders');
 				document.getElementById('dp-title').textContent = rootName();
 				document.getElementById('dp-device-status-text').textContent = isAfc ? 'Daniel’s iPhone · Connected via iPhone USB' : 'Pixel 8 · Connected via ADB';
 				document.getElementById('dp-media-note').hidden = !opts.mediaOnly;
@@ -5765,15 +5801,14 @@
 						list.appendChild(li);
 					});
 				}
-				function open(kind) {
+				function open() {
 					var m = document.getElementById('btn-conn-afc').classList.contains('active') ? 'afc' : 'adb';
 					openPicker({
-						origin: 'wizard', originLabel: 'USB photo backup', method: m, kind: kind, mediaOnly: true,
+						origin: 'wizard', originLabel: 'USB photo backup', method: m, kind: 'both', mediaOnly: true,
 						onAdd: function (items) { picks = picks.concat(items); renderPicks(); }
 					});
 				}
-				document.getElementById('btn-wz-add-folder').addEventListener('click', function () { open('folders'); });
-				document.getElementById('btn-wz-add-files').addEventListener('click', function () { open('files'); });
+				document.getElementById('btn-wz-add-more').addEventListener('click', open);
 				var b = document.getElementById('btn-wz-add-info');
 				var p = document.getElementById('wz-add-info-panel');
 				b.addEventListener('click', function () {

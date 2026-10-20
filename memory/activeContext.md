@@ -8,6 +8,8 @@ webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevm
 
 ## Current focus
 
+Unified **Add more (files or folders)** button (v1.2.2): implemented and committed on `main`, waiting for the user to test on a real phone before publishing. See `memory/progress.md`.
+
 Phone picker **video posters** (Phase B of `specs/device-file-picker/PLAN-media-preview.md`; `SPEC.md` "Video posters" revision, approved 2026-10-20): Phases 0–4 done, Phase 5 grader PASS (round 2; round 1 findings fixed), gate green (1195 py, 165 vitest), checked against the real Pixel. Uncommitted on `main` (new: `domain/device_stream.py`, `application/{device_stream_tokens,read_device_stream}.py`, `ports/outbound/video_poster.py`, `adapters/outbound/media/ffmpeg_video_poster.py`, loopback `GET /api/device/stream`). Next: commit; Phase B2 (playback, needs a codec answer for Qt WebEngine) and Phase C (RAW previews) are later revisions.
 
 Phone picker **photo previews** (Phase A): committed `84a05f7` + `2ef79bd`.

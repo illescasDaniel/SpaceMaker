@@ -64,7 +64,7 @@ class UsbBrowseMixin:
 			return {
 				"picker_available": False,
 				"available_folders": None,
-				"hint": "Add files/folder needs a connected, authorized device.",
+				"hint": "Add more needs a connected, authorized device.",
 			}
 		try:
 			# Folder names only, so hidden entries are fine; the 500 cap matches the old probe.

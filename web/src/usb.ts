@@ -108,15 +108,11 @@ function rebuildUsbTransferFolders(method: string, selected: string[] | undefine
 }
 function syncUsbTransferBrowseUi(next: AppSnapshot): void {
 	const browse = next.usb_transfer_browse;
-	const btnFiles = document.getElementById("btn-uft-add-files");
-	const btnFolder = document.getElementById("btn-uft-add-folder");
+	const btnAddMore = document.getElementById("btn-uft-add-more");
 	const hint = document.getElementById("uft-browse-unavailable");
 	const mountOk = !!browse?.picker_available;
-	if (btnFiles instanceof HTMLButtonElement) {
-		btnFiles.disabled = !mountOk;
-	}
-	if (btnFolder instanceof HTMLButtonElement) {
-		btnFolder.disabled = !mountOk;
+	if (btnAddMore instanceof HTMLButtonElement) {
+		btnAddMore.disabled = !mountOk;
 	}
 	if (hint) {
 		hint.classList.toggle("panel-hidden", mountOk);
@@ -496,11 +492,11 @@ function bindUsbDesktop(): void {
 			pushUsbTransferSettings();
 		});
 	}
-	function openUsbPicker(kind: "files" | "folders"): void {
+	function openUsbPicker(): void {
 		const sel = document.getElementById("uft-select-device");
 		const deviceId = sel instanceof HTMLSelectElement ? sel.value : "";
 		if (!deviceId) {
-			showFormBanner("Add files/folder needs a connected, authorized device.", "uft-form-banner");
+			showFormBanner("Add more needs a connected, authorized device.", "uft-form-banner");
 			return;
 		}
 		const method = selectedUsbTransferMethod() === "afc" ? "afc" : "adb";
@@ -510,7 +506,7 @@ function bindUsbDesktop(): void {
 			method,
 			deviceId,
 			deviceLabel: uftDeviceLabels[deviceId] || "",
-			kind,
+			kind: "both",
 			mediaOnly: false,
 			onAdd: (items) => {
 				const picked = items.map((item) => item.path);
@@ -518,12 +514,7 @@ function bindUsbDesktop(): void {
 			},
 		});
 	}
-	onClick("btn-uft-add-files", () => {
-		openUsbPicker("files");
-	});
-	onClick("btn-uft-add-folder", () => {
-		openUsbPicker("folders");
-	});
+	onClick("btn-uft-add-more", openUsbPicker);
 	onClick("btn-uft-start", () => {
 		pushUsbTransferSettings()
 			.then(() => apiSend<AppSnapshot>("POST", "/api/usb-transfer/start"))

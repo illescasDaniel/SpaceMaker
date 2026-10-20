@@ -860,7 +860,8 @@ function openDevicePicker(options: DevicePickerOptions): void {
 	}
 	const title = el<HTMLElement>("dp-bc-title");
 	if (title) {
-		title.textContent = options.kind === "folders" ? "Pick folders" : "Pick files";
+		title.textContent =
+			options.kind === "folders" ? "Pick folders" : options.kind === "files" ? "Pick files" : "Pick files or folders";
 	}
 	const heading = el<HTMLElement>("dp-title");
 	if (heading) {

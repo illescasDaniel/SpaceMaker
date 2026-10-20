@@ -147,7 +147,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-function open(onAdd = vi.fn(), kind: "files" | "folders" = "files"): ReturnType<typeof vi.fn> {
+function open(onAdd = vi.fn(), kind: "files" | "folders" | "both" = "files"): ReturnType<typeof vi.fn> {
 	if (!bound) {
 		bindDevicePicker();
 		bound = true;
@@ -254,6 +254,30 @@ describe("device picker", () => {
 		const boxes = document.querySelectorAll<HTMLInputElement>("#dp-list input");
 		expect(boxes[0]?.disabled).toBe(false);
 		expect(boxes[1]?.disabled).toBe(true);
+	});
+
+	it("given both mode then files and folders are selectable and the title says so", async () => {
+		mockList({
+			"": page("", [
+				["Docs", true],
+				["a.txt", false],
+			]),
+		});
+		const onAdd = open(vi.fn(), "both");
+		await flush();
+		const boxes = document.querySelectorAll<HTMLInputElement>("#dp-list input");
+		expect(boxes[0]?.disabled).toBe(false);
+		expect(boxes[1]?.disabled).toBe(false);
+		expect(document.getElementById("dp-bc-title")?.textContent).toBe("Pick files or folders");
+		expect(document.getElementById("btn-dp-select-folder")?.hidden).toBe(false);
+		tick(0);
+		tick(1);
+		document.getElementById("btn-dp-add")?.click();
+		expect(onAdd).toHaveBeenCalledTimes(1);
+		expect(onAdd).toHaveBeenCalledWith([
+			{ path: "Docs", isDir: true },
+			{ path: "a.txt", isDir: false },
+		]);
 	});
 
 	it("given an empty folder then the empty state shows", async () => {

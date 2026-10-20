@@ -52,7 +52,7 @@
 | **ADB** | None — one `adb shell` listing per directory (picker) | bundled/PATH `adb` | No FUSE mount; works on Linux, macOS and Windows. |
 | **AFC** | Session-owned **ifuse** temp mount (existing adapter pattern) | `ifuse` (+ libimobiledevice) on **PATH** | Same mount used for list/pull/picker listing/exist-probe. Unmount with session cleanup as today. |
 
-Without a connected, authorized device: **Add files…** / **Add folder…** are disabled with the hint “needs a connected, authorized device”. Preset checklist may be empty with the empty-presets hint. iPhone USB stays Linux only.
+Without a connected, authorized device: **Add more** is disabled with the hint “needs a connected, authorized device”. Preset checklist may be empty with the empty-presets hint. iPhone USB stays Linux only.
 
 **Out of product:** MTP / GVFS / libmtp — removed from SpaceMaker entirely (UI, adapters, packaging, docs). Users who want Explorer/Dolphin-style phone browsing use the OS file manager separately; this module uses ADB or iPhone USB only.
 
@@ -61,7 +61,7 @@ Without a connected, authorized device: **Add files…** / **Add folder…** are
 Always-visible body copy stays minimal. Detail lives behind ⓘ toggles (collapsed by default), matching the approved wireframe:
 
 1. **Connection** — ADB / iPhone setup (same substance as extract-media USB help; no Wi‑Fi; no MTP).
-2. **Sources** — presets appear only when they exist; **Add files…** / **Add folder…** open the system dialog at the (flattened) phone mount and add picks.
+2. **Sources** — presets appear only when they exist; **Add more (files or folders)** opens the in-app picker at the (flattened) phone mount and add picks.
 3. **Destination** — files under the destination folder (default `~/Documents/SpaceMaker/`, same root as Receive files; changeable with **Browse…**); Android user-storage prefixes stripped; remaining nested paths preserved; no `originals/` / convert pipeline.
 4. **Mode** — Copy vs Move; Move deletes on device after successful copy when supported (ADB preferred; iPhone may fall back to copy-only per file).
 5. **Actions** — Pause finishes the current file then waits; Stop ends the queue after the current file; completed files stay in the destination.
@@ -80,7 +80,7 @@ Section label: **Sources to transfer** (presets + removable extras).
 
 ### Preset checklist (exist-only)
 
-Multi-select checklist of common labels. The UI lists a preset **only if that folder exists** on the connected device (probed under the mount). Missing folders are **hidden**, not shown unchecked. **No preset is pre-checked** — the user opts in. If none of the common folders exist, show a short empty hint and rely on **Add files…** / **Add folder…**.
+Multi-select checklist of common labels. The UI lists a preset **only if that folder exists** on the connected device (probed under the mount). Missing folders are **hidden**, not shown unchecked. **No preset is pre-checked** — the user opts in. If none of the common folders exist, show a short empty hint and rely on **Add more**.
 
 #### Android (ADB) — candidates
 
@@ -102,7 +102,9 @@ Queue includes **any file type** under selected roots (not media-only).
 - Candidates limited to what AFC exposes (v1: **Camera (DCIM)** when present).
 - Selecting iPhone switches the candidate set to that limited set (wireframe behavior); still hide if not present.
 
-### Add files / Add folder extras (pick-to-add)
+### Add more extras (pick-to-add)
+
+> **Revised 2026-10-20 (wireframe + spec approved in chat):** the two buttons below are replaced by one **Add more (files or folders)** button that opens the in-app picker in `kind: "both"` (see [device-file-picker](../device-file-picker/SPEC.md)); picks come back as file or folder extras. The table is kept as history of the original dialog design.
 
 Native dialogs cannot select files and folders in one pick, so the UI exposes two actions (same pattern as Send / Transfer files):
 
@@ -186,7 +188,7 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 
 - Match approved wireframe: breadcrumb **`Home / USB file transfer`**; intro line; single **Transfer** card **without** a numbered step badge.
 - Connection toggle (**ADB** + **iPhone USB** only) + Connection ⓘ; conditional iPhone limit banner; device picker + friendly status (never raw serials/`libmtp:0`-style ids as primary text).
-- **Sources to transfer** + ⓘ; exist-only preset checklist; empty-presets hint when none; removable extra rows; **Add files…** and **Add folder…** (+ unavailable hint when no mount / server-only).
+- **Sources to transfer** + ⓘ; exist-only preset checklist; empty-presets hint when none; removable extra rows; one accent-outlined **Add more (files or folders)** button directly under the presets (+ unavailable hint when no mount / server-only).
 - Destination + ⓘ (documents flattening); Mode chips + ⓘ; status / progress / count; Actions ⓘ + Start / Pause|Resume / Stop; **Open destination folder** when applicable.
 - Theme: system light/dark (`theme.css`).
 - Demo-only wireframe controls are not production UI.
@@ -239,7 +241,7 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 - **Given** a connected device whose root listing has none of the preset folders
 - **When** the sources section renders
 - **Then** the checklist is empty
-- **And** a short hint tells the user to use Add files… or Add folder…
+- **And** a short hint tells the user to use Add more (files or folders)
 - **And** **Start transfer** stays disabled until at least one extra is added (or a preset appears and is checked)
 
 ### Scenario: Android folders include Download and Documents when present
@@ -255,13 +257,13 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 - **Given** iPhone (USB) is selected on Linux, the device is trusted, and ifuse succeeds
 - **When** the picker or exist-probe needs a listing
 - **Then** `list_directory` reads one directory under the ifuse mount
-- **And** **Add files…** and **Add folder…** are enabled
+- **And** **Add more** is enabled
 - **And** exist-probe uses that same mount
 
 ### Scenario: Add folder extra
 
 - **Given** a mounted device and the desktop app
-- **When** the user chooses **Add folder…** and selects a folder under the mount (e.g. `WhatsApp/Media`)
+- **When** the user chooses **Add more** and ticks a folder under the mount (e.g. `WhatsApp/Media`)
 - **Then** that folder appears as a removable extra source
 - **And** preset checkboxes are unchanged
 - **When** transfer runs with that extra selected
@@ -270,7 +272,7 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 ### Scenario: Add files extra
 
 - **Given** a mounted device and the desktop app
-- **When** the user chooses **Add files…** and selects one or more files under the mount
+- **When** the user chooses **Add more** and ticks one or more files under the mount
 - **Then** each file appears as a removable extra source
 - **And** transfer includes those files in the queue
 
@@ -299,7 +301,7 @@ If Move delete fails after a successful copy: keep PC file, record per-file fail
 
 - **Given** no device is connected or authorized (or the ifuse mount failed)
 - **When** the transfer form is shown
-- **Then** **Add files…** and **Add folder…** are disabled
+- **Then** **Add more** is disabled
 - **And** a hint says it needs a connected, authorized device
 
 ### Scenario: Remove Add extra

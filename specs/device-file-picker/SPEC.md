@@ -9,7 +9,7 @@
 - **Revision — sorting:** wireframe revision (sortable **Name** / **Size** / **Modified** column headers with ▲/▼, toolbar **Sort** menu ≤ 520 px) approved 2026-10-19 (in chat); **spec revision approved** 2026-10-19 (in chat).
 - **Revision — photo previews:** wireframe revision (thumbnails in image rows, 👁 button, lightbox; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). Plan: [PLAN-media-preview.md](PLAN-media-preview.md) (Phase A; videos are Phase B).
 - **Revision — video posters (Phase B, posters only):** wireframe revision (video rows with poster + ▶ + duration badge, lightbox stepping through photos and videos, “Video previews” demo buttons; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). No in-app playback (Phase B2), no RAW (Phase C). Plan: [PLAN-media-preview.md](PLAN-media-preview.md).
-- **Callers:** [usb-file-transfer](../usb-file-transfer/SPEC.md) (**Add files…** / **Add folder…**), [extract-media](../extract-media/SPEC.md) / [main-wizard](../main-wizard/SPEC.md) Step 1 for ADB and iPhone USB (**Add folder…** / **Add files…**)
+- **Callers:** [usb-file-transfer](../usb-file-transfer/SPEC.md) (**Add more**), [extract-media](../extract-media/SPEC.md) / [main-wizard](../main-wizard/SPEC.md) Step 1 for ADB and iPhone USB (**Add more**)
 - **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> list[DeviceEntry]` (contract unchanged; adapters stay dumb); domain `DeviceEntry`, `DeviceDirectoryScrollPage` with an opaque keyset cursor; application-level `DeviceListingCache` (not a port) owned by the long-lived services object; photo previews add `DeviceRepositoryPort.read_head(device_id, path, max_bytes, timeout)`, a thumbnail-extraction port and a preview-cache port (names settled at the architecture gate); video posters add `DeviceRepositoryPort.read_range(device_id, path, offset, length, timeout)`, a video-poster port (ffmpeg) and an application-level short-lived stream-token registry (not a port)
 - **Supersedes:** adbfs mount path in usb-file-transfer (“Mount backends”), `adbfs` in [packaging](../packaging/SPEC.md), `docs/legal/THIRD_PARTY_TOOLS.md`
 
@@ -36,8 +36,8 @@ _Proposed — confirm or adjust at spec review._
 
 ## Triggers & routing
 
-- **Open:** from a caller button; the SPA navigates to `#view-device-picker` with a caller context `{ origin, kind: "files" | "folders", method: "adb" | "afc", mediaOnly }`. Opening does not start a server-side session; each directory read is one stateless request.
-- **Breadcrumb:** `Home / <origin module> / Pick folders` (or `Pick files`). The origin crumb returns to the caller without picks.
+- **Open:** from a caller button; the SPA navigates to `#view-device-picker` with a caller context `{ origin, kind: "files" | "folders" | "both", method: "adb" | "afc", mediaOnly }`. Opening does not start a server-side session; each directory read is one stateless request.
+- **Breadcrumb:** `Home / <origin module> / Pick folders` (or `Pick files`, or `Pick files or folders` for `kind: "both"`). The origin crumb returns to the caller without picks.
 - **API (inbound, JSON):** `POST /api/device/list` with `{ method, device_id, path, cursor?: string | null, limit?: int, query?: string, show_hidden?: bool, refresh?: bool, sort?: "name" | "mtime" | "size", order?: "asc" | "desc" }` → `{ path, entries: [{ name, is_dir, size, mtime }], next_cursor: string | null, total, total_unfiltered, sort, order, error? }`. `path` is storage-relative (`""` = **Phone storage** root = `/sdcard` canonical). `limit` defaults to 100 (bounded 1..500); `show_hidden` defaults to false; `refresh` defaults to false and bypasses the listing cache. Entries are ordered by the effective sort (see **Sorting** below; default folders first, then case-insensitive name A → Z, ties broken by exact name). `sort` and `order` must be sent together or not at all (one without the other → 422); when omitted, the stored picker sort preference is used. The response always echoes the effective `sort` / `order`. `total` is the count after `query` / `show_hidden` filtering; `total_unfiltered` is the directory’s full count. `next_cursor` is `null` on the last page. The cursor is **keyset**: it encodes the effective `sort` / `order` and the sort key of the last returned entry, so continuing after the cache expired and the folder changed on the phone neither skips nor duplicates entries. `show_hidden` moves hidden (dot) filtering to the server — before this revision the client filtered; hidden entries are excluded from pages, `total` and `next_cursor` unless `show_hidden` is true. An invalid cursor — including a cursor issued under a different `sort` / `order` than the request’s, or one issued before this revision — returns 400 `invalid_cursor`.
 - **Return:** on **Add N items** the SPA hands the ticked `[{ path, is_dir }]` to the caller; the caller posts them with its existing extras endpoint (`set_usb_transfer_extra_paths` for USB file transfer; a new equivalent for extract extras).
 - **Methods:** ADB (all OS). AFC (Linux, same as today): `list_directory` reads one directory under the ifuse mount owned by the session. Root for AFC is the device root (**iPhone**), typically only `DCIM`.
@@ -98,7 +98,7 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 - Sticky footer: selected count (`aria-live`), **Cancel**, **Add N items** (disabled at 0). Selection persists across folders within one picker session.
 - Hint under the list when a folder is ticked: ticked folders are added whole, sub-folders included, when the job starts.
 - Theme: system light/dark (`theme.css`); no motion beyond the existing screen fade (spinner static under `prefers-reduced-motion`). Mobile width: no horizontal page scroll.
-- Entry points: USB file transfer keeps **Add files…** / **Add folder…**; the unavailable hint now reads “needs a connected, authorized device”. USB photo backup Step 1 (ADB / iPhone only; hidden for Wi‑Fi) gains an extras list + **Add folder…** + **Add files…** + ⓘ under the preset checklist, with the “only photos and videos are extracted” note.
+- Entry points (revised 2026-10-20, wireframe approved): USB file transfer and USB photo backup Step 1 each have **one** accent-outlined **Add more (files or folders)** button (replacing the former **Add files…** / **Add folder…** pair) that opens the picker with `kind: "both"` — every row has an enabled checkbox and **Select this folder** is visible. In USB file transfer it sits directly under the preset checklist, above the extras list; the unavailable hint reads “Add more needs a connected, authorized device.” USB photo backup Step 1 (ADB / iPhone only; hidden for Wi‑Fi) has an extras list + **Add more** + ⓘ under the preset checklist, with the “only photos and videos are extracted” note.
 - **Photo previews — rows:** image rows (`jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`) replace the 📄 icon with a 44 px rounded `object-fit: cover` thumbnail (36 px at ≤ 520 px). States: shimmer while loading (static under `prefers-reduced-motion`); the photo once loaded; the 🖼 glyph when the request fails or the file is too large — no error text in the row. The thumbnail is a `<button>` with `aria-label="Preview <name>"` and the visible **👁 Preview** button (also `aria-label="Preview <name>"`) is a second, keyboard-reachable opener; clicking anywhere else on the row behaves as before (checkbox selects, folder name opens). Videos get a poster (see **Video posters — rows**); other files show 📄, folders 📁, and neither requests a preview. Rows keep their checkbox in every state.
 - **Photo previews — lightbox:** `role="dialog"` `aria-modal="true"` labelled by the file name; shows the photo fitted to the window, name, size, modified date, “n / N” (n among the **image and video rows of the loaded pages**, in list order; announced via `aria-live="polite"`), **←** / **→** buttons and arrow keys (disabled at the ends, no wrap), **Esc** and **✕** to close, and a **Selected** checkbox that mirrors the row's tick in both directions (in `kind: "folders"` mode, where file checkboxes are disabled, it is disabled too). Loading state: the blurred, upscaled thumbnail with a spinner (static under reduced motion), crossfading to the large rendition. Error state: “Preview unavailable” (and, for files over 25 MB, “Full preview unavailable for files over 25 MB” above the upscaled thumbnail); the file stays selectable. Focus is trapped inside; closing returns focus to the opener (thumbnail or 👁 button). Below 520 px the lightbox is full-screen with the ←/→ buttons in a bottom bar. Opening or stepping the lightbox does not change the list scroll position or the ticks.
 - **Video posters — rows:** video rows (`mp4`, `mov`, `m4v`, `3gp`, `mkv`, `webm`) use the same rounded thumbnail button as photos (44 px, 36 px at ≤ 520 px) with the poster, a small ▶ glyph centred and a **duration badge** bottom-right: `m:ss` (`0:42`, `12:07`) and `h:mm:ss` from one hour (`1:02:15`). States: shimmer while loading (no ▶ or badge yet; static under `prefers-reduced-motion`); poster + ▶ + badge once loaded; the 🎞 icon alone, **no badge**, when there is no poster (failure, undecodable, unknown duration is shown as a poster with ▶ and no badge). The thumbnail button and **👁 Preview** carry `aria-label="Preview <name> (video, <duration>)"` (duration omitted when unknown). No error text in the row; the checkbox works in every state.
@@ -145,22 +145,22 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 ### Scenario: Open from USB file transfer
 
 - **Given** ADB is selected and an authorized phone is connected
-- **When** the user activates **Add folder…**
-- **Then** the picker opens at **Phone storage** with breadcrumb `Home / USB file transfer / Pick folders`
+- **When** the user activates **Add more**
+- **Then** the picker opens at **Phone storage** with breadcrumb `Home / USB file transfer / Pick files or folders`
 - **And** the list shows folders before files, no `/sdcard` path anywhere in the UI
 
 ### Scenario: Open from USB photo backup
 
 - **Given** USB photo backup Step 1 with ADB or iPhone selected
-- **When** the user activates **Add folder…** or **Add files…**
-- **Then** the picker opens with breadcrumb `Home / USB photo backup / Pick folders|files` and the media-only note is shown
+- **When** the user activates **Add more**
+- **Then** the picker opens with breadcrumb `Home / USB photo backup / Pick files or folders` and the media-only note is shown
 - **And** Cancel returns to Step 1 with the extras list unchanged
 
 ### Scenario: Wi‑Fi has no picker entry
 
 - **Given** USB photo backup Step 1
 - **When** Wi‑Fi is the selected connection
-- **Then** no **Add folder…** / **Add files…** controls are visible
+- **Then** no **Add more** control is visible
 
 ### Scenario: Navigate and multi-select across folders
 
@@ -183,6 +183,14 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 - **Given** the picker is inside `WhatsApp/Media` (`kind: "folders"`)
 - **When** the user activates **Select this folder**
 - **Then** `WhatsApp/Media` is added to the selection as a whole folder
+
+### Scenario: Both mode allows files and folders
+
+- **Given** the picker was opened with `kind: "both"` (the **Add more** button)
+- **When** a directory with files and sub-folders is listed
+- **Then** every row’s checkbox is enabled, **Select this folder** is visible and the breadcrumb ends with `Pick files or folders`
+- **When** the user ticks a folder and a file and activates **Add 2 items**
+- **Then** both reach the caller (folder as a whole-folder pick)
 
 ### Scenario: Folders-only mode disables file checkboxes
 

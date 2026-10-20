@@ -26,12 +26,12 @@ function syncWizardExtras(next: AppSnapshot): void {
 	});
 }
 
-function openWizardPicker(kind: "files" | "folders"): void {
+function openWizardPicker(): void {
 	const method = selectedConnectionMethod();
 	const sel = document.getElementById("select-device");
 	const deviceId = sel instanceof HTMLSelectElement ? sel.value : "";
 	if (method === "wifi" || !deviceId) {
-		showFormBanner("Add folder/files needs a connected, authorized device.");
+		showFormBanner("Add more needs a connected, authorized device.");
 		return;
 	}
 	openDevicePicker({
@@ -40,7 +40,7 @@ function openWizardPicker(kind: "files" | "folders"): void {
 		method: method === "afc" ? "afc" : "adb",
 		deviceId,
 		deviceLabel: S.deviceLabels[deviceId] || "",
-		kind,
+		kind: "both",
 		mediaOnly: true,
 		onAdd: (items) => {
 			void saveWizardExtras(currentWizardExtras().concat(items.map((item) => item.path)));
@@ -49,12 +49,7 @@ function openWizardPicker(kind: "files" | "folders"): void {
 }
 
 function bindWizardExtras(): void {
-	document.getElementById("btn-wz-add-folder")?.addEventListener("click", () => {
-		openWizardPicker("folders");
-	});
-	document.getElementById("btn-wz-add-files")?.addEventListener("click", () => {
-		openWizardPicker("files");
-	});
+	document.getElementById("btn-wz-add-more")?.addEventListener("click", openWizardPicker);
 }
 
 export { bindWizardExtras, syncWizardExtras };

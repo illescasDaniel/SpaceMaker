@@ -173,7 +173,7 @@ export interface DevicePickerOptions {
 	method: "adb" | "afc";
 	deviceId: string;
 	deviceLabel: string;
-	kind: "files" | "folders";
+	kind: "files" | "folders" | "both";
 	/** Photo backup: non-photo/video files are shown greyed out. */
 	mediaOnly: boolean;
 	onAdd: (items: DevicePickedItem[]) => void;

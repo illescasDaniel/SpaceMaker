@@ -773,7 +773,8 @@ function openDevicePicker(options) {
 	}
 	const title = el("dp-bc-title");
 	if (title) {
-		title.textContent = options.kind === "folders" ? "Pick folders" : "Pick files";
+		title.textContent =
+			options.kind === "folders" ? "Pick folders" : options.kind === "files" ? "Pick files" : "Pick files or folders";
 	}
 	const heading = el("dp-title");
 	if (heading) {
