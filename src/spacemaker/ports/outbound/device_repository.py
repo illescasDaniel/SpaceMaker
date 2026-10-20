@@ -33,6 +33,30 @@ class DeviceRepositoryPort(Protocol):
 		"""
 		...
 
+	def stat_file(self, device_id: str, path: str) -> DeviceEntry:
+		"""Name, size and mtime of one file; ``path`` is storage-relative like ``list_directory``.
+
+		One device round-trip. Raises ``DeviceBrowseError`` (unplugged, unauthorized, timeout, not found).
+		"""
+		...
+
+	def read_head(self, device_id: str, path: str, max_bytes: int, timeout_s: float) -> bytes:
+		"""First ``max_bytes`` bytes of a file (fewer if shorter); ``path`` is storage-relative.
+
+		One device round-trip, never pulls the whole file. Raises ``DeviceBrowseError`` (unplugged,
+		unauthorized, timeout, not found).
+		"""
+		...
+
+	def pull_file_with_timeout(self, device_id: str, path: str, local_path: str, timeout_s: float) -> None:
+		"""Copy a whole file to ``local_path``; ``path`` is storage-relative, unlike ``pull_file`` whose
+		``device_path`` is an absolute device path from ``list_*_paths``.
+
+		One device round-trip. Raises ``DeviceBrowseError`` (unplugged, unauthorized, timeout, not found);
+		a partial ``local_path`` may be left behind on failure (the caller deletes it).
+		"""
+		...
+
 	def remote_file_size(self, device_id: str, device_path: str) -> int: ...
 
 	def pull_file(self, device_id: str, device_path: str, local_path: str) -> None: ...

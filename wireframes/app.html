@@ -594,6 +594,179 @@
 		.dp-size, .dp-date { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
 		.dp-size { text-align: right; }
 
+		/* Photo previews (thumbnail tiles + lightbox) — see the "Photo previews" wf-notes. */
+		.dp-list { --dp-thumb: 44px; }
+		.dp-thumb {
+			position: relative;
+			flex-shrink: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: var(--dp-thumb);
+			height: var(--dp-thumb);
+			padding: 0;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			overflow: hidden;
+			background: var(--surface2);
+			color: var(--muted);
+			font: inherit;
+			font-size: 1.2rem;
+			cursor: zoom-in;
+		}
+		.dp-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+		.dp-thumb-img {
+			position: absolute;
+			inset: 0;
+			/* Fake photo for the wireframe only: sun + sky gradient, hue from --h. Production uses <img> with object-fit: cover. */
+			background:
+				radial-gradient(circle at 72% 30%, hsl(var(--h, 40) 90% 80%) 0 11%, transparent 12%),
+				linear-gradient(160deg, hsl(var(--h, 210) 60% 58%), hsl(calc(var(--h, 210) + 40) 55% 28%));
+		}
+		.dp-thumb-glyph { display: none; }
+		.dp-thumb.is-loading .dp-thumb-img {
+			background: linear-gradient(100deg, var(--surface2) 30%, var(--border) 50%, var(--surface2) 70%);
+			background-size: 200% 100%;
+			animation: dp-shimmer 1.2s linear infinite;
+		}
+		.dp-thumb.is-failed .dp-thumb-img,
+		.dp-thumb.is-toolarge .dp-thumb-img { display: none; }
+		.dp-thumb.is-failed .dp-thumb-glyph,
+		.dp-thumb.is-toolarge .dp-thumb-glyph { display: inline; }
+		@keyframes dp-shimmer { to { background-position: -200% 0; } }
+		@media (prefers-reduced-motion: reduce) { .dp-thumb.is-loading .dp-thumb-img { animation: none; } }
+		.dp-ico-media { width: var(--dp-thumb); height: var(--dp-thumb); display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+		.dp-preview-btn {
+			flex-shrink: 0;
+			margin-left: auto;
+			padding: 0.1rem 0.4rem;
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			background: var(--surface);
+			color: var(--muted);
+			font: inherit;
+			font-size: 0.85rem;
+			cursor: pointer;
+		}
+		.dp-preview-btn:hover { color: var(--accent); border-color: var(--accent); }
+		.dp-preview-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+		.dp-demo-tiles { max-height: none; border: 1px solid var(--border); border-radius: 8px; }
+		.dp-demo-caption { font-size: 0.82rem; color: var(--muted); margin: 0.25rem 0; }
+
+		.dp-lb {
+			position: fixed;
+			inset: 0;
+			z-index: 60;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 1rem;
+		}
+		.dp-lb[hidden] { display: none; }
+		.dp-lb-backdrop { position: absolute; inset: 0; background: rgba(8, 12, 18, 0.78); }
+		.dp-lb-panel {
+			position: relative;
+			display: flex;
+			flex-direction: column;
+			gap: 0.6rem;
+			width: min(60rem, 100%);
+			max-height: 100%;
+			padding: 0.75rem 0.9rem 0.9rem;
+			border-radius: var(--radius);
+			background: var(--surface);
+			border: 1px solid var(--border);
+			color: var(--text);
+		}
+		.dp-lb-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+		.dp-lb-meta { flex: 1; min-width: 10rem; display: flex; flex-direction: column; }
+		.dp-lb-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.dp-lb-info, .dp-lb-pos { color: var(--muted); font-size: 0.82rem; }
+		.dp-lb-sel { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; }
+		.dp-lb-btn {
+			border: 1px solid var(--border);
+			border-radius: 999px;
+			background: var(--surface2);
+			color: var(--text);
+			font: inherit;
+			width: 2.4rem;
+			height: 2.4rem;
+			cursor: pointer;
+		}
+		.dp-lb-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+		.dp-lb-btn:disabled { opacity: 0.4; cursor: default; }
+		.dp-lb-btn:focus-visible, .dp-lb-sel input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+		.dp-lb-stage {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			grid-template-areas: "prev photo next";
+			align-items: center;
+			gap: 0.6rem;
+		}
+		.dp-lb-prev { grid-area: prev; }
+		.dp-lb-next { grid-area: next; }
+		.dp-lb-photo {
+			grid-area: photo;
+			position: relative;
+			height: min(60vh, 34rem);
+			border-radius: 8px;
+			overflow: hidden;
+			background: var(--surface2);
+		}
+		.dp-lb-blur, .dp-lb-full { position: absolute; inset: 0; }
+		/* Blurred-upscaled thumbnail shows first; the large rendition cross-fades over it. */
+		.dp-lb-blur { filter: blur(14px); transform: scale(1.15); }
+		.dp-lb-full { transition: opacity var(--dur-crossfade) var(--ease-standard); }
+		.dp-lb-blur, .dp-lb-full {
+			background:
+				radial-gradient(circle at 72% 30%, hsl(var(--h, 40) 90% 80%) 0 9%, transparent 10%),
+				linear-gradient(160deg, hsl(var(--h, 210) 60% 58%), hsl(calc(var(--h, 210) + 40) 55% 28%));
+		}
+		/* Production: <img> with max-width/max-height: 100%; object-fit: contain, centered. */
+		.dp-lb-loading, .dp-lb-error {
+			position: absolute;
+			inset: 0;
+			display: none;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 0.4rem;
+			text-align: center;
+			font-size: 0.9rem;
+		}
+		.dp-lb-loading { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+		.dp-lb-loading .dp-spinner { margin: 0; border-color: rgba(255, 255, 255, 0.4); border-top-color: #fff; }
+		.dp-lb-error { background: var(--surface2); color: var(--muted); }
+		.dp-lb-error strong { color: var(--text); font-size: 1rem; }
+		.dp-lb[data-state="loading"] .dp-lb-full { opacity: 0; }
+		.dp-lb[data-state="loading"] .dp-lb-loading { display: flex; }
+		.dp-lb[data-state="error"] .dp-lb-blur,
+		.dp-lb[data-state="error"] .dp-lb-full { display: none; }
+		.dp-lb[data-state="error"] .dp-lb-error { display: flex; }
+		.dp-lb-hint { margin: 0; font-size: 0.78rem; color: var(--muted); text-align: center; }
+
+		/* Narrow lightbox: full screen, nav buttons at the bottom. Also forced by the demo button (.is-mobile-demo). */
+		@media (max-width: 520px) {
+			.dp-list { --dp-thumb: 36px; }
+			.dp-lb { padding: 0; }
+			.dp-lb-panel { width: 100%; height: 100%; border-radius: 0; border: none; }
+			.dp-lb-stage { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: none; }
+			.dp-lb-photo { grid-area: 1 / 1 / 2 / 3; }
+			.dp-lb-prev { grid-area: 2 / 1; }
+			.dp-lb-next { grid-area: 2 / 2; }
+			.dp-lb-photo { height: 100%; }
+			.dp-lb-stage .dp-lb-btn { width: 100%; border-radius: 10px; height: 2.8rem; }
+			.dp-lb-hint { display: none; }
+		}
+		.dp-lb.is-mobile-demo { padding: 0; }
+		.dp-lb.is-mobile-demo .dp-lb-panel { width: 22rem; max-width: 100%; height: min(100%, 40rem); border-radius: 0; margin: 0 auto; }
+		.dp-lb.is-mobile-demo .dp-lb-stage { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: none; }
+		.dp-lb.is-mobile-demo .dp-lb-photo { grid-area: 1 / 1 / 2 / 3; }
+		.dp-lb.is-mobile-demo .dp-lb-prev { grid-area: 2 / 1; }
+		.dp-lb.is-mobile-demo .dp-lb-next { grid-area: 2 / 2; }
+		.dp-lb.is-mobile-demo .dp-lb-photo { height: 100%; }
+		.dp-lb.is-mobile-demo .dp-lb-stage .dp-lb-btn { width: 100%; border-radius: 10px; height: 2.8rem; }
+		.dp-lb.is-mobile-demo .dp-lb-hint { display: none; }
+
 		.dp-more {
 			display: flex;
 			align-items: center;
@@ -3031,6 +3204,37 @@
 				<label style="margin-left: 0.5rem;"><input type="checkbox" id="dp-demo-next-error" /> Simulate next-page error (uncheck, then Retry)</label>
 			</p>
 
+			<p class="wireframe-demo-row">
+				Photo previews:
+				<button type="button" data-dp-lb-demo="ok">Open lightbox (loaded)</button>
+				<button type="button" data-dp-lb-demo="loading">Lightbox loading</button>
+				<button type="button" data-dp-lb-demo="error">Lightbox error</button>
+				<button type="button" data-dp-lb-demo="mobile">Lightbox narrow (&lt; 520 px)</button>
+				<span>· or open <b>DCIM → Camera</b> and click any thumbnail / 👁.</span>
+			</p>
+
+			<div id="dp-demo-tiles-wrap">
+				<p class="dp-demo-caption">Static tile states (as they appear in a row, left to right: loading, loaded, failed, too large, video, document, folder):</p>
+				<ul class="dp-list dp-demo-tiles" aria-label="Thumbnail tile states (demo)">
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo loading" /><span class="dp-name"><span class="dp-thumb is-loading" role="img" aria-label="Thumbnail loading"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span></span><span class="dp-label">IMG_20261018_1.jpg — loading (shimmer)</span></span><span class="dp-size">3.2 MB</span><span class="dp-date">2026-10-18</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo loaded" /><span class="dp-name"><button type="button" class="dp-thumb" style="--h: 205" aria-label="Preview IMG_20261018_2.jpg"><span class="dp-thumb-img"></span></button><span class="dp-label">IMG_20261018_2.jpg — loaded</span><button type="button" class="dp-preview-btn" aria-label="Preview IMG_20261018_2.jpg">👁</button></span><span class="dp-size">3.4 MB</span><span class="dp-date">2026-10-18</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo failed" /><span class="dp-name"><button type="button" class="dp-thumb is-failed" aria-label="Preview IMG_20261018_3.heic"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span></button><span class="dp-label">IMG_20261018_3.heic — failed (icon only, no error text)</span><button type="button" class="dp-preview-btn" aria-label="Preview IMG_20261018_3.heic">👁</button></span><span class="dp-size">2.4 MB</span><span class="dp-date">2026-10-18</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo too large" /><span class="dp-name"><button type="button" class="dp-thumb is-toolarge" aria-label="Preview PANO_0042.jpg"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span></button><span class="dp-label">PANO_0042.jpg — too large (over the size cap, same as failed)</span><button type="button" class="dp-preview-btn" aria-label="Preview PANO_0042.jpg">👁</button></span><span class="dp-size">38 MB</span><span class="dp-date">2026-09-30</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo video" /><span class="dp-name"><span class="dp-ico dp-ico-media" aria-hidden="true">🎞</span><span class="dp-label">CLIP_0007.mp4 — video (generic icon; thumbnails come later)</span></span><span class="dp-size">18.4 MB</span><span class="dp-date">2026-09-04</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo document" /><span class="dp-name"><span class="dp-ico dp-ico-media" aria-hidden="true">📄</span><span class="dp-label">contract.pdf — other file</span></span><span class="dp-size">1.2 MB</span><span class="dp-date">2026-09-30</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo folder" /><span class="dp-name"><span class="dp-ico dp-ico-media" aria-hidden="true">📁</span><span class="dp-label">Camera — folder</span></span><span class="dp-size">—</span><span class="dp-date">2026-10-18</span></li>
+				</ul>
+			</div>
+
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				<b>Photo previews (new):</b> image rows (jpg, jpeg, png, heic, heif, webp, gif…) show a rounded square thumbnail (44 px, 36 px below 520 px) instead of 📄. States: shimmer while loading, the photo once loaded, and the 🖼 icon (no error text in the row) when it fails or the file is over the size cap. Folders keep 📁; videos and other files keep an icon (video thumbnails are a later phase). Rows keep their checkbox. Clicking the thumbnail or the 👁 button opens the <b>lightbox</b>; clicking anywhere else on the row behaves as today. The lightbox shows the photo fitted to the window, name, size, date, “3 / 12” (image rows in the loaded pages only), ← / → buttons and keys, Esc / ✕ to close, and a <b>Selected</b> checkbox that mirrors the row. While the large rendition loads, the blurred-upscaled thumbnail shows; on error it says “Preview unavailable” and the file stays selectable. Below 520 px the lightbox is full-screen with ← / → at the bottom. The “Photo previews” demo buttons above show each state.
+			</aside>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Thumbnails load only for rows currently visible in the list (IntersectionObserver), at most 4 requests at a time; scrolling away or changing folder cancels the request. Thumbnails are cached on disk (LRU, outside the library; key = device + path + size + mtime). Preview routes are loopback-only — never on the LAN allow-list. Videos: later phase (generic icon now). Lightbox a11y (spec): <code>role="dialog" aria-modal="true"</code> labelled by the file name, focus trap inside, focus returns to the opener (thumbnail or 👁) on close, Esc closes, arrow keys navigate, the position is announced via <code>aria-live="polite"</code>. The tile-state list and demo buttons are wireframe-only.
+			</aside>
+
 			<aside class="wf-note" data-for="reviewer">
 				<span class="wf-note-badge">Review only</span>
 				<b>Sorting (new):</b> click <b>Name</b>, <b>Size</b> or <b>Modified</b> in the list header. The first click on a column uses its natural direction (Name A → Z, Modified newest first, Size largest first); clicking the active column flips it (▲ ascending / ▼ descending). <b>Folders always stay above files</b> — folders sort among themselves by the same key (by name for Size, since folders have no size); ties fall back to name. Changing the sort restarts at the first 100 rows on the server (list dims, no spinner, no new phone call), keeps the filter, hidden toggle and every tick. The choice is remembered for the next time the picker opens (default Name A → Z). Below 520 px wide, where Modified is hidden, a <b>Sort</b> menu appears in the toolbar with the same six options. Try <b>Big folder (3,412)</b> → Modified.<br><br>
@@ -3044,6 +3248,32 @@
 				<button type="button" class="btn btn-ghost" id="btn-dp-cancel">Cancel</button>
 				<button type="button" class="btn btn-primary" id="btn-dp-add" disabled>Add</button>
 			</span>
+		</div>
+
+		<div class="dp-lb" id="dp-lb" role="dialog" aria-modal="true" aria-labelledby="dp-lb-name" data-state="ok" hidden>
+			<div class="dp-lb-backdrop" data-dp-lb-close></div>
+			<div class="dp-lb-panel">
+				<div class="dp-lb-head">
+					<div class="dp-lb-meta">
+						<strong id="dp-lb-name"></strong>
+						<span class="dp-lb-info" id="dp-lb-info"></span>
+					</div>
+					<span class="dp-lb-pos" id="dp-lb-pos" aria-live="polite"></span>
+					<label class="dp-lb-sel"><input type="checkbox" id="dp-lb-sel" /> Selected</label>
+					<button type="button" class="dp-lb-btn" id="dp-lb-close" aria-label="Close preview">✕</button>
+				</div>
+				<div class="dp-lb-stage">
+					<button type="button" class="dp-lb-btn dp-lb-prev" id="dp-lb-prev" aria-label="Previous photo">←</button>
+					<div class="dp-lb-photo">
+						<div class="dp-lb-blur"></div>
+						<div class="dp-lb-full"></div>
+						<div class="dp-lb-loading" role="status"><span class="dp-spinner" aria-hidden="true"></span>Loading larger preview…</div>
+						<div class="dp-lb-error" role="alert"><strong>Preview unavailable</strong>You can still select this file.</div>
+					</div>
+					<button type="button" class="dp-lb-btn dp-lb-next" id="dp-lb-next" aria-label="Next photo">→</button>
+				</div>
+				<p class="dp-lb-hint">← → to browse · Esc to close</p>
+			</div>
 		</div>
 	</section>
 
@@ -4990,6 +5220,93 @@
 				});
 			}
 
+			/* Photo previews: thumbnail state per row + lightbox (demo only; no real images). */
+			var IMG_RE = /\.(jpe?g|png|heic|heif|webp|gif)$/i;
+			var VID_RE = /\.(mp4|mov|m4v|3gp|mkv|webm)$/i;
+			var imgInfo = {};
+			function hueOf(name) { var h = 0; for (let i = 0; i < name.length; i += 1) { h = (h * 31 + name.charCodeAt(i)) % 360; } return h; }
+			function thumbState(e) {
+				if (e.size > 25 * M) { return 'toolarge'; }
+				if (/WA0004|_13\./.test(e.name)) { return 'failed'; }
+				return hueOf(e.name) % 4 === 0 ? 'loading' : 'loaded';
+			}
+			var lb = document.getElementById('dp-lb');
+			var lbOpener = null;
+			var lbPath = null;
+			function lbRows() { return Array.prototype.slice.call(listEl.querySelectorAll('li.dp-row[data-image]')); }
+			function lbRowFor(path) { return lbRows().filter(function (r) { return r.dataset.path === path; })[0] || null; }
+			function setLbState(state) { lb.dataset.state = state; }
+			function showLb(path) {
+				var rows = lbRows();
+				var idx = rows.findIndex(function (r) { return r.dataset.path === path; });
+				var e = imgInfo[path];
+				if (!e) { return; }
+				lbPath = path;
+				lb.style.setProperty('--h', String(hueOf(e.name)));
+				document.getElementById('dp-lb-name').textContent = e.name;
+				document.getElementById('dp-lb-info').textContent = fmtSize(e.size) + ' · ' + e.mtime;
+				document.getElementById('dp-lb-pos').textContent = idx >= 0 ? (idx + 1) + ' / ' + rows.length : '';
+				document.getElementById('dp-lb-prev').disabled = idx <= 0;
+				document.getElementById('dp-lb-next').disabled = idx < 0 || idx >= rows.length - 1;
+				var cb = document.getElementById('dp-lb-sel');
+				cb.checked = !!selected[path];
+				cb.disabled = !!(ctx && ctx.kind === 'folders');
+				var st = thumbState(e);
+				setLbState(st === 'failed' || st === 'toolarge' ? 'error' : 'loading');
+				window.clearTimeout(showLb.t);
+				if (lb.dataset.state === 'loading') { showLb.t = window.setTimeout(function () { setLbState('ok'); }, 900); }
+			}
+			function openLb(path, opener) {
+				lbOpener = opener || null;
+				lb.classList.remove('is-mobile-demo');
+				lb.hidden = false;
+				showLb(path);
+				document.getElementById('dp-lb-close').focus();
+			}
+			function closeLb() {
+				window.clearTimeout(showLb.t);
+				lb.hidden = true;
+				lb.classList.remove('is-mobile-demo');
+				if (lbOpener && document.body.contains(lbOpener)) { lbOpener.focus(); }
+			}
+			function stepLb(delta) {
+				var rows = lbRows();
+				var idx = rows.findIndex(function (r) { return r.dataset.path === lbPath; }) + delta;
+				if (idx >= 0 && idx < rows.length) { showLb(rows[idx].dataset.path); }
+			}
+			document.getElementById('dp-lb-prev').addEventListener('click', function () { stepLb(-1); });
+			document.getElementById('dp-lb-next').addEventListener('click', function () { stepLb(1); });
+			document.getElementById('dp-lb-close').addEventListener('click', closeLb);
+			lb.querySelector('[data-dp-lb-close]').addEventListener('click', closeLb);
+			document.getElementById('dp-lb-sel').addEventListener('change', function (ev) {
+				var row = lbRowFor(lbPath);
+				var rcb = row && row.querySelector('input[type="checkbox"]');
+				if (rcb && !rcb.disabled) { rcb.checked = ev.target.checked; rcb.dispatchEvent(new Event('change')); }
+			});
+			document.addEventListener('keydown', function (ev) {
+				if (lb.hidden) { return; }
+				if (ev.key === 'Escape') { closeLb(); }
+				else if (ev.key === 'ArrowLeft') { stepLb(-1); }
+				else if (ev.key === 'ArrowRight') { stepLb(1); }
+			});
+			document.querySelectorAll('[data-dp-lb-demo]').forEach(function (b) {
+				b.addEventListener('click', function () {
+					var mode = b.getAttribute('data-dp-lb-demo');
+					if (!ctx) { ctx = { kind: 'both' }; }
+					if (!listEl.querySelector('li.dp-row[data-image]')) { forced = 'big'; cwd = 'DCIM/Camera'; loadFirst(true); }
+					var tries = 0;
+					(function wait() {
+						var first = listEl.querySelector('li.dp-row[data-image]');
+						if (!first && tries++ < 20) { window.setTimeout(wait, 100); return; }
+						if (!first) { return; }
+						openLb(first.dataset.path, b);
+						window.clearTimeout(showLb.t);
+						if (mode === 'mobile') { lb.classList.add('is-mobile-demo'); setLbState('ok'); }
+						else { setLbState(mode); }
+					})();
+				});
+			});
+
 			function makeRow(e) {
 				var path = join(cwd, e.name);
 				var li = document.createElement('li');
@@ -5015,8 +5332,35 @@
 					if (ctx && ctx.mediaOnly && e.media === false) { li.style.opacity = '0.55'; }
 				}
 				name.className = 'dp-name';
-				name.innerHTML = '<span class="dp-ico" aria-hidden="true">' + (e.dir ? '📁' : '📄') + '</span><span class="dp-label"></span>';
+				var isImg = !e.dir && IMG_RE.test(e.name);
+				var isVid = !e.dir && VID_RE.test(e.name);
+				name.innerHTML = (isImg ? '' : '<span class="dp-ico' + (isVid ? ' dp-ico-media' : '') + '" aria-hidden="true">' + (e.dir ? '📁' : isVid ? '🎞' : '📄') + '</span>') + '<span class="dp-label"></span>';
 				name.querySelector('.dp-label').textContent = e.name;
+				li.dataset.path = path;
+				if (isImg) {
+					li.dataset.image = '1';
+					imgInfo[path] = e;
+					const st = thumbState(e);
+					const th = document.createElement('button');
+					th.type = 'button';
+					th.className = 'dp-thumb is-' + st;
+					th.style.setProperty('--h', String(hueOf(e.name)));
+					th.setAttribute('aria-label', 'Preview ' + e.name);
+					th.innerHTML = '<span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span>';
+					name.insertBefore(th, name.firstChild);
+					if (st === 'loading') {
+						/* Demo: tiles resolve after a short delay (production: lazy, max 4 in flight). */
+						window.setTimeout(function () { th.classList.remove('is-loading'); }, 500 + (hueOf(e.name) % 7) * 150);
+					}
+					const eye = document.createElement('button');
+					eye.type = 'button';
+					eye.className = 'dp-preview-btn';
+					eye.textContent = '👁';
+					eye.setAttribute('aria-label', 'Preview ' + e.name);
+					name.appendChild(eye);
+					th.addEventListener('click', function () { openLb(path, th); });
+					eye.addEventListener('click', function () { openLb(path, eye); });
+				}
 				var size = document.createElement('span');
 				size.className = 'dp-size';
 				size.textContent = e.dir ? '—' : fmtSize(e.size);

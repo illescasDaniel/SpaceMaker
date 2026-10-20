@@ -34,3 +34,9 @@ class FileSystemPort(Protocol):
 	def count_files_in_folder(self, library_root: str, folder: LibraryFolder) -> int: ...
 
 	def library_path(self, library_root: str, folder: LibraryFolder, relative: str) -> str: ...
+
+	def make_temp_file(self, suffix: str) -> str:
+		"""Create an empty temp file (outside the library) and return its path; the caller deletes it
+		with ``delete_file`` (device previews: every outcome).
+		"""
+		...

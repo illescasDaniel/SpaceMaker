@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, DeviceBrowseSort, DeviceEntry
+from spacemaker.domain.device_preview import DevicePreviewError, DevicePreviewErrorKind
 from spacemaker.domain.gallery import GalleryItem
 from spacemaker.domain.gallery_batch import ArchiveEntry, TrashError, VideoExportEncoder
 from spacemaker.domain.gallery_index import FileStat, GalleryCursor, GalleryIndexRow, GalleryPage
@@ -23,6 +26,13 @@ class FakeFileSystem:
 	mtimes: dict[str, float] = field(default_factory=dict)
 	dirs: set[str] = field(default_factory=set)
 	identical_pairs: set[frozenset[str]] = field(default_factory=set)
+	temp_files_created: list[str] = field(default_factory=list)
+
+	def make_temp_file(self, suffix: str) -> str:
+		self.temp_files_created.append(f"fake-temp/preview-{len(self.temp_files_created)}{suffix}")
+		path = self.temp_files_created[-1]
+		self.files[path] = 0
+		return path
 
 	def ensure_library_folders(self, library_root: str) -> None:
 		for folder in LibraryFolder:
@@ -124,6 +134,26 @@ class FakeDeviceRepository:
 	tree: dict[str, list[DeviceEntry]] = field(default_factory=dict)
 	browse_errors: dict[str, DeviceBrowseErrorKind] = field(default_factory=dict)
 	list_directory_calls: list[str] = field(default_factory=list)
+	# device previews: per-path scripted data and recorded calls
+	stat_entries: dict[str, DeviceEntry] = field(default_factory=dict)
+	heads: dict[str, bytes] = field(default_factory=dict)
+	stat_errors: dict[str, DeviceBrowseErrorKind] = field(default_factory=dict)
+	head_errors: dict[str, DeviceBrowseErrorKind] = field(default_factory=dict)
+	pull_errors: dict[str, DeviceBrowseErrorKind] = field(default_factory=dict)
+	stat_calls: list[str] = field(default_factory=list)
+	read_head_calls: list[tuple[str, str, int, float]] = field(default_factory=list)
+	pull_timeout_calls: list[tuple[str, str, float]] = field(default_factory=list)
+	head_gates: dict[str, threading.Event] = field(default_factory=dict)
+	"""Per device id: ``read_head`` blocks until the event is set (to test the concurrency cap)."""
+	active_heads: dict[str, int] = field(default_factory=dict)
+	peak_heads: dict[str, int] = field(default_factory=dict)
+	head_entered: threading.Semaphore = field(default_factory=lambda: threading.Semaphore(0))
+	"""Released once per ``read_head`` entry; tests acquire it to wait for N reads to have started."""
+	_head_lock: threading.Lock = field(default_factory=threading.Lock)
+
+	@property
+	def device_calls(self) -> int:
+		return len(self.stat_calls) + len(self.read_head_calls) + len(self.pull_timeout_calls)
 
 	def list_devices(self) -> list[DeviceInfo]:
 		return list(self.devices)
@@ -149,6 +179,40 @@ class FakeDeviceRepository:
 		if path in self.browse_errors:
 			raise DeviceBrowseError(self.browse_errors[path])
 		return list(self.tree.get(path, []))
+
+	def stat_file(self, device_id: str, path: str) -> DeviceEntry:
+		_ = device_id
+		self.stat_calls.append(path)
+		if path in self.stat_errors:
+			raise DeviceBrowseError(self.stat_errors[path])
+		if path not in self.stat_entries:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.NOT_FOUND)
+		return self.stat_entries[path]
+
+	def read_head(self, device_id: str, path: str, max_bytes: int, timeout_s: float) -> bytes:
+		self.read_head_calls.append((device_id, path, max_bytes, timeout_s))
+		with self._head_lock:
+			active = self.active_heads.get(device_id, 0) + 1
+			self.active_heads[device_id] = active
+			self.peak_heads[device_id] = max(self.peak_heads.get(device_id, 0), active)
+		self.head_entered.release()
+		try:
+			gate = self.head_gates.get(device_id)
+			if gate is not None:
+				gate.wait(timeout=5)
+			if path in self.head_errors:
+				raise DeviceBrowseError(self.head_errors[path])
+			return self.heads.get(path, b"")[:max_bytes]
+		finally:
+			with self._head_lock:
+				self.active_heads[device_id] -= 1
+
+	def pull_file_with_timeout(self, device_id: str, path: str, local_path: str, timeout_s: float) -> None:
+		_ = device_id
+		self.pull_timeout_calls.append((path, local_path, timeout_s))
+		self.files_set(local_path, 1)  # a (partial) file exists even when the pull then fails
+		if path in self.pull_errors:
+			raise DeviceBrowseError(self.pull_errors[path])
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		_ = device_id
@@ -429,3 +493,53 @@ class FakeUserPreferences:
 		self.compress_media = None
 		self.usb_transfer_destination = None
 		self.device_picker_sort = None
+
+
+@dataclass
+class FakePreviewImaging:
+	"""``PreviewImagingPort`` fake: ``embedded`` is what ``thumbnail_from_head`` finds, ``rendered`` what ``render_jpeg`` returns."""
+
+	embedded: bytes | None = None
+	rendered: bytes = b"rendered-jpeg"
+	render_error: DevicePreviewErrorKind | None = None
+	filesystem: FakeFileSystem | None = None
+	head_calls: list[tuple[bytes, int]] = field(default_factory=list)
+	render_calls: list[tuple[str, int, float]] = field(default_factory=list)
+	source_existed_at_render: list[bool] = field(default_factory=list)
+
+	def thumbnail_from_head(self, head: bytes, max_edge: int) -> bytes | None:
+		self.head_calls.append((head, max_edge))
+		return self.embedded
+
+	def render_jpeg(self, source_path: str, max_edge: int, timeout_s: float) -> bytes:
+		self.render_calls.append((source_path, max_edge, timeout_s))
+		if self.filesystem is not None:
+			self.source_existed_at_render.append(source_path in self.filesystem.files)
+		if self.render_error is not None:
+			raise DevicePreviewError(self.render_error)
+		return self.rendered
+
+
+@dataclass
+class FakeDevicePreviewCache:
+	store: dict[str, bytes] = field(default_factory=dict)
+	get_calls: list[str] = field(default_factory=list)
+	put_calls: list[tuple[str, bytes]] = field(default_factory=list)
+
+	def get(self, key: str) -> bytes | None:
+		self.get_calls.append(key)
+		return self.store.get(key)
+
+	def put(self, key: str, jpeg: bytes) -> None:
+		self.put_calls.append((key, jpeg))
+		self.store[key] = jpeg
+
+
+@dataclass
+class FakeDeviceActivity:
+	busy: bool = False
+	calls: list[tuple[ConnectionMethod, str]] = field(default_factory=list)
+
+	def is_busy(self, method: ConnectionMethod, device_id: str) -> bool:
+		self.calls.append((method, device_id))
+		return self.busy

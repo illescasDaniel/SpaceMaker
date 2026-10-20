@@ -18,7 +18,32 @@ const MARKUP = `
 <span class="dp-date"><button type="button" class="dp-sort" data-dp-sort="mtime">Modified <span class="dp-sort-arrow" aria-hidden="true"></span></button></span></div>
 <p class="sr-only" id="dp-sort-status" aria-live="polite"></p><ul id="dp-list"></ul><div id="dp-state" hidden></div>
 <div id="dp-more" hidden><span id="dp-more-text"></span><button id="btn-dp-more"></button></div></div>
-<p id="dp-hint"></p><span id="dp-count"></span><button id="btn-dp-cancel"></button><button id="btn-dp-add"></button>`;
+<p id="dp-hint"></p><span id="dp-count"></span><button id="btn-dp-cancel"></button><button id="btn-dp-add"></button>
+<div class="dp-lb" id="dp-lb" role="dialog" aria-modal="true" aria-labelledby="dp-lb-name" data-state="loading" hidden>
+<div class="dp-lb-backdrop" data-dp-lb-close></div>
+<div class="dp-lb-panel">
+<div class="dp-lb-head">
+<div class="dp-lb-meta">
+<strong id="dp-lb-name"></strong>
+<span class="dp-lb-info" id="dp-lb-info"></span>
+</div>
+<span class="dp-lb-pos" id="dp-lb-pos" aria-live="polite"></span>
+<label class="dp-lb-sel"><input type="checkbox" id="dp-lb-sel" /> Selected</label>
+<button type="button" class="dp-lb-btn" id="dp-lb-close" aria-label="Close preview">✕</button>
+</div>
+<div class="dp-lb-stage">
+<button type="button" class="dp-lb-btn dp-lb-prev" id="dp-lb-prev" aria-label="Previous photo">←</button>
+<div class="dp-lb-photo">
+<div class="dp-lb-blur"></div>
+<div class="dp-lb-full"></div>
+<div class="dp-lb-note" role="status">Full preview unavailable for files over 25 MB</div>
+<div class="dp-lb-loading" role="status"><span class="dp-spinner" aria-hidden="true"></span>Loading larger preview…</div>
+<div class="dp-lb-error" role="alert"><strong>Preview unavailable</strong>You can still select this file.</div>
+</div>
+<button type="button" class="dp-lb-btn dp-lb-next" id="dp-lb-next" aria-label="Next photo">→</button>
+</div>
+<p class="dp-lb-hint">← → to browse · Esc to close</p>
+</div>`;
 
 interface ListBody {
 	path: string;
@@ -76,7 +101,7 @@ class FakeObserver {
 	readonly observed = new Set<Element>();
 	disconnected = false;
 	constructor(
-		private readonly callback: (entries: Array<{ isIntersecting: boolean }>) => void,
+		private readonly callback: (entries: Array<{ isIntersecting: boolean; target?: Element }>) => void,
 		readonly options?: IntersectionObserverInit,
 	) {
 		FakeObserver.instances.push(this);
@@ -93,6 +118,10 @@ class FakeObserver {
 	}
 	fire(): void {
 		this.callback([{ isIntersecting: true }]);
+	}
+	/** Report every observed element as visible (what the thumbnail loader needs to start fetching). */
+	fireVisible(): void {
+		this.callback([...this.observed].map((target) => ({ isIntersecting: true, target })));
 	}
 }
 function fireIntersect(): void {
@@ -755,5 +784,146 @@ describe("device picker sorting", () => {
 		open();
 		await flush();
 		expect(document.querySelector("#dp-list .dp-date")?.textContent).toBe("—");
+	});
+});
+
+describe("device picker photo rows", () => {
+	it("given mixed files when listed then images get a thumb and preview button, videos 🎞, others 📄, and openers do not tick", async () => {
+		mockList({
+			"": page("", [
+				["Camera", true],
+				["a.jpg", false],
+				["clip.mp4", false],
+				["doc.pdf", false],
+			]),
+		});
+		open();
+		await flush();
+		const rows = [...document.querySelectorAll<HTMLElement>("#dp-list .dp-row")];
+		expect(rows[0]?.querySelector(".dp-ico")?.textContent).toBe("📁");
+		expect(rows[1]?.querySelector("button.dp-thumb.is-loading")?.getAttribute("aria-label")).toBe("Preview a.jpg");
+		expect(rows[1]?.querySelector(".dp-preview-btn")?.getAttribute("aria-label")).toBe("Preview a.jpg");
+		expect(rows[1]?.querySelector(".dp-ico")).toBeNull();
+		expect(rows[2]?.querySelector(".dp-ico-media")?.textContent).toBe("🎞");
+		expect(rows[3]?.querySelector(".dp-ico")?.textContent).toBe("📄");
+		rows[1]?.querySelector<HTMLButtonElement>(".dp-preview-btn")?.click();
+		expect(document.querySelectorAll<HTMLInputElement>("#dp-list input:checked")).toHaveLength(0);
+		expect(document.getElementById("btn-dp-add")?.hasAttribute("disabled")).toBe(true);
+	});
+});
+
+describe("device picker lightbox and thumbnail loading", () => {
+	const imageNames = ["a.jpg", "b.jpg", "c.jpg"];
+	let previewSignals: AbortSignal[];
+
+	/** List calls answer normally; thumb/preview fetches hang until their AbortSignal fires. */
+	function mockWithHangingPreviews(handler: (body: ListBody) => Reply = (body) => page(body.path, [])): void {
+		previewSignals = [];
+		mockApi(handler);
+		const listFetch = globalThis.fetch;
+		globalThis.fetch = vi.fn((url: unknown, init?: RequestInit) => {
+			if (String(url).includes("/api/device/") && !String(url).endsWith("/api/device/list")) {
+				const signal = init?.signal as AbortSignal;
+				previewSignals.push(signal);
+				return new Promise<Response>((_resolve, reject) => {
+					signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+				});
+			}
+			return listFetch(url as RequestInfo, init);
+		}) as typeof fetch;
+	}
+
+	const lightbox = (): HTMLElement => document.getElementById("dp-lb") as HTMLElement;
+	const thumbs = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>("#dp-list .dp-thumb")];
+	const lbSel = (): HTMLInputElement => document.getElementById("dp-lb-sel") as HTMLInputElement;
+	const mediaPage = (): DeviceListPage =>
+		page(
+			"",
+			imageNames.map((name) => [name, false]),
+		);
+
+	async function openWithImages(): Promise<void> {
+		mockWithHangingPreviews((body) => (body.path === "" ? mediaPage() : page(body.path, [["x.jpg", false]])));
+		open();
+		await flush();
+	}
+
+	it("given a row thumbnail when clicked then the lightbox opens on that image", async () => {
+		await openWithImages();
+		expect(lightbox().hidden).toBe(true);
+		thumbs()[1]?.click();
+		expect(lightbox().hidden).toBe(false);
+		expect(document.getElementById("dp-lb-name")?.textContent).toBe("b.jpg");
+	});
+
+	it("given a row eye button when clicked then the lightbox opens on that image", async () => {
+		await openWithImages();
+		document.querySelectorAll<HTMLButtonElement>("#dp-list .dp-preview-btn")[2]?.click();
+		expect(lightbox().hidden).toBe(false);
+		expect(document.getElementById("dp-lb-name")?.textContent).toBe("c.jpg");
+	});
+
+	it("given Selected ticked in the lightbox then the row checkbox and the footer count follow", async () => {
+		await openWithImages();
+		const before = document.getElementById("dp-count")?.textContent;
+		thumbs()[1]?.click();
+		lbSel().checked = true;
+		lbSel().dispatchEvent(new Event("change"));
+		const boxes = document.querySelectorAll<HTMLInputElement>("#dp-list input");
+		expect([...boxes].map((box) => box.checked)).toEqual([false, true, false]);
+		expect(document.getElementById("dp-count")?.textContent).not.toBe(before);
+		expect(document.getElementById("dp-count")?.textContent).toContain("1");
+		expect(document.getElementById("btn-dp-add")?.hasAttribute("disabled")).toBe(false);
+	});
+
+	it("given the lightbox open when Tab and Shift+Tab are pressed at the ends then focus stays inside the dialog", async () => {
+		await openWithImages();
+		thumbs()[1]?.click();
+		const focusable = [...lightbox().querySelectorAll<HTMLElement>("button:not([disabled]), input")];
+		const first = focusable[0] as HTMLElement;
+		const last = focusable.at(-1) as HTMLElement;
+		last.focus();
+		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+		expect(document.activeElement).toBe(first);
+		document.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }),
+		);
+		expect(document.activeElement).toBe(last);
+		(document.getElementById("btn-dp-add") as HTMLElement).focus();
+		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+		expect(lightbox().contains(document.activeElement)).toBe(true);
+	});
+
+	function startThumbFetches(): void {
+		FakeObserver.instances.find((observer) => observer.observed.has(thumbs()[0] as Element))?.fireVisible();
+	}
+
+	it("given in-flight thumbnail fetches when a folder is opened then they are aborted", async () => {
+		mockWithHangingPreviews((body) =>
+			body.path === ""
+				? page("", [["Camera", true], ...imageNames.map((n) => [n, false] as [string, boolean])])
+				: page(body.path, []),
+		);
+		open();
+		await flush();
+		startThumbFetches();
+		await flush();
+		expect(previewSignals.length).toBeGreaterThan(0);
+		expect(previewSignals.every((signal) => !signal.aborted)).toBe(true);
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		await flush();
+		expect(previewSignals.every((signal) => signal.aborted)).toBe(true);
+	});
+
+	it("given in-flight thumbnail fetches when the filter restarts the listing then they are aborted", async () => {
+		await openWithImages();
+		startThumbFetches();
+		await flush();
+		expect(previewSignals.length).toBeGreaterThan(0);
+		const filter = document.getElementById("dp-hidden-toggle") as HTMLInputElement;
+		filter.checked = true;
+		filter.dispatchEvent(new Event("change"));
+		await flush();
+		expect(previewSignals.every((signal) => signal.aborted)).toBe(true);
 	});
 });

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 from pathlib import Path
 
 from spacemaker.domain.gallery_index import FileStat
@@ -76,6 +77,11 @@ class LocalFileSystem:
 
 	def ensure_parent_directory(self, file_path: str) -> None:
 		Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+
+	def make_temp_file(self, suffix: str) -> str:
+		fd, path = tempfile.mkstemp(prefix="spacemaker-preview-", suffix=suffix)
+		os.close(fd)
+		return path
 
 	def delete_file(self, path: str) -> None:
 		Path(path).unlink(missing_ok=True)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import Future
 from pathlib import Path
 
 import pytest
@@ -120,3 +121,51 @@ def test_given_destination_is_a_file_when_start_transfer_then_error_and_no_job(t
 	# then
 	assert services.session.usb_transfer_phase is JobPhase.ERROR
 	assert services._usb_transfer_future is None
+
+
+def _busy_services(method: ConnectionMethod = ConnectionMethod.ADB) -> AppServices:
+	services = AppServices(port=8765, bind_host="127.0.0.1")
+	with services.session._lock:
+		services.session.connection_method = method
+	return services
+
+
+def _future(done: bool) -> Future[None]:
+	future: Future[None] = Future()
+	if done:
+		future.set_result(None)
+	return future
+
+
+def test_given_pending_transfer_when_is_busy_on_session_method_then_true() -> None:
+	# given
+	services = _busy_services()
+	services._usb_transfer_future = _future(done=False)
+	# when / then
+	assert services.is_busy(ConnectionMethod.ADB, "dev1") is True
+
+
+def test_given_pending_transfer_when_is_busy_on_other_method_then_false() -> None:
+	# given
+	services = _busy_services()
+	services._usb_transfer_future = _future(done=False)
+	# when / then
+	assert services.is_busy(ConnectionMethod.AFC, "dev1") is False
+
+
+def test_given_finished_transfer_when_is_busy_then_false() -> None:
+	# given
+	services = _busy_services()
+	services._usb_transfer_future = _future(done=True)
+	# when / then
+	assert services.is_busy(ConnectionMethod.ADB, "dev1") is False
+
+
+def test_given_pending_extract_when_is_busy_then_true_and_finished_extract_false() -> None:
+	# given
+	services = _busy_services()
+	services._extract_future = _future(done=False)
+	# when / then
+	assert services.is_busy(ConnectionMethod.ADB, "dev1") is True
+	services._extract_future = _future(done=True)
+	assert services.is_busy(ConnectionMethod.ADB, "dev1") is False

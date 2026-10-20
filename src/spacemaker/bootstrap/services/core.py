@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import threading
+import time
 from collections.abc import Coroutine
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -16,7 +17,9 @@ from spacemaker.adapters.outbound.filesystem.sha256_hasher import Sha256ContentH
 from spacemaker.adapters.outbound.filesystem.shutil_disk_space import ShutilDiskSpace
 from spacemaker.adapters.outbound.filesystem.zip_archive_writer import StoredZipArchiveWriter
 from spacemaker.adapters.outbound.gallery.sqlite_index import SqliteGalleryIndex
+from spacemaker.adapters.outbound.media.file_device_preview_cache import FileDevicePreviewCache
 from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMediaConverter
+from spacemaker.adapters.outbound.media.subprocess_preview_imaging import SubprocessPreviewImaging
 from spacemaker.adapters.outbound.media.subprocess_probe import SubprocessMediaProbe
 from spacemaker.adapters.outbound.media.subprocess_thumbnails import SubprocessThumbnailGenerator
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
@@ -39,6 +42,7 @@ from spacemaker.application.file_share_manifest import (
 	SharedManifestEntry,
 )
 from spacemaker.application.generate_gallery import GenerateGallery
+from spacemaker.application.get_device_preview import GetDevicePreview
 from spacemaker.application.get_gallery_item import GetGalleryItem
 from spacemaker.application.list_device_directory import ListDeviceDirectory
 from spacemaker.application.network_passcode import NetworkPasscode
@@ -62,6 +66,7 @@ from spacemaker.bootstrap.bundled_tools import (
 from spacemaker.bootstrap.paths import (
 	default_documents_receive_root,
 	default_library_root,
+	device_preview_cache_dir,
 	is_absolute_library_path,
 	network_passcode_path,
 	normalize_library_root,
@@ -76,6 +81,7 @@ from spacemaker.bootstrap.services.usb_browse import UsbBrowseMixin
 from spacemaker.domain.app_module import LanSessionKind
 from spacemaker.domain.compress_media import CompressMediaPreference, resolve_compress_media_preference
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.device_preview import PREVIEW_CACHE_MAX_BYTES
 from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.gallery_batch import GalleryBatchConvertJob, TrashItemResult, TrashOutcome
 from spacemaker.domain.gallery_export_job import GalleryExportJob
@@ -173,6 +179,14 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self._usb_transfer_future: Future[None] | None = None
 		self._convert_control: ExtractJobControl | None = None
 		self._convert_future: Future[None] | None = None
+		# Phone photo previews: this object is the DeviceActivityPort (see UsbBrowseMixin.is_busy).
+		self.get_device_preview = GetDevicePreview(
+			self.devices_for,
+			FileDevicePreviewCache(device_preview_cache_dir(), PREVIEW_CACHE_MAX_BYTES, time.time),
+			SubprocessPreviewImaging(self.runner),
+			self,
+			self.filesystem,
+		)
 		self.receive_uploaded = ReceiveUploadedMedia(self.filesystem)
 		self.receive_documents = ReceiveUploadedDocuments(self.filesystem)
 		self.content_hasher = Sha256ContentHasher()

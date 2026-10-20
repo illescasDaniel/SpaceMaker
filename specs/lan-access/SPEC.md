@@ -72,6 +72,8 @@
 | POST | `/api/convert/stop` | **Desktop** |  | Loopback-only |
 | POST | `/api/error/move-to-processed` | **Desktop** |  | Loopback-only |
 | POST | `/api/device/list` | **Desktop** |  | Loopback-only |
+| GET | `/api/device/thumb` | **Desktop** | Phone photo thumbnail | Loopback-only |
+| GET | `/api/device/preview` | **Desktop** | Phone photo lightbox rendition | Loopback-only |
 | GET | `/api/devices` | **Desktop** |  | Loopback-only |
 | GET | `/api/library/counts` | **Desktop** |  | Loopback-only |
 | POST | `/api/extract/start` | **Desktop** |  | Loopback-only |

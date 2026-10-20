@@ -3,10 +3,14 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
+import threading
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 from spacemaker.adapters.outbound.device.mount_dirs import remove_empty_mount_dir
 from spacemaker.adapters.outbound.media.tool_runner import ToolRunner
@@ -18,6 +22,8 @@ from spacemaker.ports.outbound.device_repository import DeviceInfo
 
 
 _USBMUXD_SOCKETS = (Path("/run/usbmuxd"), Path("/var/run/usbmuxd"))
+_STAT_TIMEOUT_SECONDS = 10.0
+_T = TypeVar("_T")
 _AFC_TOP_DIRS = ("DCIM", "Pictures", "Movies")
 
 
@@ -132,6 +138,82 @@ class AfcDeviceRepository:
 		except OSError as exc:
 			raise DeviceBrowseError(DeviceBrowseErrorKind.FAILED, str(exc)) from exc
 		return entries
+
+	def stat_file(self, device_id: str, path: str) -> DeviceEntry:
+		"""Name, size and mtime of one file on the ifuse mount; ``path`` is mount-relative."""
+		target = self._browse_target(device_id, path)
+
+		def read() -> DeviceEntry:
+			info = target.stat()
+			is_dir = stat.S_ISDIR(info.st_mode)
+			return DeviceEntry(target.name, is_dir, 0 if is_dir else info.st_size, int(info.st_mtime))
+
+		return self._bounded(read, _STAT_TIMEOUT_SECONDS)
+
+	def read_head(self, device_id: str, path: str, max_bytes: int, timeout_s: float) -> bytes:
+		"""First ``max_bytes`` bytes of a file on the mount (never reads the rest)."""
+		target = self._browse_target(device_id, path)
+
+		def read() -> bytes:
+			with target.open("rb") as handle:
+				return handle.read(max_bytes)
+
+		return self._bounded(read, timeout_s)
+
+	def pull_file_with_timeout(self, device_id: str, path: str, local_path: str, timeout_s: float) -> None:
+		"""Copy a whole file off the mount, bounded by ``timeout_s``; a partial ``local_path`` may remain."""
+		target = self._browse_target(device_id, path)
+		# Open the destination up front on the calling thread: a worker that outlives the timeout can only
+		# write to this (unlinked-by-the-caller) handle, never re-create the deleted path.
+		try:
+			destination = open(local_path, "wb")  # noqa: SIM115 - closed in the finally below
+		except OSError as exc:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.FAILED, str(exc)) from exc
+
+		def copy() -> None:
+			with target.open("rb") as source:
+				shutil.copyfileobj(source, destination)
+				destination.flush()
+
+		try:
+			self._bounded(copy, timeout_s)
+		finally:
+			destination.close()
+
+	def _browse_target(self, device_id: str, path: str) -> Path:
+		try:
+			mount = self._mount_path(device_id)
+		except RuntimeError as exc:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.UNPLUGGED, str(exc)) from exc
+		return mount / path.lstrip("/") if path else mount
+
+	@staticmethod
+	def _bounded(work: Callable[[], _T], timeout_s: float) -> _T:
+		"""Run blocking mount I/O on a daemon thread so a hung ifuse read cannot outlive ``timeout_s``."""
+		outcome: list[_T] = []
+		failure: list[BaseException] = []
+
+		def run() -> None:
+			try:
+				outcome.append(work())
+			except BaseException as exc:  # noqa: BLE001 - re-raised on the caller's thread
+				failure.append(exc)
+
+		thread = threading.Thread(target=run, name="spacemaker-afc-read", daemon=True)
+		thread.start()
+		thread.join(timeout_s)
+		if thread.is_alive():
+			raise DeviceBrowseError(DeviceBrowseErrorKind.TIMEOUT)
+		if failure:
+			exc = failure[0]
+			if isinstance(exc, PermissionError):
+				raise DeviceBrowseError(DeviceBrowseErrorKind.PERMISSION_DENIED, str(exc)) from exc
+			if isinstance(exc, (FileNotFoundError, NotADirectoryError, IsADirectoryError)):
+				raise DeviceBrowseError(DeviceBrowseErrorKind.NOT_FOUND, str(exc)) from exc
+			if isinstance(exc, OSError):
+				raise DeviceBrowseError(DeviceBrowseErrorKind.FAILED, str(exc)) from exc
+			raise exc
+		return outcome[0]
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		mount = self._mount_path(device_id)

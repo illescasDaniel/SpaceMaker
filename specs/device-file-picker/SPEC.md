@@ -7,8 +7,9 @@
 - **Spec approved:** 2026-10-19 (original picker)
 - **Revision — scroll pagination:** wireframe revision (auto-load sentinel, “Loading more…”, inline Retry, **Load more** fallback) approved 2026-10-19 (in chat); **spec revision approved** 2026-10-19 (in chat); "No match" rule amended 2026-10-19 (in chat: filter typed and `total` = 0). Plan: [PLAN-scroll-pagination.md](PLAN-scroll-pagination.md)
 - **Revision — sorting:** wireframe revision (sortable **Name** / **Size** / **Modified** column headers with ▲/▼, toolbar **Sort** menu ≤ 520 px) approved 2026-10-19 (in chat); **spec revision approved** 2026-10-19 (in chat).
+- **Revision — photo previews:** wireframe revision (thumbnails in image rows, 👁 button, lightbox; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). Plan: [PLAN-media-preview.md](PLAN-media-preview.md) (Phase A; videos are Phase B).
 - **Callers:** [usb-file-transfer](../usb-file-transfer/SPEC.md) (**Add files…** / **Add folder…**), [extract-media](../extract-media/SPEC.md) / [main-wizard](../main-wizard/SPEC.md) Step 1 for ADB and iPhone USB (**Add folder…** / **Add files…**)
-- **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> list[DeviceEntry]` (contract unchanged; adapters stay dumb); domain `DeviceEntry`, `DeviceDirectoryScrollPage` with an opaque keyset cursor; application-level `DeviceListingCache` (not a port) owned by the long-lived services object
+- **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> list[DeviceEntry]` (contract unchanged; adapters stay dumb); domain `DeviceEntry`, `DeviceDirectoryScrollPage` with an opaque keyset cursor; application-level `DeviceListingCache` (not a port) owned by the long-lived services object; photo previews add `DeviceRepositoryPort.read_head(device_id, path, max_bytes, timeout)`, a thumbnail-extraction port and a preview-cache port (names settled at the architecture gate)
 - **Supersedes:** adbfs mount path in usb-file-transfer (“Mount backends”), `adbfs` in [packaging](../packaging/SPEC.md), `docs/legal/THIRD_PARTY_TOOLS.md`
 
 ## Design decisions
@@ -21,6 +22,11 @@ _Proposed — confirm or adjust at spec review._
 | **Failure handling** | Per directory, the picker shows one of: loading, empty, permission denied (e.g. `Android/data` on Android 11+), device unauthorized, device unplugged/offline, listing timed out, generic error — each with Retry or Go up where it helps. Failures never clear ticked items. A failed **next-page** fetch keeps every loaded row and tick and shows an inline “Couldn’t load more items.” row with **Retry** at the bottom of the list (no full-panel error); an invalid or expired cursor is answered 400 `invalid_cursor` and the client silently restarts from page 1 (ticks kept). A failed listing leaves the previous directory’s selection and path intact. Closing the picker (Cancel) discards picks; Add returns them. Nothing is copied by the picker. |
 | **Performance & resource budget** | One `adb shell` call (or one AFC directory read) per directory opened, plus one per explicit refresh (**Retry**) or cache expiry; never recurse; sub-folders of a ticked folder are not expanded in the picker. Results are served in pages of 100 entries (request `limit` bounded 1..500). The application layer holds a listing cache `DeviceListingCache`: TTL 30 s, LRU ≤ 8 directories, keyed `(method, device_id, path)`, errors are never cached, `refresh: true` bypasses it; later pages, filter changes, the hidden toggle and sort changes are served from the cached listing with no device call; a page served from the cache (sort + filter + slice of ~5 000 entries) answers in ≤ 50 ms. Filter and **Show hidden** are applied server-side over that listing — the client never downloads all pages to filter. The UI appends rows as pages arrive and never re-renders existing rows. Directory listing of ~5 000 entries returns the first page in ≤ 2 s on USB 2. The server holds no persistent connection. Entry payload ≤ ~150 bytes/entry (a 100-entry page ≈ 15 KB). Stale responses are dropped when the user navigates away, filters or toggles (request id); a superseded listing is not awaited. |
 | **Trust boundary** | Untrusted input: the `path` sent by the web client (including a LAN client probing the endpoint) and file names returned by the phone (arbitrary unicode, spaces, quotes, newlines, `$`, backticks). The inbound route validates and normalizes `path` (no `..`, no NUL, no absolute escape, must resolve under the user-storage root) before the adapter runs; `cursor` is an opaque string decoded and validated server-side (malformed, tampered or not-a-cursor → 400 `invalid_cursor`, never reaches the adapter); `query` is a plain case-insensitive substring, length-bounded (≤ 200 chars, longer → 400), matched in Python over the cached listing and never sent to the device shell; `limit` is bounded 1..500 (out of range, or a `query` over 200 characters, is rejected by request validation with 422, not silently clamped), `sort` / `order` are closed enums (any other value → 422) and `show_hidden` / `refresh` are booleans; the stored sort preference is re-validated when read (unknown or corrupt → default **Name, A → Z**, never an error); the ADB adapter passes the path as a single `shlex`-quoted argument and never builds shell from phone-provided names. File names from the phone are rendered with `textContent` only. `POST /api/device/list` and the extras routes are loopback-only like every other module-screen API (403 `desktop-only` for LAN clients; the network-passcode gate still answers first when a passcode is set — [network-passcode](../network-passcode/SPEC.md)). The picker only lists; copying/moving remains in the transfer/extract use cases. |
+| **Photo previews — success criteria** | Image rows show a thumbnail within ~0.5 s of becoming visible on a typical camera JPEG (A0 spike on a Pixel: 64 KB head read 0.04–0.10 s; 97% of camera JPEGs carry an EXIF thumbnail in the first 55 KB). The lightbox shows a large rendition (≤ 1600 px, fit-within) within ~1.5 s of opening, after showing the thumbnail at once. Formats: `jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`. HEIC/HEIF is decoded by the host Magick's libheif and **has not been verified on a real HEIC phone** (the spike phone has none) — to be checked during implementation. DNG and other RAW → icon only (out of scope). Videos → 🎞 icon, no thumbnail (Phase B). Works for ADB and AFC. |
+| **Photo previews — strategy** | **Thumbnail (320 px, JPEG):** (1) read the first 64 KB of the file; (2) if it holds an embedded EXIF/HEIC thumbnail, use it, applying the EXIF Orientation; (3) otherwise, **only if the file is ≤ 25 MB**, pull the whole file to a temp file and have Magick produce a 320 px fit-within JPEG (`-auto-orient`); (4) over 25 MB with no embedded thumbnail, or any failure → no preview, the UI keeps the icon. **Lightbox rendition (1600 px fit-within, JPEG):** full pull to a temp file + Magick, same 25 MB cap. Over the cap the lightbox shows the (upscaled) thumbnail if one exists plus the note “Full preview unavailable for files over 25 MB”; with no thumbnail either it shows the error state. Temp files are deleted in every outcome (success, error, timeout, cancel). |
+| **Photo previews — failure handling** | A preview failure never affects the picker: the row keeps its icon with no error text, stays tickable, and the listing and ticks are untouched. Phone unplugged or read timeout → icon; the tile is retried the next time it becomes visible (folder reopened, or scrolled out and back), never on a timer. Device busy with a transfer/extract job → the row stays a plain icon (not marked failed) and is requested again on its next visibility. The lightbox shows “Preview unavailable” when the large rendition fails and stays usable (navigation, **Selected**, Esc). |
+| **Photo previews — performance & resource budget** | At most **4** concurrent device reads per device (server-enforced; the client also keeps ≤ 4 requests in flight). Per-read timeouts: 10 s for the head read, 30 s for a full pull; Magick calls bounded by the same timeout. Previews are **not started** while a USB transfer or extract job is using the same device (409 `device_busy`) — a transfer always wins. Only rows currently visible request thumbnails (`IntersectionObserver`); requests are aborted on scroll-away, folder change and picker close; the lightbox requests only the current image (the thumbnail of a neighbour is already loaded as a row). **Disk cache** under the app cache directory (`device-thumbs/`, never the library, never the phone): key = hash(device id, path, size, mtime); one JPEG per key and kind (thumbnail / preview); a format-version marker in the directory name or a marker file (as for the gallery thumbnails) invalidates old entries when the pipeline changes; atomic writes (temp file + rename); LRU eviction keeps the cache ≤ **200 MB**; the cache survives restarts. A cache hit makes no device call and answers in ≤ 50 ms. |
+| **Photo previews — trust boundary** | Untrusted input: `path`, `device_id`, `method`, `size`, `mtime` on the new routes, and the bytes of the image (arbitrary, possibly malformed). The routes are **loopback-only** (`require_loopback` → 403 `desktop-only`; passcode gate first) and are **not** added to `LAN_ALLOWED_ROUTES`, so the [lan-access](../lan-access/SPEC.md) default-deny holds (its route table gains these two rows as **Desktop**). `path` is validated and normalized exactly as for `/api/device/list` (no `..`, no NUL, under user storage) before any adapter runs; the ADB adapter passes it as one `shlex`-quoted argument. `size` and `mtime` come from the client listing but only form part of the cache key: a wrong value just causes a cache miss and regeneration, never access to another file; the server compares `size` with the real file size before choosing the 25 MB path. Image decoding runs in a subprocess (Magick) with a timeout and a resource limit on pixel dimensions; the output is always re-encoded JPEG, so original bytes are never served. Preview bytes are written only to the cache directory and temp files, **never into the user's library**. Responses use `Cache-Control: private, max-age=300, must-revalidate` with a strong `ETag` and answer 304 on `If-None-Match`, consistent with `/thumbs`. |
 
 ## Triggers & routing
 
@@ -29,6 +35,29 @@ _Proposed — confirm or adjust at spec review._
 - **API (inbound, JSON):** `POST /api/device/list` with `{ method, device_id, path, cursor?: string | null, limit?: int, query?: string, show_hidden?: bool, refresh?: bool, sort?: "name" | "mtime" | "size", order?: "asc" | "desc" }` → `{ path, entries: [{ name, is_dir, size, mtime }], next_cursor: string | null, total, total_unfiltered, sort, order, error? }`. `path` is storage-relative (`""` = **Phone storage** root = `/sdcard` canonical). `limit` defaults to 100 (bounded 1..500); `show_hidden` defaults to false; `refresh` defaults to false and bypasses the listing cache. Entries are ordered by the effective sort (see **Sorting** below; default folders first, then case-insensitive name A → Z, ties broken by exact name). `sort` and `order` must be sent together or not at all (one without the other → 422); when omitted, the stored picker sort preference is used. The response always echoes the effective `sort` / `order`. `total` is the count after `query` / `show_hidden` filtering; `total_unfiltered` is the directory’s full count. `next_cursor` is `null` on the last page. The cursor is **keyset**: it encodes the effective `sort` / `order` and the sort key of the last returned entry, so continuing after the cache expired and the folder changed on the phone neither skips nor duplicates entries. `show_hidden` moves hidden (dot) filtering to the server — before this revision the client filtered; hidden entries are excluded from pages, `total` and `next_cursor` unless `show_hidden` is true. An invalid cursor — including a cursor issued under a different `sort` / `order` than the request’s, or one issued before this revision — returns 400 `invalid_cursor`.
 - **Return:** on **Add N items** the SPA hands the ticked `[{ path, is_dir }]` to the caller; the caller posts them with its existing extras endpoint (`set_usb_transfer_extra_paths` for USB file transfer; a new equivalent for extract extras).
 - **Methods:** ADB (all OS). AFC (Linux, same as today): `list_directory` reads one directory under the ifuse mount owned by the session. Root for AFC is the device root (**iPhone**), typically only `DCIM`.
+
+## Photo previews — API
+
+Two loopback-only `GET` routes, `image/jpeg` on success. Query: `method` (`adb` | `afc`), `device_id`, `path` (storage-relative, as in `/api/device/list`), `size` (int ≥ 0), `mtime` (int ≥ 0).
+
+| Route | Returns | Notes |
+|---|---|---|
+| `GET /api/device/thumb` | 320 px fit-within JPEG | Head-read strategy first, then the ≤ 25 MB full-pull fallback |
+| `GET /api/device/preview` | 1600 px fit-within JPEG | Full pull, ≤ 25 MB |
+
+Errors (JSON `{ "detail": <code> }`; the UI treats every non-2xx as “keep the icon” / “Preview unavailable”):
+
+| Status | `detail` | Meaning |
+|---|---|---|
+| 400 | `invalid_path` | Path validation failed, unknown `method`, empty `device_id`, or AFC off Linux (same checks as `/api/device/list`); no device process started |
+| 403 | `desktop-only` | Non-loopback client |
+| 404 | `no_preview` | Not an image type, not a file, missing on the phone, or undecodable |
+| 409 | `device_busy` | A transfer/extract job is using this device |
+| 413 | `too_large` | Over 25 MB and no embedded thumbnail (`thumb`), or over 25 MB (`preview`) |
+| 422 | — | `size` / `mtime` missing or negative (request validation) |
+| 503 | `unplugged` / `timeout` / `unauthorized` | Device unavailable or a read exceeded its timeout |
+
+Identification of the device matches `/api/device/list`: `method` + `device_id` (the id the picker already holds); the route resolves the adapter the same way. For `preview`, a file over 25 MB returns 413 and the lightbox falls back to the already-loaded thumbnail (see Visual rules). Classification of image extensions lives server-side (the TS list is only a UI hint for showing the placeholder).
 
 ## Visual & UI rules (aligned with wireframe)
 
@@ -42,6 +71,8 @@ _Proposed — confirm or adjust at spec review._
 - Hint under the list when a folder is ticked: ticked folders are added whole, sub-folders included, when the job starts.
 - Theme: system light/dark (`theme.css`); no motion beyond the existing screen fade (spinner static under `prefers-reduced-motion`). Mobile width: no horizontal page scroll.
 - Entry points: USB file transfer keeps **Add files…** / **Add folder…**; the unavailable hint now reads “needs a connected, authorized device”. USB photo backup Step 1 (ADB / iPhone only; hidden for Wi‑Fi) gains an extras list + **Add folder…** + **Add files…** + ⓘ under the preset checklist, with the “only photos and videos are extracted” note.
+- **Photo previews — rows:** image rows (`jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`) replace the 📄 icon with a 44 px rounded `object-fit: cover` thumbnail (36 px at ≤ 520 px). States: shimmer while loading (static under `prefers-reduced-motion`); the photo once loaded; the 🖼 glyph when the request fails or the file is too large — no error text in the row. The thumbnail is a `<button>` with `aria-label="Preview <name>"` and the visible **👁 Preview** button (also `aria-label="Preview <name>"`) is a second, keyboard-reachable opener; clicking anywhere else on the row behaves as before (checkbox selects, folder name opens). Videos show a 🎞 icon, other files 📄, folders 📁; none of them request a preview. Rows keep their checkbox in every state.
+- **Photo previews — lightbox:** `role="dialog"` `aria-modal="true"` labelled by the file name; shows the photo fitted to the window, name, size, modified date, “n / N” (n among **image rows of the loaded pages**, in list order; announced via `aria-live="polite"`), **←** / **→** buttons and arrow keys (disabled at the ends, no wrap), **Esc** and **✕** to close, and a **Selected** checkbox that mirrors the row's tick in both directions (in `kind: "folders"` mode, where file checkboxes are disabled, it is disabled too). Loading state: the blurred, upscaled thumbnail with a spinner (static under reduced motion), crossfading to the large rendition. Error state: “Preview unavailable” (and, for files over 25 MB, “Full preview unavailable for files over 25 MB” above the upscaled thumbnail); the file stays selectable. Focus is trapped inside; closing returns focus to the opener (thumbnail or 👁 button). Below 520 px the lightbox is full-screen with the ←/→ buttons in a bottom bar. Opening or stepping the lightbox does not change the list scroll position or the ticks.
 
 ## Behaviour details
 
@@ -54,6 +85,9 @@ _Proposed — confirm or adjust at spec review._
 - **Hidden entries:** `.thumbnails`, `.nomedia`, etc. are kept in the cached listing but filtered out server-side by default (`show_hidden: false`); `SKIPPED_LIBRARY_DIR_NAMES` still apply when expanding ticked folders.
 - **Android listing command:** implementation-defined (adapter picks the most robust of `toybox stat`/`find -printf`/`ls -la` with fallback for old Android), but must be NUL- or otherwise unambiguously delimited so names with spaces/newlines parse correctly, and must return size and mtime. Symlinks resolve to their target type when cheap; otherwise are listed as files.
 - **Device gone mid-browse:** next list request returns `error: "unplugged"`; the UI shows the unplugged state; Retry re-runs the same directory.
+- **Photo previews — request lifecycle:** a row requests its thumbnail only when it enters the viewport (with a small root margin); the request is aborted when the row leaves, the folder changes, a restart (filter / hidden / sort) replaces the rows, or the picker closes. At most 4 requests are in flight; the rest queue and are dropped with their rows. A thumbnail `src` carries the row's `size` and `mtime`, so an entry whose size or mtime changed is a new cache key. The lightbox requests `/api/device/preview` for the current image only, and aborts it when stepping or closing.
+- **Photo previews — busy device:** while a transfer/extract job uses the device, `409 device_busy` leaves the row as a plain icon (not failed); it is re-requested the next time the row becomes visible (including after the folder is reopened). No polling.
+- **AFC (iPhone):** the same routes read from the ifuse mount; the “head read” is a bounded file read of the first 64 KB. Same limits, timeouts and cache.
 
 ## Sorting
 
@@ -369,10 +403,157 @@ _Proposed — confirm or adjust at spec review._
 - **When** the picker change set is implemented
 - **Then** no `adbfs` tool, hint, legal row, or mount code remains
 
+### Scenario: Thumbnail from the embedded EXIF thumbnail
+
+- **Given** a folder contains a camera `IMG_0001.jpg` (4 MB) whose first 64 KB hold an EXIF thumbnail with Orientation 6
+- **When** its row becomes visible
+- **Then** one head read of 64 KB is made on the device (no full pull) and the row shows an upright 44 px thumbnail
+- **And** the thumbnail is shown within ~0.5 s and is stored in the preview cache
+
+### Scenario: Fallback for an image without an embedded thumbnail
+
+- **Given** `IMG-WA0001.jpg` (800 KB, WhatsApp, no EXIF thumbnail)
+- **When** its row becomes visible
+- **Then** the file is pulled to a temp file, a 320 px JPEG is produced, the temp file is deleted, and the row shows the thumbnail
+
+### Scenario: Too-large image keeps the icon
+
+- **Given** `PANO_0042.jpg` is 40 MB and has no embedded thumbnail
+- **When** its row becomes visible
+- **Then** the server answers 413 `too_large` without pulling the file, and the row shows the 🖼 glyph with no error text
+- **And** the row is still tickable and the 👁 button still opens the lightbox
+
+### Scenario: Preview read fails
+
+- **Given** a thumbnail read times out or the phone is unplugged
+- **When** the row's request fails (503)
+- **Then** the row shows the 🖼 glyph, the checkbox still works and the footer count is unchanged
+- **When** the row leaves and re-enters the viewport
+- **Then** the thumbnail is requested again
+
+### Scenario: Only visible rows request thumbnails
+
+- **Given** a folder of 100 loaded rows of which 12 are in the viewport
+- **When** the folder opens
+- **Then** only those rows request thumbnails, at most 4 are in flight at once, and rows scrolled into view later request theirs
+
+### Scenario: Scrolling away or changing folder cancels pending thumbnails
+
+- **Given** requests are queued or in flight
+- **When** the user scrolls them out of view, opens another folder, restarts the list (filter, hidden, sort) or closes the picker
+- **Then** the requests are aborted, no late response is applied to another folder's rows, and temp files are removed
+
+### Scenario: Cache hit after reopening the folder
+
+- **Given** the thumbnails of `DCIM/Camera` were generated and the app was restarted
+- **When** the folder is opened again
+- **Then** the thumbnails are served from the preview cache with no device read for them
+
+### Scenario: Cache key changes with size or mtime
+
+- **Given** `IMG_0001.jpg` has a cached thumbnail
+- **When** the listing reports a different `size` or `mtime` for that path
+- **Then** the request is a cache miss and the thumbnail is regenerated from the phone
+- **And** a client sending a wrong `size` or `mtime` cannot read any other file, only cause a miss
+
+### Scenario: Cache eviction past 200 MB
+
+- **Given** the preview cache holds 200 MB of entries
+- **When** a new preview is written
+- **Then** the least recently used entries are removed until the cache is ≤ 200 MB, and the new entry is kept
+- **And** writes are atomic: a crash mid-write never leaves a partial file that is served
+
+### Scenario: Open the lightbox from the thumbnail and from the 👁 button
+
+- **Given** an image row with a loaded thumbnail
+- **When** the user clicks the thumbnail, or activates **👁 Preview** with Enter or Space
+- **Then** the lightbox opens on that image showing the blurred thumbnail first, then the large rendition within ~1.5 s
+- **And** it shows the name, size, modified date and “n / N”
+
+### Scenario: Step with the arrow keys across image rows only
+
+- **Given** the loaded pages hold image rows and non-image rows (folders, a PDF, a video)
+- **When** the lightbox is open and the user presses → then ←
+- **Then** it moves to the next / previous **image** row in list order, skipping the others, and “n / N” updates
+- **And** → on the last image and ← on the first do nothing (buttons disabled)
+
+### Scenario: Select from the lightbox
+
+- **Given** the lightbox is open on an unticked image
+- **When** the user ticks **Selected**, then closes the lightbox
+- **Then** the row is ticked and the footer count increased
+- **When** the lightbox is reopened and **Selected** is unticked
+- **Then** the row is unticked
+
+### Scenario: Lightbox error state
+
+- **Given** the lightbox is open on an image
+- **When** the large rendition request fails
+- **Then** the lightbox shows “Preview unavailable”, **Selected**, ←/→ and Esc still work
+
+### Scenario: Large file in the lightbox
+
+- **Given** an image over 25 MB with an embedded thumbnail
+- **When** the user opens it
+- **Then** the upscaled thumbnail is shown with “Full preview unavailable for files over 25 MB” and no full pull is made
+
+### Scenario: Esc returns focus
+
+- **Given** the lightbox was opened from a thumbnail or a 👁 button
+- **When** the user presses Esc (or ✕)
+- **Then** the lightbox closes and focus returns to that opener
+- **And** Tab never leaves the dialog while it is open
+
+### Scenario: Narrow window lightbox
+
+- **Given** the window is ≤ 520 px wide
+- **When** the lightbox opens
+- **Then** it is full-screen with the ←/→ buttons in a bottom bar, and rows use 36 px thumbnails
+
+### Scenario: Previews yield to a running transfer
+
+- **Given** a USB transfer or extract job is running on the same device
+- **When** a row requests its thumbnail
+- **Then** the server answers 409 `device_busy` without touching the device, and the row stays a plain icon
+- **When** the job has ended and the row becomes visible again
+- **Then** the thumbnail is requested and shown
+
+### Scenario: Previews are desktop-only
+
+- **Given** a request to `GET /api/device/thumb` or `/api/device/preview` from a non-loopback (LAN) client
+- **When** the route handles it
+- **Then** it returns 403 `desktop-only` and no `adb` process is started
+- **And** neither route is on `LAN_ALLOWED_ROUTES`
+
+### Scenario: Preview path validation
+
+- **Given** a preview request whose `path` contains `..`, a NUL byte, or an absolute path outside user storage
+- **When** the route handles it
+- **Then** it returns 400 `invalid_path` and no `adb` process is started
+
+### Scenario: Non-image or non-file paths
+
+- **Given** a request for a folder, a `.mp4`, a `.dng`, or a missing file
+- **When** the route handles it
+- **Then** the server returns 404 `no_preview` and the UI keeps the icon
+
+### Scenario: iPhone previews through the same endpoints
+
+- **Given** iPhone (USB) on Linux with the ifuse mount present and a `DCIM` folder of JPEGs
+- **When** the rows become visible and the user opens the lightbox
+- **Then** thumbnails and the large rendition come from the same routes, reading the first 64 KB (head) or the whole file from the mount, with the same limits and cache
+
+### Scenario: Previews never touch the library
+
+- **Given** a library is configured
+- **When** previews are generated for several photos
+- **Then** the cache lives under the app cache directory, and nothing is written into the library or onto the phone
+
 ## Out of scope
 
 - Browsing the phone’s app-private storage, root-only paths, SD-card/secondary volumes beyond what `/sdcard` exposes (v1: user storage root only).
-- Thumbnails/previews of phone files (a later revision); search across directories; drag-and-drop.
+- Video thumbnails and in-lightbox playback (Phase B, see [PLAN-media-preview.md](PLAN-media-preview.md)); DNG/RAW previews; a grid view; zoom/pan in the lightbox; rotate/edit; previews over Wi‑Fi/LAN.
+- Search across directories; drag-and-drop.
 - Sorting by type/extension, natural/numeric name order (`IMG_2` before `IMG_10`), mixing folders among files, and a per-folder remembered sort.
 - Recursive size/count of ticked folders before start.
 - Writing to the phone, rename/delete from the picker.

@@ -70,6 +70,21 @@ def display_user_path(path: str, *, trailing_slash: bool = False) -> str:
 	return display
 
 
+def app_cache_dir() -> Path:
+	"""Per-user cache directory for disposable app data (never the library, never the phone)."""
+	if sys.platform == "win32":
+		local = os.environ.get("LOCALAPPDATA", "")
+		return (Path(local) if local else Path.home() / "AppData" / "Local") / "SpaceMaker" / "cache"
+	if sys.platform == "darwin":
+		return Path.home() / "Library" / "Caches" / "SpaceMaker"
+	xdg = os.environ.get("XDG_CACHE_HOME", "").strip()
+	return (Path(xdg) if xdg else Path.home() / ".cache") / "spacemaker"
+
+
+def device_preview_cache_dir() -> Path:
+	return app_cache_dir() / "device-thumbs"
+
+
 def webengine_storage_path() -> str:
 	from spacemaker.bootstrap.ui_shell import webengine_profile_slug
 

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import os
 import shlex
+import subprocess
 from pathlib import Path
+from typing import BinaryIO, NoReturn
 
 from adbutils import AdbClient, AdbDevice, AdbError
 
 from spacemaker.adapters.outbound.device.android_listing import (
 	android_list_command,
+	android_stat_file_command,
 	classify_android_shell_failure,
 	parse_android_stat_listing,
 )
@@ -156,6 +159,68 @@ class AdbDeviceRepository:
 			if kind is not DeviceBrowseErrorKind.FAILED or "no such" not in output.lower():
 				raise DeviceBrowseError(kind, output.strip())
 		return entries
+
+	def stat_file(self, device_id: str, path: str) -> DeviceEntry:
+		"""Name, size and mtime of one file under user storage; one ``adb exec-out stat`` call."""
+		result = self._run_adb(device_id, android_stat_file_command(path), _LIST_TIMEOUT_SECONDS)
+		text = result.stdout.decode("utf-8", errors="replace")
+		entries = parse_android_stat_listing(text) if result.returncode == 0 else []
+		if not entries:
+			kind = classify_android_shell_failure(text + result.stderr.decode("utf-8", errors="replace"))
+			raise DeviceBrowseError(DeviceBrowseErrorKind.NOT_FOUND if kind is DeviceBrowseErrorKind.FAILED else kind)
+		entry = entries[0]
+		return DeviceEntry(path.rsplit("/", 1)[-1], entry.is_dir, entry.size, entry.mtime)
+
+	def read_head(self, device_id: str, path: str, max_bytes: int, timeout_s: float) -> bytes:
+		"""First ``max_bytes`` bytes via ``adb exec-out head -c`` (binary-safe; never pulls the whole file)."""
+		remote = f"head -c {int(max_bytes)} -- {shlex.quote(self._storage_file_path(path))}"
+		result = self._run_adb(device_id, remote, timeout_s)
+		if result.returncode != 0:
+			self._raise_adb_failure(result)
+		return result.stdout
+
+	def pull_file_with_timeout(self, device_id: str, path: str, local_path: str, timeout_s: float) -> None:
+		"""Stream a whole file to ``local_path`` via ``adb exec-out cat``; a partial file may remain on failure."""
+		remote = f"cat -- {shlex.quote(self._storage_file_path(path))}"
+		Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+		with open(local_path, "wb") as out:
+			result = self._run_adb(device_id, remote, timeout_s, stdout=out)
+		if result.returncode != 0:
+			self._raise_adb_failure(result)
+
+	@staticmethod
+	def _storage_file_path(path: str) -> str:
+		"""Absolute device path of a storage-relative, already validated ``path``."""
+		return f"/sdcard/{path.lstrip('/')}"
+
+	def _adb_command(self, device_id: str, remote_command: str) -> list[str]:
+		return [str(self._adb_path), "-s", device_id, "exec-out", remote_command]
+
+	def _run_adb(
+		self, device_id: str, remote_command: str, timeout_s: float, *, stdout: BinaryIO | None = None
+	) -> subprocess.CompletedProcess[bytes]:
+		try:
+			return subprocess.run(  # noqa: S603
+				self._adb_command(device_id, remote_command),
+				stdout=stdout if stdout is not None else subprocess.PIPE,
+				stderr=subprocess.PIPE,
+				timeout=timeout_s,
+				check=False,
+			)
+		except subprocess.TimeoutExpired as exc:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.TIMEOUT) from exc
+		except OSError as exc:
+			raise DeviceBrowseError(DeviceBrowseErrorKind.UNPLUGGED, str(exc)) from exc
+
+	@staticmethod
+	def _raise_adb_failure(result: subprocess.CompletedProcess[bytes]) -> NoReturn:
+		text = (result.stderr or b"").decode("utf-8", errors="replace")
+		if not text.strip() and result.stdout:
+			text = result.stdout[:400].decode("utf-8", errors="replace")
+		kind = classify_android_shell_failure(text)
+		if kind is DeviceBrowseErrorKind.FAILED and "no such" in text.lower():
+			kind = DeviceBrowseErrorKind.NOT_FOUND
+		raise DeviceBrowseError(kind, text.strip())
 
 	def remote_file_size(self, device_id: str, device_path: str) -> int:
 		device = self._client.device(device_id)

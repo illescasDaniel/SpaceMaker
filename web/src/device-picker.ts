@@ -1,4 +1,12 @@
 import { ApiError, apiSend } from "./api.ts";
+import {
+	bindLightbox,
+	closeLightbox,
+	type LightboxItem,
+	openLightbox,
+	syncLightboxSelection,
+} from "./device-lightbox.ts";
+import { createThumbLoader, isImageName, isVideoName, type ThumbLoader } from "./device-preview.ts";
 import { onClick } from "./dom.ts";
 import { showView } from "./shell.ts";
 import type {
@@ -67,6 +75,10 @@ interface PickerSession {
 	filterTimer: number | null;
 	/** Sort in effect; null until the first reply echoes it (the first request sends none). */
 	sort: DeviceSort | null;
+	/** Lazy thumbnail loader for the image rows currently in the list. */
+	thumbs: ThumbLoader;
+	/** Image rows of the loaded pages in list order (the lightbox steps through these). */
+	images: LightboxItem[];
 }
 
 interface DeviceSort {
@@ -173,6 +185,9 @@ function showState(kind: DevicePickerStateKind): void {
 	if (!stateEl || !list || !head || !more) {
 		return;
 	}
+	closeLightbox();
+	session.thumbs.reset();
+	session.images = [];
 	stateEl.textContent = "";
 	const title = document.createElement("strong");
 	const body = document.createElement("span");
@@ -336,6 +351,7 @@ function makeRow(entry: DeviceEntryRow): HTMLLIElement {
 		}
 		li.classList.toggle("is-selected", box.checked);
 		updateFooter();
+		syncLightboxSelection();
 	});
 	let name: HTMLElement;
 	if (entry.is_dir) {
@@ -352,15 +368,30 @@ function makeRow(entry: DeviceEntryRow): HTMLLIElement {
 		}
 	}
 	name.className = "dp-name";
-	const icon = document.createElement("span");
-	icon.className = "dp-ico";
-	icon.setAttribute("aria-hidden", "true");
-	icon.textContent = entry.is_dir ? "📁" : "📄";
 	const label = document.createElement("span");
 	label.className = "dp-label";
 	label.textContent = entry.name;
-	name.appendChild(icon);
-	name.appendChild(label);
+	const isImage = !entry.is_dir && isImageName(entry.name);
+	let thumb: HTMLButtonElement | null = null;
+	let eye: HTMLButtonElement | null = null;
+	if (isImage) {
+		thumb = makeThumb(entry.name);
+		name.appendChild(thumb);
+		name.appendChild(label);
+		eye = document.createElement("button");
+		eye.type = "button";
+		eye.className = "dp-preview-btn";
+		eye.textContent = "👁";
+		eye.setAttribute("aria-label", "Preview " + entry.name);
+		name.appendChild(eye);
+	} else {
+		const icon = document.createElement("span");
+		icon.className = "dp-ico" + (!entry.is_dir && isVideoName(entry.name) ? " dp-ico-media" : "");
+		icon.setAttribute("aria-hidden", "true");
+		icon.textContent = entry.is_dir ? "📁" : isVideoName(entry.name) ? "🎞" : "📄";
+		name.appendChild(icon);
+		name.appendChild(label);
+	}
 	const size = document.createElement("span");
 	size.className = "dp-size";
 	size.textContent = entry.is_dir ? "—" : formatSize(entry.size);
@@ -371,7 +402,62 @@ function makeRow(entry: DeviceEntryRow): HTMLLIElement {
 	li.appendChild(name);
 	li.appendChild(size);
 	li.appendChild(date);
+	if (thumb && eye) {
+		wireImageRow(active, li, box, entry, path, thumb, eye);
+	}
 	return li;
+}
+
+function makeThumb(name: string): HTMLButtonElement {
+	const thumb = document.createElement("button");
+	thumb.type = "button";
+	thumb.className = "dp-thumb is-loading";
+	thumb.setAttribute("aria-label", "Preview " + name);
+	const img = document.createElement("span");
+	img.className = "dp-thumb-img";
+	const glyph = document.createElement("span");
+	glyph.className = "dp-thumb-glyph";
+	glyph.setAttribute("aria-hidden", "true");
+	glyph.textContent = "🖼";
+	thumb.appendChild(img);
+	thumb.appendChild(glyph);
+	return thumb;
+}
+
+/** Register the row for lazy thumbnails and lightbox browsing; the openers never touch ticks or folders. */
+function wireImageRow(
+	active: PickerSession,
+	li: HTMLLIElement,
+	box: HTMLInputElement,
+	entry: DeviceEntryRow,
+	path: string,
+	thumb: HTMLButtonElement,
+	eye: HTMLButtonElement,
+): void {
+	const { method, deviceId } = active.options;
+	const target = { method, deviceId, path, size: entry.size, mtime: entry.mtime };
+	active.thumbs.register(thumb, target);
+	active.images.push({
+		path,
+		name: entry.name,
+		info: formatSize(entry.size) + " · " + formatDate(entry.mtime),
+		target,
+		thumbUrl: () => active.thumbs.objectUrlFor(thumb),
+		isSelected: () => box.checked,
+		setSelected: (selected: boolean) => {
+			if (!box.disabled && box.checked !== selected) {
+				box.checked = selected;
+				box.dispatchEvent(new Event("change"));
+			}
+		},
+	});
+	for (const opener of [thumb, eye]) {
+		opener.addEventListener("click", (ev: MouseEvent) => {
+			ev.stopPropagation();
+			openLightbox(path, opener);
+		});
+	}
+	li.dataset.path = path;
 }
 
 function clearTail(): void {
@@ -587,6 +673,9 @@ function renderFirstPage(page: DeviceListPage): void {
 	stateEl.hidden = true;
 	list.hidden = false;
 	head.hidden = false;
+	closeLightbox();
+	session.thumbs.reset();
+	session.images = [];
 	list.textContent = "";
 	session.tail = null;
 	for (const entry of page.entries) {
@@ -609,6 +698,7 @@ async function startListing(blank: boolean, refresh: boolean): Promise<void> {
 	session.loadError = false;
 	session.nextCursor = null;
 	session.observer?.unobserve(session.sentinel);
+	session.thumbs.cancelPending();
 	clearTail();
 	const list = el<HTMLElement>("dp-list");
 	renderTrail();
@@ -707,6 +797,8 @@ function finish(commit: boolean): void {
 		window.clearTimeout(current.filterTimer);
 	}
 	current.observer?.disconnect();
+	closeLightbox();
+	current.thumbs.reset();
 	session = null;
 	showView(current.options.origin, { skipHistory: true });
 	if (commit) {
@@ -732,6 +824,8 @@ function openDevicePicker(options: DevicePickerOptions): void {
 		tail: null,
 		filterTimer: null,
 		sort: null,
+		thumbs: createThumbLoader(el<HTMLElement>("dp-list")),
+		images: [],
 	};
 	renderSort();
 	const origin = el<HTMLElement>("dp-bc-origin");
@@ -763,6 +857,10 @@ function openDevicePicker(options: DevicePickerOptions): void {
 	if (hiddenToggle) {
 		hiddenToggle.checked = false;
 	}
+	bindLightbox({
+		items: () => session?.images ?? [],
+		selectionDisabled: () => session?.options.kind === "folders",
+	});
 	showView("device-picker", { skipHistory: true });
 	updateFooter();
 	void navigate("");

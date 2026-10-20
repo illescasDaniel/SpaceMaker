@@ -23,6 +23,11 @@ def android_list_command(path: str) -> str:
 	)
 
 
+def android_stat_file_command(path: str) -> str:
+	"""Shell command printing one ``%F|%s|%Y|%n`` record for one file under user storage (``path`` validated)."""
+	return f"stat -L -c {shlex.quote(_STAT_FORMAT)} {shlex.quote(f'{_STORAGE_ROOT}/{path}')}"
+
+
 _HEADER = re.compile(r"^([A-Za-z][A-Za-z ]*)\|(\d+)\|(-?\d+)\|(.*)$")
 
 

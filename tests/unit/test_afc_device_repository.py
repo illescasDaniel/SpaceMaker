@@ -1,3 +1,5 @@
+import threading
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -116,3 +118,101 @@ def test_given_missing_directory_when_list_directory_then_not_found(tmp_path: Pa
 	with pytest.raises(DeviceBrowseError) as exc:
 		repo.list_directory("udid", "Nope")
 	assert exc.value.kind is DeviceBrowseErrorKind.NOT_FOUND
+
+
+def test_given_file_when_stat_file_then_name_size_mtime(tmp_path: Path) -> None:
+	# given
+	(tmp_path / "DCIM").mkdir()
+	(tmp_path / "DCIM" / "IMG_1.HEIC").write_bytes(b"abcd")
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when
+	entry = repo.stat_file("udid", "DCIM/IMG_1.HEIC")
+	# then
+	assert (entry.name, entry.is_dir, entry.size) == ("IMG_1.HEIC", False, 4)
+	assert entry.mtime > 0
+
+
+def test_given_missing_file_when_stat_file_then_not_found(tmp_path: Path) -> None:
+	# given
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		repo.stat_file("udid", "DCIM/nope.jpg")
+	assert exc.value.kind is DeviceBrowseErrorKind.NOT_FOUND
+
+
+def test_given_big_file_when_read_head_then_only_requested_bytes(tmp_path: Path) -> None:
+	# given
+	(tmp_path / "a.jpg").write_bytes(b"0123456789")
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when
+	head = repo.read_head("udid", "a.jpg", 4, 5.0)
+	whole = repo.read_head("udid", "a.jpg", 100, 5.0)
+	# then
+	assert head == b"0123"
+	assert whole == b"0123456789"
+
+
+def test_given_unknown_device_when_read_head_then_unplugged(tmp_path: Path) -> None:
+	# given
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		repo.read_head("other", "a.jpg", 4, 5.0)
+	assert exc.value.kind is DeviceBrowseErrorKind.UNPLUGGED
+
+
+def test_given_file_when_pull_file_with_timeout_then_copied(tmp_path: Path) -> None:
+	# given
+	mount = tmp_path / "mnt"
+	mount.mkdir()
+	(mount / "a.jpg").write_bytes(b"photo")
+	repo = AfcDeviceRepository(test_mounts={"udid": mount})
+	dest = tmp_path / "out.jpg"
+	# when
+	repo.pull_file_with_timeout("udid", "a.jpg", str(dest), 5.0)
+	# then
+	assert dest.read_bytes() == b"photo"
+
+
+def test_given_missing_file_when_pull_file_with_timeout_then_not_found(tmp_path: Path) -> None:
+	# given
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		repo.pull_file_with_timeout("udid", "nope.jpg", str(tmp_path / "out.jpg"), 5.0)
+	assert exc.value.kind is DeviceBrowseErrorKind.NOT_FOUND
+
+
+def test_given_timeout_and_caller_deleted_temp_when_late_worker_writes_then_path_not_recreated(tmp_path: Path) -> None:
+	# given
+	mount = tmp_path / "mnt"
+	mount.mkdir()
+	(mount / "a.jpg").write_bytes(b"photo")
+	repo = AfcDeviceRepository(test_mounts={"udid": mount})
+	dest = tmp_path / "out.jpg"
+	gate = threading.Event()
+	released = threading.Event()
+
+	def hung_bounded(work: Callable[[], None], timeout_s: float) -> None:
+		def late() -> None:
+			gate.wait()
+			try:
+				work()
+			except ValueError:  # the abandoned handle is closed: the late write is rejected
+				pass
+			finally:
+				released.set()
+
+		threading.Thread(target=late, daemon=True).start()
+		raise DeviceBrowseError(DeviceBrowseErrorKind.TIMEOUT)
+
+	repo._bounded = hung_bounded  # type: ignore[method-assign,assignment]
+	# when
+	with pytest.raises(DeviceBrowseError):
+		repo.pull_file_with_timeout("udid", "a.jpg", str(dest), 0.0)
+	dest.unlink()
+	gate.set()
+	assert released.wait(timeout=5)
+	# then
+	assert not dest.exists()

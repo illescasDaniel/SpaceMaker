@@ -37,6 +37,21 @@ class UsbBrowseMixin:
 		future = self._usb_transfer_future
 		return future is not None and not future.done()
 
+	def is_busy(self: AppServices, method: ConnectionMethod, device_id: str) -> bool:
+		"""``DeviceActivityPort``: a USB transfer or extract job is running on this connection method.
+
+		Jobs are not tracked per device id, so ``device_id`` is unused for now.
+		"""
+		_ = device_id
+		with self.session._lock:
+			session_method = self.session.connection_method
+		if session_method is not method:
+			return False
+		for future in (self._usb_transfer_future, self._extract_future):
+			if future is not None and not future.done():
+				return True
+		return False
+
 	def _usb_browse_snapshot(self: AppServices, method: ConnectionMethod, device_id: str) -> dict[str, object]:
 		"""Picker availability plus preset exist-probe from ONE shallow listing of the storage root."""
 		with self.session._lock:

@@ -1,6 +1,6 @@
 [project]
 name = "spacemaker"
-version = "1.1.2"
+version = "1.2.1"
 description = "Local backup, convert, and gallery for phone media"
 readme = "README.md"
 requires-python = ">=3.11"
