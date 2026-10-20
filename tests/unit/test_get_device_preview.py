@@ -312,6 +312,24 @@ def test_given_sdcard_prefixed_path_when_thumb_then_device_gets_storage_relative
 	assert [call[1] for call in rig.devices.read_head_calls] == ["DCIM/Camera/IMG_0001.jpg"]
 
 
+@pytest.mark.parametrize("alias", ["DCIM/x.jpg", "/storage/emulated/0/DCIM/x.jpg"])
+def test_given_preview_generated_for_sdcard_path_when_same_file_by_other_spelling_then_cache_hit_same_etag(
+	alias: str,
+) -> None:
+	# given
+	rig = _Rig()
+	rig.imaging.embedded = b"embedded-jpeg"
+	first = rig.use_case(_request(path="/sdcard/DCIM/x.jpg"))
+	calls_after_first = rig.devices.device_calls
+	# when
+	second = rig.use_case(_request(path=alias))
+	# then
+	assert second.jpeg == b"embedded-jpeg"
+	assert second.etag == first.etag
+	assert rig.devices.device_calls == calls_after_first
+	assert len(rig.cache.put_calls) == 1
+
+
 def test_given_preview_kind_when_get_then_no_head_read_and_renders_1600() -> None:
 	# given
 	rig = _Rig()

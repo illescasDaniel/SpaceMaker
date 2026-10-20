@@ -122,6 +122,31 @@ describe("device lightbox", () => {
 		expect(lb().dataset.state).toBe("error");
 	});
 
+	it("given the error state when selecting, stepping with arrows and pressing Esc then all still work", async () => {
+		const fetchMock = vi.fn(async () => new Response("{}", { status: 500 }));
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+		const selected = new Set<string>();
+		bindLightbox({ items: () => items(selected), selectionDisabled: () => false });
+		const opener = document.getElementById("opener") as HTMLElement;
+		openLightbox("DCIM/b.jpg", opener);
+		await flush();
+		expect(lb().dataset.state).toBe("error");
+		const sel = document.getElementById("dp-lb-sel") as HTMLInputElement;
+		sel.checked = true;
+		sel.dispatchEvent(new Event("change"));
+		expect(selected.has("DCIM/b.jpg")).toBe(true);
+		const requestsBefore = fetchMock.mock.calls.length;
+		document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+		expect(text("dp-lb-name")).toBe("c.jpg");
+		await flush();
+		expect(fetchMock.mock.calls.length).toBe(requestsBefore + 1);
+		document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }));
+		expect(text("dp-lb-name")).toBe("b.jpg");
+		document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+		expect(isLightboxOpen()).toBe(false);
+		expect(document.activeElement).toBe(opener);
+	});
+
 	it("given a 413 without a thumbnail when opened then the error state shows", async () => {
 		globalThis.fetch = vi.fn(async () => new Response("{}", { status: 413 })) as typeof fetch;
 		bindLightbox({ items: () => items(new Set(), null), selectionDisabled: () => false });

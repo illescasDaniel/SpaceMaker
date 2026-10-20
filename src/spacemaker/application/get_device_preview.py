@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath
-
 import threading
 from collections.abc import Callable
+from dataclasses import replace
+from pathlib import PurePosixPath
 
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, normalize_browse_path
@@ -84,6 +84,7 @@ class GetDevicePreview:
 			raise _map_browse_error(exc) from exc
 		if not is_previewable_image(path.rsplit("/", 1)[-1]):
 			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "not an image type")
+		request = replace(request, path=path)  # same file, same cache key and ETag, however the client spelled the path
 		key = device_preview_cache_key(request)
 		etag = f'"{key}"'
 		cached = self._cache.get(key)
