@@ -121,3 +121,19 @@ def test_given_new_format_version_when_cache_key_then_old_key_no_longer_matches(
 	after = device_preview_cache_key(request)
 	# then
 	assert after != before
+
+
+# Video posters: the format version moved to "2" so v1 (photo-only) cache entries are a miss.
+def test_given_video_posters_release_when_cache_key_then_version_2_and_v1_key_differs(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	# given
+	request = _request()
+	current = device_preview_cache_key(request)
+	version = device_preview.DEVICE_PREVIEW_FORMAT_VERSION
+	# when
+	monkeypatch.setattr(device_preview, "DEVICE_PREVIEW_FORMAT_VERSION", "1")
+	v1_key = device_preview_cache_key(request)
+	# then
+	assert version == "2"
+	assert v1_key != current

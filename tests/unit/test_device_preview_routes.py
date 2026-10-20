@@ -1,6 +1,7 @@
 # Expected seam for Phase 4: ``AppServices.get_device_preview`` is a callable
 # ``(DevicePreviewRequest) -> DevicePreview`` (the ``GetDevicePreview`` use case) that raises ``DevicePreviewError``.
 # Routes: ``GET /api/device/thumb`` and ``GET /api/device/preview``, loopback-only, not in ``LAN_ALLOWED_ROUTES``.
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -32,8 +33,10 @@ class _StubGetDevicePreview:
 	def __init__(self, error: DevicePreviewErrorKind | None = None) -> None:
 		self.error = error
 		self.requests: list[DevicePreviewRequest] = []
+		self.cancels: list[threading.Event | None] = []
 
-	def __call__(self, request: DevicePreviewRequest) -> DevicePreview:
+	def __call__(self, request: DevicePreviewRequest, *, cancel: threading.Event | None = None) -> DevicePreview:
+		self.cancels.append(cancel)
 		self.requests.append(request)
 		if self.error is not None:
 			raise DevicePreviewError(self.error)

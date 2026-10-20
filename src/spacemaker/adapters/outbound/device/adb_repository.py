@@ -179,6 +179,17 @@ class AdbDeviceRepository:
 			self._raise_adb_failure(result)
 		return result.stdout
 
+	def read_range(self, device_id: str, path: str, offset: int, length: int, timeout_s: float) -> bytes:
+		"""``length`` bytes from ``offset`` via ``adb exec-out dd`` (byte-exact; reads only the range)."""
+		remote = (
+			f"dd if={shlex.quote(self._storage_file_path(path))} iflag=skip_bytes,count_bytes "
+			f"skip={int(offset)} count={int(length)}"
+		)
+		result = self._run_adb(device_id, remote, timeout_s)
+		if result.returncode != 0:
+			self._raise_adb_failure(result)
+		return result.stdout
+
 	def pull_file_with_timeout(self, device_id: str, path: str, local_path: str, timeout_s: float) -> None:
 		"""Stream a whole file to ``local_path`` via ``adb exec-out cat``; a partial file may remain on failure."""
 		remote = f"cat -- {shlex.quote(self._storage_file_path(path))}"

@@ -36,12 +36,15 @@ const MARKUP = `
 <div class="dp-lb-photo">
 <div class="dp-lb-blur"></div>
 <div class="dp-lb-full"></div>
+<div class="dp-lb-glyph" aria-hidden="true">🎞</div>
 <div class="dp-lb-note" role="status">Full preview unavailable for files over 25 MB</div>
 <div class="dp-lb-loading" role="status"><span class="dp-spinner" aria-hidden="true"></span>Loading larger preview…</div>
 <div class="dp-lb-error" role="alert"><strong>Preview unavailable</strong>You can still select this file.</div>
+<div class="dp-lb-verror" role="alert"><strong>Video unavailable</strong>The phone was unplugged or didn’t respond. You can still select this file.</div>
 </div>
 <button type="button" class="dp-lb-btn dp-lb-next" id="dp-lb-next" aria-label="Next photo">→</button>
 </div>
+<p class="dp-lb-vnote">Playback isn’t available in the app yet. Transfer the video to watch it.</p>
 <p class="dp-lb-hint">← → to browse · Esc to close</p>
 </div>`;
 
@@ -788,7 +791,7 @@ describe("device picker sorting", () => {
 });
 
 describe("device picker photo rows", () => {
-	it("given mixed files when listed then images get a thumb and preview button, videos 🎞, others 📄, and openers do not tick", async () => {
+	it("given mixed files when listed then images and videos get a thumb and preview button, others 📄, and openers do not tick", async () => {
 		mockList({
 			"": page("", [
 				["Camera", true],
@@ -804,7 +807,13 @@ describe("device picker photo rows", () => {
 		expect(rows[1]?.querySelector("button.dp-thumb.is-loading")?.getAttribute("aria-label")).toBe("Preview a.jpg");
 		expect(rows[1]?.querySelector(".dp-preview-btn")?.getAttribute("aria-label")).toBe("Preview a.jpg");
 		expect(rows[1]?.querySelector(".dp-ico")).toBeNull();
-		expect(rows[2]?.querySelector(".dp-ico-media")?.textContent).toBe("🎞");
+		const video = rows[2]?.querySelector("button.dp-thumb.dp-thumb-video.is-loading");
+		expect(video?.getAttribute("aria-label")).toBe("Preview clip.mp4 (video)");
+		expect(video?.querySelector(".dp-thumb-glyph")?.textContent).toBe("🎞");
+		expect(video?.querySelector(".dp-thumb-play")?.textContent).toBe("▶");
+		expect(video?.querySelector(".dp-thumb-dur")?.textContent).toBe("");
+		expect(rows[2]?.querySelector(".dp-preview-btn")?.getAttribute("aria-label")).toBe("Preview clip.mp4 (video)");
+		expect(rows[2]?.querySelector(".dp-ico")).toBeNull();
 		expect(rows[3]?.querySelector(".dp-ico")?.textContent).toBe("📄");
 		rows[1]?.querySelector<HTMLButtonElement>(".dp-preview-btn")?.click();
 		expect(document.querySelectorAll<HTMLInputElement>("#dp-list input:checked")).toHaveLength(0);
@@ -925,5 +934,99 @@ describe("device picker lightbox and thumbnail loading", () => {
 		filter.dispatchEvent(new Event("change"));
 		await flush();
 		expect(previewSignals.every((signal) => signal.aborted)).toBe(true);
+	});
+});
+
+describe("device picker video rows", () => {
+	const entries: Array<[string, boolean]> = [
+		["a.jpg", false],
+		["CLIP.MP4", false],
+		["old.avi", false],
+		["doc.pdf", false],
+		["Camera", true],
+		["z.png", false],
+	];
+	const thumbs = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>("#dp-list .dp-thumb")];
+	const lbName = (): string => document.getElementById("dp-lb-name")?.textContent ?? "";
+	const key = (k: string): void => {
+		document.dispatchEvent(new KeyboardEvent("keydown", { key: k }));
+	};
+
+	function mockVideoApi(thumbReply: () => Response): void {
+		mockApi((body) => page(body.path, body.path === "" ? entries : []));
+		const listFetch = globalThis.fetch;
+		globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
+			if (String(url).includes("/api/device/thumb")) {
+				return thumbReply();
+			}
+			if (String(url).includes("/api/device/preview")) {
+				return new Response("{}", { status: 500 });
+			}
+			return listFetch(url as RequestInfo, init);
+		}) as typeof fetch;
+	}
+
+	it("given a loaded poster when the duration is unknown then the preview button still says video", async () => {
+		mockVideoApi(() => new Response(new Blob(["x"]), { status: 200 }));
+		open();
+		await flush();
+		FakeObserver.instances.find((o) => o.observed.has(thumbs()[0] as Element))?.fireVisible();
+		await flush();
+		const video = thumbs()[1] as HTMLButtonElement;
+		const eye = video.closest(".dp-row")?.querySelector(".dp-preview-btn");
+		expect(video.getAttribute("aria-label")).toBe("Preview CLIP.MP4 (video)");
+		expect(eye?.getAttribute("aria-label")).toBe("Preview CLIP.MP4 (video)");
+	});
+
+	it("given photos, videos and others when listed then only previewable videos get a thumb, others keep icons", async () => {
+		mockVideoApi(() => new Response("{}", { status: 404 }));
+		open();
+		await flush();
+		expect(thumbs()).toHaveLength(3);
+		expect(thumbs().map((t) => t.classList.contains("dp-thumb-video"))).toEqual([false, true, false]);
+		const avi = [...document.querySelectorAll("#dp-list .dp-row")].find((r) => r.textContent?.includes("old.avi"));
+		expect(avi?.querySelector(".dp-ico-media")?.textContent).toBe("🎞");
+		expect(avi?.querySelector(".dp-thumb")).toBeNull();
+	});
+
+	it("given a loaded poster when the duration header is known then badge and both aria-labels carry it", async () => {
+		mockVideoApi(() => new Response(new Blob(["x"]), { status: 200, headers: { "X-Media-Duration": "42.4" } }));
+		open();
+		await flush();
+		FakeObserver.instances.find((o) => o.observed.has(thumbs()[0] as Element))?.fireVisible();
+		await flush();
+		const video = thumbs()[1] as HTMLButtonElement;
+		expect(video.querySelector(".dp-thumb-dur")?.textContent).toBe("0:42");
+		expect(video.getAttribute("aria-label")).toBe("Preview CLIP.MP4 (video, 0:42)");
+		const eye = video.closest(".dp-row")?.querySelector(".dp-preview-btn");
+		expect(eye?.getAttribute("aria-label")).toBe("Preview CLIP.MP4 (video, 0:42)");
+	});
+
+	it("given photos, a video, an avi, a pdf and a folder when stepping then it visits the three previewable items", async () => {
+		mockVideoApi(() => new Response("{}", { status: 404 }));
+		open();
+		await flush();
+		thumbs()[0]?.click();
+		expect(document.getElementById("dp-lb-pos")?.textContent).toBe("1 / 3");
+		key("ArrowRight");
+		expect(lbName()).toBe("CLIP.MP4");
+		expect(document.getElementById("dp-lb-pos")?.textContent).toBe("2 / 3");
+		expect(document.getElementById("dp-lb")?.dataset.kind).toBe("video");
+		key("ArrowRight");
+		expect(lbName()).toBe("z.png");
+		expect(document.getElementById("dp-lb-pos")?.textContent).toBe("3 / 3");
+		expect((document.getElementById("dp-lb-next") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it("given the 👁 button of a video with a known duration when clicked then the caption has it", async () => {
+		mockVideoApi(() => new Response(new Blob(["x"]), { status: 200, headers: { "X-Media-Duration": "3735" } }));
+		open();
+		await flush();
+		FakeObserver.instances.find((o) => o.observed.has(thumbs()[0] as Element))?.fireVisible();
+		await flush();
+		thumbs()[1]?.closest(".dp-row")?.querySelector<HTMLButtonElement>(".dp-preview-btn")?.click();
+		expect(document.getElementById("dp-lb-info")?.textContent).toMatch(/^Video · 1:02:15 · /);
+		await flush();
+		expect(document.getElementById("dp-lb")?.dataset.state).toBe("verror");
 	});
 });

@@ -32,9 +32,9 @@ def test_given_known_extension_when_render_jpeg_then_source_gets_explicit_coder_
 	# given
 	imaging = _RecordingImaging()
 	# when
-	imaging.render_jpeg(f"/tmp/{name}", 320, 5.0)
+	imaging.render_jpeg(f"/fake/{name}", 320, 5.0)
 	# then
-	assert f"{prefix}/tmp/{name}[0]" in imaging.calls[0]
+	assert f"{prefix}/fake/{name}[0]" in imaging.calls[0]
 
 
 @pytest.mark.parametrize("name", ["a.svg", "a.mvg", "a", "a.txt"])
@@ -43,6 +43,6 @@ def test_given_unknown_extension_when_render_jpeg_then_no_preview_without_spawni
 	imaging = _RecordingImaging()
 	# when / then
 	with pytest.raises(DevicePreviewError) as exc:
-		imaging.render_jpeg(f"/tmp/{name}", 320, 5.0)
+		imaging.render_jpeg(f"/fake/{name}", 320, 5.0)
 	assert exc.value.kind is DevicePreviewErrorKind.NO_PREVIEW
 	assert imaging.calls == []

@@ -48,6 +48,13 @@ class DeviceRepositoryPort(Protocol):
 		"""
 		...
 
+	def read_range(self, device_id: str, path: str, offset: int, length: int, timeout_s: float) -> bytes:
+		"""Up to ``length`` bytes starting at ``offset`` (fewer at the end of the file); ``path`` is
+		storage-relative. One device round-trip, never reads outside the range. Raises ``DeviceBrowseError``
+		(unplugged, unauthorized, timeout, not found) like ``read_head``.
+		"""
+		...
+
 	def pull_file_with_timeout(self, device_id: str, path: str, local_path: str, timeout_s: float) -> None:
 		"""Copy a whole file to ``local_path``; ``path`` is storage-relative, unlike ``pull_file`` whose
 		``device_path`` is an absolute device path from ``list_*_paths``.

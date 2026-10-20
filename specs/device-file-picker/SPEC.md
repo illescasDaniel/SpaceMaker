@@ -8,8 +8,9 @@
 - **Revision — scroll pagination:** wireframe revision (auto-load sentinel, “Loading more…”, inline Retry, **Load more** fallback) approved 2026-10-19 (in chat); **spec revision approved** 2026-10-19 (in chat); "No match" rule amended 2026-10-19 (in chat: filter typed and `total` = 0). Plan: [PLAN-scroll-pagination.md](PLAN-scroll-pagination.md)
 - **Revision — sorting:** wireframe revision (sortable **Name** / **Size** / **Modified** column headers with ▲/▼, toolbar **Sort** menu ≤ 520 px) approved 2026-10-19 (in chat); **spec revision approved** 2026-10-19 (in chat).
 - **Revision — photo previews:** wireframe revision (thumbnails in image rows, 👁 button, lightbox; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). Plan: [PLAN-media-preview.md](PLAN-media-preview.md) (Phase A; videos are Phase B).
+- **Revision — video posters (Phase B, posters only):** wireframe revision (video rows with poster + ▶ + duration badge, lightbox stepping through photos and videos, “Video previews” demo buttons; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). No in-app playback (Phase B2), no RAW (Phase C). Plan: [PLAN-media-preview.md](PLAN-media-preview.md).
 - **Callers:** [usb-file-transfer](../usb-file-transfer/SPEC.md) (**Add files…** / **Add folder…**), [extract-media](../extract-media/SPEC.md) / [main-wizard](../main-wizard/SPEC.md) Step 1 for ADB and iPhone USB (**Add folder…** / **Add files…**)
-- **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> list[DeviceEntry]` (contract unchanged; adapters stay dumb); domain `DeviceEntry`, `DeviceDirectoryScrollPage` with an opaque keyset cursor; application-level `DeviceListingCache` (not a port) owned by the long-lived services object; photo previews add `DeviceRepositoryPort.read_head(device_id, path, max_bytes, timeout)`, a thumbnail-extraction port and a preview-cache port (names settled at the architecture gate)
+- **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> list[DeviceEntry]` (contract unchanged; adapters stay dumb); domain `DeviceEntry`, `DeviceDirectoryScrollPage` with an opaque keyset cursor; application-level `DeviceListingCache` (not a port) owned by the long-lived services object; photo previews add `DeviceRepositoryPort.read_head(device_id, path, max_bytes, timeout)`, a thumbnail-extraction port and a preview-cache port (names settled at the architecture gate); video posters add `DeviceRepositoryPort.read_range(device_id, path, offset, length, timeout)`, a video-poster port (ffmpeg) and an application-level short-lived stream-token registry (not a port)
 - **Supersedes:** adbfs mount path in usb-file-transfer (“Mount backends”), `adbfs` in [packaging](../packaging/SPEC.md), `docs/legal/THIRD_PARTY_TOOLS.md`
 
 ## Design decisions
@@ -22,11 +23,16 @@ _Proposed — confirm or adjust at spec review._
 | **Failure handling** | Per directory, the picker shows one of: loading, empty, permission denied (e.g. `Android/data` on Android 11+), device unauthorized, device unplugged/offline, listing timed out, generic error — each with Retry or Go up where it helps. Failures never clear ticked items. A failed **next-page** fetch keeps every loaded row and tick and shows an inline “Couldn’t load more items.” row with **Retry** at the bottom of the list (no full-panel error); an invalid or expired cursor is answered 400 `invalid_cursor` and the client silently restarts from page 1 (ticks kept). A failed listing leaves the previous directory’s selection and path intact. Closing the picker (Cancel) discards picks; Add returns them. Nothing is copied by the picker. |
 | **Performance & resource budget** | One `adb shell` call (or one AFC directory read) per directory opened, plus one per explicit refresh (**Retry**) or cache expiry; never recurse; sub-folders of a ticked folder are not expanded in the picker. Results are served in pages of 100 entries (request `limit` bounded 1..500). The application layer holds a listing cache `DeviceListingCache`: TTL 30 s, LRU ≤ 8 directories, keyed `(method, device_id, path)`, errors are never cached, `refresh: true` bypasses it; later pages, filter changes, the hidden toggle and sort changes are served from the cached listing with no device call; a page served from the cache (sort + filter + slice of ~5 000 entries) answers in ≤ 50 ms. Filter and **Show hidden** are applied server-side over that listing — the client never downloads all pages to filter. The UI appends rows as pages arrive and never re-renders existing rows. Directory listing of ~5 000 entries returns the first page in ≤ 2 s on USB 2. The server holds no persistent connection. Entry payload ≤ ~150 bytes/entry (a 100-entry page ≈ 15 KB). Stale responses are dropped when the user navigates away, filters or toggles (request id); a superseded listing is not awaited. |
 | **Trust boundary** | Untrusted input: the `path` sent by the web client (including a LAN client probing the endpoint) and file names returned by the phone (arbitrary unicode, spaces, quotes, newlines, `$`, backticks). The inbound route validates and normalizes `path` (no `..`, no NUL, no absolute escape, must resolve under the user-storage root) before the adapter runs; `cursor` is an opaque string decoded and validated server-side (malformed, tampered or not-a-cursor → 400 `invalid_cursor`, never reaches the adapter); `query` is a plain case-insensitive substring, length-bounded (≤ 200 chars, longer → 400), matched in Python over the cached listing and never sent to the device shell; `limit` is bounded 1..500 (out of range, or a `query` over 200 characters, is rejected by request validation with 422, not silently clamped), `sort` / `order` are closed enums (any other value → 422) and `show_hidden` / `refresh` are booleans; the stored sort preference is re-validated when read (unknown or corrupt → default **Name, A → Z**, never an error); the ADB adapter passes the path as a single `shlex`-quoted argument and never builds shell from phone-provided names. File names from the phone are rendered with `textContent` only. `POST /api/device/list` and the extras routes are loopback-only like every other module-screen API (403 `desktop-only` for LAN clients; the network-passcode gate still answers first when a passcode is set — [network-passcode](../network-passcode/SPEC.md)). The picker only lists; copying/moving remains in the transfer/extract use cases. |
-| **Photo previews — success criteria** | Image rows show a thumbnail within ~0.5 s of becoming visible on a typical camera JPEG (A0 spike on a Pixel: 64 KB head read 0.04–0.10 s; 97% of camera JPEGs carry an EXIF thumbnail in the first 55 KB). The lightbox shows a large rendition (≤ 1600 px, fit-within) within ~1.5 s of opening, after showing the thumbnail at once. Formats: `jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`. HEIC/HEIF is decoded by the host Magick's libheif and **has not been verified on a real HEIC phone** (the spike phone has none) — to be checked during implementation. DNG and other RAW → icon only (out of scope). Videos → 🎞 icon, no thumbnail (Phase B). Works for ADB and AFC. |
+| **Photo previews — success criteria** | Image rows show a thumbnail within ~0.5 s of becoming visible on a typical camera JPEG (A0 spike on a Pixel: 64 KB head read 0.04–0.10 s; 97% of camera JPEGs carry an EXIF thumbnail in the first 55 KB). The lightbox shows a large rendition (≤ 1600 px, fit-within) within ~1.5 s of opening, after showing the thumbnail at once. Formats: `jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`. HEIC/HEIF is decoded by the host Magick's libheif and **has not been verified on a real HEIC phone** (the spike phone has none) — to be checked during implementation. DNG and other RAW → icon only (out of scope). Videos: see **Video posters** below. Works for ADB and AFC. |
 | **Photo previews — strategy** | **Thumbnail (320 px, JPEG):** (1) read the first 64 KB of the file; (2) if it holds an embedded EXIF/HEIC thumbnail, use it, applying the EXIF Orientation; (3) otherwise, **only if the file is ≤ 25 MB**, pull the whole file to a temp file and have Magick produce a 320 px fit-within JPEG (`-auto-orient`); (4) over 25 MB with no embedded thumbnail, or any failure → no preview, the UI keeps the icon. **Lightbox rendition (1600 px fit-within, JPEG):** full pull to a temp file + Magick, same 25 MB cap. Over the cap the lightbox shows the (upscaled) thumbnail if one exists plus the note “Full preview unavailable for files over 25 MB”; with no thumbnail either it shows the error state. Temp files are deleted in every outcome (success, error, timeout, cancel). |
 | **Photo previews — failure handling** | A preview failure never affects the picker: the row keeps its icon with no error text, stays tickable, and the listing and ticks are untouched. Phone unplugged or read timeout → icon; the tile is retried the next time it becomes visible (folder reopened, or scrolled out and back), never on a timer. Device busy with a transfer/extract job → the row stays a plain icon (not marked failed) and is requested again on its next visibility. The lightbox shows “Preview unavailable” when the large rendition fails and stays usable (navigation, **Selected**, Esc). |
 | **Photo previews — performance & resource budget** | At most **4** concurrent device reads per device (server-enforced; the client also keeps ≤ 4 requests in flight). Per-read timeouts: 10 s for the head read, 30 s for a full pull; Magick calls bounded by the same timeout. Previews are **not started** while a USB transfer or extract job is using the same device (409 `device_busy`) — a transfer always wins. Only rows currently visible request thumbnails (`IntersectionObserver`); requests are aborted on scroll-away, folder change and picker close; the lightbox requests only the current image (the thumbnail of a neighbour is already loaded as a row). **Disk cache** under the app cache directory (`device-thumbs/`, never the library, never the phone): key = hash(device id, path, size, mtime); one JPEG per key and kind (thumbnail / preview); a format-version marker in the directory name or a marker file (as for the gallery thumbnails) invalidates old entries when the pipeline changes; atomic writes (temp file + rename); LRU eviction keeps the cache ≤ **200 MB**; the cache survives restarts. A cache hit makes no device call and answers in ≤ 50 ms. |
 | **Photo previews — trust boundary** | Untrusted input: `path`, `device_id`, `method`, `size`, `mtime` on the new routes, and the bytes of the image (arbitrary, possibly malformed). The routes are **loopback-only** (`require_loopback` → 403 `desktop-only`; passcode gate first) and are **not** added to `LAN_ALLOWED_ROUTES`, so the [lan-access](../lan-access/SPEC.md) default-deny holds (its route table gains these two rows as **Desktop**). `path` is validated and normalized exactly as for `/api/device/list` (no `..`, no NUL, under user storage) before any adapter runs; the ADB adapter passes it as one `shlex`-quoted argument. `size` and `mtime` come from the client listing but only form part of the cache key: a wrong value just causes a cache miss and regeneration, never access to another file; the server compares `size` with the real file size before choosing the 25 MB path. Image decoding runs in a subprocess (Magick) with a timeout and a resource limit on pixel dimensions; the output is always re-encoded JPEG, so original bytes are never served. Preview bytes are written only to the cache directory and temp files, **never into the user's library**. Responses use `Cache-Control: private, max-age=300, must-revalidate` with a strong `ETag` and answer 304 on `If-None-Match`, consistent with `/thumbs`. |
+| **Video posters — success criteria** | Video rows show a **poster** (the first frame) with a small ▶ glyph and a duration badge. A poster appears within ~1.5 s of the row becoming visible (B0 spike, Pixel 10a, 4K HEVC: 0.6–0.9 s, ~4.5 MB read regardless of file size); 4 in parallel ≈ 2.4 s; the lightbox large frame within ~2 s. Formats (case-insensitive): `mp4`, `mov`, `m4v`, `3gp`, `mkv`, `webm`. **Posters only — there is no playback in the app** (the bundled Qt WebEngine cannot decode H.264/HEVC/AAC, B0); playback is Phase B2. RAW is Phase C. The same endpoints as photos serve videos. Works for ADB and AFC. |
+| **Video posters — strategy** | **Poster = the first frame** (`ffmpeg -frames:v 1`, rotation applied so portrait clips come out upright), scaled fit-within to 320 px (`thumb`) or 1600 px (`preview`), JPEG. **Duration** comes from the same ffmpeg run (stderr `Duration:` line) — no separate ffprobe. ffmpeg reads the phone file through a **loopback-only internal stream route** `GET /api/device/stream?token=…` (a single `Range`, ≤ 4 MiB per response) which reads through `DeviceRepositoryPort.read_range` (ADB `exec-out dd iflag=skip_bytes,count_bytes`, `shlex`-quoted; AFC seek + read on the mount). 4 MiB is the cap because B0 measured ≈ 1.0 s per poster at 4 MiB against ≈ 1.5 s at 1 MiB (per-request `adb` latency ~0.1 s). The file is never pulled whole, so videos have **no size cap** (no `too_large`). The cache stores the JPEG **and** the duration; the cache format version is bumped, so existing photo-only entries are a miss. |
+| **Video posters — failure handling** | Same as photos: a failure never affects the picker; the row keeps its 🎞 icon with **no badge** and no error text, stays tickable, and is retried only when it becomes visible again. No poster (undecodable, no video stream, ffmpeg timeout, unplugged) → 🎞 and no duration badge. A transfer/extract job → 409 `device_busy` **before** starting; if one starts mid-run the stream route answers 409, ffmpeg fails and the poster fails as `device_busy` (row stays a plain icon, nothing cached). Errors are never cached. The lightbox shows “Video unavailable” when the large frame fails and stays usable (navigation, **Selected**, Esc). |
+| **Video posters — performance & resource budget** | One video poster holds **1 of the same 4 per-device slots** as photos for its whole ffmpeg run; the stream route and ffmpeg's sub-requests take **no extra** slots (they are covered by the token). ffmpeg runs with `-protocol_whitelist http,tcp`, the only input URL `http://127.0.0.1:<port>/api/device/stream?token=…`, a **20 s** timeout, and is killed on timeout, client abort or picker close. A stream response carries ≤ **4 MiB**. ~4.5 MB (4K HEVC) is read per poster whatever the file size. Disk cache: the existing `device-thumbs/` LRU, ≤ **200 MB**, same key fields (device id, path, size, mtime) plus kind; a hit makes no device call and answers in ≤ 50 ms. Previews yield to transfers/extracts. |
+| **Video posters — trust boundary** | Untrusted: the stream `token`, the `Range` header, the video `path`/`size`/`mtime` on thumb/preview, and **every byte ffmpeg parses**. The stream route is **loopback-only** (`require_loopback` → 403 `desktop-only`; passcode gate first), **never on `LAN_ALLOWED_ROUTES`**, and is not a general phone-file reader: the use case mints a random **128-bit token** bound to (method, device_id, normalized path, size) only for the duration of one poster generation and **revokes it afterwards**; an unknown, expired or revoked token → 404, and the route can read nothing but the one file the token names. `path` is validated and normalized exactly as for `/api/device/list` before the token is minted; ADB passes it as one `shlex`-quoted argument. The stream route validates `Range` strictly (a single `bytes=a-b` or `a-`; anything else → 400/416) and never reads past the bound `size`. ffmpeg is the only process that sees the URL, runs with a protocol whitelist and a timeout, and its output is always re-encoded JPEG — original bytes are never served and never written to the library or the phone. [lan-access](../lan-access/SPEC.md)'s route table gains one row, `GET /api/device/stream` → **Desktop**. |
 
 ## Triggers & routing
 
@@ -51,13 +57,35 @@ Errors (JSON `{ "detail": <code> }`; the UI treats every non-2xx as “keep the 
 |---|---|---|
 | 400 | `invalid_path` | Path validation failed, unknown `method`, empty `device_id`, or AFC off Linux (same checks as `/api/device/list`); no device process started |
 | 403 | `desktop-only` | Non-loopback client |
-| 404 | `no_preview` | Not an image type, not a file, missing on the phone, or undecodable |
+| 404 | `no_preview` | Not an image or video type, not a file, missing on the phone, or undecodable |
 | 409 | `device_busy` | A transfer/extract job is using this device |
 | 413 | `too_large` | Over 25 MB and no embedded thumbnail (`thumb`), or over 25 MB (`preview`) |
 | 422 | — | `size` / `mtime` missing or negative (request validation) |
 | 503 | `unplugged` / `timeout` / `unauthorized` | Device unavailable or a read exceeded its timeout |
 
 Identification of the device matches `/api/device/list`: `method` + `device_id` (the id the picker already holds); the route resolves the adapter the same way. For `preview`, a file over 25 MB returns 413 and the lightbox falls back to the already-loaded thumbnail (see Visual rules). Classification of image extensions lives server-side (the TS list is only a UI hint for showing the placeholder).
+
+## Video posters — API
+
+`GET /api/device/thumb` and `GET /api/device/preview` (above) **also accept video paths** (`mp4`, `mov`, `m4v`, `3gp`, `mkv`, `webm`, case-insensitive): same query, same JPEG output (320 px / ≤ 1600 px fit-within), same `ETag` / 304 / `Cache-Control: private, max-age=300, must-revalidate`, same error codes — except that a video is **never** 413 `too_large`. A response for a video carries `X-Media-Duration: <seconds, decimal>` (e.g. `42.37`) on **200 and on 304** when the duration is known, and omits the header when it is unknown. Stored `X-Media-Duration` is part of the cache entry.
+
+Internal route (loopback-only, used by the poster's own ffmpeg, never by the web client):
+
+| Route | Returns | Notes |
+|---|---|---|
+| `GET /api/device/stream?token=…` | `206` with `Content-Range`, `Accept-Ranges: bytes`, `application/octet-stream`, ≤ 4 MiB | Requires a single `Range: bytes=a-b` or `bytes=a-` |
+
+| Status | `detail` | Meaning |
+|---|---|---|
+| 206 | — | The requested range, truncated to 4 MiB (`Content-Range` states the bytes actually sent) |
+| 400 | `range_required` | No `Range` header (a 206 of the first chunk is **not** allowed) or a malformed / multi-range header |
+| 403 | `desktop-only` | Non-loopback client |
+| 404 | `unknown_token` | Token unknown, expired or revoked |
+| 409 | `device_busy` | A transfer/extract job started while the poster was being generated |
+| 416 | `range_not_satisfiable` | `a` is at or past the bound `size` (`Content-Range: bytes */<size>`) |
+| 503 | `unplugged` / `timeout` / `unauthorized` | Device unavailable or the range read exceeded its timeout |
+
+The token is minted by the use case, not by any route: no HTTP route returns, lists or accepts the creation of a token.
 
 ## Visual & UI rules (aligned with wireframe)
 
@@ -71,8 +99,10 @@ Identification of the device matches `/api/device/list`: `method` + `device_id` 
 - Hint under the list when a folder is ticked: ticked folders are added whole, sub-folders included, when the job starts.
 - Theme: system light/dark (`theme.css`); no motion beyond the existing screen fade (spinner static under `prefers-reduced-motion`). Mobile width: no horizontal page scroll.
 - Entry points: USB file transfer keeps **Add files…** / **Add folder…**; the unavailable hint now reads “needs a connected, authorized device”. USB photo backup Step 1 (ADB / iPhone only; hidden for Wi‑Fi) gains an extras list + **Add folder…** + **Add files…** + ⓘ under the preset checklist, with the “only photos and videos are extracted” note.
-- **Photo previews — rows:** image rows (`jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`) replace the 📄 icon with a 44 px rounded `object-fit: cover` thumbnail (36 px at ≤ 520 px). States: shimmer while loading (static under `prefers-reduced-motion`); the photo once loaded; the 🖼 glyph when the request fails or the file is too large — no error text in the row. The thumbnail is a `<button>` with `aria-label="Preview <name>"` and the visible **👁 Preview** button (also `aria-label="Preview <name>"`) is a second, keyboard-reachable opener; clicking anywhere else on the row behaves as before (checkbox selects, folder name opens). Videos show a 🎞 icon, other files 📄, folders 📁; none of them request a preview. Rows keep their checkbox in every state.
-- **Photo previews — lightbox:** `role="dialog"` `aria-modal="true"` labelled by the file name; shows the photo fitted to the window, name, size, modified date, “n / N” (n among **image rows of the loaded pages**, in list order; announced via `aria-live="polite"`), **←** / **→** buttons and arrow keys (disabled at the ends, no wrap), **Esc** and **✕** to close, and a **Selected** checkbox that mirrors the row's tick in both directions (in `kind: "folders"` mode, where file checkboxes are disabled, it is disabled too). Loading state: the blurred, upscaled thumbnail with a spinner (static under reduced motion), crossfading to the large rendition. Error state: “Preview unavailable” (and, for files over 25 MB, “Full preview unavailable for files over 25 MB” above the upscaled thumbnail); the file stays selectable. Focus is trapped inside; closing returns focus to the opener (thumbnail or 👁 button). Below 520 px the lightbox is full-screen with the ←/→ buttons in a bottom bar. Opening or stepping the lightbox does not change the list scroll position or the ticks.
+- **Photo previews — rows:** image rows (`jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`) replace the 📄 icon with a 44 px rounded `object-fit: cover` thumbnail (36 px at ≤ 520 px). States: shimmer while loading (static under `prefers-reduced-motion`); the photo once loaded; the 🖼 glyph when the request fails or the file is too large — no error text in the row. The thumbnail is a `<button>` with `aria-label="Preview <name>"` and the visible **👁 Preview** button (also `aria-label="Preview <name>"`) is a second, keyboard-reachable opener; clicking anywhere else on the row behaves as before (checkbox selects, folder name opens). Videos get a poster (see **Video posters — rows**); other files show 📄, folders 📁, and neither requests a preview. Rows keep their checkbox in every state.
+- **Photo previews — lightbox:** `role="dialog"` `aria-modal="true"` labelled by the file name; shows the photo fitted to the window, name, size, modified date, “n / N” (n among the **image and video rows of the loaded pages**, in list order; announced via `aria-live="polite"`), **←** / **→** buttons and arrow keys (disabled at the ends, no wrap), **Esc** and **✕** to close, and a **Selected** checkbox that mirrors the row's tick in both directions (in `kind: "folders"` mode, where file checkboxes are disabled, it is disabled too). Loading state: the blurred, upscaled thumbnail with a spinner (static under reduced motion), crossfading to the large rendition. Error state: “Preview unavailable” (and, for files over 25 MB, “Full preview unavailable for files over 25 MB” above the upscaled thumbnail); the file stays selectable. Focus is trapped inside; closing returns focus to the opener (thumbnail or 👁 button). Below 520 px the lightbox is full-screen with the ←/→ buttons in a bottom bar. Opening or stepping the lightbox does not change the list scroll position or the ticks.
+- **Video posters — rows:** video rows (`mp4`, `mov`, `m4v`, `3gp`, `mkv`, `webm`) use the same rounded thumbnail button as photos (44 px, 36 px at ≤ 520 px) with the poster, a small ▶ glyph centred and a **duration badge** bottom-right: `m:ss` (`0:42`, `12:07`) and `h:mm:ss` from one hour (`1:02:15`). States: shimmer while loading (no ▶ or badge yet; static under `prefers-reduced-motion`); poster + ▶ + badge once loaded; the 🎞 icon alone, **no badge**, when there is no poster (failure, undecodable, unknown duration is shown as a poster with ▶ and no badge). The thumbnail button and **👁 Preview** carry `aria-label="Preview <name> (video, <duration>)"` (duration omitted when unknown). No error text in the row; the checkbox works in every state.
+- **Video posters — lightbox:** the lightbox steps through **photos and videos together** (“3 / 58” counts both; arrow-key and button behaviour as for photos). A video shows its large frame (the poster first, blurred and upscaled with a spinner, then the ≤ 1600 px frame), the caption “Video · 0:42 · 86.0 MB · <date>” (duration omitted when unknown), and the muted note “Playback isn’t available in the app yet. Transfer the video to watch it.” There is no play button and no player. Hint: “← → to browse · Esc to close”. Error: “Video unavailable — The phone was unplugged or didn’t respond. You can still select this file.” Selected, Esc, focus trap and the ≤ 520 px full-screen layout are unchanged.
 
 ## Behaviour details
 
@@ -88,6 +118,9 @@ Identification of the device matches `/api/device/list`: `method` + `device_id` 
 - **Photo previews — request lifecycle:** a row requests its thumbnail only when it enters the viewport (with a small root margin); the request is aborted when the row leaves, the folder changes, a restart (filter / hidden / sort) replaces the rows, or the picker closes. At most 4 requests are in flight; the rest queue and are dropped with their rows. A thumbnail `src` carries the row's `size` and `mtime`, so an entry whose size or mtime changed is a new cache key. The lightbox requests `/api/device/preview` for the current image only, and aborts it when stepping or closing.
 - **Photo previews — busy device:** while a transfer/extract job uses the device, `409 device_busy` leaves the row as a plain icon (not failed); it is re-requested the next time the row becomes visible (including after the folder is reopened). No polling.
 - **AFC (iPhone):** the same routes read from the ifuse mount; the “head read” is a bounded file read of the first 64 KB. Same limits, timeouts and cache.
+- **Video posters — request lifecycle:** rows request posters exactly like photos (visible rows only, aborted on scroll-away / folder change / restart / picker close, ≤ 4 client requests in flight shared with photos). The use case generates a poster as: check the cache (hit → return, no device call) → reserve one device slot → mint a stream token → run ffmpeg against the stream URL → read duration from stderr → store JPEG + duration → revoke the token (in a `finally`, in every outcome) → release the slot. A client abort kills ffmpeg and revokes the token.
+- **Video posters — busy device:** `409 device_busy` leaves the row a plain icon (not failed) and it is requested again on its next visibility; a transfer/extract starting mid-run makes the stream route answer 409, the poster fails as `device_busy`, nothing is cached.
+- **Video posters — AFC (iPhone):** the same routes; `read_range` is a seek + bounded read on the ifuse mount. Same limits, timeouts, 4 MiB cap and cache.
 
 ## Sorting
 
@@ -470,11 +503,11 @@ Identification of the device matches `/api/device/list`: `method` + `device_id` 
 - **Then** the lightbox opens on that image showing the blurred thumbnail first, then the large rendition within ~1.5 s
 - **And** it shows the name, size, modified date and “n / N”
 
-### Scenario: Step with the arrow keys across image rows only
+### Scenario: Step with the arrow keys across previewable rows only
 
-- **Given** the loaded pages hold image rows and non-image rows (folders, a PDF, a video)
+- **Given** the loaded pages hold image rows and non-previewable rows (folders, a PDF)
 - **When** the lightbox is open and the user presses → then ←
-- **Then** it moves to the next / previous **image** row in list order, skipping the others, and “n / N” updates
+- **Then** it moves to the next / previous **image or video** row in list order, skipping the others, and “n / N” updates
 - **And** → on the last image and ← on the first do nothing (buttons disabled)
 
 ### Scenario: Select from the lightbox
@@ -531,9 +564,9 @@ Identification of the device matches `/api/device/list`: `method` + `device_id` 
 - **When** the route handles it
 - **Then** it returns 400 `invalid_path` and no `adb` process is started
 
-### Scenario: Non-image or non-file paths
+### Scenario: Non-image, non-video or non-file paths
 
-- **Given** a request for a folder, a `.mp4`, a `.dng`, or a missing file
+- **Given** a request for a folder, a `.pdf`, a `.dng`, or a missing file
 - **When** the route handles it
 - **Then** the server returns 404 `no_preview` and the UI keeps the icon
 
@@ -549,10 +582,207 @@ Identification of the device matches `/api/device/list`: `method` + `device_id` 
 - **When** previews are generated for several photos
 - **Then** the cache lives under the app cache directory, and nothing is written into the library or onto the phone
 
+### Scenario: Poster for a camera HEVC clip with moov at the tail
+
+- **Given** `PXL_0001.mp4` is a 416 MB 4K HEVC clip whose `moov` atom is at the end of the file
+- **When** its row becomes visible
+- **Then** a stream token is minted, ffmpeg reads small head and tail ranges plus the data for the first frame through the stream route (~4.5 MB in total, never the whole file), and the token is revoked
+- **And** the row shows the first frame as a 44 px thumbnail with a ▶ glyph and a duration badge, within ~1.5 s
+- **And** the JPEG and the duration are stored in the preview cache
+
+### Scenario: Duration badge formats
+
+- **Given** videos of 42.4 s, 12 min 7 s and 1 h 2 min 15 s
+- **When** their posters load
+- **Then** the badges read `0:42`, `12:07` and `1:02:15`
+- **And** each response carried `X-Media-Duration` as decimal seconds
+
+### Scenario: No poster keeps the 🎞 icon and no badge
+
+- **Given** `VID_0004.3gp` has no decodable video stream
+- **When** its row becomes visible and the request answers 404 `no_preview`
+- **Then** the row shows the 🎞 icon with no ▶ and no duration badge, and no error text
+- **And** the checkbox and the 👁 button still work, and nothing is cached
+
+### Scenario: Portrait clip comes out upright
+
+- **Given** a phone clip stored landscape with a −90° rotation tag
+- **When** its poster is generated
+- **Then** the thumbnail is portrait (e.g. 320×568) and upright, and the large frame is upright too
+
+### Scenario: Unknown duration
+
+- **Given** ffmpeg decodes a frame but prints no usable `Duration:` line
+- **When** the poster is served
+- **Then** the response has no `X-Media-Duration` header, the row shows the poster with ▶ and no badge, and the lightbox caption omits the duration
+
+### Scenario: Cache hit returns the stored duration
+
+- **Given** the poster of `PXL_0001.mp4` was generated earlier (even before an app restart)
+- **When** the row becomes visible again, or the browser revalidates with `If-None-Match`
+- **Then** the JPEG comes from the cache with no device call and no ffmpeg run, within 50 ms
+- **And** the 200 and the 304 both carry the stored `X-Media-Duration`, so the badge is unchanged
+
+### Scenario: Old cache entries are a miss
+
+- **Given** the cache holds entries written before the format version was bumped
+- **When** a poster or photo is requested
+- **Then** the old entry is ignored, the item is regenerated, and the new entry is stored with the new version
+
+### Scenario: Videos have no size cap
+
+- **Given** `holiday.mov` is 1.5 GB
+- **When** its row becomes visible and the lightbox opens on it
+- **Then** both routes answer 200 and neither answers 413 `too_large`
+- **And** only ranges were read from the phone
+
+### Scenario: Open the lightbox on a video
+
+- **Given** a video row with a loaded poster
+- **When** the user clicks the thumbnail or activates **👁 Preview**
+- **Then** the lightbox opens showing the blurred poster with a spinner, then the large frame (≤ 1600 px) within ~2 s
+- **And** it shows the caption “Video · 0:42 · 86.0 MB · <date>”, the note “Playback isn’t available in the app yet. Transfer the video to watch it.” and the hint “← → to browse · Esc to close”
+- **And** there is no play button and no player
+
+### Scenario: Step across photos and videos
+
+- **Given** the loaded pages hold two photos, a video, a PDF and a photo, in that order
+- **When** the lightbox is open on the first photo and the user presses → repeatedly
+- **Then** it visits photo, photo, video, photo (skipping the PDF) and the counter reads 1 / 4 … 4 / 4, counting photos and videos together
+- **And** → on the last item and ← on the first do nothing
+
+### Scenario: Video lightbox error state
+
+- **Given** the lightbox is open on a video
+- **When** the large frame request fails
+- **Then** it shows “Video unavailable”, and **Selected**, ←/→ and Esc still work
+
+### Scenario: Stream route honours a single Range
+
+- **Given** a valid token for a 100 MB file
+- **When** the client sends `Range: bytes=1000-2999` and then `Range: bytes=50000000-`
+- **Then** the first answer is 206 with 2000 bytes and `Content-Range: bytes 1000-2999/100000000`
+- **And** the second is 206 truncated to 4 MiB with the matching `Content-Range`
+
+### Scenario: Stream response is capped at 4 MiB
+
+- **Given** a valid token and `Range: bytes=0-33554431`
+- **When** the route answers
+- **Then** it is 206 with exactly 4 MiB (4 194 304 bytes) and a `Content-Range` that states the bytes actually sent
+- **And** `read_range` was called with `length` ≤ 4 MiB
+
+### Scenario: Unsatisfiable range
+
+- **Given** a valid token for a 1 000-byte file
+- **When** the client sends `Range: bytes=1000-`
+- **Then** the route answers 416 with `Content-Range: bytes */1000` and reads nothing from the phone
+
+### Scenario: Stream request without Range
+
+- **Given** a valid token
+- **When** the client sends no `Range` header, or a malformed one (`bytes=a-b`, `bytes=0-1,5-9`)
+- **Then** the route answers 400 `range_required` and does not return the first chunk
+
+### Scenario: Unknown or expired token
+
+- **Given** a token that was never minted, was already revoked after its poster finished, or has expired
+- **When** it is sent to `GET /api/device/stream`
+- **Then** the route answers 404 `unknown_token` and starts no `adb` process
+
+### Scenario: Token is bound to one file
+
+- **Given** a token minted for `DCIM/Camera/PXL_0001.mp4` on device A
+- **When** the stream route is called with that token and any other `path`, `device_id` or `method` in the query
+- **Then** only the bound file is read and the other values are ignored
+- **And** a range beyond the bound `size` is never read
+
+### Scenario: Token lives only for one poster generation
+
+- **Given** a poster generation is running
+- **When** it finishes, fails, times out or is aborted
+- **Then** its token is revoked and a later request with it answers 404
+- **And** no HTTP route returns or accepts the creation of a token
+
+### Scenario: Stream route is desktop-only
+
+- **Given** a request to `GET /api/device/stream` from a non-loopback (LAN) client, even with a valid token
+- **When** the route handles it
+- **Then** it returns 403 `desktop-only` and no `adb` process is started
+- **And** the route is not on `LAN_ALLOWED_ROUTES`, and the [lan-access](../lan-access/SPEC.md) route table lists it as **Desktop**
+
+### Scenario: ffmpeg runs locked down
+
+- **Given** a poster is being generated
+- **When** ffmpeg is started
+- **Then** its only input is `http://127.0.0.1:<port>/api/device/stream?token=…`, with `-protocol_whitelist http,tcp`, `-frames:v 1` and a 20 s timeout
+- **And** a phone file whose bytes try to reference other files or URLs causes no other read
+
+### Scenario: Posters share the four device slots
+
+- **Given** 12 video rows and photo rows are visible
+- **When** their requests arrive
+- **Then** at most 4 device reads or poster runs are active per device, a poster using 1 slot for its whole ffmpeg run
+- **And** the stream route's range reads for ffmpeg do not take additional slots
+
+### Scenario: Posters yield to a transfer before they start
+
+- **Given** a USB transfer or extract job is running on the same device
+- **When** a video row requests its poster
+- **Then** the server answers 409 `device_busy` without minting a token or touching the device, and the row stays a plain 🎞 icon
+- **When** the job has ended and the row becomes visible again
+- **Then** the poster is requested and shown
+
+### Scenario: A transfer starts mid-run
+
+- **Given** a poster generation is running
+- **When** a transfer or extract job starts on the same device
+- **Then** the next stream request answers 409 `device_busy`, ffmpeg fails, and the poster answers 409 `device_busy`
+- **And** nothing is cached, the token is revoked, and the row stays a plain icon (not failed)
+
+### Scenario: ffmpeg timeout
+
+- **Given** the phone answers range reads so slowly that ffmpeg exceeds 20 s
+- **When** the timeout fires
+- **Then** ffmpeg is killed, the token is revoked and the response is 503 `timeout`
+- **And** nothing is cached and the row shows the 🎞 icon with no badge
+- **When** the row leaves and re-enters the viewport
+- **Then** the poster is requested again
+
+### Scenario: Undecodable video
+
+- **Given** a `.mp4` that is truncated or has no video stream
+- **When** its poster is requested
+- **Then** ffmpeg exits without a frame, the response is 404 `no_preview`, the token is revoked and nothing is cached
+
+### Scenario: Abort kills ffmpeg
+
+- **Given** a poster is being generated
+- **When** the user scrolls the row away, opens another folder or closes the picker
+- **Then** the request is aborted, ffmpeg is killed, the token is revoked and the slot is released
+
+### Scenario: Unplugged during a poster
+
+- **Given** the phone is unplugged while a poster is being generated
+- **When** a range read fails
+- **Then** the stream route answers 503 `unplugged`, the poster answers 503 `unplugged`, nothing is cached, and the row shows 🎞 with no badge
+- **And** the picker, the ticks and the listing are unaffected
+
+### Scenario: iPhone posters through the same endpoints
+
+- **Given** iPhone (USB) on Linux with the ifuse mount present and a `DCIM` folder of `.MOV` clips
+- **When** the rows become visible and the user opens the lightbox
+- **Then** posters and large frames come from the same routes, `read_range` seeks and reads from the mount (≤ 4 MiB per response), and the limits, timeout and cache are the same
+
+### Scenario: Posters never touch the library or the phone
+
+- **Given** a library is configured
+- **When** posters are generated for several videos
+- **Then** JPEGs live only under the app cache directory, temp data is removed, and nothing is written into the library or onto the phone
+
 ## Out of scope
 
 - Browsing the phone’s app-private storage, root-only paths, SD-card/secondary volumes beyond what `/sdcard` exposes (v1: user storage root only).
-- Video thumbnails and in-lightbox playback (Phase B, see [PLAN-media-preview.md](PLAN-media-preview.md)); DNG/RAW previews; a grid view; zoom/pan in the lightbox; rotate/edit; previews over Wi‑Fi/LAN.
+- In-app video **playback** (Phase B2, see [PLAN-media-preview.md](PLAN-media-preview.md)); RAW/DNG previews (Phase C); audio-file previews; motion photos; scrub/hover previews; choosing the poster frame; video previews over LAN; a grid view; zoom/pan in the lightbox; rotate/edit; previews over Wi‑Fi/LAN.
 - Search across directories; drag-and-drop.
 - Sorting by type/extension, natural/numeric name order (`IMG_2` before `IMG_10`), mixing folders among files, and a per-folder remembered sort.
 - Recursive size/count of ticked folders before start.

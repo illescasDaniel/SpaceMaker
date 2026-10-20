@@ -162,6 +162,47 @@ def test_given_unknown_device_when_read_head_then_unplugged(tmp_path: Path) -> N
 	assert exc.value.kind is DeviceBrowseErrorKind.UNPLUGGED
 
 
+# Video posters: AFC ``read_range`` is a seek + bounded read on the mount.
+def test_given_file_when_read_range_then_exactly_that_slice(tmp_path: Path) -> None:
+	# given
+	(tmp_path / "a.mp4").write_bytes(b"0123456789")
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when
+	data = repo.read_range("udid", "a.mp4", 3, 4, 5.0)
+	# then
+	assert data == b"3456"
+
+
+def test_given_range_past_end_when_read_range_then_fewer_bytes_or_empty(tmp_path: Path) -> None:
+	# given
+	(tmp_path / "a.mp4").write_bytes(b"0123456789")
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when
+	tail = repo.read_range("udid", "a.mp4", 8, 100, 5.0)
+	beyond = repo.read_range("udid", "a.mp4", 50, 10, 5.0)
+	# then
+	assert tail == b"89"
+	assert beyond == b""
+
+
+def test_given_unknown_device_when_read_range_then_unplugged(tmp_path: Path) -> None:
+	# given
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		repo.read_range("other", "a.mp4", 0, 4, 5.0)
+	assert exc.value.kind is DeviceBrowseErrorKind.UNPLUGGED
+
+
+def test_given_missing_file_when_read_range_then_not_found(tmp_path: Path) -> None:
+	# given
+	repo = AfcDeviceRepository(test_mounts={"udid": tmp_path})
+	# when / then
+	with pytest.raises(DeviceBrowseError) as exc:
+		repo.read_range("udid", "nope.mp4", 0, 4, 5.0)
+	assert exc.value.kind is DeviceBrowseErrorKind.NOT_FOUND
+
+
 def test_given_file_when_pull_file_with_timeout_then_copied(tmp_path: Path) -> None:
 	# given
 	mount = tmp_path / "mnt"

@@ -715,6 +715,39 @@
 		.dp-thumb.is-busy .dp-thumb-glyph { display: inline; }
 		@keyframes dp-shimmer { to { background-position: -200% 0; } }
 		@media (prefers-reduced-motion: reduce) { .dp-thumb.is-loading .dp-thumb-img { animation: none; } }
+		/* Video rows: poster + small play glyph + duration badge. Hidden while loading / without a poster / busy / too large. */
+		.dp-thumb-play, .dp-thumb-dur { display: none; pointer-events: none; }
+		.dp-thumb-video .dp-thumb-play {
+			position: absolute;
+			left: 50%;
+			top: 44%;
+			transform: translate(-50%, -50%);
+			width: 1.3rem;
+			height: 1.3rem;
+			padding-left: 0.08rem;
+			border-radius: 50%;
+			background: rgba(0, 0, 0, 0.55);
+			color: #fff;
+			font-size: 0.55rem;
+			align-items: center;
+			justify-content: center;
+		}
+		.dp-thumb-video .dp-thumb-dur {
+			position: absolute;
+			right: 0;
+			bottom: 0;
+			max-width: 100%;
+			padding: 0 0.25rem;
+			border-radius: 4px 0 0 0;
+			background: rgba(0, 0, 0, 0.72);
+			color: #fff;
+			font-size: 0.58rem;
+			line-height: 1.3;
+			white-space: nowrap;
+			font-variant-numeric: tabular-nums;
+		}
+		.dp-thumb-video:not(.is-loading):not(.is-failed):not(.is-busy):not(.is-toolarge) .dp-thumb-play { display: inline-flex; }
+		.dp-thumb-video:not(.is-loading):not(.is-failed):not(.is-busy):not(.is-toolarge) .dp-thumb-dur:not(:empty) { display: block; }
 		.dp-ico-media { width: var(--dp-thumb); height: var(--dp-thumb); display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; }
 		.dp-preview-btn {
 			flex-shrink: 0;
@@ -814,7 +847,7 @@
 		.dp-lb[data-state="toolarge"] .dp-lb-full { display: none; }
 		.dp-lb[data-state="toolarge"] .dp-lb-note { display: block; }
 		@media (prefers-reduced-motion: reduce) { .dp-lb-blur, .dp-lb-full { transition: none; } }
-		.dp-lb-loading, .dp-lb-error {
+		.dp-lb-loading, .dp-lb-error, .dp-lb-verror {
 			position: absolute;
 			inset: 0;
 			display: none;
@@ -827,8 +860,8 @@
 		}
 		.dp-lb-loading { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
 		.dp-lb-loading .dp-spinner { margin: 0; border-color: rgba(255, 255, 255, 0.4); border-top-color: #fff; }
-		.dp-lb-error { background: var(--surface2); color: var(--muted); }
-		.dp-lb-error strong { color: var(--text); font-size: 1rem; }
+		.dp-lb-error, .dp-lb-verror { background: var(--surface2); color: var(--muted); }
+		.dp-lb-error strong, .dp-lb-verror strong { color: var(--text); font-size: 1rem; }
 		.dp-lb[data-state="loading"] .dp-lb-full { opacity: 0; }
 		.dp-lb[data-state="loading"] .dp-lb-loading { display: flex; }
 		.dp-lb[data-state="error"] .dp-lb-blur,
@@ -836,9 +869,23 @@
 		.dp-lb[data-state="error"] .dp-lb-error { display: flex; }
 		.dp-lb-hint { margin: 0; font-size: 0.78rem; color: var(--muted); text-align: center; }
 
+		/* Video in the lightbox: poster frame only, no playback. */
+		.dp-lb-vnote { display: none; margin: 0; font-size: 0.82rem; color: var(--muted); text-align: center; }
+		.dp-lb[data-kind="video"]:not([data-state="verror"]) .dp-lb-vnote { display: block; }
+		.dp-lb-glyph { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-size: 3rem; color: var(--muted); }
+		.dp-lb[data-poster="none"] .dp-lb-blur,
+		.dp-lb[data-poster="none"] .dp-lb-full { display: none; }
+		.dp-lb[data-poster="none"] .dp-lb-glyph { display: flex; }
+		.dp-lb[data-state="verror"] .dp-lb-blur,
+		.dp-lb[data-state="verror"] .dp-lb-full,
+		.dp-lb[data-state="verror"] .dp-lb-glyph { display: none; }
+		.dp-lb[data-state="verror"] .dp-lb-verror { display: flex; }
+
 		/* Narrow lightbox: full screen, nav buttons at the bottom. */
 		@media (max-width: 520px) {
 			.dp-list { --dp-thumb: 36px; }
+			.dp-thumb-video .dp-thumb-play { width: 1.05rem; height: 1.05rem; font-size: 0.45rem; }
+			.dp-thumb-video .dp-thumb-dur { padding: 0 0.15rem; font-size: 0.5rem; letter-spacing: -0.02em; }
 			.dp-lb { padding: 0; }
 			.dp-lb-panel { width: 100%; height: 100%; border-radius: 0; border: none; }
 			.dp-lb-stage { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: none; }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -8,7 +9,12 @@ from typing import Literal
 
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, DeviceBrowseSort, DeviceEntry
-from spacemaker.domain.device_preview import DevicePreviewError, DevicePreviewErrorKind
+from spacemaker.domain.device_preview import (
+	CachedDevicePreview,
+	DevicePreviewError,
+	DevicePreviewErrorKind,
+	VideoPoster,
+)
 from spacemaker.domain.gallery import GalleryItem
 from spacemaker.domain.gallery_batch import ArchiveEntry, TrashError, VideoExportEncoder
 from spacemaker.domain.gallery_index import FileStat, GalleryCursor, GalleryIndexRow, GalleryPage
@@ -150,10 +156,16 @@ class FakeDeviceRepository:
 	head_entered: threading.Semaphore = field(default_factory=lambda: threading.Semaphore(0))
 	"""Released once per ``read_head`` entry; tests acquire it to wait for N reads to have started."""
 	_head_lock: threading.Lock = field(default_factory=threading.Lock)
+	# video streaming: per-path file bytes served by ``read_range`` and recorded calls
+	range_data: dict[str, bytes] = field(default_factory=dict)
+	range_errors: dict[str, DeviceBrowseErrorKind] = field(default_factory=dict)
+	read_range_calls: list[tuple[str, str, int, int, float]] = field(default_factory=list)
 
 	@property
 	def device_calls(self) -> int:
-		return len(self.stat_calls) + len(self.read_head_calls) + len(self.pull_timeout_calls)
+		return (
+			len(self.stat_calls) + len(self.read_head_calls) + len(self.pull_timeout_calls) + len(self.read_range_calls)
+		)
 
 	def list_devices(self) -> list[DeviceInfo]:
 		return list(self.devices)
@@ -206,6 +218,12 @@ class FakeDeviceRepository:
 		finally:
 			with self._head_lock:
 				self.active_heads[device_id] -= 1
+
+	def read_range(self, device_id: str, path: str, offset: int, length: int, timeout_s: float) -> bytes:
+		self.read_range_calls.append((device_id, path, offset, length, timeout_s))
+		if path in self.range_errors:
+			raise DeviceBrowseError(self.range_errors[path])
+		return self.range_data.get(path, b"")[offset : offset + length]
 
 	def pull_file_with_timeout(self, device_id: str, path: str, local_path: str, timeout_s: float) -> None:
 		_ = device_id
@@ -521,18 +539,61 @@ class FakePreviewImaging:
 
 
 @dataclass
-class FakeDevicePreviewCache:
-	store: dict[str, bytes] = field(default_factory=dict)
-	get_calls: list[str] = field(default_factory=list)
-	put_calls: list[tuple[str, bytes]] = field(default_factory=list)
+class FakeVideoPoster:
+	"""``VideoPosterPort`` fake: returns ``poster`` or raises ``error``; records every call.
 
-	def get(self, key: str) -> bytes | None:
+	``on_render`` runs inside ``render_poster`` with the source URL (tests use it to inspect the live token);
+	``gate`` blocks the render until set (concurrency-cap tests) and ``entered`` is released once per entry.
+	"""
+
+	poster: VideoPoster = field(default_factory=lambda: VideoPoster(b"poster-jpeg", 42.37))
+	error: DevicePreviewErrorKind | None = None
+	calls: list[tuple[str, int, float]] = field(default_factory=list)
+	cancels: list[threading.Event | None] = field(default_factory=list)
+	on_render: Callable[[str], None] | None = None
+	gate: threading.Event | None = None
+	entered: threading.Semaphore = field(default_factory=lambda: threading.Semaphore(0))
+	active: int = 0
+	peak: int = 0
+	_lock: threading.Lock = field(default_factory=threading.Lock)
+
+	def render_poster(
+		self, source_url: str, max_edge: int, timeout_s: float, cancel: threading.Event | None = None
+	) -> VideoPoster:
+		self.cancels.append(cancel)
+		self.calls.append((source_url, max_edge, timeout_s))
+		with self._lock:
+			self.active += 1
+			self.peak = max(self.peak, self.active)
+		self.entered.release()
+		try:
+			if self.on_render is not None:
+				self.on_render(source_url)
+			if cancel is not None and cancel.is_set():  # like the real adapter: killed ffmpeg -> timeout
+				raise DevicePreviewError(DevicePreviewErrorKind.TIMEOUT)
+			if self.gate is not None:
+				self.gate.wait(timeout=5)
+			if self.error is not None:
+				raise DevicePreviewError(self.error)
+			return self.poster
+		finally:
+			with self._lock:
+				self.active -= 1
+
+
+@dataclass
+class FakeDevicePreviewCache:
+	store: dict[str, CachedDevicePreview] = field(default_factory=dict)
+	get_calls: list[str] = field(default_factory=list)
+	put_calls: list[tuple[str, CachedDevicePreview]] = field(default_factory=list)
+
+	def get(self, key: str) -> CachedDevicePreview | None:
 		self.get_calls.append(key)
 		return self.store.get(key)
 
-	def put(self, key: str, jpeg: bytes) -> None:
-		self.put_calls.append((key, jpeg))
-		self.store[key] = jpeg
+	def put(self, key: str, entry: CachedDevicePreview) -> None:
+		self.put_calls.append((key, entry))
+		self.store[key] = entry
 
 
 @dataclass

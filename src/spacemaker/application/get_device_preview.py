@@ -1,44 +1,43 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import PurePosixPath
 
+from spacemaker.application.device_stream_tokens import DeviceStreamTokens
 from spacemaker.domain.connection import ConnectionMethod
-from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind, normalize_browse_path
+from spacemaker.domain.device_browse import DeviceBrowseError, normalize_browse_path
 from spacemaker.domain.device_preview import (
 	PREVIEW_FULL_PULL_MAX_BYTES,
 	PREVIEW_FULL_TIMEOUT_S,
 	PREVIEW_HEAD_BYTES,
 	PREVIEW_HEAD_TIMEOUT_S,
 	PREVIEW_MAX_CONCURRENT_READS,
+	PREVIEW_SLOT_WAIT_S,
+	VIDEO_POSTER_TIMEOUT_S,
+	CachedDevicePreview,
 	DevicePreview,
+	DevicePreviewCancelled,
 	DevicePreviewError,
 	DevicePreviewErrorKind,
 	DevicePreviewKind,
+	DevicePreviewMedia,
 	DevicePreviewRequest,
+	VideoPoster,
 	device_preview_cache_key,
-	is_previewable_image,
+	map_browse_error,
+	preview_media_of,
 )
+from spacemaker.domain.device_stream import DeviceStreamGrant
 from spacemaker.ports.outbound.device_activity import DeviceActivityPort
 from spacemaker.ports.outbound.device_preview_cache import DevicePreviewCachePort
 from spacemaker.ports.outbound.device_repository import DeviceRepositoryPort
 from spacemaker.ports.outbound.filesystem import FileSystemPort
 from spacemaker.ports.outbound.preview_imaging import PreviewImagingPort
-
-
-_ERROR_BY_BROWSE_KIND: dict[DeviceBrowseErrorKind, DevicePreviewErrorKind] = {
-	DeviceBrowseErrorKind.INVALID_PATH: DevicePreviewErrorKind.INVALID_PATH,
-	DeviceBrowseErrorKind.UNPLUGGED: DevicePreviewErrorKind.UNPLUGGED,
-	DeviceBrowseErrorKind.UNAUTHORIZED: DevicePreviewErrorKind.UNAUTHORIZED,
-	DeviceBrowseErrorKind.TIMEOUT: DevicePreviewErrorKind.TIMEOUT,
-}
-
-
-def _map_browse_error(exc: DeviceBrowseError) -> DevicePreviewError:
-	kind = _ERROR_BY_BROWSE_KIND.get(exc.kind, DevicePreviewErrorKind.NO_PREVIEW)
-	return DevicePreviewError(kind, exc.detail)
+from spacemaker.ports.outbound.video_poster import VideoPosterPort
 
 
 class GetDevicePreview:
@@ -53,6 +52,10 @@ class GetDevicePreview:
 	``DevicePreviewError``; device failures from the repository (``DeviceBrowseError``) are mapped to
 	``UNPLUGGED`` / ``UNAUTHORIZED`` / ``TIMEOUT`` / ``NO_PREVIEW`` (not found).
 
+	``cancel`` (set when the client aborts) is checked before work starts, while waiting for a slot (the wait is
+	bounded by ``slot_wait_s`` -> ``TIMEOUT``) and after getting one, and is handed to the poster renderer so
+	ffmpeg is killed; a cancelled request raises ``DevicePreviewCancelled`` and caches nothing.
+
 	``resolve_repository`` picks the ADB or AFC repository for a method, like ``devices_for`` does for
 	``/api/device/list``.
 	"""
@@ -64,12 +67,25 @@ class GetDevicePreview:
 		imaging: PreviewImagingPort,
 		activity: DeviceActivityPort,
 		filesystem: FileSystemPort,
+		*,
+		poster: VideoPosterPort,
+		tokens: DeviceStreamTokens,
+		stream_url: Callable[[str], str],
+		slot_wait_s: float = PREVIEW_SLOT_WAIT_S,
+		slot_poll_s: float = 0.25,
+		clock: Callable[[], float] = time.monotonic,
 	) -> None:
 		self._resolve_repository = resolve_repository
 		self._cache = cache
 		self._imaging = imaging
 		self._activity = activity
 		self._filesystem = filesystem
+		self._poster = poster
+		self._tokens = tokens
+		self._stream_url = stream_url  # token -> loopback URL the poster renderer reads from
+		self._slot_wait_s = slot_wait_s
+		self._slot_poll_s = slot_poll_s
+		self._clock = clock
 		self._slots: dict[tuple[ConnectionMethod, str], threading.BoundedSemaphore] = {}
 		self._slots_lock = threading.Lock()
 
@@ -77,29 +93,73 @@ class GetDevicePreview:
 		with self._slots_lock:
 			return self._slots.setdefault((method, device_id), threading.BoundedSemaphore(PREVIEW_MAX_CONCURRENT_READS))
 
-	def __call__(self, request: DevicePreviewRequest) -> DevicePreview:
+	@contextmanager
+	def _acquire_slot(self, method: ConnectionMethod, device_id: str, cancel: threading.Event | None) -> Iterator[None]:
+		slot = self._slot(method, device_id)
+		deadline = self._clock() + self._slot_wait_s
+		while not slot.acquire(timeout=self._slot_poll_s):
+			if cancel is not None and cancel.is_set():
+				raise DevicePreviewCancelled
+			if self._clock() >= deadline:
+				raise DevicePreviewError(DevicePreviewErrorKind.TIMEOUT, "waiting for a free device read slot")
+		try:
+			if cancel is not None and cancel.is_set():
+				raise DevicePreviewCancelled
+			yield
+		finally:
+			slot.release()
+
+	def __call__(self, request: DevicePreviewRequest, *, cancel: threading.Event | None = None) -> DevicePreview:
 		try:
 			path = normalize_browse_path(request.path)
 		except DeviceBrowseError as exc:
-			raise _map_browse_error(exc) from exc
-		if not is_previewable_image(path.rsplit("/", 1)[-1]):
-			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "not an image type")
+			raise map_browse_error(exc) from exc
+		media = preview_media_of(path.rsplit("/", 1)[-1])
+		if media is None:
+			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "not a previewable type")
 		request = replace(request, path=path)  # same file, same cache key and ETag, however the client spelled the path
 		key = device_preview_cache_key(request)
 		etag = f'"{key}"'
 		cached = self._cache.get(key)
 		if cached is not None:
-			return DevicePreview(cached, etag)
+			return DevicePreview(cached.jpeg, etag, cached.duration_s)
+		if cancel is not None and cancel.is_set():
+			raise DevicePreviewCancelled
 		if self._activity.is_busy(request.method, request.device_id):
 			raise DevicePreviewError(DevicePreviewErrorKind.DEVICE_BUSY)
 		repository = self._resolve_repository(request.method)
-		with self._slot(request.method, request.device_id):
+		with self._acquire_slot(request.method, request.device_id, cancel):
 			try:
-				jpeg = self._generate(repository, request, path)
+				if media is DevicePreviewMedia.VIDEO:
+					poster = self._generate_video(repository, request, path, cancel)
+					entry = CachedDevicePreview(poster.jpeg, poster.duration_s)
+				else:
+					entry = CachedDevicePreview(self._generate(repository, request, path))
 			except DeviceBrowseError as exc:
-				raise _map_browse_error(exc) from exc
-		self._cache.put(key, jpeg)
-		return DevicePreview(jpeg, etag)
+				raise map_browse_error(exc) from exc
+			except DevicePreviewError as exc:
+				if cancel is not None and cancel.is_set():
+					raise DevicePreviewCancelled from exc
+				raise
+		self._cache.put(key, entry)
+		return DevicePreview(entry.jpeg, etag, entry.duration_s)
+
+	def _generate_video(
+		self, repository: DeviceRepositoryPort, request: DevicePreviewRequest, path: str, cancel: threading.Event | None
+	) -> VideoPoster:
+		"""Poster for a video: stat, mint a stream token for the file, ``render_poster`` against the loopback
+		URL, revoke the token in every outcome. Videos are never ``TOO_LARGE`` (only ranges are read).
+		"""
+		stat = repository.stat_file(request.device_id, path)
+		if stat.is_dir:
+			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "not a file")
+		token = self._tokens.mint(DeviceStreamGrant(request.method, request.device_id, path, stat.size))
+		try:
+			return self._poster.render_poster(
+				self._stream_url(token), request.kind.max_edge, VIDEO_POSTER_TIMEOUT_S, cancel
+			)
+		finally:
+			self._tokens.revoke(token)
 
 	def _generate(self, repository: DeviceRepositoryPort, request: DevicePreviewRequest, path: str) -> bytes:
 		edge = request.kind.max_edge

@@ -6,7 +6,14 @@ import {
 	openLightbox,
 	syncLightboxSelection,
 } from "./device-lightbox.ts";
-import { createThumbLoader, isImageName, isVideoName, type ThumbLoader } from "./device-preview.ts";
+import {
+	createThumbLoader,
+	formatMediaDuration,
+	isImageName,
+	isPreviewableVideo,
+	isVideoName,
+	type ThumbLoader,
+} from "./device-preview.ts";
 import { onClick } from "./dom.ts";
 import { showView } from "./shell.ts";
 import type {
@@ -371,18 +378,19 @@ function makeRow(entry: DeviceEntryRow): HTMLLIElement {
 	const label = document.createElement("span");
 	label.className = "dp-label";
 	label.textContent = entry.name;
-	const isImage = !entry.is_dir && isImageName(entry.name);
+	const isVideo = !entry.is_dir && isPreviewableVideo(entry.name);
+	const isImage = !entry.is_dir && (isImageName(entry.name) || isVideo);
 	let thumb: HTMLButtonElement | null = null;
 	let eye: HTMLButtonElement | null = null;
 	if (isImage) {
-		thumb = makeThumb(entry.name);
+		thumb = makeThumb(entry.name, isVideo);
 		name.appendChild(thumb);
 		name.appendChild(label);
 		eye = document.createElement("button");
 		eye.type = "button";
 		eye.className = "dp-preview-btn";
 		eye.textContent = "👁";
-		eye.setAttribute("aria-label", "Preview " + entry.name);
+		eye.setAttribute("aria-label", "Preview " + entry.name + (isVideo ? " (video)" : ""));
 		name.appendChild(eye);
 	} else {
 		const icon = document.createElement("span");
@@ -408,19 +416,30 @@ function makeRow(entry: DeviceEntryRow): HTMLLIElement {
 	return li;
 }
 
-function makeThumb(name: string): HTMLButtonElement {
+function makeThumb(name: string, video: boolean): HTMLButtonElement {
 	const thumb = document.createElement("button");
 	thumb.type = "button";
-	thumb.className = "dp-thumb is-loading";
-	thumb.setAttribute("aria-label", "Preview " + name);
+	thumb.className = "dp-thumb" + (video ? " dp-thumb-video" : "") + " is-loading";
+	thumb.setAttribute("aria-label", "Preview " + name + (video ? " (video)" : ""));
 	const img = document.createElement("span");
 	img.className = "dp-thumb-img";
 	const glyph = document.createElement("span");
 	glyph.className = "dp-thumb-glyph";
 	glyph.setAttribute("aria-hidden", "true");
-	glyph.textContent = "🖼";
+	glyph.textContent = video ? "🎞" : "🖼";
 	thumb.appendChild(img);
 	thumb.appendChild(glyph);
+	if (video) {
+		const play = document.createElement("span");
+		play.className = "dp-thumb-play";
+		play.setAttribute("aria-hidden", "true");
+		play.textContent = "▶";
+		const dur = document.createElement("span");
+		dur.className = "dp-thumb-dur";
+		dur.setAttribute("aria-hidden", "true");
+		thumb.appendChild(play);
+		thumb.appendChild(dur);
+	}
 	return thumb;
 }
 
@@ -436,13 +455,20 @@ function wireImageRow(
 ): void {
 	const { method, deviceId } = active.options;
 	const target = { method, deviceId, path, size: entry.size, mtime: entry.mtime };
-	active.thumbs.register(thumb, target);
+	const video = thumb.classList.contains("dp-thumb-video");
+	active.thumbs.register(thumb, target, (duration: number | null) => {
+		const text = duration === null ? "" : formatMediaDuration(duration);
+		const suffix = !video ? "" : text ? " (video, " + text + ")" : " (video)";
+		eye.setAttribute("aria-label", "Preview " + entry.name + suffix);
+	});
 	active.images.push({
 		path,
 		name: entry.name,
 		info: formatSize(entry.size) + " · " + formatDate(entry.mtime),
 		target,
 		thumbUrl: () => active.thumbs.objectUrlFor(thumb),
+		kind: video ? "video" : "image",
+		durationSeconds: () => active.thumbs.durationFor(thumb),
 		isSelected: () => box.checked,
 		setSelected: (selected: boolean) => {
 			if (!box.disabled && box.checked !== selected) {

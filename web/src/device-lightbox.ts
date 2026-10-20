@@ -1,6 +1,12 @@
 /** Lightbox for the phone picker's photo previews (`#dp-lb`): browse image rows, tick them, see the large rendition. */
 
-import { buildPreviewUrl, outcomeForStatus, type PreviewTarget, stepIndex } from "./device-preview.ts";
+import {
+	buildPreviewUrl,
+	formatMediaDuration,
+	outcomeForStatus,
+	type PreviewTarget,
+	stepIndex,
+} from "./device-preview.ts";
 
 /** One image row as the lightbox sees it. */
 interface LightboxItem {
@@ -11,6 +17,10 @@ interface LightboxItem {
 	target: PreviewTarget;
 	/** Object URL of the row's loaded thumbnail, if any. */
 	thumbUrl: () => string | null;
+	/** Defaults to "image". Videos get the "Video · duration · info" caption and the playback note. */
+	kind?: "image" | "video";
+	/** Seconds from the poster response (`X-Media-Duration`); null or absent when unknown. */
+	durationSeconds?: () => number | null;
 	isSelected: () => boolean;
 	setSelected: (selected: boolean) => void;
 }
@@ -22,7 +32,7 @@ interface LightboxHost {
 	selectionDisabled: () => boolean;
 }
 
-type LightboxState = "loading" | "ok" | "error" | "toolarge";
+type LightboxState = "loading" | "ok" | "error" | "toolarge" | "verror";
 
 const FOCUSABLE = "button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex='-1'])";
 
@@ -89,6 +99,10 @@ async function loadFull(item: LightboxItem, signal: AbortSignal): Promise<void> 
 			return;
 		}
 		if (outcome !== "ok") {
+			if (item.kind === "video") {
+				setState("verror");
+				return;
+			}
 			setState(outcome === "toolarge" && item.thumbUrl() ? "toolarge" : "error");
 			return;
 		}
@@ -106,15 +120,25 @@ async function loadFull(item: LightboxItem, signal: AbortSignal): Promise<void> 
 			});
 			img.addEventListener("error", () => {
 				if (!signal.aborted) {
-					setState("error");
+					setState(item.kind === "video" ? "verror" : "error");
 				}
 			});
 		}
 	} catch {
 		if (!signal.aborted) {
-			setState("error");
+			setState(item.kind === "video" ? "verror" : "error");
 		}
 	}
+}
+
+/** Caption under the name: photos show `info`; videos get "Video · m:ss · info" (duration omitted when unknown). */
+function captionFor(item: LightboxItem): string {
+	if (item.kind !== "video") {
+		return item.info;
+	}
+	const seconds = item.durationSeconds?.() ?? null;
+	const duration = seconds === null ? "" : formatMediaDuration(seconds);
+	return ["Video", duration, item.info].filter((part) => part !== "").join(" · ");
 }
 
 function show(item: LightboxItem): void {
@@ -129,7 +153,7 @@ function show(item: LightboxItem): void {
 	}
 	const info = byId<HTMLElement>("dp-lb-info");
 	if (info) {
-		info.textContent = item.info;
+		info.textContent = captionFor(item);
 	}
 	const pos = byId<HTMLElement>("dp-lb-pos");
 	if (pos) {
@@ -145,6 +169,15 @@ function show(item: LightboxItem): void {
 	}
 	syncSelection();
 	setImage(".dp-lb-blur", item.thumbUrl());
+	const lb = box();
+	if (lb) {
+		lb.dataset.kind = item.kind ?? "image";
+		if (item.kind === "video" && !item.thumbUrl()) {
+			lb.dataset.poster = "none";
+		} else {
+			delete lb.dataset.poster;
+		}
+	}
 	setState("loading");
 	controller = new AbortController();
 	void loadFull(item, controller.signal);

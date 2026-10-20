@@ -1,5 +1,5 @@
 /** Lightbox for the phone picker's photo previews (`#dp-lb`): browse image rows, tick them, see the large rendition. */
-import { buildPreviewUrl, outcomeForStatus, stepIndex } from "./device-preview.js";
+import { buildPreviewUrl, formatMediaDuration, outcomeForStatus, stepIndex } from "./device-preview.js";
 
 const FOCUSABLE = "button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex='-1'])";
 let host = null;
@@ -58,6 +58,10 @@ async function loadFull(item, signal) {
 			return;
 		}
 		if (outcome !== "ok") {
+			if (item.kind === "video") {
+				setState("verror");
+				return;
+			}
 			setState(outcome === "toolarge" && item.thumbUrl() ? "toolarge" : "error");
 			return;
 		}
@@ -75,15 +79,24 @@ async function loadFull(item, signal) {
 			});
 			img.addEventListener("error", () => {
 				if (!signal.aborted) {
-					setState("error");
+					setState(item.kind === "video" ? "verror" : "error");
 				}
 			});
 		}
 	} catch {
 		if (!signal.aborted) {
-			setState("error");
+			setState(item.kind === "video" ? "verror" : "error");
 		}
 	}
+}
+/** Caption under the name: photos show `info`; videos get "Video · m:ss · info" (duration omitted when unknown). */
+function captionFor(item) {
+	if (item.kind !== "video") {
+		return item.info;
+	}
+	const seconds = item.durationSeconds?.() ?? null;
+	const duration = seconds === null ? "" : formatMediaDuration(seconds);
+	return ["Video", duration, item.info].filter((part) => part !== "").join(" · ");
 }
 function show(item) {
 	abortPending();
@@ -97,7 +110,7 @@ function show(item) {
 	}
 	const info = byId("dp-lb-info");
 	if (info) {
-		info.textContent = item.info;
+		info.textContent = captionFor(item);
 	}
 	const pos = byId("dp-lb-pos");
 	if (pos) {
@@ -113,6 +126,15 @@ function show(item) {
 	}
 	syncSelection();
 	setImage(".dp-lb-blur", item.thumbUrl());
+	const lb = box();
+	if (lb) {
+		lb.dataset.kind = item.kind ?? "image";
+		if (item.kind === "video" && !item.thumbUrl()) {
+			lb.dataset.poster = "none";
+		} else {
+			delete lb.dataset.poster;
+		}
+	}
 	setState("loading");
 	controller = new AbortController();
 	void loadFull(item, controller.signal);

@@ -160,6 +160,17 @@ class AfcDeviceRepository:
 
 		return self._bounded(read, timeout_s)
 
+	def read_range(self, device_id: str, path: str, offset: int, length: int, timeout_s: float) -> bytes:
+		"""Up to ``length`` bytes at ``offset`` of a file on the mount (seek + bounded read)."""
+		target = self._browse_target(device_id, path)
+
+		def read() -> bytes:
+			with target.open("rb") as handle:
+				handle.seek(offset)
+				return handle.read(length)
+
+		return self._bounded(read, timeout_s)
+
 	def pull_file_with_timeout(self, device_id: str, path: str, local_path: str, timeout_s: float) -> None:
 		"""Copy a whole file off the mount, bounded by ``timeout_s``; a partial ``local_path`` may remain."""
 		target = self._browse_target(device_id, path)

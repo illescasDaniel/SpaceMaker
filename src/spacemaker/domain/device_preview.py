@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind
 
 
 PREVIEW_HEAD_BYTES = 65_536
@@ -13,11 +14,30 @@ PREVIEW_CACHE_MAX_BYTES = 200 * 1024 * 1024
 PREVIEW_MAX_CONCURRENT_READS = 4
 PREVIEW_HEAD_TIMEOUT_S = 10.0
 PREVIEW_FULL_TIMEOUT_S = 30.0
-DEVICE_PREVIEW_FORMAT_VERSION = "1"
-"""Bump when the pipeline changes so old cache entries stop matching."""
+DEVICE_PREVIEW_FORMAT_VERSION = "2"
+"""Bump when the pipeline changes so old cache entries stop matching (``"2"``: video posters and durations)."""
+
+STREAM_MAX_CHUNK_BYTES = 4 * 1024 * 1024
+"""Largest byte range one loopback stream response serves (see ``parse_single_range``)."""
+VIDEO_POSTER_TIMEOUT_S = 20.0
+"""Wall-clock budget of one video poster render (first frame + duration)."""
+PREVIEW_SLOT_WAIT_S = 20.0
+"""Longest a preview request waits for one of the per-device read slots before answering ``TIMEOUT``."""
+STREAM_READ_TIMEOUT_S = 10.0
+"""Budget of one ``read_range`` device read (per range request)."""
 
 PREVIEWABLE_IMAGE_EXTENSIONS: frozenset[str] = frozenset({"jpg", "jpeg", "png", "webp", "gif", "heic", "heif"})
 """Lower-case, without the dot."""
+
+PREVIEWABLE_VIDEO_EXTENSIONS: frozenset[str] = frozenset({"mp4", "mov", "m4v", "3gp", "mkv", "webm"})
+"""Lower-case, without the dot."""
+
+
+class DevicePreviewMedia(StrEnum):
+	"""Which pipeline renders a file's preview."""
+
+	IMAGE = "image"
+	VIDEO = "video"
 
 
 class DevicePreviewKind(StrEnum):
@@ -49,6 +69,24 @@ class DevicePreviewError(Exception):
 		self.detail = detail
 
 
+class DevicePreviewCancelled(Exception):
+	"""The caller went away (client abort) before the preview finished; nothing was cached."""
+
+
+_ERROR_BY_BROWSE_KIND: dict[DeviceBrowseErrorKind, DevicePreviewErrorKind] = {
+	DeviceBrowseErrorKind.INVALID_PATH: DevicePreviewErrorKind.INVALID_PATH,
+	DeviceBrowseErrorKind.UNPLUGGED: DevicePreviewErrorKind.UNPLUGGED,
+	DeviceBrowseErrorKind.UNAUTHORIZED: DevicePreviewErrorKind.UNAUTHORIZED,
+	DeviceBrowseErrorKind.TIMEOUT: DevicePreviewErrorKind.TIMEOUT,
+}
+
+
+def map_browse_error(exc: DeviceBrowseError) -> DevicePreviewError:
+	"""Preview-API error for a failed device read (anything unmapped, e.g. not found, is ``NO_PREVIEW``)."""
+	kind = _ERROR_BY_BROWSE_KIND.get(exc.kind, DevicePreviewErrorKind.NO_PREVIEW)
+	return DevicePreviewError(kind, exc.detail)
+
+
 @dataclass(frozen=True, slots=True)
 class DevicePreviewRequest:
 	"""One thumbnail/preview request. ``path`` is storage-relative (as in the listing); ``size`` and
@@ -69,6 +107,24 @@ class DevicePreview:
 
 	jpeg: bytes
 	etag: str
+	duration_s: float | None = None
+	"""Video length in seconds (``None`` for photos or when the container does not say)."""
+
+
+@dataclass(frozen=True, slots=True)
+class CachedDevicePreview:
+	"""What ``DevicePreviewCachePort`` stores per key: the JPEG and, for videos, the duration."""
+
+	jpeg: bytes
+	duration_s: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class VideoPoster:
+	"""First frame of a video as a fit-within JPEG, plus the duration found in the same run."""
+
+	jpeg: bytes
+	duration_s: float | None
 
 
 def is_previewable_image(name: str) -> bool:
@@ -76,6 +132,18 @@ def is_previewable_image(name: str) -> bool:
 	if "." not in name:
 		return False
 	return name.rsplit(".", 1)[-1].lower() in PREVIEWABLE_IMAGE_EXTENSIONS
+
+
+def preview_media_of(name: str) -> DevicePreviewMedia | None:
+	"""``IMAGE`` / ``VIDEO`` from the extension of ``name`` (case-insensitive); ``None`` when not previewable."""
+	if "." not in name:
+		return None
+	extension = name.rsplit(".", 1)[-1].lower()
+	if extension in PREVIEWABLE_IMAGE_EXTENSIONS:
+		return DevicePreviewMedia.IMAGE
+	if extension in PREVIEWABLE_VIDEO_EXTENSIONS:
+		return DevicePreviewMedia.VIDEO
+	return None
 
 
 def device_preview_cache_key(request: DevicePreviewRequest) -> str:
@@ -93,6 +161,14 @@ def device_preview_cache_key(request: DevicePreviewRequest) -> str:
 
 
 __all__ = [
+	"PREVIEWABLE_VIDEO_EXTENSIONS",
+	"STREAM_MAX_CHUNK_BYTES",
+	"STREAM_READ_TIMEOUT_S",
+	"VIDEO_POSTER_TIMEOUT_S",
+	"CachedDevicePreview",
+	"DevicePreviewMedia",
+	"VideoPoster",
+	"preview_media_of",
 	"DEVICE_PREVIEW_FORMAT_VERSION",
 	"PREVIEWABLE_IMAGE_EXTENSIONS",
 	"PREVIEW_CACHE_MAX_BYTES",
@@ -108,4 +184,5 @@ __all__ = [
 	"DevicePreviewRequest",
 	"device_preview_cache_key",
 	"is_previewable_image",
+	"map_browse_error",
 ]

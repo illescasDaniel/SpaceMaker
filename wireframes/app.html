@@ -634,6 +634,39 @@
 		.dp-thumb.is-failed .dp-thumb-glyph,
 		.dp-thumb.is-toolarge .dp-thumb-glyph { display: inline; }
 		@keyframes dp-shimmer { to { background-position: -200% 0; } }
+		/* Video rows: poster + small play glyph + duration badge. Hidden while loading / when there is no poster. */
+		.dp-thumb-play, .dp-thumb-dur { display: none; pointer-events: none; }
+		.dp-thumb-video .dp-thumb-play {
+			position: absolute;
+			left: 50%;
+			top: 44%;
+			transform: translate(-50%, -50%);
+			width: 1.3rem;
+			height: 1.3rem;
+			padding-left: 0.08rem;
+			border-radius: 50%;
+			background: rgba(0, 0, 0, 0.55);
+			color: #fff;
+			font-size: 0.55rem;
+			align-items: center;
+			justify-content: center;
+		}
+		.dp-thumb-video .dp-thumb-dur {
+			position: absolute;
+			right: 0;
+			bottom: 0;
+			max-width: 100%;
+			padding: 0 0.25rem;
+			border-radius: 4px 0 0 0;
+			background: rgba(0, 0, 0, 0.72);
+			color: #fff;
+			font-size: 0.58rem;
+			line-height: 1.3;
+			white-space: nowrap;
+			font-variant-numeric: tabular-nums;
+		}
+		.dp-thumb-video:not(.is-loading):not(.is-failed) .dp-thumb-play { display: inline-flex; }
+		.dp-thumb-video:not(.is-loading):not(.is-failed) .dp-thumb-dur { display: block; }
 		@media (prefers-reduced-motion: reduce) { .dp-thumb.is-loading .dp-thumb-img { animation: none; } }
 		.dp-ico-media { width: var(--dp-thumb); height: var(--dp-thumb); display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; }
 		.dp-preview-btn {
@@ -722,7 +755,7 @@
 				linear-gradient(160deg, hsl(var(--h, 210) 60% 58%), hsl(calc(var(--h, 210) + 40) 55% 28%));
 		}
 		/* Production: <img> with max-width/max-height: 100%; object-fit: contain, centered. */
-		.dp-lb-loading, .dp-lb-error {
+		.dp-lb-loading, .dp-lb-error, .dp-lb-verror {
 			position: absolute;
 			inset: 0;
 			display: none;
@@ -735,8 +768,8 @@
 		}
 		.dp-lb-loading { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
 		.dp-lb-loading .dp-spinner { margin: 0; border-color: rgba(255, 255, 255, 0.4); border-top-color: #fff; }
-		.dp-lb-error { background: var(--surface2); color: var(--muted); }
-		.dp-lb-error strong { color: var(--text); font-size: 1rem; }
+		.dp-lb-error, .dp-lb-verror { background: var(--surface2); color: var(--muted); }
+		.dp-lb-error strong, .dp-lb-verror strong { color: var(--text); font-size: 1rem; }
 		.dp-lb[data-state="loading"] .dp-lb-full { opacity: 0; }
 		.dp-lb[data-state="loading"] .dp-lb-loading { display: flex; }
 		.dp-lb[data-state="error"] .dp-lb-blur,
@@ -744,9 +777,32 @@
 		.dp-lb[data-state="error"] .dp-lb-error { display: flex; }
 		.dp-lb-hint { margin: 0; font-size: 0.78rem; color: var(--muted); text-align: center; }
 
+		/* Video in the lightbox (poster only, no playback in Phase B). States via data-state: vposter, vframe, verror. */
+		.dp-lb-vnote { display: none; margin: 0; font-size: 0.82rem; color: var(--muted); text-align: center; }
+		.dp-lb[data-kind="video"]:not([data-state="verror"]) .dp-lb-vnote { display: block; }
+		.dp-lb-glyph { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-size: 3rem; color: var(--muted); }
+		.dp-lb[data-poster="none"] .dp-lb-blur,
+		.dp-lb[data-poster="none"] .dp-lb-full { display: none; }
+		.dp-lb[data-poster="none"] .dp-lb-glyph { display: flex; }
+		.dp-lb[data-state="vposter"] .dp-lb-blur { display: none; }
+		.dp-lb[data-state="vposter"] .dp-lb-full {
+			background: linear-gradient(100deg, var(--surface2) 30%, var(--border) 50%, var(--surface2) 70%);
+			background-size: 200% 100%;
+			animation: dp-shimmer 1.2s linear infinite;
+		}
+		@media (prefers-reduced-motion: reduce) { .dp-lb[data-state="vposter"] .dp-lb-full { animation: none; } }
+		.dp-lb[data-state="vposter"] .dp-lb-loading { display: flex; color: var(--muted); text-shadow: none; }
+		.dp-lb[data-state="vposter"] .dp-lb-loading .dp-spinner { border-color: var(--border); border-top-color: var(--accent); }
+		.dp-lb[data-state="verror"] .dp-lb-blur,
+		.dp-lb[data-state="verror"] .dp-lb-full,
+		.dp-lb[data-state="verror"] .dp-lb-glyph { display: none; }
+		.dp-lb[data-state="verror"] .dp-lb-verror { display: flex; }
+
 		/* Narrow lightbox: full screen, nav buttons at the bottom. Also forced by the demo button (.is-mobile-demo). */
 		@media (max-width: 520px) {
 			.dp-list { --dp-thumb: 36px; }
+			.dp-thumb-video .dp-thumb-play { width: 1.05rem; height: 1.05rem; font-size: 0.45rem; }
+			.dp-thumb-video .dp-thumb-dur { padding: 0 0.15rem; font-size: 0.5rem; letter-spacing: -0.02em; }
 			.dp-lb { padding: 0; }
 			.dp-lb-panel { width: 100%; height: 100%; border-radius: 0; border: none; }
 			.dp-lb-stage { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: none; }
@@ -3212,15 +3268,26 @@
 				<button type="button" data-dp-lb-demo="mobile">Lightbox narrow (&lt; 520 px)</button>
 				<span>· or open <b>DCIM → Camera</b> and click any thumbnail / 👁.</span>
 			</p>
+			<p class="wireframe-demo-row">
+				Video previews:
+				<button type="button" data-dp-lbv-demo="poster">Video poster loading</button>
+				<button type="button" data-dp-lbv-demo="frame">Video frame (loaded)</button>
+				<button type="button" data-dp-lbv-demo="error">Video error</button>
+				<button type="button" data-dp-lbv-demo="mobile">Video narrow (&lt; 520 px)</button>
+				<span>· or open <b>DCIM → Camera</b> and click a row with a ▶ thumbnail.</span>
+			</p>
 
 			<div id="dp-demo-tiles-wrap">
-				<p class="dp-demo-caption">Static tile states (as they appear in a row, left to right: loading, loaded, failed, too large, video, document, folder):</p>
+				<p class="dp-demo-caption">Static tile states (as they appear in a row, left to right: loading, loaded, failed, too large, videos (loaded, long, loading, no poster), document, folder):</p>
 				<ul class="dp-list dp-demo-tiles" aria-label="Thumbnail tile states (demo)">
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo loading" /><span class="dp-name"><span class="dp-thumb is-loading" role="img" aria-label="Thumbnail loading"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span></span><span class="dp-label">IMG_20261018_1.jpg — loading (shimmer)</span></span><span class="dp-size">3.2 MB</span><span class="dp-date">2026-10-18</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo loaded" /><span class="dp-name"><button type="button" class="dp-thumb" style="--h: 205" aria-label="Preview IMG_20261018_2.jpg"><span class="dp-thumb-img"></span></button><span class="dp-label">IMG_20261018_2.jpg — loaded</span><button type="button" class="dp-preview-btn" aria-label="Preview IMG_20261018_2.jpg">👁</button></span><span class="dp-size">3.4 MB</span><span class="dp-date">2026-10-18</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo failed" /><span class="dp-name"><button type="button" class="dp-thumb is-failed" aria-label="Preview IMG_20261018_3.heic"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span></button><span class="dp-label">IMG_20261018_3.heic — failed (icon only, no error text)</span><button type="button" class="dp-preview-btn" aria-label="Preview IMG_20261018_3.heic">👁</button></span><span class="dp-size">2.4 MB</span><span class="dp-date">2026-10-18</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo too large" /><span class="dp-name"><button type="button" class="dp-thumb is-toolarge" aria-label="Preview PANO_0042.jpg"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span></button><span class="dp-label">PANO_0042.jpg — too large (over the size cap, same as failed)</span><button type="button" class="dp-preview-btn" aria-label="Preview PANO_0042.jpg">👁</button></span><span class="dp-size">38 MB</span><span class="dp-date">2026-09-30</span></li>
-					<li class="dp-row"><input type="checkbox" aria-label="Select demo video" /><span class="dp-name"><span class="dp-ico dp-ico-media" aria-hidden="true">🎞</span><span class="dp-label">CLIP_0007.mp4 — video (generic icon; thumbnails come later)</span></span><span class="dp-size">18.4 MB</span><span class="dp-date">2026-09-04</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo video" /><span class="dp-name"><button type="button" class="dp-thumb dp-thumb-video" style="--h: 330" aria-label="Preview CLIP_0007.mp4 (video, 0:42)"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🎞</span><span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">0:42</span></button><span class="dp-label">CLIP_0007.mp4 — video, poster loaded (first frame, ▶ + duration)</span><button type="button" class="dp-preview-btn" aria-label="Preview CLIP_0007.mp4">👁</button></span><span class="dp-size">18.4 MB</span><span class="dp-date">2026-09-04</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo video long" /><span class="dp-name"><button type="button" class="dp-thumb dp-thumb-video" style="--h: 150" aria-label="Preview holiday.mov (video, 1:02:15)"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🎞</span><span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">1:02:15</span></button><span class="dp-label">holiday.mov — video, long clip (h:mm:ss badge)</span><button type="button" class="dp-preview-btn" aria-label="Preview holiday.mov">👁</button></span><span class="dp-size">1.4 GB</span><span class="dp-date">2026-08-20</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo video loading" /><span class="dp-name"><span class="dp-thumb dp-thumb-video is-loading" role="img" aria-label="Video poster loading"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🎞</span><span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">12:07</span></span><span class="dp-label">VID_0003.webm — video, poster loading (shimmer, no badge yet)</span></span><span class="dp-size">64 MB</span><span class="dp-date">2026-09-04</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo video failed" /><span class="dp-name"><button type="button" class="dp-thumb dp-thumb-video is-failed" aria-label="Preview VID_0004.3gp (video)"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🎞</span><span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">0:09</span></button><span class="dp-label">VID_0004.3gp — video, no poster (🎞 icon only)</span><button type="button" class="dp-preview-btn" aria-label="Preview VID_0004.3gp">👁</button></span><span class="dp-size">1.8 MB</span><span class="dp-date">2026-09-04</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo document" /><span class="dp-name"><span class="dp-ico dp-ico-media" aria-hidden="true">📄</span><span class="dp-label">contract.pdf — other file</span></span><span class="dp-size">1.2 MB</span><span class="dp-date">2026-09-30</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo folder" /><span class="dp-name"><span class="dp-ico dp-ico-media" aria-hidden="true">📁</span><span class="dp-label">Camera — folder</span></span><span class="dp-size">—</span><span class="dp-date">2026-10-18</span></li>
 				</ul>
@@ -3232,7 +3299,16 @@
 			</aside>
 			<aside class="wf-note" data-for="agent">
 				<span class="wf-note-badge">Agent note</span>
-				Thumbnails load only for rows currently visible in the list (IntersectionObserver), at most 4 requests at a time; scrolling away or changing folder cancels the request. Thumbnails are cached on disk (LRU, outside the library; key = device + path + size + mtime). Preview routes are loopback-only — never on the LAN allow-list. Videos: later phase (generic icon now). Lightbox a11y (spec): <code>role="dialog" aria-modal="true"</code> labelled by the file name, focus trap inside, focus returns to the opener (thumbnail or 👁) on close, Esc closes, arrow keys navigate, the position is announced via <code>aria-live="polite"</code>. The tile-state list and demo buttons are wireframe-only.
+				Thumbnails load only for rows currently visible in the list (IntersectionObserver), at most 4 requests at a time; scrolling away or changing folder cancels the request. Thumbnails are cached on disk (LRU, outside the library; key = device + path + size + mtime). Preview routes are loopback-only — never on the LAN allow-list. Videos: see the “Video previews” notes below. Lightbox a11y (spec): <code>role="dialog" aria-modal="true"</code> labelled by the file name, focus trap inside, focus returns to the opener (thumbnail or 👁) on close, Esc closes, arrow keys navigate, the position is announced via <code>aria-live="polite"</code>. The tile-state list and demo buttons are wireframe-only.
+			</aside>
+
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				<b>Video previews (new, Phase B — posters only):</b> video rows (mp4, mov, m4v, 3gp, mkv, webm) get the same rounded thumbnail as photos (44 px, 36 px below 520 px) showing the video’s <b>first frame</b>, a small ▶ glyph in the centre and a <b>duration badge</b> in the bottom-right corner (<code>0:42</code>, <code>12:07</code>, <code>1:02:15</code>). States match photos: shimmer while loading (no glyph or badge yet), and the 🎞 icon alone (no badge) when there is no poster. The 👁 button and the thumbnail both open the lightbox, which steps through <b>photos and videos together</b> (“3 / 58” counts both). A video shows a large frame (thumbnail first, then the larger rendition, like photos), the caption “Video · 0:42 · 86.0 MB · date”, and a small muted note under the frame: “Playback isn’t available in the app yet. Transfer the video to watch it.” There is no play button and no player. Error looks like the photo error (“Video unavailable”, the file stays selectable). Selected checkbox, Esc, focus trap and the narrow full-screen layout (nav below) are unchanged. Use the “Video previews” demo buttons above.
+			</aside>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Posters and the large lightbox frame come from the <b>first frame</b> of the video, generated by ffmpeg reading only the byte ranges it needs through a <b>desktop-only (loopback) ranged stream route</b> (spike: about 0.7 s and about 4.5 MB per clip, whatever the file size); the duration comes from the same ffmpeg run. At most <b>4 preview reads per device</b> are in flight, shared between photos and videos, and previews yield to running transfers/extracts as photos do. No LAN or phone-browser access: the route is never on the LAN allow-list. Nothing is fully downloaded, so there is no size cap for videos. <b>Playback is out of scope</b> (the bundled Qt WebEngine can’t decode H.264/HEVC/AAC); it is planned as Phase B2.
 			</aside>
 
 			<aside class="wf-note" data-for="reviewer">
@@ -3263,15 +3339,18 @@
 					<button type="button" class="dp-lb-btn" id="dp-lb-close" aria-label="Close preview">✕</button>
 				</div>
 				<div class="dp-lb-stage">
-					<button type="button" class="dp-lb-btn dp-lb-prev" id="dp-lb-prev" aria-label="Previous photo">←</button>
+					<button type="button" class="dp-lb-btn dp-lb-prev" id="dp-lb-prev" aria-label="Previous photo or video">←</button>
 					<div class="dp-lb-photo">
 						<div class="dp-lb-blur"></div>
 						<div class="dp-lb-full"></div>
-						<div class="dp-lb-loading" role="status"><span class="dp-spinner" aria-hidden="true"></span>Loading larger preview…</div>
+						<div class="dp-lb-glyph" aria-hidden="true">🎞</div>
+						<div class="dp-lb-loading" role="status"><span class="dp-spinner" aria-hidden="true"></span><span id="dp-lb-loading-txt">Loading larger preview…</span></div>
 						<div class="dp-lb-error" role="alert"><strong>Preview unavailable</strong>You can still select this file.</div>
+						<div class="dp-lb-verror" role="alert"><strong>Video unavailable</strong>The phone was unplugged or didn’t respond. You can still select this file.</div>
 					</div>
-					<button type="button" class="dp-lb-btn dp-lb-next" id="dp-lb-next" aria-label="Next photo">→</button>
+					<button type="button" class="dp-lb-btn dp-lb-next" id="dp-lb-next" aria-label="Next photo or video">→</button>
 				</div>
+				<p class="dp-lb-vnote">Playback isn’t available in the app yet. Transfer the video to watch it.</p>
 				<p class="dp-lb-hint">← → to browse · Esc to close</p>
 			</div>
 		</div>
@@ -5033,6 +5112,13 @@
 			function f(name, size, mtime, media) { return { name: name, dir: false, size: size, mtime: mtime || '2026-09-12', media: media !== false }; }
 			var big = [];
 			for (let i = 1; i <= 3412; i += 1) { big.push(f('IMG_' + String(20260000 + i) + '.jpg', 3.1 * M + (i % 7) * 200 * K, '2026-08-' + String(1 + (i % 28)).padStart(2, '0'))); }
+			/* Videos among the photos (first page): dur = probe duration, vs = poster state. */
+			function vid(i, ext, size, extra) { big[i - 1] = Object.assign(f('IMG_' + String(20260000 + i) + '.' + ext, size, big[i - 1].mtime), extra); }
+			vid(3, 'mp4', 86 * M, { dur: '0:42' });
+			vid(6, 'mov', 212 * M, { dur: '12:07' });
+			vid(10, '3gp', 1.8 * M, { dur: '0:09', vs: 'failed' });
+			vid(15, 'mkv', 1434 * M, { dur: '1:02:15' });
+			vid(19, 'webm', 64 * M, { dur: '3:31', vs: 'loading' });
 			var tree = {
 				'': [d('Alarms'), d('Android'), d('DCIM'), d('Documents'), d('Download', '2026-10-17'), d('Movies'), d('Music'), d('Pictures'), d('WhatsApp'), d('.thumbnails'), f('.nomedia', 0, '2025-01-04', false), f('notes.txt', 2 * K, '2026-10-01', false)],
 				'Android': [d('data'), d('media'), d('obb')],
@@ -5115,6 +5201,7 @@
 			})();
 
 			function fmtSize(n) {
+				if (n >= 1024 * M) { return (n / (1024 * M)).toFixed(1) + ' GB'; }
 				if (n >= M) { return (n / M).toFixed(1) + ' MB'; }
 				if (n >= K) { return Math.round(n / K) + ' KB'; }
 				return n + ' B';
@@ -5230,30 +5317,56 @@
 				if (/WA0004|_13\./.test(e.name)) { return 'failed'; }
 				return hueOf(e.name) % 4 === 0 ? 'loading' : 'loaded';
 			}
+			var DURS = ['0:42', '12:07', '1:02:15', '0:09', '3:31'];
+			function durOf(e) { return e.dur || DURS[hueOf(e.name) % DURS.length]; }
+			function videoThumbState(e) { return e.vs || (hueOf(e.name) % 4 === 0 ? 'loading' : 'loaded'); }
 			var lb = document.getElementById('dp-lb');
 			var lbOpener = null;
 			var lbPath = null;
-			function lbRows() { return Array.prototype.slice.call(listEl.querySelectorAll('li.dp-row[data-image]')); }
+			var lbEntry = null;
+			function lbRows() { return Array.prototype.slice.call(listEl.querySelectorAll('li.dp-row[data-image], li.dp-row[data-video]')); }
 			function lbRowFor(path) { return lbRows().filter(function (r) { return r.dataset.path === path; })[0] || null; }
-			function setLbState(state) { lb.dataset.state = state; }
+			var LB_LOADING_TXT = { vposter: 'Loading video frame…' };
+			function setLbState(state) {
+				lb.dataset.state = state;
+				var e = lbEntry;
+				if (!e) { return; }
+				var isV = VID_RE.test(e.name);
+				lb.dataset.kind = isV ? 'video' : 'photo';
+				document.getElementById('dp-lb-loading-txt').textContent = LB_LOADING_TXT[state] || 'Loading larger preview…';
+				document.getElementById('dp-lb-info').textContent = isV
+					? ['Video', durOf(e), fmtSize(e.size), e.mtime].join(' · ')
+					: fmtSize(e.size) + ' · ' + e.mtime;
+			}
 			function showLb(path) {
 				var rows = lbRows();
 				var idx = rows.findIndex(function (r) { return r.dataset.path === path; });
 				var e = imgInfo[path];
 				if (!e) { return; }
 				lbPath = path;
+				lbEntry = e;
+				var isV = VID_RE.test(e.name);
 				lb.style.setProperty('--h', String(hueOf(e.name)));
 				document.getElementById('dp-lb-name').textContent = e.name;
-				document.getElementById('dp-lb-info').textContent = fmtSize(e.size) + ' · ' + e.mtime;
 				document.getElementById('dp-lb-pos').textContent = idx >= 0 ? (idx + 1) + ' / ' + rows.length : '';
 				document.getElementById('dp-lb-prev').disabled = idx <= 0;
 				document.getElementById('dp-lb-next').disabled = idx < 0 || idx >= rows.length - 1;
 				var cb = document.getElementById('dp-lb-sel');
 				cb.checked = !!selected[path];
 				cb.disabled = !!(ctx && ctx.kind === 'folders');
+				window.clearTimeout(showLb.t);
+				if (isV) {
+					const vs = videoThumbState(e);
+					lb.dataset.poster = vs === 'failed' ? 'none' : '';
+					if (vs === 'loading') {
+						setLbState('vposter');
+						showLb.t = window.setTimeout(function () { setLbState('vframe'); }, 900);
+					} else { setLbState('vframe'); }
+					return;
+				}
+				lb.dataset.poster = '';
 				var st = thumbState(e);
 				setLbState(st === 'failed' || st === 'toolarge' ? 'error' : 'loading');
-				window.clearTimeout(showLb.t);
 				if (lb.dataset.state === 'loading') { showLb.t = window.setTimeout(function () { setLbState('ok'); }, 900); }
 			}
 			function openLb(path, opener) {
@@ -5307,6 +5420,25 @@
 				});
 			});
 
+			document.querySelectorAll('[data-dp-lbv-demo]').forEach(function (b) {
+				b.addEventListener('click', function () {
+					var mode = b.getAttribute('data-dp-lbv-demo');
+					if (!ctx) { ctx = { kind: 'both' }; }
+					if (!listEl.querySelector('li.dp-row[data-video]')) { forced = 'big'; cwd = 'DCIM/Camera'; loadFirst(true); }
+					var tries = 0;
+					(function wait() {
+						var first = listEl.querySelector('li.dp-row[data-video]');
+						if (!first && tries++ < 20) { window.setTimeout(wait, 100); return; }
+						if (!first) { return; }
+						openLb(first.dataset.path, b);
+						window.clearTimeout(showLb.t);
+						lb.dataset.poster = '';
+						if (mode === 'mobile') { lb.classList.add('is-mobile-demo'); setLbState('vframe'); return; }
+						setLbState({ poster: 'vposter', frame: 'vframe', error: 'verror' }[mode] || 'vframe');
+					})();
+				});
+			});
+
 			function makeRow(e) {
 				var path = join(cwd, e.name);
 				var li = document.createElement('li');
@@ -5334,19 +5466,19 @@
 				name.className = 'dp-name';
 				var isImg = !e.dir && IMG_RE.test(e.name);
 				var isVid = !e.dir && VID_RE.test(e.name);
-				name.innerHTML = (isImg ? '' : '<span class="dp-ico' + (isVid ? ' dp-ico-media' : '') + '" aria-hidden="true">' + (e.dir ? '📁' : isVid ? '🎞' : '📄') + '</span>') + '<span class="dp-label"></span>';
+				name.innerHTML = (isImg || isVid ? '' : '<span class="dp-ico' + (isVid ? ' dp-ico-media' : '') + '" aria-hidden="true">' + (e.dir ? '📁' : isVid ? '🎞' : '📄') + '</span>') + '<span class="dp-label"></span>';
 				name.querySelector('.dp-label').textContent = e.name;
 				li.dataset.path = path;
-				if (isImg) {
-					li.dataset.image = '1';
+				if (isImg || isVid) {
+					li.dataset[isVid ? 'video' : 'image'] = '1';
 					imgInfo[path] = e;
-					const st = thumbState(e);
+					const st = isVid ? videoThumbState(e) : thumbState(e);
 					const th = document.createElement('button');
 					th.type = 'button';
-					th.className = 'dp-thumb is-' + st;
+					th.className = 'dp-thumb' + (isVid ? ' dp-thumb-video' : '') + ' is-' + st;
 					th.style.setProperty('--h', String(hueOf(e.name)));
-					th.setAttribute('aria-label', 'Preview ' + e.name);
-					th.innerHTML = '<span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span>';
+					th.setAttribute('aria-label', 'Preview ' + e.name + (isVid ? ' (video, ' + durOf(e) + ')' : ''));
+					th.innerHTML = '<span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">' + (isVid ? '🎞' : '🖼') + '</span>' + (isVid ? '<span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">' + durOf(e) + '</span>' : '');
 					name.insertBefore(th, name.firstChild);
 					if (st === 'loading') {
 						/* Demo: tiles resolve after a short delay (production: lazy, max 4 in flight). */

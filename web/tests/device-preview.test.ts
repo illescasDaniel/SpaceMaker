@@ -3,7 +3,9 @@ import {
 	buildPreviewUrl,
 	createThumbLoader,
 	FetchQueue,
+	formatMediaDuration,
 	isImageName,
+	isPreviewableVideo,
 	isVideoName,
 	outcomeForStatus,
 	retriesOnVisible,
@@ -51,6 +53,29 @@ describe("preview helpers", () => {
 		expect(stepIndex(2, 1, 3)).toBeNull();
 		expect(stepIndex(1, 1, 3)).toBe(2);
 		expect(stepIndex(-1, 1, 3)).toBe(0);
+	});
+});
+
+describe("video helpers", () => {
+	it("given seconds when formatted then m:ss, h:mm:ss, rounding down, and empty for invalid", () => {
+		expect(formatMediaDuration(42.4)).toBe("0:42");
+		expect(formatMediaDuration(42.99)).toBe("0:42");
+		expect(formatMediaDuration(727)).toBe("12:07");
+		expect(formatMediaDuration(3735)).toBe("1:02:15");
+		expect(formatMediaDuration(0)).toBe("0:00");
+		expect(formatMediaDuration(Number.NaN)).toBe("");
+		expect(formatMediaDuration(-1)).toBe("");
+	});
+
+	it("given names when classified then only the six poster formats are previewable videos, any case", () => {
+		for (const name of ["a.mp4", "a.MOV", "a.m4v", "a.3gp", "a.MKV", "a.WebM"]) {
+			expect(isPreviewableVideo(name)).toBe(true);
+		}
+		for (const name of ["a.jpg", "a.avi", "a.pdf", "mp4", ".mp4"]) {
+			expect(isPreviewableVideo(name)).toBe(false);
+		}
+		expect(isImageName("clip.mp4")).toBe(false);
+		expect(isImageName("IMG.JPG")).toBe(true);
 	});
 });
 
@@ -206,6 +231,137 @@ describe("thumb loader", () => {
 		FakeObserver.instances[0]?.emit(b, true);
 		await flush();
 		expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+		loader.reset();
+		vi.unstubAllGlobals();
+	});
+});
+
+function videoThumb(name = "clip.mp4"): HTMLButtonElement {
+	const button = document.createElement("button");
+	button.className = "dp-thumb dp-thumb-video is-loading";
+	button.setAttribute("aria-label", "Preview " + name + " (video)");
+	button.innerHTML =
+		'<span class="dp-thumb-img"></span><span class="dp-thumb-glyph">🎞</span><span class="dp-thumb-play">▶</span><span class="dp-thumb-dur"></span>';
+	document.body.appendChild(button);
+	return button;
+}
+const videoTarget = { ...target, path: "DCIM/Camera/clip.mp4" };
+const dur = (b: HTMLElement): string => b.querySelector(".dp-thumb-dur")?.textContent ?? "";
+
+describe("thumb loader with videos", () => {
+	function setup(): void {
+		FakeObserver.instances = [];
+		vi.stubGlobal("IntersectionObserver", FakeObserver);
+		vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:v", revokeObjectURL: () => undefined }));
+	}
+
+	it("given a visible video row when the poster loads then thumb is requested and badge, label and duration follow the header", async () => {
+		setup();
+		const calls: string[] = [];
+		globalThis.fetch = vi.fn(async (url: unknown) => {
+			calls.push(String(url));
+			return new Response(new Blob(["x"]), { status: 200, headers: { "X-Media-Duration": "42.37" } });
+		}) as typeof fetch;
+		const loader = createThumbLoader(null);
+		const button = videoThumb();
+		loader.register(button, videoTarget);
+		FakeObserver.instances[0]?.emit(button, true);
+		await flush();
+		expect(calls[0]).toContain("/api/device/thumb?");
+		expect(button.querySelector("img.dp-thumb-img")?.getAttribute("src")).toBe("blob:v");
+		expect(button.querySelector(".dp-thumb-play")?.textContent).toBe("▶");
+		expect(button.classList.contains("is-loading")).toBe(false);
+		expect(button.classList.contains("is-failed")).toBe(false);
+		expect(dur(button)).toBe("0:42");
+		expect(button.getAttribute("aria-label")).toBe("Preview clip.mp4 (video, 0:42)");
+		expect(loader.durationFor(button)).toBeCloseTo(42.37);
+		loader.reset();
+		vi.unstubAllGlobals();
+	});
+
+	it("given a poster without the duration header then poster and play glyph show, no badge, label without duration", async () => {
+		setup();
+		globalThis.fetch = vi.fn(async () => new Response(new Blob(["x"]), { status: 200 })) as typeof fetch;
+		const loader = createThumbLoader(null);
+		const button = videoThumb();
+		loader.register(button, videoTarget);
+		FakeObserver.instances[0]?.emit(button, true);
+		await flush();
+		expect(button.querySelector("img.dp-thumb-img")).not.toBeNull();
+		expect(dur(button)).toBe("");
+		expect(button.getAttribute("aria-label")).toBe("Preview clip.mp4 (video)");
+		expect(loader.durationFor(button)).toBeNull();
+		loader.reset();
+		vi.unstubAllGlobals();
+	});
+
+	it("given a 404 when requested then the 🎞 icon stays with no badge and no error text, and it is not retried", async () => {
+		setup();
+		globalThis.fetch = vi.fn(async () => new Response("{}", { status: 404 })) as typeof fetch;
+		const loader = createThumbLoader(null);
+		const button = videoThumb();
+		loader.register(button, videoTarget);
+		FakeObserver.instances[0]?.emit(button, true);
+		await flush();
+		expect(button.classList.contains("is-failed")).toBe(true);
+		expect(button.querySelector("img.dp-thumb-img")).toBeNull();
+		expect(dur(button)).toBe("");
+		expect(button.textContent).not.toMatch(/unavailable|error|failed/i);
+		expect(loader.durationFor(button)).toBeNull();
+		FakeObserver.instances[0]?.emit(button, false);
+		FakeObserver.instances[0]?.emit(button, true);
+		await flush();
+		expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+		loader.reset();
+		vi.unstubAllGlobals();
+	});
+
+	it("given a 409 when requested then the row is a plain busy icon without badge and is asked again on next visibility", async () => {
+		setup();
+		const statuses = [409, 200];
+		globalThis.fetch = vi.fn(
+			async () =>
+				new Response(new Blob(["x"]), {
+					status: statuses.shift() ?? 200,
+					headers: { "X-Media-Duration": "727" },
+				}),
+		) as typeof fetch;
+		const loader = createThumbLoader(null);
+		const button = videoThumb();
+		loader.register(button, videoTarget);
+		FakeObserver.instances[0]?.emit(button, true);
+		await flush();
+		expect(button.classList.contains("is-busy")).toBe(true);
+		expect(button.classList.contains("is-failed")).toBe(false);
+		expect(dur(button)).toBe("");
+		FakeObserver.instances[0]?.emit(button, false);
+		FakeObserver.instances[0]?.emit(button, true);
+		await flush();
+		expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+		expect(dur(button)).toBe("12:07");
+		loader.reset();
+		vi.unstubAllGlobals();
+	});
+
+	it("given photos and videos together when visible then at most four requests are in flight in total", async () => {
+		setup();
+		const pending: Array<() => void> = [];
+		globalThis.fetch = vi.fn(
+			() =>
+				new Promise<Response>((resolve) => {
+					pending.push(() => resolve(new Response(new Blob(["x"]), { status: 200 })));
+				}),
+		) as typeof fetch;
+		const loader = createThumbLoader(null);
+		const tiles = [videoThumb("a.mp4"), thumb(), videoThumb("b.mp4"), thumb(), videoThumb("c.mp4"), thumb()];
+		for (const t of tiles) {
+			loader.register(t, t.classList.contains("dp-thumb-video") ? videoTarget : target);
+			FakeObserver.instances[0]?.emit(t, true);
+		}
+		expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+		pending[0]?.();
+		await flush();
+		expect(globalThis.fetch).toHaveBeenCalledTimes(5);
 		loader.reset();
 		vi.unstubAllGlobals();
 	});

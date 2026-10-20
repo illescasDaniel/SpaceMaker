@@ -17,6 +17,7 @@ from spacemaker.adapters.outbound.filesystem.sha256_hasher import Sha256ContentH
 from spacemaker.adapters.outbound.filesystem.shutil_disk_space import ShutilDiskSpace
 from spacemaker.adapters.outbound.filesystem.zip_archive_writer import StoredZipArchiveWriter
 from spacemaker.adapters.outbound.gallery.sqlite_index import SqliteGalleryIndex
+from spacemaker.adapters.outbound.media.ffmpeg_video_poster import FfmpegVideoPoster
 from spacemaker.adapters.outbound.media.file_device_preview_cache import FileDevicePreviewCache
 from spacemaker.adapters.outbound.media.subprocess_converter import SubprocessMediaConverter
 from spacemaker.adapters.outbound.media.subprocess_preview_imaging import SubprocessPreviewImaging
@@ -34,6 +35,7 @@ from spacemaker.application.clear_user_preferences import ClearUserPreferences
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.delete_gallery_item import DeleteGalleryItem
 from spacemaker.application.device_listing_cache import DeviceListingCache
+from spacemaker.application.device_stream_tokens import DeviceStreamTokens
 from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.export_friendly_media_batch import ExportFriendlyMediaBatch
@@ -47,6 +49,7 @@ from spacemaker.application.get_gallery_item import GetGalleryItem
 from spacemaker.application.list_device_directory import ListDeviceDirectory
 from spacemaker.application.network_passcode import NetworkPasscode
 from spacemaker.application.promote_originals import PromoteOriginalsToProcessed
+from spacemaker.application.read_device_stream import ReadDeviceStream
 from spacemaker.application.receive_uploaded_documents import ReceiveUploadedDocuments
 from spacemaker.application.receive_uploaded_media import ReceiveUploadedMedia
 from spacemaker.application.reset_library import ResetLibrary
@@ -180,12 +183,17 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self._convert_control: ExtractJobControl | None = None
 		self._convert_future: Future[None] | None = None
 		# Phone photo previews: this object is the DeviceActivityPort (see UsbBrowseMixin.is_busy).
+		self.device_stream_tokens = DeviceStreamTokens()
+		self.read_device_stream = ReadDeviceStream(self.device_stream_tokens, self.devices_for, self)
 		self.get_device_preview = GetDevicePreview(
 			self.devices_for,
 			FileDevicePreviewCache(device_preview_cache_dir(), PREVIEW_CACHE_MAX_BYTES, time.time),
 			SubprocessPreviewImaging(self.runner),
 			self,
 			self.filesystem,
+			poster=FfmpegVideoPoster(self.runner),
+			tokens=self.device_stream_tokens,
+			stream_url=self._device_stream_url,
 		)
 		self.receive_uploaded = ReceiveUploadedMedia(self.filesystem)
 		self.receive_documents = ReceiveUploadedDocuments(self.filesystem)
@@ -195,6 +203,10 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self._documents_receive_root = default_documents_receive_root()
 		# Batch zips never survive an app restart (spec: gallery-batch).
 		self.sweep_batch_exports(expire_all=True)
+
+	def _device_stream_url(self, token: str) -> str:
+		"""Loopback URL of the stream endpoint for ``token`` (the poster renderer runs on this machine)."""
+		return f"http://127.0.0.1:{self.port}/api/device/stream?token={token}"
 
 	def devices_for(self, method: ConnectionMethod) -> DeviceRepositoryPort:
 		if method is ConnectionMethod.WIFI:

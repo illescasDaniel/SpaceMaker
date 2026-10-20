@@ -1,6 +1,10 @@
 /** Photo previews for the phone picker: URL building, status mapping, a bounded fetch queue and the lazy thumbnail loader. */
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
 const VIDEO_EXTENSIONS = new Set(["3gp", "avi", "m2ts", "m4v", "mkv", "mov", "mp4", "mts", "webm"]);
+/** Videos that get a poster frame (the rest keep the 🎞 icon). */
+const POSTER_EXTENSIONS = new Set(["3gp", "m4v", "mkv", "mov", "mp4", "webm"]);
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
 /** Concurrent thumbnail requests in flight (the server enforces the same cap per device). */
 const MAX_IN_FLIGHT = 4;
 /** Start loading a little before the row is on screen. */
@@ -15,6 +19,32 @@ function isImageName(name) {
 }
 function isVideoName(name) {
 	return VIDEO_EXTENSIONS.has(extensionOf(name));
+}
+/** True for the video extensions that get a poster (mp4, mov, m4v, 3gp, mkv, webm; case-insensitive). */
+function isPreviewableVideo(name) {
+	return POSTER_EXTENSIONS.has(extensionOf(name));
+}
+/** `m:ss` (`0:42`, `12:07`), `h:mm:ss` from one hour; rounds down; "" for NaN or negative. */
+function formatMediaDuration(seconds) {
+	if (!Number.isFinite(seconds) || seconds < 0) {
+		return "";
+	}
+	const total = Math.floor(seconds);
+	const hours = Math.floor(total / SECONDS_PER_HOUR);
+	const minutes = Math.floor((total % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+	const secs = String(total % SECONDS_PER_MINUTE).padStart(2, "0");
+	if (hours > 0) {
+		return hours + ":" + String(minutes).padStart(2, "0") + ":" + secs;
+	}
+	return minutes + ":" + secs;
+}
+/** Decimal seconds from the `X-Media-Duration` header; null when missing or not a finite non-negative number. */
+function parseMediaDuration(header) {
+	if (header === null || header.trim() === "") {
+		return null;
+	}
+	const value = Number(header);
+	return Number.isFinite(value) && value >= 0 ? value : null;
 }
 function buildPreviewUrl(kind, target) {
 	const params = new URLSearchParams({
@@ -118,16 +148,33 @@ function createThumbLoader(root, queue = new FetchQueue(MAX_IN_FLIGHT)) {
 			tile.button.classList.add(cls);
 		}
 	};
+	const applyDuration = (button, duration) => {
+		const badge = button.querySelector(".dp-thumb-dur");
+		if (!badge) {
+			return;
+		}
+		const text = duration === null ? "" : formatMediaDuration(duration);
+		badge.textContent = text;
+		const label = button.getAttribute("aria-label");
+		if (label) {
+			button.setAttribute(
+				"aria-label",
+				label.replace(/ \(video[^)]*\)$/, text ? " (video, " + text + ")" : " (video)"),
+			);
+		}
+	};
 	const request = (tile) => {
 		tile.state = "queued";
 		setState(tile, "is-loading");
 		tile.handle = queue.enqueue(async (signal) => {
 			let outcome;
 			let blob = null;
+			let duration = null;
 			try {
 				const response = await fetch(buildPreviewUrl("thumb", tile.target), { signal });
 				outcome = outcomeForStatus(response.status);
 				if (outcome === "ok") {
+					duration = parseMediaDuration(response.headers.get("X-Media-Duration"));
 					blob = await response.blob();
 				}
 			} catch {
@@ -141,6 +188,9 @@ function createThumbLoader(root, queue = new FetchQueue(MAX_IN_FLIGHT)) {
 			}
 			tile.handle = null;
 			if (blob) {
+				tile.duration = duration;
+				applyDuration(tile.button, duration);
+				tile.onPoster?.(duration);
 				const url = URL.createObjectURL(blob);
 				tile.objectUrl = url;
 				const img = document.createElement("img");
@@ -177,8 +227,16 @@ function createThumbLoader(root, queue = new FetchQueue(MAX_IN_FLIGHT)) {
 		}
 	};
 	return {
-		register(button, target) {
-			tiles.set(button, { button, target, state: "idle", handle: null, objectUrl: null });
+		register(button, target, onPoster) {
+			tiles.set(button, {
+				button,
+				target,
+				state: "idle",
+				handle: null,
+				objectUrl: null,
+				duration: null,
+				onPoster: onPoster ?? null,
+			});
 			if (typeof IntersectionObserver === "undefined") {
 				return;
 			}
@@ -210,6 +268,9 @@ function createThumbLoader(root, queue = new FetchQueue(MAX_IN_FLIGHT)) {
 		objectUrlFor(button) {
 			return tiles.get(button)?.objectUrl ?? null;
 		},
+		durationFor(button) {
+			return tiles.get(button)?.duration ?? null;
+		},
 	};
 }
 
@@ -217,7 +278,9 @@ export {
 	buildPreviewUrl,
 	createThumbLoader,
 	FetchQueue,
+	formatMediaDuration,
 	isImageName,
+	isPreviewableVideo,
 	isVideoName,
 	MAX_IN_FLIGHT,
 	outcomeForStatus,

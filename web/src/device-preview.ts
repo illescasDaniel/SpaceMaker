@@ -13,6 +13,11 @@ const VIDEO_EXTENSIONS: ReadonlySet<string> = new Set([
 	"webm",
 ]);
 
+/** Videos that get a poster frame (the rest keep the 🎞 icon). */
+const POSTER_EXTENSIONS: ReadonlySet<string> = new Set(["3gp", "m4v", "mkv", "mov", "mp4", "webm"]);
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
+
 /** Concurrent thumbnail requests in flight (the server enforces the same cap per device). */
 const MAX_IN_FLIGHT = 4;
 /** Start loading a little before the row is on screen. */
@@ -42,6 +47,35 @@ function isImageName(name: string): boolean {
 }
 function isVideoName(name: string): boolean {
 	return VIDEO_EXTENSIONS.has(extensionOf(name));
+}
+
+/** True for the video extensions that get a poster (mp4, mov, m4v, 3gp, mkv, webm; case-insensitive). */
+function isPreviewableVideo(name: string): boolean {
+	return POSTER_EXTENSIONS.has(extensionOf(name));
+}
+
+/** `m:ss` (`0:42`, `12:07`), `h:mm:ss` from one hour; rounds down; "" for NaN or negative. */
+function formatMediaDuration(seconds: number): string {
+	if (!Number.isFinite(seconds) || seconds < 0) {
+		return "";
+	}
+	const total = Math.floor(seconds);
+	const hours = Math.floor(total / SECONDS_PER_HOUR);
+	const minutes = Math.floor((total % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+	const secs = String(total % SECONDS_PER_MINUTE).padStart(2, "0");
+	if (hours > 0) {
+		return hours + ":" + String(minutes).padStart(2, "0") + ":" + secs;
+	}
+	return minutes + ":" + secs;
+}
+
+/** Decimal seconds from the `X-Media-Duration` header; null when missing or not a finite non-negative number. */
+function parseMediaDuration(header: string | null): number | null {
+	if (header === null || header.trim() === "") {
+		return null;
+	}
+	const value = Number(header);
+	return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 function buildPreviewUrl(kind: PreviewKind, target: PreviewTarget): string {
@@ -159,17 +193,21 @@ interface Tile {
 	state: TileState;
 	handle: QueueHandle | null;
 	objectUrl: string | null;
+	duration: number | null;
+	onPoster: ((duration: number | null) => void) | null;
 }
 
 interface ThumbLoader {
-	/** Start watching a thumbnail button; it loads once it scrolls into view. */
-	register: (button: HTMLButtonElement, target: PreviewTarget) => void;
+	/** Start watching a thumbnail button; it loads once it scrolls into view. `onPoster` fires after a poster loads. */
+	register: (button: HTMLButtonElement, target: PreviewTarget, onPoster?: (duration: number | null) => void) => void;
 	/** Abort queued and running requests but keep what is already loaded (rows still on screen). */
 	cancelPending: () => void;
 	/** Abort everything, revoke every object URL and forget all tiles (rows are being removed). */
 	reset: () => void;
 	/** Object URL of an already loaded thumbnail, if any. */
 	objectUrlFor: (button: HTMLButtonElement) => string | null;
+	/** Duration in seconds from the `X-Media-Duration` header of a loaded video poster; null when unknown. */
+	durationFor: (button: HTMLButtonElement) => number | null;
 }
 
 function createThumbLoader(root: HTMLElement | null, queue: FetchQueue = new FetchQueue(MAX_IN_FLIGHT)): ThumbLoader {
@@ -183,16 +221,34 @@ function createThumbLoader(root: HTMLElement | null, queue: FetchQueue = new Fet
 		}
 	};
 
+	const applyDuration = (button: HTMLButtonElement, duration: number | null): void => {
+		const badge = button.querySelector(".dp-thumb-dur");
+		if (!badge) {
+			return;
+		}
+		const text = duration === null ? "" : formatMediaDuration(duration);
+		badge.textContent = text;
+		const label = button.getAttribute("aria-label");
+		if (label) {
+			button.setAttribute(
+				"aria-label",
+				label.replace(/ \(video[^)]*\)$/, text ? " (video, " + text + ")" : " (video)"),
+			);
+		}
+	};
+
 	const request = (tile: Tile): void => {
 		tile.state = "queued";
 		setState(tile, "is-loading");
 		tile.handle = queue.enqueue(async (signal: AbortSignal): Promise<void> => {
 			let outcome: PreviewOutcome;
 			let blob: Blob | null = null;
+			let duration: number | null = null;
 			try {
 				const response = await fetch(buildPreviewUrl("thumb", tile.target), { signal });
 				outcome = outcomeForStatus(response.status);
 				if (outcome === "ok") {
+					duration = parseMediaDuration(response.headers.get("X-Media-Duration"));
 					blob = await response.blob();
 				}
 			} catch {
@@ -206,6 +262,9 @@ function createThumbLoader(root: HTMLElement | null, queue: FetchQueue = new Fet
 			}
 			tile.handle = null;
 			if (blob) {
+				tile.duration = duration;
+				applyDuration(tile.button, duration);
+				tile.onPoster?.(duration);
 				const url = URL.createObjectURL(blob);
 				tile.objectUrl = url;
 				const img = document.createElement("img");
@@ -244,8 +303,16 @@ function createThumbLoader(root: HTMLElement | null, queue: FetchQueue = new Fet
 	};
 
 	return {
-		register(button: HTMLButtonElement, target: PreviewTarget): void {
-			tiles.set(button, { button, target, state: "idle", handle: null, objectUrl: null });
+		register(button: HTMLButtonElement, target: PreviewTarget, onPoster?: (duration: number | null) => void): void {
+			tiles.set(button, {
+				button,
+				target,
+				state: "idle",
+				handle: null,
+				objectUrl: null,
+				duration: null,
+				onPoster: onPoster ?? null,
+			});
 			if (typeof IntersectionObserver === "undefined") {
 				return;
 			}
@@ -277,6 +344,9 @@ function createThumbLoader(root: HTMLElement | null, queue: FetchQueue = new Fet
 		objectUrlFor(button: HTMLButtonElement): string | null {
 			return tiles.get(button)?.objectUrl ?? null;
 		},
+		durationFor(button: HTMLButtonElement): number | null {
+			return tiles.get(button)?.duration ?? null;
+		},
 	};
 }
 
@@ -285,7 +355,9 @@ export {
 	buildPreviewUrl,
 	createThumbLoader,
 	FetchQueue,
+	formatMediaDuration,
 	isImageName,
+	isPreviewableVideo,
 	isVideoName,
 	MAX_IN_FLIGHT,
 	outcomeForStatus,

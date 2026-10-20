@@ -9,8 +9,10 @@ from tests.unit.fakes import (
 	FakeDeviceRepository,
 	FakeFileSystem,
 	FakePreviewImaging,
+	FakeVideoPoster,
 )
 
+from spacemaker.application.device_stream_tokens import DeviceStreamTokens
 from spacemaker.application.get_device_preview import GetDevicePreview
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.device_browse import DeviceBrowseErrorKind, DeviceEntry
@@ -20,6 +22,7 @@ from spacemaker.domain.device_preview import (
 	PREVIEW_HEAD_BYTES,
 	PREVIEW_HEAD_TIMEOUT_S,
 	PREVIEW_MAX_CONCURRENT_READS,
+	CachedDevicePreview,
 	DevicePreviewError,
 	DevicePreviewErrorKind,
 	DevicePreviewKind,
@@ -45,7 +48,16 @@ class _Rig:
 	def __post_init__(self) -> None:
 		self.devices.bind_filesystem(self.filesystem)
 		self.imaging = FakePreviewImaging(filesystem=self.filesystem)
-		self.use_case = GetDevicePreview(self._resolve, self.cache, self.imaging, self.activity, self.filesystem)
+		self.use_case = GetDevicePreview(
+			self._resolve,
+			self.cache,
+			self.imaging,
+			self.activity,
+			self.filesystem,
+			poster=FakeVideoPoster(),
+			tokens=DeviceStreamTokens(),
+			stream_url=lambda token: f"http://127.0.0.1/{token}",
+		)
 
 	def _resolve(self, method: ConnectionMethod) -> FakeDeviceRepository:
 		self.resolved.append(method)
@@ -82,7 +94,7 @@ def test_given_embedded_thumbnail_when_thumb_then_one_head_read_and_no_pull_and_
 	assert rig.devices.stat_calls == []
 	assert rig.devices.pull_timeout_calls == []
 	key = device_preview_cache_key(request)
-	assert rig.cache.put_calls == [(key, b"embedded-jpeg")]
+	assert rig.cache.put_calls == [(key, CachedDevicePreview(b"embedded-jpeg"))]
 	assert preview.etag.startswith('"')
 	assert preview.etag.endswith('"')
 	assert key in preview.etag
@@ -103,7 +115,7 @@ def test_given_no_embedded_thumbnail_when_thumb_then_pulls_renders_320_and_delet
 	assert rig.imaging.render_calls == [(temp, 320, PREVIEW_FULL_TIMEOUT_S)]
 	assert rig.imaging.source_existed_at_render == [True]
 	assert temp not in rig.filesystem.files
-	assert rig.cache.put_calls == [(device_preview_cache_key(_request()), b"rendered-320")]
+	assert rig.cache.put_calls == [(device_preview_cache_key(_request()), CachedDevicePreview(b"rendered-320"))]
 
 
 def test_given_file_exactly_at_cap_when_fallback_then_still_pulled() -> None:
@@ -175,7 +187,7 @@ def test_given_cache_hit_when_thumb_then_served_without_any_device_call() -> Non
 	rig = _Rig()
 	request = _request()
 	key = device_preview_cache_key(request)
-	rig.cache.store[key] = b"cached-jpeg"
+	rig.cache.store[key] = CachedDevicePreview(b"cached-jpeg")
 	# when
 	preview = rig.use_case(request)
 	# then
@@ -189,7 +201,7 @@ def test_given_cache_hit_when_thumb_then_served_without_any_device_call() -> Non
 def test_given_changed_size_when_cached_entry_for_old_size_then_regenerated_from_phone() -> None:
 	# given
 	rig = _Rig()
-	rig.cache.store[device_preview_cache_key(_request(size=800_000))] = b"old"
+	rig.cache.store[device_preview_cache_key(_request(size=800_000))] = CachedDevicePreview(b"old")
 	rig.devices.heads[PATH] = b"head"
 	rig.imaging.embedded = b"fresh"
 	# when
@@ -216,7 +228,7 @@ def test_given_busy_device_when_cache_hit_then_still_served_because_no_device_ca
 	rig = _Rig()
 	rig.activity.busy = True
 	request = _request()
-	rig.cache.store[device_preview_cache_key(request)] = b"cached-jpeg"
+	rig.cache.store[device_preview_cache_key(request)] = CachedDevicePreview(b"cached-jpeg")
 	# when
 	preview = rig.use_case(request)
 	# then
@@ -278,7 +290,7 @@ def test_given_path_is_a_folder_when_preview_then_no_preview() -> None:
 	assert rig.devices.pull_timeout_calls == []
 
 
-@pytest.mark.parametrize("path", ["DCIM/Camera/clip.mp4", "DCIM/Camera/IMG_0001.dng", "DCIM/Camera/README", "DCIM"])
+@pytest.mark.parametrize("path", ["DCIM/Camera/clip.avi", "DCIM/Camera/IMG_0001.dng", "DCIM/Camera/README", "DCIM"])
 def test_given_non_image_extension_when_thumb_then_no_preview_without_device_calls(path: str) -> None:
 	# given
 	rig = _Rig()
@@ -346,7 +358,7 @@ def test_given_preview_kind_when_get_then_no_head_read_and_renders_1600() -> Non
 	temp = rig.filesystem.temp_files_created[0]
 	assert rig.imaging.render_calls == [(temp, 1600, PREVIEW_FULL_TIMEOUT_S)]
 	assert temp not in rig.filesystem.files
-	assert rig.cache.put_calls == [(device_preview_cache_key(request), b"rendered-1600")]
+	assert rig.cache.put_calls == [(device_preview_cache_key(request), CachedDevicePreview(b"rendered-1600"))]
 
 
 def test_given_afc_method_when_get_then_repository_resolved_for_that_method() -> None:
