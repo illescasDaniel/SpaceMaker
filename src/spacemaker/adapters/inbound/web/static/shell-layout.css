@@ -1014,3 +1014,37 @@
 			/* Modified column is hidden: keep every sort reachable from the toolbar. */
 			.dp-sort-select { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
 		}
+
+/* PC "Add" button (Send files / Transfer files): opens a Files… / Folder… chooser. */
+.add-menu-wrap { position: relative; flex: 1 1 14rem; }
+.add-menu-wrap .btn-add-more { margin-top: 0; }
+.add-menu {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: calc(100% + 0.25rem);
+	z-index: 5;
+	margin: 0;
+	padding: 0.25rem;
+	list-style: none;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.add-menu[hidden] { display: none; }
+.add-menu button {
+	display: block;
+	width: 100%;
+	padding: 0.55rem 0.75rem;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.add-menu button:hover,
+.add-menu button:focus-visible { background: var(--surface2); outline: none; }
+.add-menu .add-menu-sub { display: block; font-size: 0.75rem; color: var(--muted); }

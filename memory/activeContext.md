@@ -8,6 +8,8 @@ webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevm
 
 ## Current focus
 
+Unified **Add (files or folders)** on Send files / Transfer files (desktop) and **Choose files or folder** on the phone pages (receive/upload/transfer): wireframe, specs, implementation done and gate green (2026-10-20); chooser menu (Files…/Folder…) because OS dialogs and browser inputs cannot pick both. Committed on `main`; chooser extracted to `web/src/pick-chooser.ts` (tested). v1.2.2 Release run 39454611400 failed only because the macOS arm64 runner never started (cancelled, no steps); re-cut the tag.
+
 Unified **Add more (files or folders)** button (v1.2.2): implemented and committed on `main`, tested on a real phone, tagged and pushed as `v1.2.2` (release workflow). USB photo backup now starts with no folders selected and the empty-selection-means-everything bug is fixed. See `memory/progress.md`.
 
 Phone picker **video posters** (Phase B of `specs/device-file-picker/PLAN-media-preview.md`; `SPEC.md` "Video posters" revision, approved 2026-10-20): Phases 0–4 done, Phase 5 grader PASS (round 2; round 1 findings fixed), gate green (1195 py, 165 vitest), checked against the real Pixel. Uncommitted on `main` (new: `domain/device_stream.py`, `application/{device_stream_tokens,read_device_stream}.py`, `ports/outbound/video_poster.py`, `adapters/outbound/media/ffmpeg_video_poster.py`, loopback `GET /api/device/stream`). Next: commit; Phase B2 (playback, needs a codec answer for Qt WebEngine) and Phase C (RAW previews) are later revisions.

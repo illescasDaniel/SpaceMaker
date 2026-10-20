@@ -3,17 +3,24 @@
 ## Metadata
 
 - **Feature:** Pick files/folders on desktop; phone downloads via QR `/share` page
-- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-send-files`; phone [wireframes/phone-share.html](../../wireframes/phone-share.html). **Wireframe approved** 2026-09-23 (desktop hub + phone share page); **updated** 2026-09-23 (folder zip rows on phone page).
-- **Spec approved:** 2026-09-23; **updated** 2026-09-23 (folder zip downloads).
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-send-files`; phone [wireframes/phone-share.html](../../wireframes/phone-share.html). **Wireframe approved** 2026-09-23 (desktop hub + phone share page); **updated** 2026-09-23 (folder zip rows on phone page); **updated** 2026-10-20 (single Add button with Files…/Folder… chooser — approved).
+- **Spec approved:** 2026-09-23; **updated** 2026-09-23 (folder zip downloads); **re-approved** 2026-10-20 (single Add button).
 - **Architecture approved:** 2026-09-23
 - **Related:** [home-modules](../home-modules/SPEC.md)
+
+## Design decisions
+
+- **Success criteria:** one **Add** control replaces the separate file and folder buttons; the chooser offers Files / Folder and opens the existing native dialog or file input.
+- **Failure handling:** unchanged — a missing desktop bridge shows the existing "Use the desktop app" banner; an empty folder keeps the existing alert.
+- **Perf/resource budget:** UI-only change; no new requests, polling or dependencies.
+- **Trust boundary:** unchanged — paths still come only from the native desktop dialogs / browser file inputs and go through the existing validated APIs.
 
 ## Triggers & routing
 
 - Enter from Home → **Send files**. Selection is **session-only** (cleared on Home or quit).
-- Desktop: **Add files** / **Add folder** via pywebview dialogs → `POST /api/share/selection` with absolute paths.
+- Desktop: one **Add (files or folders)** button opens a two-item chooser (**Files…** / **Folder…**; OS dialogs cannot select both kinds at once), which opens the matching pywebview dialog → `POST /api/share/selection` with absolute paths. **Clear** stays beside it.
 - When the manifest is non-empty, show QR to `GET /share?t=…`.
-- Downloads: `GET /api/share/download?t=…&file_id=…` — single files as-is; each **top-level folder** from **Add folder** as a **`.zip`** (contents preserve relative paths inside the archive).
+- Downloads: `GET /api/share/download?t=…&file_id=…` — single files as-is; each **top-level folder** added via **Folder…** as a **`.zip`** (contents preserve relative paths inside the archive).
 - **Share token:** issued when the first shareable item is added; **reused** when the user adds more files/folders or removes items (until **Clear**, **Home**, or quit). The QR/URL must not change on each add.
 - Breadcrumb or header **Home** stops the share session and clears selection.
 
@@ -49,7 +56,7 @@
 
 ### Scenario: Loose files download individually
 
-- **Given** the user added one or more files via **Add files**
+- **Given** the user added one or more files via **Add → Files…**
 - **When** the phone opens the share page
 - **Then** each file has its own row and **Download** link (not zipped together)
 

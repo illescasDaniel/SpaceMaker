@@ -66,6 +66,10 @@
 		}
 		.hidden { display: none; }
 		#file-input, #folder-input { display: none; }
+		.pick-menu { list-style: none; margin: 0.4rem 0 0; padding: 0.25rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+		.pick-menu[hidden] { display: none; }
+		.pick-menu button { display: block; width: 100%; padding: 0.7rem 0.8rem; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+		.pick-menu button:hover, .pick-menu button:focus-visible { background: var(--surface2); outline: none; }
 	</style>
 </head>
 <body>
@@ -75,8 +79,11 @@
 		<p class="sent-count" id="upload-sent-count" hidden></p>
 		<div id="alert-paused" class="alert hidden">Uploads are paused on the PC. Resume there to continue.</div>
 		<div id="panel-ready" class="card">
-			<button type="button" class="btn btn-primary" id="btn-pick-files">Choose files</button>
-			<button type="button" class="btn btn-secondary" id="btn-pick-folder">Choose folder</button>
+			<button type="button" class="btn btn-primary" id="btn-pick-files" aria-expanded="false">Choose files or folder</button>
+			<ul class="pick-menu" id="pick-menu" hidden>
+				<li><button type="button" id="btn-pick-files-item">Files</button></li>
+				<li><button type="button" id="btn-pick-folder">Folder</button></li>
+			</ul>
 			<input type="file" id="file-input" multiple accept="image/*,video/*" />
 			<input type="file" id="folder-input" webkitdirectory directory multiple />
 			<p class="hint" id="device-hint"></p>
@@ -89,17 +96,6 @@
 	(function () {
 		var params = new URLSearchParams(window.location.search);
 		var token = params.get("t") || "";
-
-		function uploadDeviceKind() {
-			var ua = navigator.userAgent || "";
-			if (/iPhone|iPad|iPod/i.test(ua)) {
-				return "ios";
-			}
-			if (/Android/i.test(ua)) {
-				return "android";
-			}
-			return "other";
-		}
 
 		function renderFilesSent(body) {
 			var el = document.getElementById("upload-sent-count");
@@ -114,39 +110,6 @@
 			el.hidden = false;
 			el.textContent =
 				count === 1 ? "1 file sent to your PC" : count + " files sent to your PC";
-		}
-
-		function applyUploadUiForDevice() {
-			var kind = uploadDeviceKind();
-			var pickFiles = document.getElementById("btn-pick-files");
-			var pickFolder = document.getElementById("btn-pick-folder");
-			var hint = document.getElementById("device-hint");
-			if (kind === "ios") {
-				if (pickFiles) {
-					pickFiles.textContent = "Choose";
-				}
-				if (pickFolder) {
-					pickFolder.classList.add("hidden");
-				}
-				if (hint) {
-					hint.textContent = "Tap Choose, then pick from Photos or Files.";
-				}
-			} else {
-				if (pickFiles) {
-					pickFiles.textContent = "Choose files";
-				}
-				if (pickFolder) {
-					pickFolder.classList.remove("hidden");
-				}
-				if (hint) {
-					if (kind === "android") {
-						hint.textContent =
-							"On Android: folder upload works in Chrome; or choose files one batch at a time.";
-					} else {
-						hint.textContent = "Pick files or a folder from this device.";
-					}
-				}
-			}
 		}
 
 		function sessionUrl() {
@@ -231,12 +194,6 @@
 				});
 		}
 
-		document.getElementById("btn-pick-files").addEventListener("click", function () {
-			document.getElementById("file-input").click();
-		});
-		document.getElementById("btn-pick-folder").addEventListener("click", function () {
-			document.getElementById("folder-input").click();
-		});
 		document.getElementById("file-input").addEventListener("change", function (ev) {
 			uploadFiles(ev.target.files);
 			ev.target.value = "";
@@ -246,10 +203,18 @@
 			ev.target.value = "";
 		});
 
-		applyUploadUiForDevice();
 		refreshSession();
 		sessionPollTimer = setInterval(refreshSession, 5000);
 	})();
+	</script>
+	<script type="module">
+		import { initPickChooser } from "/static/js/pick-chooser.js";
+
+		initPickChooser(document, navigator.userAgent, {
+			ios: "Tap Choose, then pick from Photos or Files.",
+			android: "On Android: folder upload works in Chrome; or choose files one batch at a time.",
+			other: "Pick files or a folder from this device.",
+		});
 	</script>
 </body>
 </html>

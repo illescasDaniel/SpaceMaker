@@ -180,7 +180,41 @@ function updateTransferUi(next: AppSnapshot): void {
 		status.textContent = items.length === 1 ? "1 item in session" : items.length + " items in session";
 	}
 }
+export function bindAddMenus(): void {
+	const wraps = Array.from(document.querySelectorAll<HTMLElement>(".add-menu-wrap"));
+	const setOpen = (wrap: HTMLElement, open: boolean): void => {
+		const menu = wrap.querySelector<HTMLElement>(".add-menu");
+		const button = wrap.querySelector<HTMLElement>(".btn-add-more");
+		if (!menu || !button) {
+			return;
+		}
+		menu.hidden = !open;
+		button.setAttribute("aria-expanded", String(open));
+	};
+	for (const wrap of wraps) {
+		const menu = wrap.querySelector<HTMLElement>(".add-menu");
+		wrap.querySelector(".btn-add-more")?.addEventListener("click", (ev) => {
+			ev.stopPropagation();
+			setOpen(wrap, Boolean(menu?.hidden));
+		});
+		menu?.addEventListener("click", () => setOpen(wrap, false));
+	}
+	document.addEventListener("click", () => {
+		for (const wrap of wraps) {
+			setOpen(wrap, false);
+		}
+	});
+	document.addEventListener("keydown", (ev) => {
+		if (ev.key === "Escape") {
+			for (const wrap of wraps) {
+				setOpen(wrap, false);
+			}
+		}
+	});
+}
+
 function bindLanDesktop(): void {
+	bindAddMenus();
 	function mergeShareSelection(extra?: string | string[] | null): string[] {
 		const base = S.state?.share_selection ? S.state.share_selection.slice() : [];
 		const seen: Record<string, boolean> = {};

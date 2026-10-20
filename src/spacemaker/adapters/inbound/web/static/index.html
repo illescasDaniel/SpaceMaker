@@ -389,7 +389,7 @@
 		</article>
 	</section>
 
-	<!-- PHONE FILE PICKER — in-app screen reached from USB file transfer (Add files/folder) and USB photo backup Step 1 (Add folder/files) -->
+	<!-- PHONE FILE PICKER — in-app screen reached from USB file transfer and USB photo backup Step 1 (Add more) -->
 	<section id="view-device-picker" class="screen" aria-label="Pick from phone">
 		<nav class="module-breadcrumbs" aria-label="You are here">
 			<button type="button" class="breadcrumb-home">Home</button>
@@ -507,8 +507,16 @@
 				Open SpaceMaker in the desktop app to pick files and folders from this PC.
 			</p>
 			<div class="share-picker-actions" id="send-picker-actions">
-				<button type="button" class="btn btn-secondary" id="btn-share-add-files">Add files</button>
-				<button type="button" class="btn btn-secondary" id="btn-share-add-folder">Add folder</button>
+				<div class="add-menu-wrap">
+					<button type="button" class="btn btn-add-more" id="btn-share-add" aria-expanded="false">
+						<span class="add-more-plus" aria-hidden="true">+</span>
+						<span>Add <span class="add-more-sub">(files or folders)</span></span>
+					</button>
+					<ul class="add-menu" hidden>
+						<li><button type="button" id="btn-share-add-files">Files…<span class="add-menu-sub">Pick one or more files</span></button></li>
+						<li><button type="button" id="btn-share-add-folder">Folder…<span class="add-menu-sub">Pick a folder (sent as a zip)</span></button></li>
+					</ul>
+				</div>
 				<button type="button" class="btn btn-ghost" id="btn-share-clear">Clear</button>
 			</div>
 			<ul class="share-path-list" id="share-path-list"></ul>
@@ -518,7 +526,7 @@
 				<div class="qr-with-info">
 					<div class="easy-qr-wrap qr-frame" id="send-qr-wrap">
 						<img id="send-share-qr" alt="QR code for phone download" hidden />
-						<p class="folder-hint" id="send-share-wait">Add files above, then scan this QR on your phone.</p>
+						<p class="folder-hint" id="send-share-wait">Use Add above, then scan this QR on your phone.</p>
 					</div>
 					<button type="button" class="info-btn" id="btn-send-qr-info" title="Show share URL" aria-expanded="false" aria-controls="send-qr-info-panel">i</button>
 				</div>
@@ -564,8 +572,16 @@
 				Open SpaceMaker in the desktop app to add files and folders from this PC.
 			</p>
 			<div class="share-picker-actions" id="transfer-picker-actions">
-				<button type="button" class="btn btn-secondary" id="btn-transfer-add-files">Add files</button>
-				<button type="button" class="btn btn-secondary" id="btn-transfer-add-folder">Add folder</button>
+				<div class="add-menu-wrap">
+					<button type="button" class="btn btn-add-more" id="btn-transfer-add" aria-expanded="false">
+						<span class="add-more-plus" aria-hidden="true">+</span>
+						<span>Add <span class="add-more-sub">(files or folders)</span></span>
+					</button>
+					<ul class="add-menu" hidden>
+						<li><button type="button" id="btn-transfer-add-files">Files…<span class="add-menu-sub">Pick one or more files</span></button></li>
+						<li><button type="button" id="btn-transfer-add-folder">Folder…<span class="add-menu-sub">Pick a folder (sent as a zip)</span></button></li>
+					</ul>
+				</div>
 			</div>
 			<p class="label" style="margin: 0 0 0.5rem;">Session files</p>
 			<ul class="transfer-item-list" id="transfer-item-list" aria-label="Shared session files"></ul>

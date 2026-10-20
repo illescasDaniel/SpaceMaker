@@ -3,16 +3,23 @@
 ## Metadata
 
 - **Feature:** Shared Wi‑Fi QR session where the PC and any phones that scan can both upload and download; session staging is deleted when the session ends; desktop **Download** copies into Documents/SpaceMaker
-- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-home` (fifth tile), `#view-transfer-files`; phone [wireframes/phone-transfer.html](../../wireframes/phone-transfer.html). **Wireframe approved** 2026-09-25; **updated** 2026-09-27 (desktop Download → Documents/SpaceMaker + Tip / Open documents folder; no redundant session/Documents lead line — wireframe approved).
-- **Spec approved:** 2026-09-25; **re-approved** 2026-09-27 (desktop save-to-Documents)
+- **Wireframe:** [wireframes/app.html](../../wireframes/app.html) — `#view-home` (fifth tile), `#view-transfer-files`; phone [wireframes/phone-transfer.html](../../wireframes/phone-transfer.html). **Wireframe approved** 2026-09-25; **updated** 2026-09-27 (desktop Download → Documents/SpaceMaker + Tip / Open documents folder; no redundant session/Documents lead line — wireframe approved); **updated** 2026-10-20 (single Add button + phone Files/Folder chooser — approved).
+- **Spec approved:** 2026-09-25; **re-approved** 2026-09-27 (desktop save-to-Documents); **re-approved** 2026-10-20 (single Add button)
 - **Architecture approved:** 2026-09-25; **re-approved** 2026-09-27 (`SaveTransferItemToDocuments` + loopback `POST /api/transfer/save`; phone keeps `GET /api/transfer/download`)
 - **Related:** [home-modules](../home-modules/SPEC.md), [receive-files](../receive-files/SPEC.md), [send-files](../send-files/SPEC.md)
+
+## Design decisions
+
+- **Success criteria:** one **Add** control replaces the separate file and folder buttons; the chooser offers Files / Folder and opens the existing native dialog or file input.
+- **Failure handling:** unchanged — a missing desktop bridge shows the existing "Use the desktop app" banner; an empty folder keeps the existing alert.
+- **Perf/resource budget:** UI-only change; no new requests, polling or dependencies.
+- **Trust boundary:** unchanged — paths still come only from the native desktop dialogs / browser file inputs and go through the existing validated APIs.
 
 ## Triggers & routing
 
 - Enter from Home → **Transfer files** → `POST /api/module/enter` with `transfer_files` starts a LAN transfer session and issues a session token immediately (QR shown even when the session list is empty).
 - Phone page: `GET /transfer?t=…`. Upload: `POST /api/transfer?t=…`. Session list/poll: `GET /api/transfer/session?t=…`. Phone download stream: `GET /api/transfer/download?t=…&file_id=…`. Desktop save: loopback `POST /api/transfer/save` with `{ "file_id": "…" }`. QR SVG: `GET /api/transfer/qr.svg` (loopback / desktop).
-- Desktop contributes via **Add files** / **Add folder** (pywebview dialogs) → loopback API that copies into the session staging area (not into Documents or the library).
+- Desktop contributes via one **Add (files or folders)** button whose chooser offers **Files…** / **Folder…** (pywebview dialogs) → loopback API that copies into the session staging area (not into Documents or the library).
 - Breadcrumb or header **Home** (`POST /api/module/home`) **ends** the session: invalidate the token, delete all staged session files, clear the manifest. App quit does the same cleanup. Files previously copied to Documents/SpaceMaker by desktop Download are **not** deleted.
 - Only **one** LAN session at a time (same mutual exclusion as photo upload / receive / send). Entering Transfer files stops any other active LAN session.
 
@@ -24,14 +31,14 @@
 - Large QR + **ⓘ** (beside the QR, not overlapping) shows the `/transfer` URL and browser fallback.
 - Lead: phones on the same Wi‑Fi scan to join; everyone can upload and download until Home.
 - **No** extra folder-hint paragraph under the lead about temporary session vs Documents (that copy was removed as redundant). Behavior is conveyed by Download feedback instead.
-- **Add files** / **Add folder** always available (no Clear control in v1 — leave via Home).
+- The single **Add (files or folders)** button (accent-outlined, same look as USB **Add more**; chooser menu closes on outside click, Escape or item pick) is always available (no Clear control in v1 — leave via Home).
 - **Session files** list: one row per staged item (display name, short origin label, **Download** as a button — not a bare browser download link). Item count status line under the list.
 - After a successful desktop Download: show a **Tip** (or equivalent status) `Saved to {display path}` (e.g. `~/Documents/SpaceMaker/notes.txt`) and an **Open documents folder** control (same destination as Receive files).
-- `--server-only` / browser-only: show hint that Add files/folder need the desktop app; QR still works; desktop save API still writes to Documents; Open documents folder follows existing host open behavior when available.
+- `--server-only` / browser-only: show hint that Add needs the desktop app; QR still works; desktop save API still writes to Documents; Open documents folder follows existing host open behavior when available.
 
 ### Phone (`/transfer`)
 
-- Mix of receive + share UX: **Upload** (Choose files / Choose folder; iOS: single **Choose**, hide folder button) above a **Session files** list with **Download** per row.
+- Mix of receive + share UX: **Upload** (one **Choose files or folder** button opening a **Files** / **Folder** chooser; iOS: single **Choose**, no chooser) above a **Session files** list with **Download** per row.
 - Ephemeral copy: session files are temporary and deleted when the PC closes Transfer files.
 - Origin labels: own uploads may show as “from you”; others as “from PC” / “from Phone” (v1 may use a generic remote label).
 - Folders appear as a single `.zip` row (button label **Download**, not a separate “Download zip” control).
@@ -86,7 +93,7 @@
 ### Scenario: Desktop can upload into the session
 
 - **Given** an active transfer session
-- **When** the user adds a file via **Add files** on the PC
+- **When** the user adds a file via **Add → Files…** on the PC
 - **Then** that file appears as a session item with origin PC
 - **And** phones on `/transfer` can download it
 

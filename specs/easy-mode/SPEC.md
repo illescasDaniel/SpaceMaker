@@ -7,6 +7,13 @@
 - **UX approved:** 2026-09-22 (initial Easy mode); **2026-09-23** (image import issue panels + open-folder actions); **2026-09-26** (**Compress media** preference + info panel); **2026-09-27** (promote to `processed/` when Compress media off; gallery bucket rename); **2026-09-28** (convert starts per received file with live progress totals — no wireframe change)
 - **Related:** [main-wizard](../main-wizard/SPEC.md), [extract-media](../extract-media/SPEC.md), [convert-media](../convert-media/SPEC.md), [gallery](../gallery/SPEC.md), [packaging](../packaging/SPEC.md), [home-modules](../home-modules/SPEC.md)
 
+## Design decisions
+
+- **Success criteria:** one **Add** control replaces the separate file and folder buttons; the chooser offers Files / Folder and opens the existing native dialog or file input.
+- **Failure handling:** unchanged — a missing desktop bridge shows the existing "Use the desktop app" banner; an empty folder keeps the existing alert.
+- **Perf/resource budget:** UI-only change; no new requests, polling or dependencies.
+- **Trust boundary:** unchanged — paths still come only from the native desktop dialogs / browser file inputs and go through the existing validated APIs.
+
 ## Triggers & routing
 
 - **Entry:** Opened from Home hub → **Photo backup** tile (`active_module=photo_backup`, `ui_mode=easy`). **USB photo backup** tile opens the wizard (`ui_mode=advanced`). App launch defaults to **Home** hub — no auto Wi‑Fi until Photo backup is entered.
@@ -34,7 +41,7 @@
   8. **View gallery** button — **only when** `processed/` count **> 0**; switches to the **Gallery** tab (same as Main → Gallery).
   9. **Gallery tab (desktop):** circular **phone help** control (bottom-right); tap opens a popup with gallery LAN URL, QR, and *Please don't open this while uploading content.* (same information as the former Easy gallery block). Hidden on phone gallery shell.
 - No library picker, connection toggle, or extract/convert buttons on Easy.
-- Phone **upload** page (`/upload`): minimal; system theme via `theme.css`; footer hint varies for **iPhone vs Android** (UA detection). **iPhone:** single **Choose** button (no folder picker). **Android:** **Choose files** + **Choose folder**.
+- Phone **upload** page (`/upload`): minimal; system theme via `theme.css`; footer hint varies for **iPhone vs Android** (UA detection). **iPhone:** single **Choose** button (no folder picker). **Android / other:** one **Choose files or folder** button that opens a **Files** / **Folder** chooser (browser file inputs cannot select both).
 - Phone **gallery** (`/gallery` on device browser): dedicated mobile shell (no Easy/Advanced or Main/Gallery chrome); system theme via `theme.css` + `shell-gallery.css`. Server serves `gallery_mobile.html` for **private LAN** hosts; loopback/desktop app keeps full `index.html`.
 - Phone **upload** page shows **files sent** count from `/api/upload/session` (`files_sent`).
 

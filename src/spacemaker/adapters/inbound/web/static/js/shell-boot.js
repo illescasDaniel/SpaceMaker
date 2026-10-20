@@ -35,7 +35,7 @@ function bootDesktopSession() {
 					transfer_mode: settings.transfer_mode,
 					device_id: settings.device_id,
 					device_label: settings.device_label,
-					source_folders: settings.source_folders || ["dcim", "pictures", "movies"],
+					source_folders: settings.source_folders ?? [],
 				});
 			}
 			return settings;

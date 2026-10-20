@@ -2301,6 +2301,39 @@
 			margin-top: 0;
 		}
 
+		/* PC "Add" button (Send files / Transfer files): same accent look as Add more, opens a two-item chooser because OS dialogs cannot pick files and folders together. */
+		.add-menu-wrap { position: relative; flex: 1 1 14rem; }
+		.add-menu-wrap .btn-add-more { margin-top: 0; }
+		.add-menu {
+			position: absolute;
+			left: 0;
+			right: 0;
+			top: calc(100% + 0.25rem);
+			z-index: 5;
+			margin: 0;
+			padding: 0.25rem;
+			list-style: none;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+		}
+		.add-menu[hidden] { display: none; }
+		.add-menu button {
+			display: block;
+			width: 100%;
+			padding: 0.55rem 0.75rem;
+			border: 0;
+			border-radius: 6px;
+			background: transparent;
+			color: inherit;
+			font: inherit;
+			text-align: left;
+			cursor: pointer;
+		}
+		.add-menu button:hover, .add-menu button:focus-visible { background: var(--surface2); outline: none; }
+		.add-menu .add-menu-sub { display: block; font-size: 0.75rem; color: var(--muted); }
+
 		.share-path-list {
 			list-style: none;
 			margin: 0;
@@ -3059,8 +3092,16 @@
 		</nav>
 		<div class="share-picker">
 			<div class="share-picker-actions">
-				<button type="button" class="btn btn-secondary">Add files</button>
-				<button type="button" class="btn btn-secondary">Add folder</button>
+				<div class="add-menu-wrap">
+					<button type="button" class="btn btn-add-more" id="btn-share-add" aria-expanded="false">
+						<span class="add-more-plus" aria-hidden="true">+</span>
+						<span>Add <span class="add-more-sub">(files or folders)</span></span>
+					</button>
+					<ul class="add-menu" hidden>
+						<li><button type="button">Files…<span class="add-menu-sub">Pick one or more files</span></button></li>
+						<li><button type="button">Folder…<span class="add-menu-sub">Pick a folder (sent as a zip)</span></button></li>
+					</ul>
+				</div>
 				<button type="button" class="btn btn-ghost">Clear</button>
 			</div>
 			<ul class="share-path-list">
@@ -3427,9 +3468,25 @@
 		</div>
 		<div class="share-picker transfer-session">
 			<div class="share-picker-actions">
-				<button type="button" class="btn btn-secondary">Add files</button>
-				<button type="button" class="btn btn-secondary">Add folder</button>
+				<div class="add-menu-wrap">
+					<button type="button" class="btn btn-add-more" id="btn-transfer-add" aria-expanded="false">
+						<span class="add-more-plus" aria-hidden="true">+</span>
+						<span>Add <span class="add-more-sub">(files or folders)</span></span>
+					</button>
+					<ul class="add-menu" hidden>
+						<li><button type="button">Files…<span class="add-menu-sub">Pick one or more files</span></button></li>
+						<li><button type="button">Folder…<span class="add-menu-sub">Pick a folder (sent as a zip)</span></button></li>
+					</ul>
+				</div>
 			</div>
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				<b>Unified “Add” (Send files + Transfer files):</b> the two grey buttons <i>Add files</i> / <i>Add folder</i> become one accent-outlined button with the round “+”, same look as USB <i>Add more</i>. Clicking it opens a two-item chooser (<i>Files…</i> / <i>Folder…</i>) because the OS file dialogs cannot select files and folders together; the item then opens the usual native dialog. Click the button below to see the open state. On Send files the ghost <i>Clear</i> stays beside it. Alternative (bigger): an in-app PC browser like the phone picker, where you tick files and folders together; say if you prefer that.
+			</aside>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Reuses <code>.btn-add-more</code>; new product classes <code>.add-menu-wrap</code> / <code>.add-menu</code>. Menu: closes on outside click, Escape, or item pick; arrow keys move focus; <code>aria-expanded</code> mirrors state. Both items reuse the existing <code>choose_files</code> / <code>choose_share_folder</code> bridge calls and the current empty-folder alert.
+			</aside>
 			<p class="label" style="margin: 0 0 0.5rem;">Session files</p>
 			<ul class="transfer-item-list" aria-label="Shared session files">
 				<li class="transfer-item">
@@ -5818,6 +5875,18 @@
 				});
 			})();
 		})();
+	</script>
+
+	<script>
+		document.querySelectorAll('.add-menu-wrap').forEach(function (wrap) {
+			var btn = wrap.querySelector('.btn-add-more');
+			var menu = wrap.querySelector('.add-menu');
+			function setOpen(open) { menu.hidden = !open; btn.setAttribute('aria-expanded', String(open)); }
+			btn.addEventListener('click', function (e) { e.stopPropagation(); setOpen(menu.hidden); });
+			menu.addEventListener('click', function () { setOpen(false); });
+			document.addEventListener('click', function () { setOpen(false); });
+			document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+		});
 	</script>
 </body>
 </html>

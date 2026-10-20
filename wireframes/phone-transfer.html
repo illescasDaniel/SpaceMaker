@@ -117,6 +117,11 @@
 		@keyframes panel-fade-in { from { opacity: 0; } to { opacity: 1; } }
 		.empty { color: var(--muted); font-size: 0.9rem; padding: 1rem 0; text-align: center; }
 		.sent-count { font-size: 0.9rem; font-weight: 600; margin: 0 0 0.75rem; }
+	
+		.pick-menu { list-style: none; margin: 0.4rem 0 0; padding: 0.25rem; border: 1px solid var(--border, #ccc); border-radius: 10px; background: var(--surface, #fff); }
+		.pick-menu[hidden] { display: none; }
+		.pick-menu button { display: block; width: 100%; padding: 0.7rem 0.8rem; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; }
+		.pick-menu button:active { background: var(--surface2, #eee); }
 	</style>
 </head>
 <body>
@@ -142,8 +147,11 @@
 
 			<div class="card" id="upload-card">
 				<p class="section-label">Upload</p>
-				<button type="button" class="btn btn-primary" id="btn-pick-files">Choose files</button>
-				<button type="button" class="btn btn-secondary" id="btn-pick-folder">Choose folder</button>
+				<button type="button" class="btn btn-primary" id="btn-pick-files">Choose files or folder</button>
+				<ul class="pick-menu" id="pick-menu" hidden>
+					<li><button type="button" id="btn-pick-files-item">Files</button></li>
+					<li><button type="button" id="btn-pick-folder">Folder</button></li>
+				</ul>
 				<p class="hint" id="device-hint">On Android: folders upload as a zip. Or choose files one batch at a time.</p>
 			</div>
 
@@ -209,10 +217,10 @@
 			document.getElementById('device-hint').textContent = hints[device];
 			if (device === 'ios') {
 				pickFiles.textContent = 'Choose';
-				pickFolder.classList.add('panel-hidden');
+				pickFolder.parentNode.parentNode.hidden = true; pickFiles.dataset.single = '1';
 			} else {
-				pickFiles.textContent = 'Choose files';
-				pickFolder.classList.remove('panel-hidden');
+				pickFiles.textContent = 'Choose files or folder';
+				pickFolder.parentNode.parentNode.hidden = true; delete pickFiles.dataset.single;
 			}
 		}
 		document.querySelectorAll('.state-tabs button[data-state]').forEach(function (btn) {
@@ -232,6 +240,19 @@
 				applyDeviceMock(btn.getAttribute('data-device'));
 			});
 		});
+	</script>
+
+	<script>
+		(function () {
+			var btn = document.getElementById('btn-pick-files');
+			var menu = document.getElementById('pick-menu');
+			if (!btn || !menu) return;
+			btn.addEventListener('click', function () {
+				if (btn.dataset.single) return;
+				menu.hidden = !menu.hidden;
+			});
+			menu.addEventListener('click', function () { menu.hidden = true; });
+		})();
 	</script>
 </body>
 </html>
