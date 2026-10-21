@@ -62,7 +62,7 @@ jobs:
         run: ./packaging/linux-appimage/smoke-appimage.sh
 
       - name: Upload AppImage artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spacemaker-linux-${{ github.sha }}
           path: |
@@ -91,7 +91,7 @@ jobs:
         run: bash scripts/packaging/build_installer.sh
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spacemaker-windows-${{ github.sha }}
           path: dist/SpaceMaker.exe
@@ -123,7 +123,7 @@ jobs:
         run: uv run task build-macos-dmg
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spacemaker-macos-${{ matrix.arch }}-${{ github.sha }}
           path: dist/SpaceMaker-*-${{ matrix.arch }}.dmg
