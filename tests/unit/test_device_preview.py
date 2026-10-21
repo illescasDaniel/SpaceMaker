@@ -42,12 +42,12 @@ def test_given_preview_kind_when_max_edge_then_1600() -> None:
 	assert edge == 1600
 
 
-def test_given_spec_formats_when_listing_extensions_then_exactly_the_seven() -> None:
+def test_given_spec_formats_when_listing_extensions_then_exactly_the_spec_eight() -> None:
 	# given
 	# when
 	extensions = PREVIEWABLE_IMAGE_EXTENSIONS
 	# then
-	assert extensions == {"jpg", "jpeg", "png", "webp", "gif", "heic", "heif"}
+	assert extensions == {"jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "dng"}
 
 
 @pytest.mark.parametrize("extension", ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"])
@@ -69,7 +69,15 @@ def test_given_mixed_case_name_when_is_previewable_then_true(name: str) -> None:
 	assert result is True
 
 
-@pytest.mark.parametrize("name", ["clip.mp4", "IMG_0001.dng", "README", "jpg", "photo.jpg.mp4", "notes.txt", ""])
+@pytest.mark.parametrize("name", ["IMG_0001.dng", "PXL_1.RAW-02.ORIGINAL.DNG"])
+def test_given_dng_name_when_is_previewable_then_true(name: str) -> None:
+	# given / when
+	result = is_previewable_image(name)
+	# then
+	assert result is True
+
+
+@pytest.mark.parametrize("name", ["clip.mp4", "IMG_0001.cr2", "README", "jpg", "photo.jpg.mp4", "notes.txt", ""])
 def test_given_other_name_when_is_previewable_then_false(name: str) -> None:
 	# given
 	# when

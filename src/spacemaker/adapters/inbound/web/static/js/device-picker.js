@@ -13,6 +13,7 @@ import {
 	formatMediaDuration,
 	isImageName,
 	isPreviewableVideo,
+	isRawName,
 	isVideoName,
 } from "./device-preview.js";
 import { onClick } from "./dom.js";
@@ -347,18 +348,19 @@ function makeRow(entry) {
 	label.className = "dp-label";
 	label.textContent = entry.name;
 	const isVideo = !entry.is_dir && isPreviewableVideo(entry.name);
+	const isRaw = !entry.is_dir && isRawName(entry.name);
 	const isImage = !entry.is_dir && (isImageName(entry.name) || isVideo);
 	let thumb = null;
 	let eye = null;
 	if (isImage) {
-		thumb = makeThumb(entry.name, isVideo);
+		thumb = makeThumb(entry.name, isVideo, isRaw);
 		name.appendChild(thumb);
 		name.appendChild(label);
 		eye = document.createElement("button");
 		eye.type = "button";
 		eye.className = "dp-preview-btn";
 		eye.textContent = "👁";
-		eye.setAttribute("aria-label", "Preview " + entry.name + (isVideo ? " (video)" : ""));
+		eye.setAttribute("aria-label", "Preview " + entry.name + (isVideo ? " (video)" : isRaw ? " (RAW)" : ""));
 		name.appendChild(eye);
 	} else {
 		const icon = document.createElement("span");
@@ -415,11 +417,11 @@ function toggleBox(box) {
 	box.checked = !box.checked;
 	box.dispatchEvent(new Event("change"));
 }
-function makeThumb(name, video) {
+function makeThumb(name, video, raw) {
 	const thumb = document.createElement("button");
 	thumb.type = "button";
-	thumb.className = "dp-thumb" + (video ? " dp-thumb-video" : "") + " is-loading";
-	thumb.setAttribute("aria-label", "Preview " + name + (video ? " (video)" : ""));
+	thumb.className = "dp-thumb" + (video ? " dp-thumb-video" : "") + (raw ? " dp-thumb-raw" : "") + " is-loading";
+	thumb.setAttribute("aria-label", "Preview " + name + (video ? " (video)" : raw ? " (RAW)" : ""));
 	const img = document.createElement("span");
 	img.className = "dp-thumb-img";
 	const glyph = document.createElement("span");
@@ -439,6 +441,13 @@ function makeThumb(name, video) {
 		thumb.appendChild(play);
 		thumb.appendChild(dur);
 	}
+	if (raw) {
+		const badge = document.createElement("span");
+		badge.className = "dp-thumb-raw-badge";
+		badge.setAttribute("aria-hidden", "true");
+		badge.textContent = "RAW";
+		thumb.appendChild(badge);
+	}
 	return thumb;
 }
 /** Register the row for lazy thumbnails and lightbox browsing; the openers never touch ticks or folders. */
@@ -446,9 +455,10 @@ function wireImageRow(active, li, box, entry, path, thumb, eye) {
 	const { method, deviceId } = active.options;
 	const target = { method, deviceId, path, size: entry.size, mtime: entry.mtime };
 	const video = thumb.classList.contains("dp-thumb-video");
+	const raw = thumb.classList.contains("dp-thumb-raw");
 	active.thumbs.register(thumb, target, (duration) => {
 		const text = duration === null ? "" : formatMediaDuration(duration);
-		const suffix = !video ? "" : text ? " (video, " + text + ")" : " (video)";
+		const suffix = raw ? " (RAW)" : !video ? "" : text ? " (video, " + text + ")" : " (video)";
 		eye.setAttribute("aria-label", "Preview " + entry.name + suffix);
 		syncThumbLabel(thumb);
 	});
@@ -459,7 +469,7 @@ function wireImageRow(active, li, box, entry, path, thumb, eye) {
 		info: formatSize(entry.size) + " · " + formatDate(entry.mtime),
 		target,
 		thumbUrl: () => active.thumbs.objectUrlFor(thumb),
-		kind: video ? "video" : "image",
+		kind: video ? "video" : raw ? "raw" : "image",
 		durationSeconds: () => active.thumbs.durationFor(thumb),
 		isSelected: () => box.checked,
 		setSelected: (selected) => {

@@ -19,6 +19,7 @@ import {
 	formatMediaDuration,
 	isImageName,
 	isPreviewableVideo,
+	isRawName,
 	isVideoName,
 	type ThumbLoader,
 } from "./device-preview.ts";
@@ -406,18 +407,19 @@ function makeRow(entry: DeviceEntryRow): HTMLLIElement {
 	label.className = "dp-label";
 	label.textContent = entry.name;
 	const isVideo = !entry.is_dir && isPreviewableVideo(entry.name);
+	const isRaw = !entry.is_dir && isRawName(entry.name);
 	const isImage = !entry.is_dir && (isImageName(entry.name) || isVideo);
 	let thumb: HTMLButtonElement | null = null;
 	let eye: HTMLButtonElement | null = null;
 	if (isImage) {
-		thumb = makeThumb(entry.name, isVideo);
+		thumb = makeThumb(entry.name, isVideo, isRaw);
 		name.appendChild(thumb);
 		name.appendChild(label);
 		eye = document.createElement("button");
 		eye.type = "button";
 		eye.className = "dp-preview-btn";
 		eye.textContent = "👁";
-		eye.setAttribute("aria-label", "Preview " + entry.name + (isVideo ? " (video)" : ""));
+		eye.setAttribute("aria-label", "Preview " + entry.name + (isVideo ? " (video)" : isRaw ? " (RAW)" : ""));
 		name.appendChild(eye);
 	} else {
 		const icon = document.createElement("span");
@@ -477,11 +479,11 @@ function toggleBox(box: HTMLInputElement): void {
 	box.dispatchEvent(new Event("change"));
 }
 
-function makeThumb(name: string, video: boolean): HTMLButtonElement {
+function makeThumb(name: string, video: boolean, raw: boolean): HTMLButtonElement {
 	const thumb = document.createElement("button");
 	thumb.type = "button";
-	thumb.className = "dp-thumb" + (video ? " dp-thumb-video" : "") + " is-loading";
-	thumb.setAttribute("aria-label", "Preview " + name + (video ? " (video)" : ""));
+	thumb.className = "dp-thumb" + (video ? " dp-thumb-video" : "") + (raw ? " dp-thumb-raw" : "") + " is-loading";
+	thumb.setAttribute("aria-label", "Preview " + name + (video ? " (video)" : raw ? " (RAW)" : ""));
 	const img = document.createElement("span");
 	img.className = "dp-thumb-img";
 	const glyph = document.createElement("span");
@@ -501,6 +503,13 @@ function makeThumb(name: string, video: boolean): HTMLButtonElement {
 		thumb.appendChild(play);
 		thumb.appendChild(dur);
 	}
+	if (raw) {
+		const badge = document.createElement("span");
+		badge.className = "dp-thumb-raw-badge";
+		badge.setAttribute("aria-hidden", "true");
+		badge.textContent = "RAW";
+		thumb.appendChild(badge);
+	}
 	return thumb;
 }
 
@@ -517,9 +526,10 @@ function wireImageRow(
 	const { method, deviceId } = active.options;
 	const target = { method, deviceId, path, size: entry.size, mtime: entry.mtime };
 	const video = thumb.classList.contains("dp-thumb-video");
+	const raw = thumb.classList.contains("dp-thumb-raw");
 	active.thumbs.register(thumb, target, (duration: number | null) => {
 		const text = duration === null ? "" : formatMediaDuration(duration);
-		const suffix = !video ? "" : text ? " (video, " + text + ")" : " (video)";
+		const suffix = raw ? " (RAW)" : !video ? "" : text ? " (video, " + text + ")" : " (video)";
 		eye.setAttribute("aria-label", "Preview " + entry.name + suffix);
 		syncThumbLabel(thumb);
 	});
@@ -530,7 +540,7 @@ function wireImageRow(
 		info: formatSize(entry.size) + " · " + formatDate(entry.mtime),
 		target,
 		thumbUrl: () => active.thumbs.objectUrlFor(thumb),
-		kind: video ? "video" : "image",
+		kind: video ? "video" : raw ? "raw" : "image",
 		durationSeconds: () => active.thumbs.durationFor(thumb),
 		isSelected: () => box.checked,
 		setSelected: (selected: boolean) => {

@@ -6,6 +6,7 @@ import {
 	formatMediaDuration,
 	isImageName,
 	isPreviewableVideo,
+	isRawName,
 	isVideoName,
 	outcomeForStatus,
 	retriesOnVisible,
@@ -19,7 +20,7 @@ describe("preview helpers", () => {
 	it("given names when classified then images, videos and others are told apart", () => {
 		expect(isImageName("IMG_1.JPG")).toBe(true);
 		expect(isImageName("a.heic")).toBe(true);
-		expect(isImageName("raw.dng")).toBe(false);
+		expect(isImageName("raw.cr2")).toBe(false);
 		expect(isImageName(".jpg")).toBe(false);
 		expect(isVideoName("clip.MP4")).toBe(true);
 		expect(isVideoName("a.jpg")).toBe(false);
@@ -364,5 +365,19 @@ describe("thumb loader with videos", () => {
 		expect(globalThis.fetch).toHaveBeenCalledTimes(5);
 		loader.reset();
 		vi.unstubAllGlobals();
+	});
+});
+
+describe("RAW names", () => {
+	it("given dng names in any case when classified then they are RAW and images, others are not", () => {
+		expect(isRawName("IMG_3809.DNG")).toBe(true);
+		expect(isRawName("PXL_1.RAW-02.ORIGINAL.dng")).toBe(true);
+		expect(isRawName("a.Dng")).toBe(true);
+		expect(isRawName("a.dng.jpg")).toBe(false);
+		expect(isRawName("a.cr2")).toBe(false);
+		expect(isRawName("dng")).toBe(false);
+		expect(isImageName("IMG_3809.DNG")).toBe(true);
+		expect(isImageName("a.cr2")).toBe(false);
+		expect(isVideoName("a.dng")).toBe(false);
 	});
 });

@@ -10,6 +10,7 @@
 - **Revision — photo previews:** wireframe revision (thumbnails in image rows, 👁 button, lightbox; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). Plan: [PLAN-media-preview.md](PLAN-media-preview.md) (Phase A; videos are Phase B).
 - **Revision — video posters (Phase B, posters only):** wireframe revision (video rows with poster + ▶ + duration badge, lightbox stepping through photos and videos, “Video previews” demo buttons; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). No in-app playback (Phase B2), no RAW (Phase C). Plan: [PLAN-media-preview.md](PLAN-media-preview.md).
 - **Revision — grid view:** wireframe revision (View control Auto · List · Grid, grid tiles, per-folder choice, folder-type table; `wireframes/app.html` `#view-device-picker`) **approved** 2026-10-21 (in chat); **spec revision approved** 2026-10-21 (in chat). Plan: [PLAN-grid-view.md](PLAN-grid-view.md).
+- **Revision — RAW previews (Phase C, DNG):** wireframe revision (RAW rows/tiles as photos with a bottom-left **RAW** badge, lightbox caption “RAW (DNG)” + embedded-preview note, “no embedded preview” error, “RAW previews” demo buttons; `wireframes/app.html` `#view-device-picker`) **approved** 2026-10-21 (in chat); **spec revision approved** 2026-10-21 (in chat); **amended** 2026-10-21 (in chat, after the real-phone check): BitsPerSample is checked only when held (tail-IFD0 Pixel files), iPhone example is `IMG_3809.DNG`. C0 spike numbers: [PLAN-media-preview.md](PLAN-media-preview.md) (“C0 result”).
 - **Callers:** [usb-file-transfer](../usb-file-transfer/SPEC.md) (**Add more**), [extract-media](../extract-media/SPEC.md) / [main-wizard](../main-wizard/SPEC.md) Step 1 for ADB and iPhone USB (**Add more**)
 - **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> list[DeviceEntry]` (contract unchanged; adapters stay dumb); domain `DeviceEntry`, `DeviceDirectoryScrollPage` with an opaque keyset cursor; application-level `DeviceListingCache` (not a port) owned by the long-lived services object; photo previews add `DeviceRepositoryPort.read_head(device_id, path, max_bytes, timeout)`, a thumbnail-extraction port and a preview-cache port (names settled at the architecture gate); video posters add `DeviceRepositoryPort.read_range(device_id, path, offset, length, timeout)`, a video-poster port (ffmpeg) and an application-level short-lived stream-token registry (not a port)
 - **Supersedes:** adbfs mount path in usb-file-transfer (“Mount backends”), `adbfs` in [packaging](../packaging/SPEC.md), `docs/legal/THIRD_PARTY_TOOLS.md`
@@ -24,7 +25,7 @@ _Proposed — confirm or adjust at spec review._
 | **Failure handling** | Per directory, the picker shows one of: loading, empty, permission denied (e.g. `Android/data` on Android 11+), device unauthorized, device unplugged/offline, listing timed out, generic error — each with Retry or Go up where it helps. Failures never clear ticked items. A failed **next-page** fetch keeps every loaded row and tick and shows an inline “Couldn’t load more items.” row with **Retry** at the bottom of the list (no full-panel error); an invalid or expired cursor is answered 400 `invalid_cursor` and the client silently restarts from page 1 (ticks kept). A failed listing leaves the previous directory’s selection and path intact. Closing the picker (Cancel) discards picks; Add returns them. Nothing is copied by the picker. |
 | **Performance & resource budget** | One `adb shell` call (or one AFC directory read) per directory opened, plus one per explicit refresh (**Retry**) or cache expiry; never recurse; sub-folders of a ticked folder are not expanded in the picker. Results are served in pages of 100 entries (request `limit` bounded 1..500). The application layer holds a listing cache `DeviceListingCache`: TTL 30 s, LRU ≤ 8 directories, keyed `(method, device_id, path)`, errors are never cached, `refresh: true` bypasses it; later pages, filter changes, the hidden toggle and sort changes are served from the cached listing with no device call; a page served from the cache (sort + filter + slice of ~5 000 entries) answers in ≤ 50 ms. Filter and **Show hidden** are applied server-side over that listing — the client never downloads all pages to filter. The UI appends rows as pages arrive and never re-renders existing rows. Directory listing of ~5 000 entries returns the first page in ≤ 2 s on USB 2. The server holds no persistent connection. Entry payload ≤ ~150 bytes/entry (a 100-entry page ≈ 15 KB). Stale responses are dropped when the user navigates away, filters or toggles (request id); a superseded listing is not awaited. |
 | **Trust boundary** | Untrusted input: the `path` sent by the web client (including a LAN client probing the endpoint) and file names returned by the phone (arbitrary unicode, spaces, quotes, newlines, `$`, backticks). The inbound route validates and normalizes `path` (no `..`, no NUL, no absolute escape, must resolve under the user-storage root) before the adapter runs; `cursor` is an opaque string decoded and validated server-side (malformed, tampered or not-a-cursor → 400 `invalid_cursor`, never reaches the adapter); `query` is a plain case-insensitive substring, length-bounded (≤ 200 chars, longer → 400), matched in Python over the cached listing and never sent to the device shell; `limit` is bounded 1..500 (out of range, or a `query` over 200 characters, is rejected by request validation with 422, not silently clamped), `sort` / `order` are closed enums (any other value → 422) and `show_hidden` / `refresh` are booleans; the stored sort preference is re-validated when read (unknown or corrupt → default **Name, A → Z**, never an error); the ADB adapter passes the path as a single `shlex`-quoted argument and never builds shell from phone-provided names. File names from the phone are rendered with `textContent` only. `POST /api/device/list` and the extras routes are loopback-only like every other module-screen API (403 `desktop-only` for LAN clients; the network-passcode gate still answers first when a passcode is set — [network-passcode](../network-passcode/SPEC.md)). The picker only lists; copying/moving remains in the transfer/extract use cases. |
-| **Photo previews — success criteria** | Image rows show a thumbnail within ~0.5 s of becoming visible on a typical camera JPEG (A0 spike on a Pixel: 64 KB head read 0.04–0.10 s; 97% of camera JPEGs carry an EXIF thumbnail in the first 55 KB). The lightbox shows a large rendition (≤ 1600 px, fit-within) within ~1.5 s of opening, after showing the thumbnail at once. Formats: `jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`. HEIC/HEIF is decoded by the host Magick's libheif and **has not been verified on a real HEIC phone** (the spike phone has none) — to be checked during implementation. DNG and other RAW → icon only (out of scope). Videos: see **Video posters** below. Works for ADB and AFC. |
+| **Photo previews — success criteria** | Image rows show a thumbnail within ~0.5 s of becoming visible on a typical camera JPEG (A0 spike on a Pixel: 64 KB head read 0.04–0.10 s; 97% of camera JPEGs carry an EXIF thumbnail in the first 55 KB). The lightbox shows a large rendition (≤ 1600 px, fit-within) within ~1.5 s of opening, after showing the thumbnail at once. Formats: `jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`, `heif`. HEIC/HEIF is decoded by the host Magick's libheif and **has not been verified on a real HEIC phone** (the spike phone has none) — to be checked during implementation. DNG: see **RAW previews** below; other RAW formats → icon only (out of scope). Videos: see **Video posters** below. Works for ADB and AFC. |
 | **Photo previews — strategy** | **Thumbnail (320 px, JPEG):** (1) read the first 64 KB of the file; (2) if it holds an embedded EXIF/HEIC thumbnail, use it, applying the EXIF Orientation; (3) otherwise, **only if the file is ≤ 25 MB**, pull the whole file to a temp file and have Magick produce a 320 px fit-within JPEG (`-auto-orient`); (4) over 25 MB with no embedded thumbnail, or any failure → no preview, the UI keeps the icon. **Lightbox rendition (1600 px fit-within, JPEG):** full pull to a temp file + Magick, same 25 MB cap. Over the cap the lightbox shows the (upscaled) thumbnail if one exists plus the note “Full preview unavailable for files over 25 MB”; with no thumbnail either it shows the error state. Temp files are deleted in every outcome (success, error, timeout, cancel). |
 | **Photo previews — failure handling** | A preview failure never affects the picker: the row keeps its icon with no error text, stays tickable, and the listing and ticks are untouched. Phone unplugged or read timeout → icon; the tile is retried the next time it becomes visible (folder reopened, or scrolled out and back), never on a timer. Device busy with a transfer/extract job → the row stays a plain icon (not marked failed) and is requested again on its next visibility. The lightbox shows “Preview unavailable” when the large rendition fails and stays usable (navigation, **Selected**, Esc). |
 | **Photo previews — performance & resource budget** | At most **4** concurrent device reads per device (server-enforced; the client also keeps ≤ 4 requests in flight). Per-read timeouts: 10 s for the head read, 30 s for a full pull; Magick calls bounded by the same timeout. Previews are **not started** while a USB transfer or extract job is using the same device (409 `device_busy`) — a transfer always wins. Only rows currently visible request thumbnails (`IntersectionObserver`); requests are aborted on scroll-away, folder change and picker close; the lightbox requests only the current image (the thumbnail of a neighbour is already loaded as a row). **Disk cache** under the app cache directory (`device-thumbs/`, never the library, never the phone): key = hash(device id, path, size, mtime); one JPEG per key and kind (thumbnail / preview); a format-version marker in the directory name or a marker file (as for the gallery thumbnails) invalidates old entries when the pipeline changes; atomic writes (temp file + rename); LRU eviction keeps the cache ≤ **200 MB**; the cache survives restarts. A cache hit makes no device call and answers in ≤ 50 ms. |
@@ -38,6 +39,11 @@ _Proposed — confirm or adjust at spec review._
 | **Grid view — failure handling** | A corrupt stored map, or one bad entry in it (unknown view value, bad or non-normalized key), is ignored **entry by entry** and never produces an error (the folder resolves as if nothing were stored). A failed write of the choice (disk error) keeps the chosen mode for the rest of the session and shows no error: the client remembers every choice made in this picker session per folder, and that session choice wins over a `stored_view` that is missing or stale; after an app restart the folder falls back to the resolution order. A listing that fails (unplugged, unauthorized, permission denied, timeout, generic error) shows the same state panels in **both** layouts, and the View control stays usable. No count, type or stored value can make the listing itself fail. |
 | **Grid view — performance & resource budget** | `entry_count` and `media_count` are computed over the **cached listing** (hidden rule applied, `query` ignored): no device call, within the existing ≤ 50 ms budget for a cached page of ~5 000 entries. The folder type is resolved from the normalized path alone (a table lookup, **no listing**). A mode switch **re-renders the already-loaded rows** in the other layout with no request, keeps the ticks and the scroll position at the first visible item where possible, and keeps in-flight thumbnail requests and already-loaded thumbnails where the DOM allows (a request whose row is rebuilt is not restarted needlessly). Grid tiles use the **same 320 px thumbnails and video posters**, the same **≤ 4 in flight** per device and the same `IntersectionObserver` lifecycle as rows; no new device read is introduced. The `device_picker_views` map holds **≤ 500** folders (LRU); a view write is one small preference write and no device call. |
 | **Grid view — trust boundary** | Untrusted input: the `view` and `path` of the new route and the stored map in the preferences file. `view` is a **closed enum** (`auto` \| `list` \| `grid`; anything else → 422). `path` is validated and normalized **exactly as for `/api/device/list`** (no `..`, no NUL, under user storage; 400 `invalid_path`) before it is used as a key; stored keys are **re-validated on read** and an invalid key or value is dropped. Folder names (from the phone) used for the folder-type match are only compared, never executed or interpolated, and every name is rendered with `textContent`. `PUT /api/device/view` is **loopback-only** (`require_loopback` → 403 `desktop-only`; the network-passcode gate answers first) and is **not** on `LAN_ALLOWED_ROUTES`; [lan-access](../lan-access/SPEC.md)'s route table gains one row, `PUT /api/device/view` → **Desktop**. The route makes no device call and writes only the preference file. |
+| **RAW previews — success criteria** | Rows for `.dng` files (case-insensitive: Pixel `….RAW-02.ORIGINAL.dng`, iPhone ProRAW `IMG_….DNG`) show a thumbnail and open in the lightbox like photos. The picture is the **JPEG preview embedded in the DNG**; the RAW data is never decoded or demosaiced. Thumbnail within ~0.5 s of becoming visible for a Pixel DNG and ~0.8 s for an iPhone ProRAW DNG (C0 spike, Pixel 10a: 2–3 small reads of ~0.1 s each, then the preview range read 0.08–0.13 s for Pixel's 1280×960 / 170–550 KB preview and 0.19–0.31 s for iPhone's 3088×2316–4032×3024 / 1.7–4.0 MB preview; Magick 25–200 ms); lightbox large rendition within ~1.5 s. The large rendition is ≤ 1600 px fit-within and **never upscaled** (a Pixel DNG's lightbox picture is at most 1280 px). Output is upright for every EXIF Orientation (spike saw 1, 6, 8). A `.dng` that is really a JPEG (Snapseed saves its edits as JPEG bytes with a `.dng` name) is previewed exactly as a JPEG. Works for ADB and AFC through the same routes. |
+| **RAW previews — strategy** | Content decides, not the extension: (1) read the first **4 KB** (`read_range(0, 4096)`). (2) Bytes start with `FF D8` → it is a JPEG: run the **Photo previews** strategy unchanged (EXIF thumbnail from the head, else the ≤ 25 MB full pull). (3) Bytes start with a TIFF header (`II*\0` or `MM\0*`) → parse the **IFD0** entry table; if IFD0 lies beyond the bytes held (5 of 9 Pixel originals keep IFD0 near the end of the file), read 4 KB at the IFD0 offset. (4) **Candidates** are IFDs describing a displayable JPEG: Photometric = 6 (YCbCr), BitsPerSample 8 (checked only when its values lie in the bytes already read — on tail-IFD0 Pixel files the three values sit ~1.77 MB away and are **not fetched**; the `FF D8` check and the Magick decode still guard), Compression 6 or 7, NewSubfileType 0 or 1, and either a single strip (StripOffsets/StripByteCounts) or JPEGInterchangeFormat/Length. IFD0 is checked first (it is the preview on both Pixel and iPhone); only when IFD0 is not a candidate are the SubIFDs (tag 0x014A) read, one 4 KB read each. Raw tiles (Photometric 32803 CFA / 34892 LinearRaw), semantic masks (NewSubfileType 65540) and JPEG XL tiles (Compression 52546) are never candidates. (5) **Pick** the largest candidate whose long edge is ≤ 1600 px, else the smallest larger one; the same JPEG serves `thumb` (320 px) and `preview` (1600 px). (6) Range-read exactly that JPEG and check it starts with `FF D8`. (7) Magick resizes and re-encodes: if the preview JPEG carries its own EXIF Orientation, `-auto-orient` applies it (iPhone); otherwise the DNG's IFD0 Orientation is applied (Pixel previews have no EXIF and are stored unrotated) — **never both**. No EXIF is written anywhere. (8) Neither JPEG nor TIFF, no candidate, or Magick cannot decode it → no preview (404). A TIFF DNG is never fully pulled, so it has **no 25 MB cap** and never answers 413. |
+| **RAW previews — failure handling** | Same as photos: the row keeps the 🖼 glyph with no error text and no RAW badge, stays tickable, and the listing and ticks are untouched; unplugged/timeout → retried on next visibility; device busy → plain icon, retried on next visibility. In the lightbox, 404 `no_preview` on a `.dng` shows “Preview unavailable — This RAW file has no embedded preview the app can show. You can still select this file.”; every other failure shows the photo error text. Lightroom `…_proxy.dng` files (JPEG XL tiles, no JPEG) are the known no-preview case. |
+| **RAW previews — performance & resource budget** | A RAW preview holds **1 of the same 4 per-device slots** for its whole extraction (all reads + Magick), and yields to transfers/extracts exactly as photos (409 `device_busy`, not started while a job uses the device). Device reads per uncached request: 1–2 header reads (4 KB each) + at most **8** SubIFD reads (only when IFD0 is not the preview) + 1 preview read; bytes read ≈ preview size + ≤ 40 KB. Timeouts: 10 s for each header read, 30 s for the preview read, Magick bounded as for photos. The extracted JPEG lives only in memory or a temp file deleted in every outcome; only the resized output is cached, in the same `device-thumbs/` cache with the same key, LRU and 200 MB budget (no cache format bump: `.dng` was never cached before). |
+| **RAW previews — trust boundary** | The DNG bytes are **untrusted** and parsed in pure Python by a bounded parser: at most **64** entries per IFD, at most **8** SubIFDs, no IFD visited twice, every offset and length checked against the bytes held and the real file size before any read, the preview length capped at **8 MB**, and any malformed structure → no preview (never an exception escaping as 500). The parser is covered by fuzz-style tests (truncated headers, cycles, huge counts, out-of-range offsets, both byte orders). Routes, path validation, loopback-only rule, `size`/`mtime` handling, Magick limits, re-encoding and “never into the library or onto the phone” are unchanged from **Photo previews — trust boundary**. |
 
 ## Triggers & routing
 
@@ -68,7 +74,7 @@ Errors (JSON `{ "detail": <code> }`; the UI treats every non-2xx as “keep the 
 | 422 | — | `size` / `mtime` missing or negative (request validation) |
 | 503 | `unplugged` / `timeout` / `unauthorized` | Device unavailable or a read exceeded its timeout |
 
-Identification of the device matches `/api/device/list`: `method` + `device_id` (the id the picker already holds); the route resolves the adapter the same way. For `preview`, a file over 25 MB returns 413 and the lightbox falls back to the already-loaded thumbnail (see Visual rules). Classification of image extensions lives server-side (the TS list is only a UI hint for showing the placeholder).
+Identification of the device matches `/api/device/list`: `method` + `device_id` (the id the picker already holds); the route resolves the adapter the same way. For `preview`, a file over 25 MB returns 413 and the lightbox falls back to the already-loaded thumbnail (see Visual rules). Classification of image extensions lives server-side (the TS list is only a UI hint for showing the placeholder). `dng` is a previewable image extension: a `.dng` request follows the **RAW previews — strategy** (no 413 for a TIFF DNG; a `.dng` that is really a JPEG follows the photo rules, including 413).
 
 ## Video posters — API
 
@@ -136,6 +142,8 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 - **Video posters — rows:** video rows (`mp4`, `mov`, `m4v`, `3gp`, `mkv`, `webm`) use the same rounded thumbnail button as photos (44 px, 36 px at ≤ 520 px) with the poster, a small ▶ glyph centred and a **duration badge** bottom-right: `m:ss` (`0:42`, `12:07`) and `h:mm:ss` from one hour (`1:02:15`). States: shimmer while loading (no ▶ or badge yet; static under `prefers-reduced-motion`); poster + ▶ + badge once loaded; the 🎞 icon alone, **no badge**, when there is no poster (failure, undecodable, unknown duration is shown as a poster with ▶ and no badge). The thumbnail button and **👁 Preview** carry `aria-label="Preview <name> (video, <duration>)"` (duration omitted when unknown). No error text in the row; the checkbox works in every state.
 - **Video posters — lightbox:** the lightbox steps through **photos and videos together** (“3 / 58” counts both; arrow-key and button behaviour as for photos). A video shows its large frame (the poster first, blurred and upscaled with a spinner, then the ≤ 1600 px frame), the caption “Video · 0:42 · 86.0 MB · <date>” (duration omitted when unknown), and the muted note “Playback isn’t available in the app yet. Transfer the video to watch it.” There is no play button and no player. Hint: “← → to browse · Esc to close”. Error: “Video unavailable — The phone was unplugged or didn’t respond. You can still select this file.” Selected, Esc, focus trap and the ≤ 520 px full-screen layout are unchanged.
 - **Grid view — toolbar:** the toolbar gets a **View** control: a three-button segmented control `role="radiogroup"` labelled **View** with `role="radio"` + `aria-checked` buttons **Auto · List · Grid** (one tab stop, arrow keys move and select, wrapping). Next to it: while **Auto** is selected, the note `#dp-view-auto-note` states what Auto resolved to (**Auto · Grid (photo folder)** / **Auto · List (documents folder)** when the folder type decided, **Auto · Grid** / **Auto · List** when detection decided); while **List** or **Grid** is selected (a stored choice), the hint `#dp-view-scope` reads **Only this folder** (it replaces the auto-note and tells the user the choice is not global; **Auto** forgets it). In grid, the Name / Size / Modified header is hidden and the toolbar **Sort** menu is shown at **every** width (it is still hidden above 520 px in List).
+- **RAW previews — rows and tiles:** `.dng` rows and grid tiles are photos in every respect (thumbnail button, 👁, shimmer, 🖼 fallback, lightbox stepping, counted as media for Auto view). A loaded `.dng` thumbnail carries a small **RAW** badge bottom-left (hidden while loading and on failure; videos keep their duration bottom-right); the badge follows the extension, so a JPEG saved as `.dng` also shows it. The thumbnail and 👁 carry `aria-label="Preview <name> (RAW)"`.
+- **RAW previews — lightbox:** caption “RAW (DNG) · 24.6 MB · <date>” and the muted note “This is the preview the camera saved inside the RAW file. The RAW data itself isn’t developed here.” under the picture (hidden in the error state). Error text as in **RAW previews — failure handling**. Navigation, Selected, Esc, focus trap and the ≤ 520 px layout unchanged.
 - **Grid view — tiles:** see **Grid view** below. Photos, videos and the loaded/failed states reuse the **Photo previews** and **Video posters** rules (shimmer, 🖼 / 🎞 fallback with no error text, ▶ and duration badge); a tile never shows error text.
 
 ## Behaviour details
@@ -646,7 +654,7 @@ The match walks the path **from the folder itself up to the root** and takes the
 
 ### Scenario: Non-image, non-video or non-file paths
 
-- **Given** a request for a folder, a `.pdf`, a `.dng`, or a missing file
+- **Given** a request for a folder, a `.pdf`, a `.cr2`, or a missing file
 - **When** the route handles it
 - **Then** the server returns 404 `no_preview` and the UI keeps the icon
 
@@ -1068,10 +1076,110 @@ The match walks the path **from the folder itself up to the root** and takes the
 - **When** the user uses Settings → **Clear preferences**
 - **Then** `device_picker_views` is empty, the client also forgets this session's choices, and the folder opens as a grid by type on the next open
 
+### Scenario: Pixel DNG thumbnail from the embedded preview
+
+- **Given** `DCIM/Camera/PXL_20260305_203512870.RAW-02.ORIGINAL.dng` (15 MB, IFD0 at offset 8, IFD0 Orientation 6, IFD0 = 1280×960 JPEG strip of 330 KB at offset ~4.95 MB with no EXIF)
+- **When** its row becomes visible
+- **Then** the device reads are: 4 KB at offset 0, then exactly the 330 KB preview range — no full pull
+- **And** the row shows an upright (portrait) thumbnail with the **RAW** badge, and the thumbnail is stored in the preview cache
+
+### Scenario: IFD0 at the end of the file
+
+- **Given** a Pixel DNG whose header points to IFD0 about 6 KB before the end of the file
+- **When** its thumbnail is requested
+- **Then** one extra 4 KB read at the IFD0 offset is made before the preview range read, and the thumbnail is shown
+- **And** IFD0's out-of-line BitsPerSample (stored outside that 4 KB) is not read, and IFD0 is still the candidate (no SubIFD read)
+
+### Scenario: iPhone ProRAW DNG
+
+- **Given** `IMG_3809.DNG` (Apple, big-endian `MM`, IFD0 = 3088×2316 JPEG strip of 1.7 MB whose own EXIF says Orientation 6)
+- **When** its row becomes visible and then the lightbox opens on it
+- **Then** the thumbnail is a 320 px upright JPEG and the lightbox picture is 1600 px on its long edge and upright
+- **And** the orientation is applied once (from the preview's EXIF), not twice
+
+### Scenario: Preview picked from a SubIFD
+
+- **Given** a DNG whose IFD0 is a 256×171 uncompressed RGB thumbnail and whose SubIFDs hold a 1024×683 JPEG preview and the CFA raw
+- **When** its thumbnail is requested
+- **Then** the 1024×683 JPEG is range-read and used, and the raw SubIFD is never read beyond its IFD entries
+
+### Scenario: Largest preview within 1600 px
+
+- **Given** DNG candidates of 320×213, 1024×683 and 4000×3000
+- **When** the preview is picked
+- **Then** the 1024×683 one is used for both `thumb` and `preview`
+- **Given** the only candidate is 4032×3024
+- **When** the preview is picked
+- **Then** that one is used
+
+### Scenario: Pixel lightbox is not upscaled
+
+- **Given** a Pixel DNG whose only preview is 1280×960
+- **When** the lightbox opens
+- **Then** the large rendition is 1280×960 (fit-within 1600 never enlarges)
+
+### Scenario: JPEG saved with a .dng name
+
+- **Given** `Pictures/Snapseed/12427.dng` whose bytes start with `FF D8` (a JPEG with an EXIF thumbnail)
+- **When** its row becomes visible
+- **Then** it is previewed by the photo strategy (EXIF thumbnail from the head read) and shows a thumbnail with the RAW badge
+
+### Scenario: DNG without a usable preview
+
+- **Given** a Lightroom `PXL_20260605_180647686_proxy.dng` whose only image is JPEG XL tiles (Compression 52546)
+- **When** its row becomes visible
+- **Then** the server answers 404 `no_preview` after the header reads only (no range read of image data), and the row shows the 🖼 glyph with no RAW badge and no error text
+- **When** the lightbox opens on it
+- **Then** it shows “Preview unavailable — This RAW file has no embedded preview the app can show. You can still select this file.” and stays usable
+
+### Scenario: Not a TIFF or JPEG
+
+- **Given** a `.dng` whose first bytes are neither `FF D8` nor a TIFF header
+- **When** its thumbnail is requested
+- **Then** the server answers 404 `no_preview` after the first 4 KB read
+
+### Scenario: Large DNG has no size cap
+
+- **Given** an iPhone ProRAW DNG of 52 MB
+- **When** its thumbnail is requested
+- **Then** it is previewed from the embedded JPEG and never answers 413
+
+### Scenario: Malformed DNG structures are rejected safely
+
+- **Given** DNG bytes with any of: a truncated header, an IFD entry count above 64, an IFD that points back to itself or to an earlier IFD, more than 8 SubIFDs, a preview offset or length beyond the file size, a preview length above 8 MB, or preview bytes not starting with `FF D8`
+- **When** the parser runs (both `II` and `MM` byte orders)
+- **Then** it returns “no preview” without raising and without reading outside the file, and the route answers 404 `no_preview`
+
+### Scenario: RAW previews share the slots and yield to transfers
+
+- **Given** a USB transfer job is using the device
+- **When** a DNG row becomes visible
+- **Then** the server answers 409 `device_busy` without any device read, and the row stays a plain icon to be requested again on its next visibility
+- **And** while no job runs, at most 4 photo/video/RAW previews read from the device at once
+
+### Scenario: RAW lightbox caption and note
+
+- **Given** the lightbox is open on a folder mixing photos, videos and `.dng` files
+- **When** the lightbox shows a `.dng`
+- **Then** the caption reads “RAW (DNG) · <size> · <date>”, the note “This is the preview the camera saved inside the RAW file. The RAW data itself isn’t developed here.” is shown, and ←/→ step through photos, videos and RAWs together
+- **And** that note is never shown for a photo or a video
+
+### Scenario: DNGs count as media for Auto view
+
+- **Given** an untyped folder holding only `.dng` files
+- **When** it opens with no stored choice
+- **Then** `media_count` counts the DNGs and Auto detection picks Grid
+
+### Scenario: iPhone ProRAW through AFC
+
+- **Given** iPhone (USB) on Linux with the ifuse mount and `DCIM/100APPLE/IMG_1002.DNG`
+- **When** its row becomes visible
+- **Then** the header and preview reads are seeks on the mounted file, with the same limits, cache and result as over ADB
+
 ## Out of scope
 
 - Browsing the phone’s app-private storage, root-only paths, SD-card/secondary volumes beyond what `/sdcard` exposes (v1: user storage root only).
-- In-app video **playback** (Phase B2, see [PLAN-media-preview.md](PLAN-media-preview.md)); RAW/DNG previews (Phase C); audio-file previews; motion photos; scrub/hover previews; choosing the poster frame; video previews over LAN; zoom/pan in the lightbox; rotate/edit; previews over Wi‑Fi/LAN.
+- In-app video **playback** (Phase B2, see [PLAN-media-preview.md](PLAN-media-preview.md)); RAW formats other than DNG (`cr2`, `cr3`, `nef`, `arw`, `orf`, `rw2`, `raf` keep 📄); developing/demosaicing RAW data, or decoding JPEG XL / lossless-JPEG DNG tiles (DNGs without an embedded JPEG keep the icon); a RAW badge based on file content rather than extension; audio-file previews; motion photos; scrub/hover previews; choosing the poster frame; video previews over LAN; zoom/pan in the lightbox; rotate/edit; previews over Wi‑Fi/LAN.
 - Grid view: a tile-size control or pinch zoom; Shift range selection; 2-D arrow-key navigation between tiles (no `role="grid"` model); a grid in the library Gallery (a different feature); a per-**device** view memory (the choice is per folder, shared by every device); a global default view; remembering the choice for a folder's sub-folders; a per-folder sort.
 - Search across directories; drag-and-drop.
 - Sorting by type/extension, natural/numeric name order (`IMG_2` before `IMG_10`), mixing folders among files, and a per-folder remembered sort.

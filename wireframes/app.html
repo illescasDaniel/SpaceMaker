@@ -665,6 +665,23 @@
 			white-space: nowrap;
 			font-variant-numeric: tabular-nums;
 		}
+		/* RAW rows (Phase C): the embedded camera preview + a small "RAW" badge bottom-left. Hidden while loading / on failure. */
+		.dp-thumb-raw-badge {
+			display: none;
+			pointer-events: none;
+			position: absolute;
+			left: 0;
+			bottom: 0;
+			padding: 0 0.22rem;
+			border-radius: 0 4px 0 0;
+			background: rgba(0, 0, 0, 0.72);
+			color: #fff;
+			font-size: 0.5rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			line-height: 1.35;
+		}
+		.dp-thumb-raw:not(.is-loading):not(.is-failed) .dp-thumb-raw-badge { display: block; }
 		.dp-thumb-video:not(.is-loading):not(.is-failed) .dp-thumb-play { display: inline-flex; }
 		.dp-thumb-video:not(.is-loading):not(.is-failed) .dp-thumb-dur { display: block; }
 		@media (prefers-reduced-motion: reduce) { .dp-thumb.is-loading .dp-thumb-img { animation: none; } }
@@ -780,6 +797,11 @@
 		/* Video in the lightbox (poster only, no playback in Phase B). States via data-state: vposter, vframe, verror. */
 		.dp-lb-vnote { display: none; margin: 0; font-size: 0.82rem; color: var(--muted); text-align: center; }
 		.dp-lb[data-kind="video"]:not([data-state="verror"]) .dp-lb-vnote { display: block; }
+		/* RAW in the lightbox: same states as photos, plus a muted note; the error text explains a missing embedded preview. */
+		.dp-lb-rnote { display: none; margin: 0; font-size: 0.82rem; color: var(--muted); text-align: center; }
+		.dp-lb-rerr { display: none; }
+		.dp-lb[data-kind="raw"]:not([data-state="error"]) .dp-lb-rnote { display: block; }
+		.dp-lb[data-kind="raw"] .dp-lb-rerr { display: inline; }
 		.dp-lb-glyph { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-size: 3rem; color: var(--muted); }
 		.dp-lb[data-poster="none"] .dp-lb-blur,
 		.dp-lb[data-poster="none"] .dp-lb-full { display: none; }
@@ -803,6 +825,7 @@
 			.dp-list { --dp-thumb: 36px; }
 			.dp-thumb-video .dp-thumb-play { width: 1.05rem; height: 1.05rem; font-size: 0.45rem; }
 			.dp-thumb-video .dp-thumb-dur { padding: 0 0.15rem; font-size: 0.5rem; letter-spacing: -0.02em; }
+			.dp-thumb-raw-badge { padding: 0 0.12rem; font-size: 0.42rem; }
 			.dp-lb { padding: 0; }
 			.dp-lb-panel { width: 100%; height: 100%; border-radius: 0; border: none; }
 			.dp-lb-stage { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: none; }
@@ -985,6 +1008,7 @@
 		}
 		.dp-list.is-grid .dp-thumb-video .dp-thumb-play { width: 2rem; height: 2rem; padding-left: 0.12rem; font-size: 0.85rem; top: 50%; }
 		.dp-list.is-grid .dp-thumb-video .dp-thumb-dur { padding: 0 0.3rem; font-size: 0.7rem; letter-spacing: normal; border-radius: 6px 0 0 0; }
+		.dp-list.is-grid .dp-thumb-raw-badge { padding: 0 0.3rem; font-size: 0.66rem; border-radius: 0 6px 0 0; }
 		.dp-list.is-grid .dp-row input[type="checkbox"] {
 			position: absolute;
 			top: 0.55rem;
@@ -3489,9 +3513,16 @@
 				<button type="button" data-dp-lbv-demo="mobile">Video narrow (&lt; 520 px)</button>
 				<span>· or open <b>DCIM → Camera</b> and click a row with a ▶ thumbnail.</span>
 			</p>
+			<p class="wireframe-demo-row">
+				RAW previews:
+				<button type="button" data-dp-lbr-demo="ok">RAW (loaded)</button>
+				<button type="button" data-dp-lbr-demo="loading">RAW loading</button>
+				<button type="button" data-dp-lbr-demo="error">RAW without a preview</button>
+				<span>· or open <b>DCIM → Camera</b> (Pixel <code>.RAW-02.ORIGINAL.dng</code>) or <b>Pictures → ProRAW</b> (iPhone <code>IMG_….DNG</code>).</span>
+			</p>
 
 			<div id="dp-demo-tiles-wrap">
-				<p class="dp-demo-caption">Static tile states (as they appear in a row, left to right: loading, loaded, failed, too large, videos (loaded, long, loading, no poster), document, folder):</p>
+				<p class="dp-demo-caption">Static tile states (as they appear in a row, left to right: loading, loaded, failed, too large, videos (loaded, long, loading, no poster), RAW (loaded, no embedded preview), document, folder):</p>
 				<ul class="dp-list dp-demo-tiles" aria-label="Thumbnail tile states (demo)">
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo loading" /><span class="dp-name"><span class="dp-thumb is-loading" role="img" aria-label="Thumbnail loading"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span></span><span class="dp-label">IMG_20261018_1.jpg — loading (shimmer)</span></span><span class="dp-size">3.2 MB</span><span class="dp-date">2026-10-18</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo loaded" /><span class="dp-name"><button type="button" class="dp-thumb" style="--h: 205" aria-label="Preview IMG_20261018_2.jpg"><span class="dp-thumb-img"></span></button><span class="dp-label">IMG_20261018_2.jpg — loaded</span><button type="button" class="dp-preview-btn" aria-label="Preview IMG_20261018_2.jpg">👁</button></span><span class="dp-size">3.4 MB</span><span class="dp-date">2026-10-18</span></li>
@@ -3501,6 +3532,8 @@
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo video long" /><span class="dp-name"><button type="button" class="dp-thumb dp-thumb-video" style="--h: 150" aria-label="Preview holiday.mov (video, 1:02:15)"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🎞</span><span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">1:02:15</span></button><span class="dp-label">holiday.mov — video, long clip (h:mm:ss badge)</span><button type="button" class="dp-preview-btn" aria-label="Preview holiday.mov">👁</button></span><span class="dp-size">1.4 GB</span><span class="dp-date">2026-08-20</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo video loading" /><span class="dp-name"><span class="dp-thumb dp-thumb-video is-loading" role="img" aria-label="Video poster loading"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🎞</span><span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">12:07</span></span><span class="dp-label">VID_0003.webm — video, poster loading (shimmer, no badge yet)</span></span><span class="dp-size">64 MB</span><span class="dp-date">2026-09-04</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo video failed" /><span class="dp-name"><button type="button" class="dp-thumb dp-thumb-video is-failed" aria-label="Preview VID_0004.3gp (video)"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🎞</span><span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">0:09</span></button><span class="dp-label">VID_0004.3gp — video, no poster (🎞 icon only)</span><button type="button" class="dp-preview-btn" aria-label="Preview VID_0004.3gp">👁</button></span><span class="dp-size">1.8 MB</span><span class="dp-date">2026-09-04</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo raw" /><span class="dp-name"><button type="button" class="dp-thumb dp-thumb-raw" style="--h: 25" aria-label="Preview PXL_20261018_101500123.RAW-02.ORIGINAL.dng (RAW)"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span><span class="dp-thumb-raw-badge" aria-hidden="true">RAW</span></button><span class="dp-label">PXL_20261018_101500123.RAW-02.ORIGINAL.dng — RAW, embedded preview loaded (RAW badge)</span><button type="button" class="dp-preview-btn" aria-label="Preview PXL_20261018_101500123.RAW-02.ORIGINAL.dng">👁</button></span><span class="dp-size">24.6 MB</span><span class="dp-date">2026-10-18</span></li>
+					<li class="dp-row"><input type="checkbox" aria-label="Select demo raw failed" /><span class="dp-name"><button type="button" class="dp-thumb dp-thumb-raw is-failed" aria-label="Preview PXL_20260605_180647686_proxy.dng (RAW)"><span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">🖼</span><span class="dp-thumb-raw-badge" aria-hidden="true">RAW</span></button><span class="dp-label">PXL_20260605_180647686_proxy.dng — RAW with no usable embedded preview (Lightroom proxy; 🖼 icon only, like a failed photo)</span><button type="button" class="dp-preview-btn" aria-label="Preview PXL_20260605_180647686_proxy.dng">👁</button></span><span class="dp-size">3.1 MB</span><span class="dp-date">2026-07-03</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo document" /><span class="dp-name"><span class="dp-ico dp-ico-media" aria-hidden="true">📄</span><span class="dp-label">contract.pdf — other file</span></span><span class="dp-size">1.2 MB</span><span class="dp-date">2026-09-30</span></li>
 					<li class="dp-row"><input type="checkbox" aria-label="Select demo folder" /><span class="dp-name"><span class="dp-ico dp-ico-media" aria-hidden="true">📁</span><span class="dp-label">Camera — folder</span></span><span class="dp-size">—</span><span class="dp-date">2026-10-18</span></li>
 				</ul>
@@ -3522,6 +3555,15 @@
 			<aside class="wf-note" data-for="agent">
 				<span class="wf-note-badge">Agent note</span>
 				Posters and the large lightbox frame come from the <b>first frame</b> of the video, generated by ffmpeg reading only the byte ranges it needs through a <b>desktop-only (loopback) ranged stream route</b> (spike: about 0.7 s and about 4.5 MB per clip, whatever the file size); the duration comes from the same ffmpeg run. At most <b>4 preview reads per device</b> are in flight, shared between photos and videos, and previews yield to running transfers/extracts as photos do. No LAN or phone-browser access: the route is never on the LAN allow-list. Nothing is fully downloaded, so there is no size cap for videos. <b>Playback is out of scope</b> (the bundled Qt WebEngine can’t decode H.264/HEVC/AAC); it is planned as Phase B2.
+			</aside>
+
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				<b>RAW previews (new, Phase C):</b> RAW photos (<code>.dng</code>: Pixel <code>….RAW-02.ORIGINAL.dng</code>, iPhone ProRAW <code>IMG_….DNG</code>, any case) are treated as <b>photos</b>: same rounded thumbnail in List, same square tile in Grid, same shimmer while loading, same 🖼 icon when there is nothing to show, and they count in the folder’s photo/video share for Auto view. A loaded RAW tile carries a small <b>RAW</b> badge in the bottom-left corner (videos keep their duration bottom-right). The picture is the <b>preview the camera saved inside the RAW file</b>, never a developed RAW. The lightbox steps through RAWs with the other photos and videos; its caption reads “RAW (DNG) · 24.6 MB · date”, and a small muted note under the picture says “This is the preview the camera saved inside the RAW file. The RAW data itself isn’t developed here.” A RAW with no usable embedded preview (for example Lightroom <code>…_proxy.dng</code> files) shows the 🖼 icon in the row and “Preview unavailable — This RAW file has no embedded preview the app can show” in the lightbox; it stays selectable. There is no “too large” state for RAW (only the preview bytes are read). Use the “RAW previews” demo buttons above, or open <b>Pictures → ProRAW</b> / <b>Pictures → Snapseed</b>.
+			</aside>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				The embedded JPEG is located by parsing the DNG’s TIFF/IFD structure from a bounded head read, then only that JPEG’s bytes are fetched with the existing ranged read (Phase B <code>read_range</code>) — no full pull, no demosaic. The same thumb/preview routes, disk cache, per-device concurrency cap (4, shared with photos and videos) and yield-to-transfers policy apply; the routes stay loopback-only. The thumbnail uses the smallest embedded JPEG at least 320 px; the lightbox the largest one up to the preview size. Orientation is applied from the RAW’s own Orientation tag when the preview isn’t pre-rotated. Exact head size, preview choice and timings come from the C0 spike. Other vendor RAW formats (cr2, cr3, nef, arw, orf, rw2, raf) are out of scope for this phase and keep 📄.
 			</aside>
 
 			<aside class="wf-note" data-for="reviewer">
@@ -3568,12 +3610,13 @@
 						<div class="dp-lb-full"></div>
 						<div class="dp-lb-glyph" aria-hidden="true">🎞</div>
 						<div class="dp-lb-loading" role="status"><span class="dp-spinner" aria-hidden="true"></span><span id="dp-lb-loading-txt">Loading larger preview…</span></div>
-						<div class="dp-lb-error" role="alert"><strong>Preview unavailable</strong>You can still select this file.</div>
+						<div class="dp-lb-error" role="alert"><strong>Preview unavailable</strong><span class="dp-lb-rerr">This RAW file has no embedded preview the app can show.</span> You can still select this file.</div>
 						<div class="dp-lb-verror" role="alert"><strong>Video unavailable</strong>The phone was unplugged or didn’t respond. You can still select this file.</div>
 					</div>
 					<button type="button" class="dp-lb-btn dp-lb-next" id="dp-lb-next" aria-label="Next photo or video">→</button>
 				</div>
 				<p class="dp-lb-vnote">Playback isn’t available in the app yet. Transfer the video to watch it.</p>
+				<p class="dp-lb-rnote">This is the preview the camera saved inside the RAW file. The RAW data itself isn’t developed here.</p>
 				<p class="dp-lb-hint">← → to browse · Esc to close</p>
 			</div>
 		</div>
@@ -5352,6 +5395,11 @@
 			vid(10, '3gp', 1.8 * M, { dur: '0:09', vs: 'failed' });
 			vid(15, 'mkv', 1434 * M, { dur: '1:02:15' });
 			vid(19, 'webm', 64 * M, { dur: '3:31', vs: 'loading' });
+			/* RAW (Phase C): Pixel-style DNGs (named to sort among the demo photos); rs = thumbnail state override. */
+			function raw(i, size, extra) { big[i - 1] = Object.assign(f('IMG_' + String(20260000 + i) + '.RAW-02.ORIGINAL.dng', size, big[i - 1].mtime), extra); }
+			raw(2, 24.6 * M);
+			raw(8, 25.1 * M);
+			raw(12, 23.9 * M, { rs: 'loading' });
 			var tree = {
 				'': [d('Alarms'), d('Android'), d('Bluetooth'), d('DCIM'), d('Documents'), d('Download', '2026-10-17'), d('Movies'), d('Music'), d('Pictures'), d('Projects'), d('WhatsApp'), d('.thumbnails'), f('.nomedia', 0, '2025-01-04', false), f('notes.txt', 2 * K, '2026-10-01', false)],
 				'Android': [d('data'), d('media'), d('obb')],
@@ -5366,7 +5414,9 @@
 				'Music': [],
 				'Bluetooth': [f('beach.jpg', 1.4 * M), f('sunset.jpg', 1.1 * M), f('friends.jpg', 1.8 * M)],
 				'Projects': [f('plan.pdf', 300 * K, '2026-09-01', false), f('budget.xlsx', 80 * K, '2026-09-02', false), f('notes.txt', 2 * K, '2026-09-03', false), f('mockup.png', 500 * K), f('logo.jpg', 120 * K)],
-				'Pictures': [d('Instagram'), f('wallpaper.png', 2.2 * M, '2026-05-02')],
+				'Pictures': [d('Instagram'), d('ProRAW'), d('Snapseed'), f('wallpaper.png', 2.2 * M, '2026-05-02')],
+				'Pictures/ProRAW': [f('IMG_3809.DNG', 52.4 * M, '2026-06-02'), f('IMG_4336.DNG', 48.9 * M, '2026-06-30'), f('IMG_4337.HEIC', 3.1 * M, '2026-06-30')],
+				'Pictures/Snapseed': [f('12427.dng', 3.2 * M, '2026-07-03', true), f('12674.dng', 2.6 * M, '2026-07-04', true), f('PXL_20260605_180647686_proxy.dng', 3.1 * M, '2026-07-05', true)],
 				'Pictures/Instagram': [f('IMG_5521.jpg', 1.1 * M), f('IMG_5522.jpg', 980 * K)],
 				'WhatsApp': [d('Media'), d('Databases')],
 				'WhatsApp/Media': [d('WhatsApp Images'), d('WhatsApp Video'), d('WhatsApp Documents')],
@@ -5380,7 +5430,7 @@
 				'': [d('DCIM')],
 				'DCIM': [d('100APPLE'), d('101APPLE')],
 				'DCIM/100APPLE': [f('IMG_0001.HEIC', 2.4 * M), f('IMG_0002.HEIC', 2.1 * M), f('IMG_0003.MOV', 41 * M)],
-				'DCIM/101APPLE': [f('IMG_1001.HEIC', 2.6 * M)]
+				'DCIM/101APPLE': [f('IMG_1001.HEIC', 2.6 * M), f('IMG_1002.DNG', 51.7 * M)]
 			};
 
 			var PAGE = 100;
@@ -5579,11 +5629,16 @@
 			}
 
 			/* Photo previews: thumbnail state per row + lightbox (demo only; no real images). */
-			var IMG_RE = /\.(jpe?g|png|heic|heif|webp|gif)$/i;
+			var IMG_RE = /\.(jpe?g|png|heic|heif|webp|gif|dng)$/i;
+			var RAW_RE = /\.dng$/i;
 			var VID_RE = /\.(mp4|mov|m4v|3gp|mkv|webm)$/i;
 			var imgInfo = {};
 			function hueOf(name) { var h = 0; for (let i = 0; i < name.length; i += 1) { h = (h * 31 + name.charCodeAt(i)) % 360; } return h; }
 			function thumbState(e) {
+				if (RAW_RE.test(e.name)) {
+					/* RAW: only the embedded preview is read (range read), so there is no size cap. Lightroom *_proxy.dng (JPEG XL tiles): none usable. Snapseed ".dng" files are plain JPEGs: shown. */
+					return e.rs || (/_proxy\.dng$/i.test(e.name) ? 'failed' : 'loaded');
+				}
 				if (e.size > 25 * M) { return 'toolarge'; }
 				if (/WA0004|_13\./.test(e.name)) { return 'failed'; }
 				return hueOf(e.name) % 4 === 0 ? 'loading' : 'loaded';
@@ -5603,10 +5658,12 @@
 				var e = lbEntry;
 				if (!e) { return; }
 				var isV = VID_RE.test(e.name);
-				lb.dataset.kind = isV ? 'video' : 'photo';
+				var isR = RAW_RE.test(e.name);
+				lb.dataset.kind = isV ? 'video' : isR ? 'raw' : 'photo';
 				document.getElementById('dp-lb-loading-txt').textContent = LB_LOADING_TXT[state] || 'Loading larger preview…';
 				document.getElementById('dp-lb-info').textContent = isV
 					? ['Video', durOf(e), fmtSize(e.size), e.mtime].join(' · ')
+					: isR ? ['RAW (DNG)', fmtSize(e.size), e.mtime].join(' · ')
 					: fmtSize(e.size) + ' · ' + e.mtime;
 			}
 			function showLb(path) {
@@ -5710,6 +5767,24 @@
 				});
 			});
 
+			document.querySelectorAll('[data-dp-lbr-demo]').forEach(function (b) {
+				b.addEventListener('click', function () {
+					var mode = b.getAttribute('data-dp-lbr-demo');
+					if (!ctx) { ctx = { kind: 'both' }; }
+					function firstRaw() { return Array.prototype.filter.call(listEl.querySelectorAll('li.dp-row[data-image]'), function (r) { return RAW_RE.test(r.dataset.path); })[0]; }
+					if (!firstRaw()) { forced = 'big'; cwd = 'DCIM/Camera'; loadFirst(true); }
+					var tries = 0;
+					(function wait() {
+						var first = firstRaw();
+						if (!first && tries++ < 20) { window.setTimeout(wait, 100); return; }
+						if (!first) { return; }
+						openLb(first.dataset.path, b);
+						window.clearTimeout(showLb.t);
+						setLbState(mode);
+					})();
+				});
+			});
+
 			function makeRow(e) {
 				var path = join(cwd, e.name);
 				var li = document.createElement('li');
@@ -5743,6 +5818,7 @@
 				name.className = 'dp-name';
 				var isImg = !e.dir && IMG_RE.test(e.name);
 				var isVid = !e.dir && VID_RE.test(e.name);
+				var isRaw = isImg && RAW_RE.test(e.name);
 				name.innerHTML = (isImg || isVid ? '' : '<span class="dp-ico' + (isVid ? ' dp-ico-media' : '') + '" aria-hidden="true">' + (e.dir ? '📁' : isVid ? '🎞' : '📄') + '</span>') + '<span class="dp-label"></span>';
 				name.querySelector('.dp-label').textContent = e.name;
 				li.dataset.path = path;
@@ -5752,10 +5828,10 @@
 					const st = isVid ? videoThumbState(e) : thumbState(e);
 					const th = document.createElement('button');
 					th.type = 'button';
-					th.className = 'dp-thumb' + (isVid ? ' dp-thumb-video' : '') + ' is-' + st;
+					th.className = 'dp-thumb' + (isVid ? ' dp-thumb-video' : '') + (isRaw ? ' dp-thumb-raw' : '') + ' is-' + st;
 					th.style.setProperty('--h', String(hueOf(e.name)));
-					th.setAttribute('aria-label', 'Preview ' + e.name + (isVid ? ' (video, ' + durOf(e) + ')' : ''));
-					th.innerHTML = '<span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">' + (isVid ? '🎞' : '🖼') + '</span>' + (isVid ? '<span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">' + durOf(e) + '</span>' : '');
+					th.setAttribute('aria-label', 'Preview ' + e.name + (isVid ? ' (video, ' + durOf(e) + ')' : isRaw ? ' (RAW)' : ''));
+					th.innerHTML = '<span class="dp-thumb-img"></span><span class="dp-thumb-glyph" aria-hidden="true">' + (isVid ? '🎞' : '🖼') + '</span>' + (isVid ? '<span class="dp-thumb-play" aria-hidden="true">▶</span><span class="dp-thumb-dur">' + durOf(e) + '</span>' : '') + (isRaw ? '<span class="dp-thumb-raw-badge" aria-hidden="true">RAW</span>' : '');
 					name.insertBefore(th, name.firstChild);
 					if (st === 'loading') {
 						/* Demo: tiles resolve after a short delay (production: lazy, max 4 in flight). */

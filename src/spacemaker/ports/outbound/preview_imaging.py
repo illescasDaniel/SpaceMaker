@@ -19,3 +19,14 @@ class PreviewImagingPort(Protocol):
 		``DevicePreviewError`` (``NO_PREVIEW`` when undecodable/over the pixel limit, ``TIMEOUT`` on timeout).
 		"""
 		...
+
+	def render_embedded_jpeg(self, jpeg: bytes, max_edge: int, fallback_orientation: int, timeout_s: float) -> bytes:
+		"""Fit-within JPEG (longest edge <= ``max_edge``, **never enlarged**) from an embedded preview JPEG held in
+		memory (e.g. a DNG's preview, untrusted bytes).
+
+		Orientation is applied exactly once: the JPEG's own EXIF Orientation when it has one, otherwise
+		``fallback_orientation`` (the DNG's IFD0 value, 1-8; 1 = as stored). No EXIF is written. Decodes in a
+		subprocess bounded by ``timeout_s`` and the same pixel-dimension limit as ``render_jpeg``. Raises
+		``DevicePreviewError`` (``NO_PREVIEW`` when undecodable/over the pixel limit, ``TIMEOUT`` on timeout).
+		"""
+		...

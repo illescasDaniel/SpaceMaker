@@ -1,6 +1,6 @@
 /** Photo previews for the phone picker: URL building, status mapping, a bounded fetch queue and the lazy thumbnail loader. */
 
-const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
+const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "dng"]);
 const VIDEO_EXTENSIONS: ReadonlySet<string> = new Set([
 	"3gp",
 	"avi",
@@ -44,6 +44,10 @@ function extensionOf(name: string): string {
 /** UI hint only; the server decides what it can really decode. */
 function isImageName(name: string): boolean {
 	return IMAGE_EXTENSIONS.has(extensionOf(name));
+}
+/** True for `.dng` (case-insensitive). By extension only: a JPEG saved as `.dng` counts too. */
+function isRawName(name: string): boolean {
+	return extensionOf(name) === "dng";
 }
 function isVideoName(name: string): boolean {
 	return VIDEO_EXTENSIONS.has(extensionOf(name));
@@ -358,6 +362,7 @@ export {
 	formatMediaDuration,
 	isImageName,
 	isPreviewableVideo,
+	isRawName,
 	isVideoName,
 	MAX_IN_FLIGHT,
 	outcomeForStatus,

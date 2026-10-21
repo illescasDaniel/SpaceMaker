@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 from spacemaker.application.device_stream_tokens import DeviceStreamTokens
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.device_browse import DeviceBrowseError, normalize_browse_path
+from spacemaker.domain.device_media import is_raw_name
 from spacemaker.domain.device_preview import (
 	PREVIEW_FULL_PULL_MAX_BYTES,
 	PREVIEW_FULL_TIMEOUT_S,
@@ -32,6 +33,14 @@ from spacemaker.domain.device_preview import (
 	preview_media_of,
 )
 from spacemaker.domain.device_stream import DeviceStreamGrant
+from spacemaker.domain.dng_preview import (
+	DNG_HEADER_READ_BYTES,
+	DNG_HEADER_TIMEOUT_S,
+	DNG_PREVIEW_TIMEOUT_S,
+	ImageContainer,
+	locate_dng_preview,
+	sniff_container,
+)
 from spacemaker.ports.outbound.device_activity import DeviceActivityPort
 from spacemaker.ports.outbound.device_preview_cache import DevicePreviewCachePort
 from spacemaker.ports.outbound.device_repository import DeviceRepositoryPort
@@ -48,7 +57,10 @@ class GetDevicePreview:
 	``PREVIEW_MAX_CONCURRENT_READS`` per-``(method, device_id)`` slots -> for ``THUMB``: head read, embedded
 	thumbnail if present -> otherwise ``stat_file`` (real size, never the client's), over
 	``PREVIEW_FULL_PULL_MAX_BYTES`` -> ``TOO_LARGE`` -> pull to a temp file -> ``render_jpeg`` -> delete the
-	temp file in every outcome -> ``cache.put``. ``PREVIEW`` skips the head step. Raises
+	temp file in every outcome -> ``cache.put``. ``PREVIEW`` skips the head step. RAW (``.dng``) files are
+	decided by content: the first ``DNG_HEADER_READ_BYTES`` say JPEG (photo strategy, temp file suffix
+	``.jpg``), TIFF (locate the embedded JPEG from a few small reads, range-read just that, ``render_embedded_jpeg``;
+	never fully pulled, never ``TOO_LARGE``) or neither (``NO_PREVIEW``). Raises
 	``DevicePreviewError``; device failures from the repository (``DeviceBrowseError``) are mapped to
 	``UNPLUGGED`` / ``UNAUTHORIZED`` / ``TIMEOUT`` / ``NO_PREVIEW`` (not found).
 
@@ -133,6 +145,8 @@ class GetDevicePreview:
 				if media is DevicePreviewMedia.VIDEO:
 					poster = self._generate_video(repository, request, path, cancel)
 					entry = CachedDevicePreview(poster.jpeg, poster.duration_s)
+				elif is_raw_name(path.rsplit("/", 1)[-1]):
+					entry = CachedDevicePreview(self._generate_raw(repository, request, path))
 				else:
 					entry = CachedDevicePreview(self._generate(repository, request, path))
 			except DeviceBrowseError as exc:
@@ -161,7 +175,35 @@ class GetDevicePreview:
 		finally:
 			self._tokens.revoke(token)
 
-	def _generate(self, repository: DeviceRepositoryPort, request: DevicePreviewRequest, path: str) -> bytes:
+	def _generate_raw(self, repository: DeviceRepositoryPort, request: DevicePreviewRequest, path: str) -> bytes:
+		"""Preview of a ``.dng`` chosen by content: JPEG bytes -> photo strategy; TIFF -> embedded JPEG."""
+		head = repository.read_head(request.device_id, path, DNG_HEADER_READ_BYTES, DNG_HEADER_TIMEOUT_S)
+		container = sniff_container(head)
+		if container is ImageContainer.JPEG:
+			return self._generate(repository, request, path, suffix=".jpg")
+		if container is not ImageContainer.TIFF:
+			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "not a TIFF or JPEG")
+		entry = repository.stat_file(request.device_id, path)
+		if entry.is_dir:
+			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "not a file")
+		device_id = request.device_id
+		location = locate_dng_preview(
+			head,
+			entry.size,
+			lambda offset, length: repository.read_range(device_id, path, offset, length, DNG_HEADER_TIMEOUT_S),
+		)
+		if location is None:
+			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "no embedded preview")
+		jpeg = repository.read_range(device_id, path, location.offset, location.length, DNG_PREVIEW_TIMEOUT_S)
+		if len(jpeg) != location.length or not jpeg.startswith(b"\xff\xd8"):
+			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "embedded preview unreadable")
+		return self._imaging.render_embedded_jpeg(
+			jpeg, request.kind.max_edge, location.orientation, PREVIEW_FULL_TIMEOUT_S
+		)
+
+	def _generate(
+		self, repository: DeviceRepositoryPort, request: DevicePreviewRequest, path: str, *, suffix: str | None = None
+	) -> bytes:
 		edge = request.kind.max_edge
 		if request.kind is DevicePreviewKind.THUMB:
 			head = repository.read_head(request.device_id, path, PREVIEW_HEAD_BYTES, PREVIEW_HEAD_TIMEOUT_S)
@@ -173,7 +215,8 @@ class GetDevicePreview:
 			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "not a file")
 		if entry.size > PREVIEW_FULL_PULL_MAX_BYTES:
 			raise DevicePreviewError(DevicePreviewErrorKind.TOO_LARGE)
-		suffix = PurePosixPath(path).suffix.lower()  # Magick picks its decoder from this extension
+		if suffix is None:
+			suffix = PurePosixPath(path).suffix.lower()  # Magick picks its decoder from this extension
 		temp = self._filesystem.make_temp_file(suffix)
 		try:
 			repository.pull_file_with_timeout(request.device_id, path, temp, PREVIEW_FULL_TIMEOUT_S)

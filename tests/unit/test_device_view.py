@@ -1,6 +1,7 @@
 import pytest
 
 from spacemaker.domain.device_browse import DeviceEntry
+from spacemaker.domain.device_media import is_raw_name
 from spacemaker.domain.device_view import (
 	DEVICE_VIEW_MEMORY_MAX,
 	EMPTY_VIEW_MEMORY,
@@ -55,13 +56,40 @@ def test_given_photo_or_video_name_when_is_media_name_then_true(name: str) -> No
 	assert result
 
 
-@pytest.mark.parametrize("name", ["notes.txt", "report.pdf", "song.mp3", "photo.dng", "jpg", "archive.jpg.zip", ""])
+@pytest.mark.parametrize("name", ["notes.txt", "report.pdf", "song.mp3", "photo.cr2", "jpg", "archive.jpg.zip", ""])
 def test_given_other_name_when_is_media_name_then_false(name: str) -> None:
 	# given
 	# when
 	result = is_media_name(name)
 	# then
 	assert not result
+
+
+@pytest.mark.parametrize("name", ["PXL_1.RAW-02.ORIGINAL.dng", "IMG_4336.DNG"])
+def test_given_dng_name_when_is_media_name_then_true(name: str) -> None:
+	# given / when
+	result = is_media_name(name)
+	# then
+	assert result
+
+
+def test_given_only_dngs_when_folder_counts_then_all_counted_as_media() -> None:
+	# given
+	entries = [DeviceEntry("a.dng", False), DeviceEntry("B.DNG", False)]
+	# when
+	counts = folder_counts(entries, show_hidden=False)
+	# then
+	assert counts == DeviceFolderCounts(entry_count=2, media_count=2)
+
+
+@pytest.mark.parametrize(
+	("name", "expected"), [("a.dng", True), ("A.DNG", True), ("a.jpg", False), ("dng", False), ("a.cr2", False)]
+)
+def test_given_name_when_is_raw_name_then_only_dng(name: str, expected: bool) -> None:
+	# given / when
+	result = is_raw_name(name)
+	# then
+	assert result is expected
 
 
 # folder_counts

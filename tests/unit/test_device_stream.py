@@ -43,7 +43,7 @@ def test_given_image_name_when_preview_media_of_then_image(name: str) -> None:
 	assert media is DevicePreviewMedia.IMAGE
 
 
-@pytest.mark.parametrize("name", ["a.dng", "a.txt", "README", "mp4", ".mp4x", "clip.mp4.bak", ""])
+@pytest.mark.parametrize("name", ["a.cr2", "a.txt", "README", "mp4", ".mp4x", "clip.mp4.bak", ""])
 def test_given_other_name_when_preview_media_of_then_none(name: str) -> None:
 	# given
 	candidate = name

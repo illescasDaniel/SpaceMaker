@@ -10,6 +10,8 @@ const MARKUP = `
 <button id="dp-lb-prev"></button><div class="dp-lb-blur"></div><div class="dp-lb-full"></div>
 <div class="dp-lb-glyph">🎞</div><div class="dp-lb-verror"><strong>Video unavailable</strong></div><button id="dp-lb-next"></button>
 <p class="dp-lb-vnote">Playback isn’t available in the app yet. Transfer the video to watch it.</p>
+<div class="dp-lb-error"><strong>Preview unavailable</strong><span class="dp-lb-rerr">This RAW file has no embedded preview the app can show.</span> You can still select this file.</div>
+<p class="dp-lb-rnote">This is the preview the camera saved inside the RAW file. The RAW data itself isn’t developed here.</p>
 <p class="dp-lb-hint">← → to browse · Esc to close</p></div>
 <button id="opener"></button>`;
 
@@ -258,5 +260,60 @@ describe("device lightbox with videos", () => {
 		openLightbox("DCIM/a.jpg", null);
 		await flush();
 		expect(lb().dataset.state).toBe("error");
+	});
+});
+
+describe("device lightbox RAW", () => {
+	const rawItems = (): LightboxItem[] => [
+		{
+			...items(new Set())[0],
+			path: "DCIM/r.dng",
+			name: "r.dng",
+			info: "24.6 MB · 2026-10-18",
+			kind: "raw",
+		} as LightboxItem,
+		...items(new Set()),
+	];
+	const open = (reply: Response): void => {
+		globalThis.fetch = vi.fn(async () => reply) as typeof fetch;
+		bindLightbox({ items: rawItems, selectionDisabled: () => false });
+		openLightbox("DCIM/r.dng", document.getElementById("opener"));
+	};
+
+	it("given a RAW item when opened then kind is raw and the caption starts with RAW (DNG)", () => {
+		open(new Response("{}", { status: 404 }));
+		expect(lb().dataset.kind).toBe("raw");
+		expect(text("dp-lb-info")).toBe("RAW (DNG) · 24.6 MB · 2026-10-18");
+	});
+
+	it("given a RAW item then stepping to a photo resets kind and caption", () => {
+		open(new Response("{}", { status: 404 }));
+		document.getElementById("dp-lb-next")?.click();
+		expect(lb().dataset.kind).toBe("image");
+		expect(text("dp-lb-info")).toBe("1 KB · 2026-01-01");
+		expect(lb().dataset.rerr).toBeUndefined();
+	});
+
+	it("given a RAW preview that answers 404 then the RAW error sentence applies", async () => {
+		open(new Response("{}", { status: 404 }));
+		await flush();
+		expect(lb().dataset.state).toBe("error");
+		expect(lb().dataset.rerr).toBe("1");
+	});
+
+	it("given a RAW preview that answers 503 then the normal photo error shows without the RAW sentence", async () => {
+		open(new Response("{}", { status: 503 }));
+		await flush();
+		expect(lb().dataset.state).toBe("error");
+		expect(lb().dataset.rerr).toBeUndefined();
+	});
+
+	it("given a photo that answers 404 then the RAW sentence is not used", async () => {
+		globalThis.fetch = vi.fn(async () => new Response("{}", { status: 404 })) as typeof fetch;
+		bindLightbox({ items: rawItems, selectionDisabled: () => false });
+		openLightbox("DCIM/a.jpg", document.getElementById("opener"));
+		await flush();
+		expect(lb().dataset.state).toBe("error");
+		expect(lb().dataset.rerr).toBeUndefined();
 	});
 });

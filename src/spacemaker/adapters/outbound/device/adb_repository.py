@@ -180,10 +180,11 @@ class AdbDeviceRepository:
 		return result.stdout
 
 	def read_range(self, device_id: str, path: str, offset: int, length: int, timeout_s: float) -> bytes:
-		"""``length`` bytes from ``offset`` via ``adb exec-out dd`` (byte-exact; reads only the range)."""
+		"""``length`` bytes from ``offset`` via ``adb exec-out dd`` (byte-exact; reads only the range). ``exec-out``
+		merges the remote stderr into stdout, so dd must print no summary (``status=none``)."""
 		remote = (
 			f"dd if={shlex.quote(self._storage_file_path(path))} iflag=skip_bytes,count_bytes "
-			f"skip={int(offset)} count={int(length)}"
+			f"skip={int(offset)} count={int(length)} status=none"
 		)
 		result = self._run_adb(device_id, remote, timeout_s)
 		if result.returncode != 0:

@@ -539,6 +539,8 @@ class FakePreviewImaging:
 	filesystem: FakeFileSystem | None = None
 	head_calls: list[tuple[bytes, int]] = field(default_factory=list)
 	render_calls: list[tuple[str, int, float]] = field(default_factory=list)
+	embedded_rendered: bytes = b"rendered-embedded-jpeg"
+	render_embedded_calls: list[tuple[bytes, int, int, float]] = field(default_factory=list)
 	source_existed_at_render: list[bool] = field(default_factory=list)
 
 	def thumbnail_from_head(self, head: bytes, max_edge: int) -> bytes | None:
@@ -552,6 +554,12 @@ class FakePreviewImaging:
 		if self.render_error is not None:
 			raise DevicePreviewError(self.render_error)
 		return self.rendered
+
+	def render_embedded_jpeg(self, jpeg: bytes, max_edge: int, fallback_orientation: int, timeout_s: float) -> bytes:
+		self.render_embedded_calls.append((jpeg, max_edge, fallback_orientation, timeout_s))
+		if self.render_error is not None:
+			raise DevicePreviewError(self.render_error)
+		return self.embedded_rendered
 
 
 @dataclass

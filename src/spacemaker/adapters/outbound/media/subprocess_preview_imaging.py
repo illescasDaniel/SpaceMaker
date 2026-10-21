@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 _JPEG_QUALITY = "82"
 _EMBEDDED_TIMEOUT_S = 10.0
+_EXIF_SCAN_BYTES = 128 * 1024  # the EXIF APP1 segment sits at the start of a JPEG (max segment 64 KB)
 _LIMITS = (
 	"-limit", "width", "20000",
 	"-limit", "height", "20000",
@@ -66,6 +67,34 @@ class SubprocessPreviewImaging:
 			logger.debug("embedded thumbnail unusable", exc_info=True)
 			return None
 		return output or None
+
+	def render_embedded_jpeg(self, jpeg: bytes, max_edge: int, fallback_orientation: int, timeout_s: float) -> bytes:
+		own = parse_exif_thumbnail(jpeg[:_EXIF_SCAN_BYTES])
+		args = [*_LIMITS]
+		if own is None or own.orientation is None:
+			# The preview has no Orientation of its own (Pixel): apply the DNG's, before the input is read.
+			name = _ORIENTATION_NAMES.get(fallback_orientation)
+			if name:
+				args += ["-orient", name]
+		args += [
+			"jpeg:-",
+			"-auto-orient",
+			"-thumbnail",
+			f"{max_edge}x{max_edge}>",
+			"-strip",
+			"-quality",
+			_JPEG_QUALITY,
+			"jpeg:-",
+		]
+		try:
+			output = self._run_magick(args, jpeg, timeout_s)
+		except subprocess.TimeoutExpired as exc:
+			raise DevicePreviewError(DevicePreviewErrorKind.TIMEOUT, "image decode timed out") from exc
+		except (OSError, subprocess.SubprocessError) as exc:
+			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, str(exc)) from exc
+		if not output:
+			raise DevicePreviewError(DevicePreviewErrorKind.NO_PREVIEW, "image could not be decoded")
+		return output
 
 	def render_jpeg(self, source_path: str, max_edge: int, timeout_s: float) -> bytes:
 		suffix = Path(source_path).suffix.lower()

@@ -103,6 +103,20 @@ def test_given_query_when_get_then_use_case_receives_typed_request(
 
 
 @pytest.mark.parametrize("route", ["/api/device/thumb", "/api/device/preview"])
+def test_given_dng_path_when_get_then_200_jpeg(
+	desktop: TestClient, use_case: _StubGetDevicePreview, route: str
+) -> None:
+	# given
+	params = {**QUERY, "path": "DCIM/Camera/PXL_20260305_203512870.RAW-02.ORIGINAL.dng"}
+	# when
+	response = desktop.get(route, params=params)
+	# then
+	assert response.status_code == 200
+	assert response.headers["content-type"] == "image/jpeg"
+	assert use_case.requests[0].path.endswith(".dng")
+
+
+@pytest.mark.parametrize("route", ["/api/device/thumb", "/api/device/preview"])
 def test_given_matching_if_none_match_when_get_then_304_without_body(desktop: TestClient, route: str) -> None:
 	# given
 	headers = {"If-None-Match": ETAG}

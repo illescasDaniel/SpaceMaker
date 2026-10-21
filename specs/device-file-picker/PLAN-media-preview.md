@@ -1,6 +1,6 @@
 # Plan — media previews in the phone picker
 
-_Drafted 2026-10-20. Status: Phase A done (committed); Phase B (video posters) implemented, grader PASS, uncommitted; B2 and C not started._ Lifts the "Thumbnails/previews of phone files" out-of-scope line in `SPEC.md`. Each phase below is its own SDD revision (Phase Gates 0→5), on its own worktree branch.
+_Drafted 2026-10-20. Status: Phase A done (committed); Phase B (video posters) committed; B2 not started; Phase C (RAW) started 2026-10-21 — C0 spike done; wireframe, spec revision (amended after the real-phone check) and architecture approved 2026-10-21; Phases 3–4 implemented, gate green, grader PASS, checked in the app against the Pixel (uncommitted)._ Lifts the "Thumbnails/previews of phone files" out-of-scope line in `SPEC.md`. Each phase below is its own SDD revision (Phase Gates 0→5), on its own worktree branch.
 
 Phase A done 2026-10-20 (SDD phases 0–5, grader PASS; commits 84a05f7, 2ef79bd). Phase B (videos) started 2026-10-20. After B0, the user chose **posters only** (first frame, duration badge, large frame in the lightbox, no playback), because the bundled Qt WebEngine cannot decode H.264/HEVC/AAC. Playback moves to Phase B2 (below). Phase C (RAW) planned below.
 
@@ -116,3 +116,11 @@ _Added 2026-10-20._ RAW files (`dng`, and later vendor formats such as `cr2`, `c
 - **Reuse.** The same cache, routes (`/api/device/thumb`, `/preview`), concurrency cap and lightbox are used; only the domain classifier (`is_previewable_image`) and the embedded-preview extractor change. It depends on Phase B's `DeviceRepositoryPort.read_range`.
 - **Spike C0.** Check which RAW formats the user's phones actually produce (Pixel: DNG), the preview sizes and offsets, and the bytes and time per thumbnail. Check orientation tags, because RAW previews are often stored unrotated.
 - **Risks.** Vendor makernote quirks, and previews placed past the end of a head read (needs the range read). The parser handles untrusted bytes, so it needs bounded reads and fuzz-style tests, as the EXIF parser has.
+
+**C0 result (2026-10-21, Pixel 10a, 18 DNGs: 9 Pixel originals, 2 iPhone 14 Pro ProRAW, 2 Snapseed, 5 Lightroom proxies).** Scripts are in the session scratchpad only.
+
+- **One displayable JPEG per file, and it is IFD0.** IFD0 is a reduced image: Compression 7, Photometric 6 (YCbCr), 8-bit, one strip. No 0x0201, no IFD1, no JpgFromRaw. Pixel: 1280×960, 170–550 KB at ~4.95 MB. iPhone: full size, 3088×2316 (1.7 MB) or 4032×3024 (4.0 MB). Byte-identical to exiftool's `PreviewImage` (4 checked); all 11 decode cleanly in Magick. SubIFD0 is the raw (CFA or LinearRaw tiles); Apple SubIFD1/2 are semantic masks (NewSubfileType 65540).
+- **No fixed head size works.** 5 of 9 Pixel originals keep IFD0 about 6 KB before EOF. Reader: 4 KB at 0, then 4 KB at the IFD0 offset if needed, then the preview range: 2–3 reads of ~0.1 s.
+- **Orientation.** Pixel previews have no EXIF and are stored unrotated, so IFD0 Orientation must be applied. iPhone previews carry their own EXIF Orientation (equal to IFD0), so `-auto-orient` alone is right. Never both. `magick -orient RightTop - -auto-orient …` works on stdin.
+- **Cost.** Pixel thumbnail ~0.2–0.25 s and 0.2–0.6 MB (full pull 0.36–0.58 s). iPhone preview read 0.19–0.31 s (full pull 0.97 s for 26.8 MB). Magick 320 px: 26–56 ms Pixel, ~133 ms iPhone; 1600 px: 25–44 ms / 132–198 ms.
+- **No preview.** Lightroom `*_proxy.dng`: one IFD0 of JPEG XL tiles (Compression 52546), LinearRaw, 16-bit → icon. **Snapseed `.dng` files are plain JPEGs** with a `.dng` name → sniff `FF D8` and use the JPEG path.

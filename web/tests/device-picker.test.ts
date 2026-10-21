@@ -1552,3 +1552,79 @@ describe("device picker grid view", () => {
 		await flush();
 	});
 });
+
+describe("device picker RAW rows", () => {
+	const thumbs = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>("#dp-list .dp-thumb")];
+
+	it("given dng files in any case when listed then they are photo thumbs with a RAW badge and (RAW) labels", async () => {
+		mockList({
+			"": page("", [
+				["a.jpg", false],
+				["IMG_3809.DNG", false],
+				["Snapseed.dng", false],
+				["x.cr2", false],
+			]),
+		});
+		open();
+		await flush();
+		const [jpg, raw, fake] = thumbs();
+		expect(thumbs()).toHaveLength(3);
+		expect(jpg?.classList.contains("dp-thumb-raw")).toBe(false);
+		expect(jpg?.querySelector(".dp-thumb-raw-badge")).toBeNull();
+		for (const thumb of [raw, fake]) {
+			expect(thumb?.classList.contains("dp-thumb-raw")).toBe(true);
+			expect(thumb?.classList.contains("is-loading")).toBe(true);
+			const badge = thumb?.querySelector(".dp-thumb-raw-badge");
+			expect(badge?.textContent).toBe("RAW");
+			expect(badge?.getAttribute("aria-hidden")).toBe("true");
+			expect(thumb?.querySelector(".dp-thumb-glyph")?.textContent).toBe("🖼");
+		}
+		expect(raw?.getAttribute("aria-label")).toBe("Preview IMG_3809.DNG (RAW)");
+		expect(raw?.closest(".dp-row")?.querySelector(".dp-preview-btn")?.getAttribute("aria-label")).toBe(
+			"Preview IMG_3809.DNG (RAW)",
+		);
+	});
+
+	it("given a failed RAW thumbnail then is-failed hides the badge by CSS state and the row stays selectable", async () => {
+		mockList({ "": page("", [["p.dng", false]]) });
+		const listFetch = globalThis.fetch;
+		globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
+			if (String(url).includes("/api/device/thumb")) {
+				return new Response("{}", { status: 404 });
+			}
+			return listFetch(url as RequestInfo, init);
+		}) as typeof fetch;
+		open();
+		await flush();
+		FakeObserver.instances.find((o) => o.observed.has(thumbs()[0] as Element))?.fireVisible();
+		await flush();
+		expect(thumbs()[0]?.classList.contains("is-failed")).toBe(true);
+		expect(thumbs()[0]?.querySelector(".dp-thumb-raw-badge")).not.toBeNull();
+		expect(thumbs()[0]?.closest(".dp-row")?.querySelector<HTMLInputElement>("input")?.disabled).toBe(false);
+	});
+
+	it("given a RAW between photos and a video when stepping then the lightbox visits all with the right kinds", async () => {
+		mockList({
+			"": page("", [
+				["a.jpg", false],
+				["b.dng", false],
+				["c.mp4", false],
+			]),
+		});
+		const listFetch = globalThis.fetch;
+		globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) =>
+			/\/api\/device\/(thumb|preview)/.test(String(url))
+				? new Response("{}", { status: 503 })
+				: listFetch(url as RequestInfo, init),
+		) as typeof fetch;
+		open();
+		await flush();
+		thumbs()[1]?.closest(".dp-row")?.querySelector<HTMLButtonElement>(".dp-preview-btn")?.click();
+		const box = document.getElementById("dp-lb");
+		expect(box?.dataset.kind).toBe("raw");
+		expect(document.getElementById("dp-lb-pos")?.textContent).toBe("2 / 3");
+		expect(document.getElementById("dp-lb-info")?.textContent).toMatch(/^RAW \(DNG\) · /);
+		document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+		expect(box?.dataset.kind).toBe("video");
+	});
+});

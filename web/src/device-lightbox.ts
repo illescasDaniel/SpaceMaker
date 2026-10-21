@@ -17,8 +17,8 @@ interface LightboxItem {
 	target: PreviewTarget;
 	/** Object URL of the row's loaded thumbnail, if any. */
 	thumbUrl: () => string | null;
-	/** Defaults to "image". Videos get the "Video · duration · info" caption and the playback note. */
-	kind?: "image" | "video";
+	/** Defaults to "image". Videos get the "Video · duration · info" caption and the playback note; RAWs ("raw", .dng) get "RAW (DNG) · info" and the embedded-preview note. */
+	kind?: "image" | "video" | "raw";
 	/** Seconds from the poster response (`X-Media-Duration`); null or absent when unknown. */
 	durationSeconds?: () => number | null;
 	isSelected: () => boolean;
@@ -103,6 +103,15 @@ async function loadFull(item: LightboxItem, signal: AbortSignal): Promise<void> 
 				setState("verror");
 				return;
 			}
+			if (item.kind === "raw" && response.status === 404) {
+				// 404 no_preview on a .dng: the RAW-specific sentence. Every other failure keeps the photo text.
+				const lb = box();
+				if (lb) {
+					lb.dataset.rerr = "1";
+				}
+				setState("error");
+				return;
+			}
 			setState(outcome === "toolarge" && item.thumbUrl() ? "toolarge" : "error");
 			return;
 		}
@@ -131,8 +140,11 @@ async function loadFull(item: LightboxItem, signal: AbortSignal): Promise<void> 
 	}
 }
 
-/** Caption under the name: photos show `info`; videos get "Video · m:ss · info" (duration omitted when unknown). */
+/** Caption under the name: photos show `info`; RAWs "RAW (DNG) · info"; videos get "Video · m:ss · info" (duration omitted when unknown). */
 function captionFor(item: LightboxItem): string {
+	if (item.kind === "raw") {
+		return "RAW (DNG) · " + item.info;
+	}
 	if (item.kind !== "video") {
 		return item.info;
 	}
@@ -172,6 +184,7 @@ function show(item: LightboxItem): void {
 	const lb = box();
 	if (lb) {
 		lb.dataset.kind = item.kind ?? "image";
+		delete lb.dataset.rerr;
 		if (item.kind === "video" && !item.thumbUrl()) {
 			lb.dataset.poster = "none";
 		} else {

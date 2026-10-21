@@ -115,11 +115,13 @@ def test_given_file_when_pull_with_timeout_then_streams_cat_to_local_file(
 
 
 # Video posters: ``read_range`` is one ``adb exec-out dd`` bounded to the range (SPEC "Video posters — strategy").
+# ``exec-out`` merges the remote stderr into stdout, so dd must print no summary (``status=none``): otherwise
+# ~80 bytes of "records in/out" text would follow the range (found on a Pixel 10a reading DNG previews).
 def test_given_path_with_quote_when_read_range_then_dd_with_skip_count_and_one_quoted_path(
 	monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 	# given
-	fake = _FakeRun(stdout=b"range-bytes", stderr=b"1+0 records in\n1+0 records out\n11 bytes copied")
+	fake = _FakeRun(stdout=b"range-bytes")
 	repo = _repo(monkeypatch, fake)
 	# when
 	data = repo.read_range("dev1", "DCIM/it's here.mp4", 4_194_304, 4_194_304, 10.0)
@@ -127,7 +129,7 @@ def test_given_path_with_quote_when_read_range_then_dd_with_skip_count_and_one_q
 	assert data == b"range-bytes"
 	assert fake.argv[:4] == ["/opt/adb", "-s", "dev1", "exec-out"]
 	assert fake.argv[4] == (
-		"dd if='/sdcard/DCIM/it'\"'\"'s here.mp4' iflag=skip_bytes,count_bytes skip=4194304 count=4194304"
+		"dd if='/sdcard/DCIM/it'\"'\"'s here.mp4' iflag=skip_bytes,count_bytes skip=4194304 count=4194304 status=none"
 	)
 	assert fake.timeout_s == 10.0
 
