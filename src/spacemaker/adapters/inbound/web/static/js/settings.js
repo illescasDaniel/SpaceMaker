@@ -1,5 +1,6 @@
 import { apiGet, apiSend } from "./api.js";
 import { COMPONENTS_POLL_MS, detailsExpandedForSummary, shouldRunComponentsPoll } from "./components-setup.js";
+import { clearSessionChoices } from "./device-picker-grid.js";
 import { copyTextToClipboard, errorMessage, onClick, showFormBanner } from "./dom.js";
 import { loadGallery } from "./gallery-timeline.js";
 import { applyState, showView } from "./shell.js";
@@ -273,6 +274,7 @@ function bindSettingsDesktop() {
 		apiSend("POST", "/api/preferences/clear")
 			.then(applyState)
 			.then(() => {
+				clearSessionChoices();
 				hideSettingsConfirms();
 				showSettingsFeedback("Preferences cleared.");
 			})

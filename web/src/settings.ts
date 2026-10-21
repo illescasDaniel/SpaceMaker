@@ -1,5 +1,6 @@
 import { apiGet, apiSend } from "./api.ts";
 import { COMPONENTS_POLL_MS, detailsExpandedForSummary, shouldRunComponentsPoll } from "./components-setup.ts";
+import { clearSessionChoices } from "./device-picker-grid.ts";
 import { copyTextToClipboard, errorMessage, onClick, showFormBanner } from "./dom.ts";
 import { loadGallery } from "./gallery-timeline.ts";
 import { applyState, showView } from "./shell.ts";
@@ -278,6 +279,7 @@ function bindSettingsDesktop(): void {
 		apiSend<AppSnapshot>("POST", "/api/preferences/clear")
 			.then(applyState)
 			.then(() => {
+				clearSessionChoices();
 				hideSettingsConfirms();
 				showSettingsFeedback("Preferences cleared.");
 			})

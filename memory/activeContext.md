@@ -8,6 +8,8 @@ webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevm
 
 ## Current focus
 
+Phone picker **grid view** (View: Auto · List · Grid; `specs/device-file-picker/PLAN-grid-view.md`): wireframe, spec, architecture approved 2026-10-21; Phases 3–4 done by Sonnet subagents (backend: `domain/device_view.py`, `domain/device_media.py`, counts in `scroll_page`, `JsonUserPreferences` `device_picker_views` (sort_keys dropped so LRU order survives), `DeviceFolderViews`, `PUT /api/device/view`, lazy `clear_user_preferences_use_case()`; web: `web/src/device-view.ts`, `device-picker-grid.ts` (session choices map), grid CSS in `shell-layout.css`). Gate green. Grader round 1 NEEDS WORK → fixed; round 2 PASS. Spec wording on absolute paths (re-rooted, not 400) confirmed 2026-10-21. Committed on `main`; not tried against a real phone. 
+
 Unified **Add (files or folders)** on Send files / Transfer files (desktop) and **Choose files or folder** on the phone pages (receive/upload/transfer): wireframe, specs, implementation done and gate green (2026-10-20); chooser menu (Files…/Folder…) because OS dialogs and browser inputs cannot pick both. Committed on `main`; chooser extracted to `web/src/pick-chooser.ts` (tested). v1.2.2 Release run 39454611400 failed only because the macOS arm64 runner never started (cancelled, no steps); re-cut the tag.
 
 Unified **Add more (files or folders)** button (v1.2.2): implemented and committed on `main`, tested on a real phone, tagged and pushed as `v1.2.2` (release workflow). USB photo backup now starts with no folders selected and the empty-selection-means-everything bug is fixed. See `memory/progress.md`.

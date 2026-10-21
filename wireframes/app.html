@@ -905,7 +905,114 @@
 			.dp-date { display: none; }
 			/* Modified column is hidden: keep every sort reachable from the toolbar. */
 			.dp-sort-select { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+			.dp-list.is-grid { --dp-tile: 104px; }
 		}
+
+		/* View control (Auto · List · Grid) + grid layout of the same #dp-list. See the "Grid view" wf-notes. */
+		.dp-view { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted); }
+		.dp-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+		.dp-seg button {
+			font: inherit;
+			font-size: 0.85rem;
+			min-height: 2rem;
+			padding: 0.3rem 0.7rem;
+			border: none;
+			background: var(--surface);
+			color: var(--text);
+			cursor: pointer;
+		}
+		.dp-seg button + button { border-left: 1px solid var(--border); }
+		.dp-seg button:hover:not([aria-checked="true"]) { background: var(--surface2); }
+		.dp-seg button[aria-checked="true"] { background: var(--accent-dim); color: #fff; font-weight: 600; }
+		.dp-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+		.dp-state.is-grid-loading { padding-bottom: 0.5rem; }
+		.dp-skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--dp-tile, 140px), 1fr)); gap: 0.5rem; margin-top: 1rem; text-align: left; }
+		.dp-skel-tile {
+			aspect-ratio: 1;
+			border-radius: 8px;
+			background: linear-gradient(100deg, var(--surface2) 30%, var(--border) 50%, var(--surface2) 70%);
+			background-size: 200% 100%;
+			animation: dp-shimmer 1.2s linear infinite;
+		}
+		@media (prefers-reduced-motion: reduce) { .dp-skel-tile { animation: none; } }
+		.dp-view-note { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+
+		.dp-card[data-view="grid"] .dp-head { display: none; }
+		.dp-card[data-view="grid"] .dp-sort-select { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+		.dp-card.is-narrow-demo { max-width: 22rem; margin-left: auto; margin-right: auto; width: 100%; }
+		.dp-card.is-narrow-demo .dp-list.is-grid { --dp-tile: 104px; }
+
+		.dp-list.is-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(var(--dp-tile, 140px), 1fr));
+			align-content: start;
+			gap: 0.5rem;
+			padding: 0.5rem;
+			max-height: 30rem;
+		}
+		.dp-list.is-grid .dp-sentinel,
+		.dp-list.is-grid .dp-tail-row { grid-column: 1 / -1; }
+		.dp-list.is-grid .dp-row {
+			position: relative;
+			display: flex;
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.3rem;
+			padding: 0.3rem;
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			cursor: pointer;
+			transition: box-shadow var(--dur-fast) var(--ease-standard);
+		}
+		.dp-list.is-grid .dp-row:last-child { border-bottom: 1px solid var(--border); }
+		.dp-list.is-grid .dp-row.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+		.dp-list.is-grid .dp-size,
+		.dp-list.is-grid .dp-date { display: none; }
+		.dp-list.is-grid .dp-name { flex-direction: column; align-items: stretch; gap: 0.3rem; width: 100%; padding: 0; }
+		.dp-list.is-grid .dp-label { display: block; min-width: 0; font-size: 0.8rem; text-align: left; }
+		.dp-list.is-grid .dp-thumb { width: 100%; height: auto; aspect-ratio: 1; border-radius: 8px; font-size: 2rem; cursor: pointer; }
+		.dp-list.is-grid .dp-ico,
+		.dp-list.is-grid .dp-ico-media {
+			width: 100%;
+			height: auto;
+			aspect-ratio: 1;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 8px;
+			background: var(--surface2);
+			font-size: 3rem;
+		}
+		.dp-list.is-grid .dp-thumb-video .dp-thumb-play { width: 2rem; height: 2rem; padding-left: 0.12rem; font-size: 0.85rem; top: 50%; }
+		.dp-list.is-grid .dp-thumb-video .dp-thumb-dur { padding: 0 0.3rem; font-size: 0.7rem; letter-spacing: normal; border-radius: 6px 0 0 0; }
+		.dp-list.is-grid .dp-row input[type="checkbox"] {
+			position: absolute;
+			top: 0.55rem;
+			left: 0.55rem;
+			z-index: 2;
+			width: 1.5rem;
+			height: 1.5rem;
+			margin: 0;
+			accent-color: var(--accent-dim);
+			filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+		}
+		.dp-list.is-grid .dp-preview-btn {
+			position: absolute;
+			top: 0.55rem;
+			right: 0.55rem;
+			z-index: 2;
+			width: 1.75rem;
+			height: 1.75rem;
+			margin: 0;
+			padding: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			border-color: transparent;
+			background: rgba(0, 0, 0, 0.55);
+			color: #fff;
+		}
+		.dp-list.is-grid .dp-preview-btn:hover { background: rgba(0, 0, 0, 0.75); color: #fff; border-color: #fff; }
 
 		.extract-actions {
 			display: flex;
@@ -3278,7 +3385,7 @@
 			Browse the phone and tick what to add. Nothing is copied yet — picks go back to the previous screen as removable sources.
 		</p>
 
-		<article class="dp-card" aria-labelledby="dp-title">
+		<article class="dp-card" id="dp-card" data-view="list" aria-labelledby="dp-title">
 			<div class="dp-device-row">
 				<h2 class="step-title" id="dp-title" style="margin: 0;">Phone storage</h2>
 				<button type="button" class="info-btn" id="btn-dp-info" title="How the phone browser works" aria-expanded="false" aria-controls="dp-info-panel">i</button>
@@ -3302,6 +3409,16 @@
 				<button type="button" class="btn btn-secondary" id="btn-dp-select-folder">Select this folder</button>
 				<input class="field" type="search" id="dp-filter" placeholder="Filter this folder by name" aria-label="Filter this folder by name" />
 				<label class="dp-toggle"><input type="checkbox" id="dp-hidden-toggle" /> Show hidden</label>
+				<div class="dp-view">
+					<span id="dp-view-label">View</span>
+					<div class="dp-seg" id="dp-view" role="radiogroup" aria-label="View">
+						<button type="button" role="radio" aria-checked="true" data-dp-view="auto" tabindex="0">Auto</button>
+						<button type="button" role="radio" aria-checked="false" data-dp-view="list" tabindex="-1">List</button>
+						<button type="button" role="radio" aria-checked="false" data-dp-view="grid" tabindex="-1">Grid</button>
+					</div>
+					<span class="dp-view-note" id="dp-view-auto-note">Auto · List</span>
+					<span class="dp-view-note" id="dp-view-scope" hidden>Only this folder</span>
+				</div>
 				<label class="dp-sort-select">Sort
 					<select class="field" id="dp-sort-select" aria-label="Sort this folder">
 						<option value="name:asc">Name, A → Z</option>
@@ -3343,6 +3460,19 @@
 				<label style="margin-left: 0.5rem;"><input type="checkbox" id="dp-demo-next-error" /> Simulate next-page error (uncheck, then Retry)</label>
 			</p>
 
+			<p class="wireframe-demo-row">
+				Grid view:
+				<button type="button" data-dp-grid-demo="camera">Open Camera (folder type → Grid)</button>
+				<button type="button" data-dp-grid-demo="screenshots">Open DCIM/Screenshots (folder type → Grid)</button>
+				<button type="button" data-dp-grid-demo="dcim">Open DCIM (folder type → Grid, folder tiles)</button>
+				<button type="button" data-dp-grid-demo="download">Open Download (folder type → List)</button>
+				<button type="button" data-dp-grid-demo="bluetooth">Open Bluetooth (untyped, all media → Grid by detection)</button>
+				<button type="button" data-dp-grid-demo="projects">Open Projects (untyped, mixed → List by detection)</button>
+				<button type="button" data-dp-grid-demo="grid">Pick Grid for this folder</button>
+				<button type="button" data-dp-grid-demo="list">Pick List for this folder</button>
+				<button type="button" data-dp-grid-demo="narrow">Grid narrow (&lt; 520 px)</button>
+				<span>· or use the <b>View</b> control in the toolbar.</span>
+			</p>
 			<p class="wireframe-demo-row">
 				Photo previews:
 				<button type="button" data-dp-lb-demo="ok">Open lightbox (loaded)</button>
@@ -3392,6 +3522,16 @@
 			<aside class="wf-note" data-for="agent">
 				<span class="wf-note-badge">Agent note</span>
 				Posters and the large lightbox frame come from the <b>first frame</b> of the video, generated by ffmpeg reading only the byte ranges it needs through a <b>desktop-only (loopback) ranged stream route</b> (spike: about 0.7 s and about 4.5 MB per clip, whatever the file size); the duration comes from the same ffmpeg run. At most <b>4 preview reads per device</b> are in flight, shared between photos and videos, and previews yield to running transfers/extracts as photos do. No LAN or phone-browser access: the route is never on the LAN allow-list. Nothing is fully downloaded, so there is no size cap for videos. <b>Playback is out of scope</b> (the bundled Qt WebEngine can’t decode H.264/HEVC/AAC); it is planned as Phase B2.
+			</aside>
+
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Review only</span>
+				<b>Grid view (new):</b> the toolbar gets a <b>View</b> control with three buttons, <b>Auto · List · Grid</b>. <b>List</b> is exactly today’s picker. <b>Grid</b> shows square tiles (about 140 px, 2–3 columns below 520 px): the photo or video poster fills the square, the checkbox sits top-left (always visible, large hit area), a 👁 button top-right, videos keep ▶ and the duration badge, and the file name is on one truncated line under the tile. A folder tile shows 📁 and opens the folder when clicked; other files show 📄. Selected tiles get an accent ring. The Name / Size / Modified header is hidden in grid, and the <b>Sort</b> menu appears at every width. <b>Tile click selects</b> (decided); 👁 and Enter open the lightbox, Space toggles.<br><br>
+				<b>Which layout opens:</b> (1) <b>your choice for this folder</b>, (2) the <b>folder type</b>, (3) <b>auto-detection</b>. Pressing List or Grid applies to <b>this folder only</b> (a small “Only this folder” hint appears next to the control); pressing Auto forgets it. The control always shows the mode of the folder you are in, and Auto when none is stored. Up to 500 folders are remembered (oldest dropped first, stored as <code>device_picker_views</code>); Settings → Clear preferences empties them. <b>Folder types</b> (nearest parent or the folder itself, case-insensitive): <b>Grid</b> for DCIM, Pictures, Movies, Screenshots, Camera, WhatsApp Images / Video, Telegram Images / Video; <b>List</b> for Documents, Download, Android, Music, Podcasts, Recordings. The type is known before the listing arrives, so a photo folder already shows placeholder tiles while it loads. With neither a choice nor a type, <b>auto-detection</b> picks Grid when at least 1 item is a photo/video and they are at least 60 % of what you can see, otherwise List. It is decided once when the folder opens: typing in the filter, sorting or toggling Show hidden never flips the layout. The note beside the control says why: “Auto · Grid (photo folder)”, “Auto · List (documents folder)”, or just “Auto · Grid” / “Auto · List” when detection decided. Switching keeps every tick and the loaded rows (no reload) and is announced to screen readers (“Grid view”). Try the “Grid view” demo buttons above.
+			</aside>
+			<aside class="wf-note" data-for="agent">
+				<span class="wf-note-badge">Agent note</span>
+				Same <code>&lt;ul id="dp-list"&gt;</code> and <code>&lt;li class="dp-row"&gt;</code> items in both modes; grid is the class <code>.dp-list.is-grid</code> (plus <code>data-view</code> on the card to hide <code>.dp-head</code> and show <code>.dp-sort-select</code>), so pagination, sentinel, Load more, tail rows and states are untouched. Page 1 of the list response carries <code>entry_count</code> and <code>media_count</code> (computed on the server over the cached listing, hidden rule applied, <code>query</code> ignored), plus <code>folder_view</code> (<code>grid</code> | <code>list</code> | null, from the domain’s folder-type table, so the client keeps no copy) and <code>stored_view</code> (<code>list</code> | <code>grid</code> | null, the user’s choice for this folder). Resolution: <code>stored_view</code> → <code>folder_view</code> → detection, where the client decides once per folder open (not on filter, sort or hidden restarts): grid when <code>media_count ≥ 1</code> and <code>media_count ≥ 60 %</code> of <code>entry_count</code>. Pressing List/Grid stores the mode for the current folder (key: device-relative path); Auto deletes it. Choices live in <code>device_picker_views</code> (path → <code>list</code>|<code>grid</code>; ≤ 500 folders, LRU; invalid entries ignored on read; emptied by Settings → Clear preferences). Because the server answers only after the device listing, the loading state shape comes from the client’s stored choice when it has one; the wireframe assumes the folder type is available earlier too (the real app may need a tiny pre-fetch or fall back to the list-shaped spinner). A mode switch only toggles the classes and re-renders the loaded rows (no refetch, ticks kept). Tiles reuse the thumbnail lifecycle (IntersectionObserver, at most 4 in flight, abort on leave). The View control is a <code>role="radiogroup"</code> with <code>role="radio"</code> + <code>aria-checked</code> buttons and arrow-key roving; announce changes in <code>#dp-sort-status</code> (polite). Tile click toggles the checkbox (ignore clicks on the checkbox, 👁 and folder button); Enter on the thumbnail opens the lightbox, Space toggles. Grid columns: <code>repeat(auto-fill, minmax(140px, 1fr))</code>, 104 px at ≤ 520 px. The demo buttons and the “narrow” card clamp are wireframe-only.
 			</aside>
 
 			<aside class="wf-note" data-for="reviewer">
@@ -5213,7 +5353,7 @@
 			vid(15, 'mkv', 1434 * M, { dur: '1:02:15' });
 			vid(19, 'webm', 64 * M, { dur: '3:31', vs: 'loading' });
 			var tree = {
-				'': [d('Alarms'), d('Android'), d('DCIM'), d('Documents'), d('Download', '2026-10-17'), d('Movies'), d('Music'), d('Pictures'), d('WhatsApp'), d('.thumbnails'), f('.nomedia', 0, '2025-01-04', false), f('notes.txt', 2 * K, '2026-10-01', false)],
+				'': [d('Alarms'), d('Android'), d('Bluetooth'), d('DCIM'), d('Documents'), d('Download', '2026-10-17'), d('Movies'), d('Music'), d('Pictures'), d('Projects'), d('WhatsApp'), d('.thumbnails'), f('.nomedia', 0, '2025-01-04', false), f('notes.txt', 2 * K, '2026-10-01', false)],
 				'Android': [d('data'), d('media'), d('obb')],
 				'Android/data': 'denied',
 				'DCIM': [d('Camera', '2026-10-18'), d('Screenshots')],
@@ -5224,6 +5364,8 @@
 				'Download/Telegram': [],
 				'Movies': [f('CLIP_0007.mp4', 18.4 * M, '2026-09-04'), f('holiday.mov', 212 * M, '2026-08-20')],
 				'Music': [],
+				'Bluetooth': [f('beach.jpg', 1.4 * M), f('sunset.jpg', 1.1 * M), f('friends.jpg', 1.8 * M)],
+				'Projects': [f('plan.pdf', 300 * K, '2026-09-01', false), f('budget.xlsx', 80 * K, '2026-09-02', false), f('notes.txt', 2 * K, '2026-09-03', false), f('mockup.png', 500 * K), f('logo.jpg', 120 * K)],
 				'Pictures': [d('Instagram'), f('wallpaper.png', 2.2 * M, '2026-05-02')],
 				'Pictures/Instagram': [f('IMG_5521.jpg', 1.1 * M), f('IMG_5522.jpg', 980 * K)],
 				'WhatsApp': [d('Media'), d('Databases')],
@@ -5282,6 +5424,31 @@
 			var sort = { key: 'name', dir: 'asc' };
 			var sortSelect = document.getElementById('dp-sort-select');
 			var sortStatus = document.getElementById('dp-sort-status');
+			/* View: per-folder choices (the real app stores them as device_picker_views; the folder-type table lives server-side, reported as folder_view on page 1). */
+			var viewPref = 'auto';
+			var viewResolved = 'list';
+			var autoPending = false;
+			/* Per-folder choices (real app: device_picker_views, <= 500 folders, LRU; here an in-memory map keyed by folder path). */
+			var viewChoices = {};
+			var folderKind = null; /* 'grid' | 'list' | null: from the folder-type table (the server returns it as folder_view) */
+			var detected = null; /* Auto-detection result, once page 1 arrived */
+			var FOLDER_GRID = ['dcim', 'pictures', 'movies', 'screenshots', 'camera', 'whatsapp images', 'whatsapp video', 'telegram images', 'telegram video'];
+			var FOLDER_LIST = ['documents', 'download', 'android', 'music', 'podcasts', 'recordings'];
+			/* Nearest ancestor-or-self name match, case-insensitive. */
+			var folderTypeOf = function (path) {
+				var parts = path ? path.split('/') : [];
+				for (let i = parts.length - 1; i >= 0; i -= 1) {
+					const n = parts[i].toLowerCase();
+					if (FOLDER_GRID.indexOf(n) >= 0) { return 'grid'; }
+					if (FOLDER_LIST.indexOf(n) >= 0) { return 'list'; }
+				}
+				return null;
+			};
+			var cardEl = document.getElementById('dp-card');
+			var viewSeg = document.getElementById('dp-view');
+			var viewNote = document.getElementById('dp-view-auto-note');
+			var viewScope = document.getElementById('dp-view-scope');
+			function isGrid() { return (viewPref === 'auto' ? viewResolved : viewPref) === 'grid'; }
 
 			(function () {
 				var btn = document.getElementById('btn-dp-info');
@@ -5337,10 +5504,17 @@
 				});
 			}
 
-			function showState(kind) {
+			var showState = function (kind) {
 				var html = '';
+				stateEl.classList.remove('is-grid-loading');
 				if (kind === 'loading') {
+					const gridShape = viewPref === 'auto' ? folderKind === 'grid' : viewPref === 'grid';
 					html = '<div class="dp-spinner" aria-hidden="true"></div><strong>Reading folder…</strong>Asking the phone for this folder’s contents.';
+					if (gridShape) {
+						/* Folder type / stored choice is known before page 1: show placeholder tiles in grid shape. */
+						stateEl.classList.add('is-grid-loading');
+						html += '<div class="dp-skel-grid" aria-hidden="true">' + '<span class="dp-skel-tile"></span>'.repeat(8) + '</div>';
+					}
 				} else if (kind === 'empty') {
 					html = '<strong>This folder is empty</strong>' + (hiddenToggle.checked ? '' : 'Hidden files are not shown. ') + 'Use Up or the path above to go elsewhere.';
 				} else if (kind === 'nomatch') {
@@ -5359,7 +5533,7 @@
 				moreEl.hidden = true;
 				var st = document.getElementById('dp-device-status');
 				st.classList.toggle('connected', kind !== 'unauthorized' && kind !== 'unplugged');
-			}
+			};
 
 			/* Fake server: folders first, then the chosen key/direction, ties by case-insensitive name; filter; keyset page. */
 			function cmpName(a, b) { return a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0); }
@@ -5380,7 +5554,9 @@
 						if (data === undefined) { data = []; }
 						if (typeof data === 'string') { resolve({ state: data }); return; }
 						var q = query.trim().toLowerCase();
-						var rows = data.filter(function (e) {
+						/* Counts ignore the filter query; the hidden rule applies (Auto view decision). */
+							var visible = data.filter(function (e) { return showHidden || e.name.charAt(0) !== '.'; });
+							var rows = data.filter(function (e) {
 							if (!showHidden && e.name.charAt(0) === '.') { return false; }
 							return !q || e.name.toLowerCase().indexOf(q) >= 0;
 						}).sort(cmpEntry);
@@ -5394,6 +5570,8 @@
 						resolve({
 							entries: page,
 							total: rows.length,
+								entry_count: visible.length,
+								media_count: visible.filter(function (e) { return !e.dir && (IMG_RE.test(e.name) || VID_RE.test(e.name)); }).length,
 							next_cursor: last && start + PAGE < rows.length ? { dir: last.dir, name: last.name, size: last.size, mtime: last.mtime } : null
 						});
 					}, 300);
@@ -5547,6 +5725,12 @@
 					li.classList.toggle('is-selected', cb.checked);
 					updateFooter();
 				});
+				li.addEventListener('click', function (ev) {
+					/* Grid only: a click on the tile body toggles the tick (not on the checkbox, 👁 or a folder). */
+					if (!isGrid() || cb.disabled || ev.target.closest('input, .dp-preview-btn, button.dp-name')) { return; }
+					cb.checked = !cb.checked;
+					cb.dispatchEvent(new Event('change'));
+				});
 				var name;
 				if (e.dir) {
 					name = document.createElement('button');
@@ -5583,7 +5767,11 @@
 					eye.textContent = '👁';
 					eye.setAttribute('aria-label', 'Preview ' + e.name);
 					name.appendChild(eye);
-					th.addEventListener('click', function () { openLb(path, th); });
+					th.addEventListener('click', function () { if (!isGrid()) { openLb(path, th); } });
+					th.addEventListener('keydown', function (ev) {
+						/* Grid: the thumbnail is the tile body (click/Space select); Enter opens the lightbox. */
+						if (isGrid() && ev.key === 'Enter') { ev.preventDefault(); openLb(path, th); }
+					});
 					eye.addEventListener('click', function () { openLb(path, eye); });
 				}
 				var size = document.createElement('span');
@@ -5645,13 +5833,29 @@
 				loadError = false;
 				nextCursor = null;
 				updateUp();
-				if (blank) { showState('loading'); } else { listEl.classList.add('is-refreshing'); }
+				if (blank) {
+					/* Opening a folder: stored choice -> folder type -> auto-detection (after page 1). */
+					viewPref = viewChoices[cwd] || 'auto';
+					folderKind = folderTypeOf(cwd);
+					detected = null;
+					autoPending = !folderKind;
+					if (viewPref === 'auto' && folderKind) { viewResolved = folderKind; }
+					renderView(false);
+					showState('loading');
+				} else { listEl.classList.add('is-refreshing'); }
 				var query = filterEl.value;
 				fetchPage(cwd, null, query, hiddenToggle.checked).then(function (res) {
 					if (id !== reqId) { return; }
 					listEl.classList.remove('is-refreshing');
 					renderTrail();
 					if (res.state) { showState(res.state); return; }
+					if (autoPending) {
+						/* Auto: decided once per folder open from the server counts, never on filter/sort restarts. */
+						autoPending = false;
+						detected = res.media_count >= 1 && res.media_count >= 0.6 * res.entry_count ? 'grid' : 'list';
+						if (viewPref === 'auto') { viewResolved = detected; }
+						renderView(viewPref === 'auto');
+					}
 					if (!res.entries.length) { showState(query.trim() ? 'nomatch' : 'empty'); return; }
 					document.getElementById('dp-device-status').classList.add('connected');
 					stateEl.hidden = true;
@@ -5745,6 +5949,42 @@
 			});
 			renderSort();
 
+			/* View control: Auto · List · Grid. A switch only toggles classes (same rows, no refetch, ticks kept). */
+			var viewBtns = Array.prototype.slice.call(viewSeg.querySelectorAll('[role="radio"]'));
+			var lastGrid = null;
+			function renderView(announce) {
+				var grid = isGrid();
+				viewBtns.forEach(function (b) {
+					var on = b.getAttribute('data-dp-view') === viewPref;
+					b.setAttribute('aria-checked', on ? 'true' : 'false');
+					b.tabIndex = on ? 0 : -1;
+				});
+				viewNote.hidden = viewPref !== 'auto';
+				viewScope.hidden = viewPref === 'auto';
+				viewNote.textContent = 'Auto · ' + (viewResolved === 'grid' ? 'Grid' : 'List') + (folderKind ? (folderKind === 'grid' ? ' (photo folder)' : ' (documents folder)') : '');
+				listEl.classList.toggle('is-grid', grid);
+				cardEl.dataset.view = grid ? 'grid' : 'list';
+				if (announce && grid !== lastGrid) { sortStatus.textContent = grid ? 'Grid view' : 'List view'; }
+				lastGrid = grid;
+			}
+			function setView(pref) {
+				viewPref = pref;
+				if (pref === 'auto') { delete viewChoices[cwd]; viewResolved = folderKind || detected || 'list'; } else { viewChoices[cwd] = pref; }
+				renderView(true);
+			}
+			viewBtns.forEach(function (b, i) {
+				b.addEventListener('click', function () { setView(b.getAttribute('data-dp-view')); });
+				b.addEventListener('keydown', function (ev) {
+					var d = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? -1 : 0;
+					if (!d) { return; }
+					ev.preventDefault();
+					var n = viewBtns[(i + d + viewBtns.length) % viewBtns.length];
+					n.focus();
+					setView(n.getAttribute('data-dp-view'));
+				});
+			});
+			renderView(false);
+
 			function updateFooter() {
 				var n = selCount();
 				countEl.textContent = n === 0 ? 'Nothing selected' : n + (n === 1 ? ' item selected' : ' items selected');
@@ -5828,6 +6068,24 @@
 					renderTrail();
 					if (k === 'loading') { reqId += 1; loadingMore = false; updateUp(); showState('loading'); return; }
 					loadFirst(true);
+				});
+			});
+
+			/* Grid view demo buttons */
+			document.querySelectorAll('[data-dp-grid-demo]').forEach(function (b) {
+				b.addEventListener('click', function () {
+					var k = b.getAttribute('data-dp-grid-demo');
+					var folder = { camera: 'DCIM/Camera', screenshots: 'DCIM/Screenshots', dcim: 'DCIM', download: 'Download', bluetooth: 'Bluetooth', projects: 'Projects' }[k];
+					var opened = false;
+					if (!ctx) {
+						openPicker({ origin: 'usb-file-transfer', originLabel: 'USB file transfer', method: 'adb', kind: 'both', onAdd: null });
+						opened = true;
+					}
+					if (k !== 'narrow') { cardEl.classList.remove('is-narrow-demo'); }
+					if (folder) { go(folder); return; }
+					if (opened) { go('DCIM/Camera'); }
+					if (k === 'narrow') { cardEl.classList.toggle('is-narrow-demo'); setView('grid'); return; }
+					setView(k);
 				});
 			});
 

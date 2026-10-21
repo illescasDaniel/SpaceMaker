@@ -75,6 +75,11 @@ class UsbTransferExtrasBody(BaseModel):
 	paths: list[str] = []
 
 
+class DeviceViewBody(BaseModel):
+	path: str
+	view: Literal["auto", "list", "grid"]
+
+
 class DeviceListBody(BaseModel):
 	method: str
 	device_id: str

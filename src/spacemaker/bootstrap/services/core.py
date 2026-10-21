@@ -34,6 +34,7 @@ from spacemaker.application.clear_browser_cache import ClearBrowserCache
 from spacemaker.application.clear_user_preferences import ClearUserPreferences
 from spacemaker.application.convert_media import ConvertMedia
 from spacemaker.application.delete_gallery_item import DeleteGalleryItem
+from spacemaker.application.device_folder_views import DeviceFolderViews
 from spacemaker.application.device_listing_cache import DeviceListingCache
 from spacemaker.application.device_stream_tokens import DeviceStreamTokens
 from spacemaker.application.error_recovery import ErrorRecovery
@@ -133,7 +134,6 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		self.converter = SubprocessMediaConverter(self.runner)
 		self.error_recovery = ErrorRecovery(self.filesystem)
 		self.promote_originals = PromoteOriginalsToProcessed(self.filesystem)
-		self.clear_user_preferences = ClearUserPreferences(self.user_preferences)
 		self.clear_browser_cache = ClearBrowserCache(self.filesystem)
 		self.gallery_index = SqliteGalleryIndex()
 		self.reset_library = ResetLibrary(self.filesystem, self.gallery_index)
@@ -234,6 +234,12 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 		return ListDeviceDirectory(
 			self.devices_for(method), cache=self.device_listing_cache, preferences=self.user_preferences
 		)
+
+	def clear_user_preferences_use_case(self) -> ClearUserPreferences:
+		return ClearUserPreferences(self.user_preferences)
+
+	def device_folder_views(self) -> DeviceFolderViews:
+		return DeviceFolderViews(self.user_preferences)
 
 	def usb_transfer_use_case(self, method: ConnectionMethod) -> TransferUsbFiles:
 		return TransferUsbFiles(self.devices_for(method), self.filesystem)

@@ -9,6 +9,7 @@ from spacemaker.adapters.outbound.preferences.json_store import JsonUserPreferen
 from spacemaker.application.clear_browser_cache import ClearBrowserCache
 from spacemaker.application.clear_user_preferences import ClearUserPreferences
 from spacemaker.application.reset_library import ResetLibrary
+from spacemaker.domain.device_view import DeviceViewSetting
 from spacemaker.domain.gallery_index import GalleryIndexRow
 from spacemaker.domain.library import LibraryFolder, gallery_index_path
 from spacemaker.domain.media import MediaKind
@@ -26,6 +27,18 @@ async def test_given_saved_preference_when_clear_then_get_returns_none(tmp_path:
 	# then
 	assert prefs.get_compress_media() is None
 	assert not path.exists()
+
+
+@pytest.mark.asyncio
+async def test_given_stored_views_when_clear_then_views_empty(tmp_path: Path):
+	# given
+	prefs = JsonUserPreferences(tmp_path / "preferences.json")
+	prefs.set_device_picker_view("DCIM/Camera", DeviceViewSetting.LIST)
+	assert len(prefs.get_device_picker_views()) == 1
+	# when
+	ClearUserPreferences(prefs).run()
+	# then
+	assert dict(prefs.get_device_picker_views()) == {}
 
 
 @pytest.mark.asyncio

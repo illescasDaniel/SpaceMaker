@@ -46,6 +46,7 @@ def test_given_lan_endpoint_when_checked_then_allowed(method: str, path: str) ->
 		("GET", "/api/legal/privacy"),
 		("GET", "/json/version"),
 		("POST", "/api/device/list"),
+		("PUT", "/api/device/view"),
 		("PUT", "/api/settings"),
 		("GET", "/api/network-passcode"),
 		("POST", "/api/usb-transfer/open-folder"),

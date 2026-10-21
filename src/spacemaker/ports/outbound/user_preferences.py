@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from spacemaker.domain.device_browse import DeviceBrowseSort
+from spacemaker.domain.device_view import DeviceViewMemory, DeviceViewSetting
 
 
 class UserPreferencesPort(Protocol):
@@ -32,6 +33,17 @@ class UserPreferencesPort(Protocol):
 
 	def set_device_picker_sort(self, sort: DeviceBrowseSort | None) -> None:
 		"""Store the picker sort (key ``device_picker_sort``); ``None`` restores the default."""
+		...
+
+	def get_device_picker_views(self) -> DeviceViewMemory:
+		"""Per-folder layout choices (key ``device_picker_views``), least → most recently set.
+
+		Re-validated with ``parse_device_view_memory``; missing or unreadable → ``EMPTY_VIEW_MEMORY``, never an error.
+		"""
+		...
+
+	def set_device_picker_view(self, path: str, setting: DeviceViewSetting) -> None:
+		"""Apply ``remember_view`` for one normalized ``path`` as a single read-modify-write (LRU cap included)."""
 		...
 
 	def clear(self) -> None:

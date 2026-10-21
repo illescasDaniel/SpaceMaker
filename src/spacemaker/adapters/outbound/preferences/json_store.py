@@ -6,6 +6,13 @@ from pathlib import Path
 from typing import cast
 
 from spacemaker.domain.device_browse import DeviceBrowseSort, parse_device_browse_sort
+from spacemaker.domain.device_view import (
+	DeviceViewMemory,
+	DeviceViewSetting,
+	dump_device_view_memory,
+	parse_device_view_memory,
+	remember_view,
+)
 
 
 class JsonUserPreferences:
@@ -58,6 +65,19 @@ class JsonUserPreferences:
 				data["device_picker_sort"] = {"sort": sort.key.value, "order": sort.order.value}
 			self._write_unlocked(data)
 
+	def get_device_picker_views(self) -> DeviceViewMemory:
+		return parse_device_view_memory(self._read().get("device_picker_views"))
+
+	def set_device_picker_view(self, path: str, setting: DeviceViewSetting) -> None:
+		with self._lock:
+			data = self._read_unlocked()
+			memory = remember_view(parse_device_view_memory(data.get("device_picker_views")), path, setting)
+			if memory:
+				data["device_picker_views"] = dump_device_view_memory(memory)
+			else:
+				data.pop("device_picker_views", None)
+			self._write_unlocked(data)
+
 	def clear(self) -> None:
 		with self._lock:
 			self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,7 +105,8 @@ class JsonUserPreferences:
 
 	def _write_unlocked(self, data: dict[str, object]) -> None:
 		self._path.parent.mkdir(parents=True, exist_ok=True)
-		text = json.dumps(data, indent="\t", sort_keys=True) + "\n"
+		# No sort_keys: the order of device_picker_views keys is the LRU order.
+		text = json.dumps(data, indent="\t") + "\n"
 		tmp = self._path.with_suffix(self._path.suffix + ".tmp")
 		tmp.write_text(text, encoding="utf-8")
 		tmp.replace(self._path)

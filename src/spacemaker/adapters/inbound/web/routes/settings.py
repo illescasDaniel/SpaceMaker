@@ -154,7 +154,7 @@ def build_settings_router(services: AppServices) -> APIRouter:
 	@router.post("/api/preferences/clear")
 	def clear_preferences(request: Request) -> dict[str, object]:
 		require_loopback(request)
-		services.clear_user_preferences.run()
+		services.clear_user_preferences_use_case().run()
 		services.maybe_start_convert_drain()
 		services.push_state()
 		return services.enriched_snapshot()

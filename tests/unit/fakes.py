@@ -15,6 +15,12 @@ from spacemaker.domain.device_preview import (
 	DevicePreviewErrorKind,
 	VideoPoster,
 )
+from spacemaker.domain.device_view import (
+	EMPTY_VIEW_MEMORY,
+	DeviceViewMemory,
+	DeviceViewSetting,
+	remember_view,
+)
 from spacemaker.domain.gallery import GalleryItem
 from spacemaker.domain.gallery_batch import ArchiveEntry, TrashError, VideoExportEncoder
 from spacemaker.domain.gallery_index import FileStat, GalleryCursor, GalleryIndexRow, GalleryPage
@@ -487,6 +493,8 @@ class FakeUserPreferences:
 	usb_transfer_destination: str | None = None
 	device_picker_sort: DeviceBrowseSort | None = None
 	picker_sort_writes: list[DeviceBrowseSort | None] = field(default_factory=list)
+	device_picker_views: DeviceViewMemory = EMPTY_VIEW_MEMORY
+	picker_view_writes: list[tuple[str, DeviceViewSetting]] = field(default_factory=list)
 
 	def get_compress_media(self) -> bool | None:
 		return self.compress_media
@@ -507,10 +515,18 @@ class FakeUserPreferences:
 		self.picker_sort_writes.append(sort)
 		self.device_picker_sort = sort
 
+	def get_device_picker_views(self) -> DeviceViewMemory:
+		return self.device_picker_views
+
+	def set_device_picker_view(self, path: str, setting: DeviceViewSetting) -> None:
+		self.picker_view_writes.append((path, setting))
+		self.device_picker_views = remember_view(self.device_picker_views, path, setting)
+
 	def clear(self) -> None:
 		self.compress_media = None
 		self.usb_transfer_destination = None
 		self.device_picker_sort = None
+		self.device_picker_views = EMPTY_VIEW_MEMORY
 
 
 @dataclass

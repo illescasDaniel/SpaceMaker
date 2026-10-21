@@ -4,6 +4,7 @@ const showView = vi.fn();
 vi.mock("../src/shell.ts", () => ({ showView: (...args: unknown[]) => showView(...args), applyState: vi.fn() }));
 
 import { bindDevicePicker, formatSize, isMediaName, openDevicePicker, parentPath } from "../src/device-picker.ts";
+import { clearSessionChoices } from "../src/device-picker-grid.ts";
 import type { DeviceListPage } from "../src/types.ts";
 
 const MARKUP = `
@@ -11,6 +12,11 @@ const MARKUP = `
 <span id="dp-device-status-text"></span><div id="dp-device-status"></div><div id="dp-media-note" hidden></div>
 <nav id="dp-trail"></nav><button id="btn-dp-up"></button><button id="btn-dp-select-folder"></button>
 <input id="dp-filter" /><input type="checkbox" id="dp-hidden-toggle" />
+<div id="dp-card" data-view="list"><div class="dp-view"><div id="dp-view" role="radiogroup" aria-label="View">
+<button type="button" role="radio" aria-checked="true" data-dp-view="auto" tabindex="0">Auto</button>
+<button type="button" role="radio" aria-checked="false" data-dp-view="list" tabindex="-1">List</button>
+<button type="button" role="radio" aria-checked="false" data-dp-view="grid" tabindex="-1">Grid</button></div>
+<span id="dp-view-auto-note">Auto · List</span><span id="dp-view-scope" hidden>Only this folder</span></div></div>
 <select id="dp-sort-select"><option value="name:asc">Name, A → Z</option><option value="name:desc">Name, Z → A</option><option value="mtime:desc">Newest first</option><option value="mtime:asc">Oldest first</option><option value="size:desc">Largest first</option><option value="size:asc">Smallest first</option></select>
 <div id="dp-list-wrap"><div class="dp-head"><span></span>
 <span><button type="button" class="dp-sort" data-dp-sort="name">Name <span class="dp-sort-arrow" aria-hidden="true"></span></button></span>
@@ -140,6 +146,7 @@ beforeEach(() => {
 	document.body.innerHTML = MARKUP;
 	showView.mockClear();
 	bound = false;
+	clearSessionChoices();
 });
 
 afterEach(() => {
@@ -1052,5 +1059,496 @@ describe("device picker video rows", () => {
 		expect(document.getElementById("dp-lb-info")?.textContent).toMatch(/^Video · 1:02:15 · /);
 		await flush();
 		expect(document.getElementById("dp-lb")?.dataset.state).toBe("verror");
+	});
+});
+
+describe("device picker grid view", () => {
+	interface Call {
+		url: string;
+		method: string;
+		body: Record<string, unknown>;
+	}
+	type ViewPage = DeviceListPage & Record<string, unknown>;
+
+	function mockViews(handler: (body: ListBody) => ViewPage | { status: number; detail: unknown }): Call[] {
+		const calls: Call[] = [];
+		globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
+			const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+			calls.push({ url: String(url), method: String(init?.method), body });
+			if (init?.method === "PUT") {
+				return new Response(null, { status: 204 });
+			}
+			const hit = handler(body as unknown as ListBody);
+			if ("status" in hit) {
+				const failure = hit as { status: number; detail: unknown };
+				return new Response(JSON.stringify({ detail: failure.detail }), { status: failure.status });
+			}
+			return new Response(JSON.stringify(hit), { status: 200 });
+		}) as typeof fetch;
+		return calls;
+	}
+	const listCalls = (calls: Call[]): Call[] => calls.filter((c) => c.url === "/api/device/list");
+	const putCalls = (calls: Call[]): Call[] => calls.filter((c) => c.method === "PUT");
+	const withView = (
+		base: DeviceListPage,
+		extra: { entry_count?: number; media_count?: number; folder_view?: string | null; stored_view?: string | null },
+	): ViewPage => ({ ...base, ...extra });
+	const radio = (name: string): HTMLButtonElement =>
+		document.querySelector(`#dp-view [data-dp-view="${name}"]`) as HTMLButtonElement;
+	const listEl = (): HTMLElement => document.getElementById("dp-list") as HTMLElement;
+	const isGrid = (): boolean => listEl().classList.contains("is-grid");
+	const card = (): HTMLElement => document.getElementById("dp-card") as HTMLElement;
+	const photos = (n: number): Array<[string, boolean]> =>
+		Array.from({ length: n }, (_, i) => [`IMG_${i}.jpg`, false] as [string, boolean]);
+
+	it("given Camera with folder_view grid when opened then it is a grid and Auto says why", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(3)), { entry_count: 3, media_count: 3, folder_view: "grid", stored_view: null }),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+		expect(card().dataset.view).toBe("grid");
+		expect(document.getElementById("dp-view-auto-note")?.textContent).toBe("Auto · Grid (photo folder)");
+		expect(radio("auto").getAttribute("aria-checked")).toBe("true");
+	});
+
+	it("given a stored list choice when opened then List is checked and the scope hint shows", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(3)), { entry_count: 3, media_count: 3, folder_view: "grid", stored_view: "list" }),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(false);
+		expect(radio("list").getAttribute("aria-checked")).toBe("true");
+		expect(radio("list").tabIndex).toBe(0);
+		expect(radio("auto").tabIndex).toBe(-1);
+		expect(document.getElementById("dp-view-scope")?.hidden).toBe(false);
+		expect(document.getElementById("dp-view-auto-note")?.hidden).toBe(true);
+	});
+
+	it("given ticks when the mode is switched then no list request is made, the ticks stay and the choice is stored", async () => {
+		const calls = mockViews((b) =>
+			withView(page(b.path, photos(3)), { entry_count: 3, media_count: 3, folder_view: null, stored_view: null }),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+		tick(0);
+		tick(2);
+		const before = listCalls(calls).length;
+		const rowsBefore = [...listEl().querySelectorAll(".dp-row")];
+		radio("list").click();
+		await flush();
+		expect(isGrid()).toBe(false);
+		radio("grid").click();
+		await flush();
+		expect(isGrid()).toBe(true);
+		expect(listCalls(calls)).toHaveLength(before);
+		expect([...listEl().querySelectorAll(".dp-row")]).toEqual(rowsBefore);
+		expect(document.getElementById("dp-count")?.textContent).toBe("2 items selected");
+		expect(putCalls(calls).map((c) => c.body)).toEqual([
+			{ path: "", view: "list" },
+			{ path: "", view: "grid" },
+		]);
+		expect(document.getElementById("dp-sort-status")?.textContent).toBe("Grid view");
+	});
+
+	it("given a failing PUT when the mode is switched then the session keeps the chosen mode silently", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(2)), { entry_count: 2, media_count: 2, folder_view: null, stored_view: null }),
+		);
+		const original = globalThis.fetch;
+		globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) =>
+			init?.method === "PUT" ? Promise.reject(new Error("offline")) : (original as typeof fetch)(url as string, init),
+		) as typeof fetch;
+		open();
+		await flush();
+		radio("list").click();
+		await flush();
+		expect(isGrid()).toBe(false);
+		expect(document.getElementById("dp-state")?.hidden).toBe(true);
+	});
+
+	it("given a failing PUT when the folder is left and reopened then the session choice still wins", async () => {
+		const folderPage = (path: string): ViewPage =>
+			withView(page(path, path === "" ? [["Sub", true]] : [["a.pdf", false]]), {
+				entry_count: 10,
+				media_count: 0,
+				folder_view: null,
+				stored_view: null,
+			});
+		mockViews((b) => folderPage(b.path));
+		const original = globalThis.fetch;
+		globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) =>
+			init?.method === "PUT" ? Promise.reject(new Error("disk full")) : (original as typeof fetch)(url as string, init),
+		) as typeof fetch;
+		open();
+		await flush();
+		expect(isGrid()).toBe(false);
+		radio("grid").click();
+		await flush();
+		expect(isGrid()).toBe(true);
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		await flush();
+		expect(isGrid()).toBe(false);
+		(document.getElementById("btn-dp-up") as HTMLButtonElement).click();
+		await flush();
+		expect(isGrid()).toBe(true);
+		expect(radio("grid").getAttribute("aria-checked")).toBe("true");
+		expect(document.getElementById("dp-state")?.hidden).toBe(true);
+	});
+
+	it("given Auto pressed over a stale stored grid when the picker is reopened then it resolves by detection", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(1)), { entry_count: 10, media_count: 0, folder_view: null, stored_view: "grid" }),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+		radio("auto").click();
+		await flush();
+		expect(isGrid()).toBe(false);
+		open();
+		await flush();
+		expect(isGrid()).toBe(false);
+		expect(radio("auto").getAttribute("aria-checked")).toBe("true");
+		expect(document.getElementById("dp-view-auto-note")?.textContent).toBe("Auto · List");
+	});
+
+	it("given a cleared session when reopened then the server's stored view applies again", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(1)), { entry_count: 10, media_count: 0, folder_view: null, stored_view: "grid" }),
+		);
+		open();
+		await flush();
+		radio("auto").click();
+		await flush();
+		clearSessionChoices();
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+	});
+
+	it("given a grid when a folder is being read then the loading panel shows placeholder tiles, in a list it does not", async () => {
+		let hold = false;
+		const base = mockViews((b) =>
+			withView(page(b.path, [["Sub", true]]), {
+				entry_count: 1,
+				media_count: 0,
+				folder_view: "grid",
+				stored_view: null,
+			}),
+		);
+		expect(base).toHaveLength(0);
+		const answering = globalThis.fetch;
+		globalThis.fetch = vi.fn((url: unknown, init?: RequestInit) =>
+			hold ? new Promise<Response>(() => undefined) : (answering as typeof fetch)(url as string, init),
+		) as typeof fetch;
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+		hold = true;
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		await flush();
+		const stateEl = document.getElementById("dp-state") as HTMLElement;
+		const skeleton = stateEl.querySelector(".dp-skel-grid");
+		expect(stateEl.hidden).toBe(false);
+		expect(stateEl.classList.contains("is-grid-loading")).toBe(true);
+		expect(skeleton?.getAttribute("aria-hidden")).toBe("true");
+		expect(skeleton?.querySelectorAll(".dp-skel-tile")).toHaveLength(8);
+		expect(stateEl.querySelector(".dp-spinner")).not.toBeNull();
+		hold = false;
+		radio("list").click();
+		await flush();
+		(document.getElementById("btn-dp-up") as HTMLButtonElement).click();
+		await flush();
+	});
+
+	it("given a list when a folder is being read then the loading panel has no placeholder tiles", async () => {
+		let hold = false;
+		mockViews((b) =>
+			withView(page(b.path, [["Sub", true]]), {
+				entry_count: 10,
+				media_count: 0,
+				folder_view: null,
+				stored_view: null,
+			}),
+		);
+		const answering = globalThis.fetch;
+		globalThis.fetch = vi.fn((url: unknown, init?: RequestInit) =>
+			hold ? new Promise<Response>(() => undefined) : (answering as typeof fetch)(url as string, init),
+		) as typeof fetch;
+		open();
+		await flush();
+		expect(isGrid()).toBe(false);
+		hold = true;
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		await flush();
+		const stateEl = document.getElementById("dp-state") as HTMLElement;
+		expect(stateEl.hidden).toBe(false);
+		expect(stateEl.querySelector(".dp-spinner")).not.toBeNull();
+		expect(stateEl.querySelector(".dp-skel-grid")).toBeNull();
+		expect(stateEl.classList.contains("is-grid-loading")).toBe(false);
+	});
+
+	it("given a scrolled list when the mode is switched then the first visible item keeps its place", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(10)), { entry_count: 10, media_count: 10, folder_view: null, stored_view: null }),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+		// jsdom has no layout: model rows of 100px in the grid and 40px in the list under a list top of 100.
+		let scrollTop = 250;
+		const list = listEl();
+		Object.defineProperty(list, "scrollTop", { get: () => scrollTop, set: (v: number) => (scrollTop = v) });
+		list.getBoundingClientRect = () => ({ top: 100, bottom: 500 }) as DOMRect;
+		[...list.querySelectorAll<HTMLElement>(".dp-row")].forEach((row, i) => {
+			row.getBoundingClientRect = () => {
+				const height = isGrid() ? 100 : 40;
+				const top = 100 + i * height - scrollTop;
+				return { top, bottom: top + height } as DOMRect;
+			};
+		});
+		radio("list").click();
+		await flush();
+		expect(isGrid()).toBe(false);
+		// Row 2 was the first visible one, 50px above the list top's offset; it must still be there.
+		expect(scrollTop).toBe(130);
+		const row2 = list.querySelectorAll<HTMLElement>(".dp-row")[2] as HTMLElement;
+		expect(row2.getBoundingClientRect().top - list.getBoundingClientRect().top).toBe(-50);
+	});
+
+	it("given Auto pressed after a stored list when counts say grid then it re-resolves with no list request", async () => {
+		const calls = mockViews((b) =>
+			withView(page(b.path, photos(4)), { entry_count: 4, media_count: 4, folder_view: null, stored_view: "list" }),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(false);
+		const before = listCalls(calls).length;
+		radio("auto").click();
+		await flush();
+		expect(isGrid()).toBe(true);
+		expect(document.getElementById("dp-view-auto-note")?.textContent).toBe("Auto · Grid");
+		expect(listCalls(calls)).toHaveLength(before);
+		expect(putCalls(calls).map((c) => c.body)).toEqual([{ path: "", view: "auto" }]);
+	});
+
+	it("given a grid when sorted, filtered or hidden is toggled then the layout does not flip", async () => {
+		const calls = mockViews((b) =>
+			// A restart carries fresh counts (filter matched one non-media file): it must not matter.
+			withView(
+				page(b.path, b.query ? [["a.txt", false]] : photos(3)),
+				b.query
+					? { entry_count: 3, media_count: 0, folder_view: null, stored_view: null }
+					: { entry_count: 3, media_count: 3, folder_view: null, stored_view: null },
+			),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+		const sort = document.getElementById("dp-sort-select") as HTMLSelectElement;
+		sort.value = "size:desc";
+		sort.dispatchEvent(new Event("change"));
+		await flush();
+		const hidden = document.getElementById("dp-hidden-toggle") as HTMLInputElement;
+		hidden.checked = true;
+		hidden.dispatchEvent(new Event("change"));
+		await flush();
+		const filter = document.getElementById("dp-filter") as HTMLInputElement;
+		filter.value = "txt";
+		filter.dispatchEvent(new Event("input"));
+		await new Promise((r) => setTimeout(r, 300));
+		expect(listCalls(calls).length).toBe(4);
+		expect(isGrid()).toBe(true);
+		expect(document.getElementById("dp-sort-status")?.textContent).not.toBe("List view");
+	});
+
+	it("given a grid folder when a list folder is opened then the layout follows each open", async () => {
+		mockViews((b) =>
+			b.path === ""
+				? withView(
+						page("", [
+							["Documents", true],
+							["DCIM", true],
+						]),
+						{ entry_count: 2, media_count: 0, folder_view: "grid", stored_view: null },
+					)
+				: withView(page(b.path, [["a.pdf", false]]), {
+						entry_count: 1,
+						media_count: 0,
+						folder_view: "list",
+						stored_view: null,
+					}),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		await flush();
+		expect(isGrid()).toBe(false);
+		// A different layout at open is not announced; only a switch is.
+		expect(document.getElementById("dp-sort-status")?.textContent).toBe("");
+	});
+
+	it("given a grid when a tile body is clicked then the tick toggles, and the checkbox is not double-toggled", async () => {
+		mockViews((b) =>
+			withView(
+				page(b.path, [
+					["a.txt", false],
+					["IMG_1.jpg", false],
+				]),
+				{ entry_count: 2, media_count: 1, folder_view: "grid", stored_view: null },
+			),
+		);
+		open();
+		await flush();
+		const rows = listEl().querySelectorAll<HTMLElement>(".dp-row");
+		(rows[0] as HTMLElement).querySelector<HTMLElement>(".dp-label")?.click();
+		expect(document.getElementById("dp-count")?.textContent).toBe("1 item selected");
+		(rows[1] as HTMLElement)
+			.querySelector<HTMLElement>(".dp-thumb")
+			?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+		expect(document.getElementById("dp-count")?.textContent).toBe("2 items selected");
+		(rows[1] as HTMLElement).querySelector<HTMLInputElement>("input")?.click();
+		expect(document.getElementById("dp-count")?.textContent).toBe("1 item selected");
+		expect(rows[0]?.classList.contains("is-selected")).toBe(true);
+	});
+
+	it("given a list when a row is clicked off its controls then nothing is toggled", async () => {
+		mockViews((b) =>
+			withView(page(b.path, [["a.txt", false]]), {
+				entry_count: 1,
+				media_count: 0,
+				folder_view: null,
+				stored_view: null,
+			}),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(false);
+		listEl().querySelector<HTMLElement>(".dp-label")?.click();
+		expect(document.getElementById("dp-count")?.textContent).toBe("Nothing selected");
+	});
+
+	it("given kind folders when a file tile is clicked then nothing happens", async () => {
+		mockViews((b) =>
+			withView(page(b.path, [["a.txt", false]]), {
+				entry_count: 1,
+				media_count: 0,
+				folder_view: "grid",
+				stored_view: null,
+			}),
+		);
+		open(vi.fn(), "folders");
+		await flush();
+		expect(isGrid()).toBe(true);
+		listEl().querySelector<HTMLElement>(".dp-label")?.click();
+		expect(document.getElementById("dp-count")?.textContent).toBe("Nothing selected");
+	});
+
+	it("given a folder tile when clicked anywhere then the folder opens and is not ticked", async () => {
+		const calls = mockViews((b) =>
+			b.path === ""
+				? withView(page("", [["Trip", true]]), {
+						entry_count: 1,
+						media_count: 0,
+						folder_view: "grid",
+						stored_view: null,
+					})
+				: withView(page(b.path, photos(1)), { entry_count: 1, media_count: 1, folder_view: null, stored_view: null }),
+		);
+		open();
+		await flush();
+		listEl().querySelector<HTMLElement>(".dp-ico")?.click();
+		await flush();
+		expect(listCalls(calls).map((c) => c.body["path"])).toEqual(["", "Trip"]);
+		expect(document.getElementById("dp-count")?.textContent).toBe("Nothing selected");
+	});
+
+	it("given a grid when the 👁 button is clicked then the lightbox opens and the tile is not toggled", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(2)), { entry_count: 2, media_count: 2, folder_view: "grid", stored_view: null }),
+		);
+		open();
+		await flush();
+		listEl().querySelector<HTMLButtonElement>(".dp-preview-btn")?.click();
+		expect(document.getElementById("dp-lb")?.hidden).toBe(false);
+		expect(document.getElementById("dp-count")?.textContent).toBe("Nothing selected");
+	});
+
+	it("given a grid thumbnail when Enter and Space are pressed then Enter previews and Space toggles", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(1)), { entry_count: 1, media_count: 1, folder_view: "grid", stored_view: null }),
+		);
+		open();
+		await flush();
+		const thumb = listEl().querySelector<HTMLElement>(".dp-thumb") as HTMLElement;
+		expect(thumb.getAttribute("aria-label")).toBe("IMG_0.jpg");
+		thumb.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+		expect(document.getElementById("dp-count")?.textContent).toBe("1 item selected");
+		thumb.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+		expect(document.getElementById("dp-lb")?.hidden).toBe(false);
+		radio("list").click();
+		expect(thumb.getAttribute("aria-label")).toBe("Preview IMG_0.jpg");
+	});
+
+	it("given the View radios when arrows are pressed then focus moves, the choice is made and it wraps", async () => {
+		mockViews((b) =>
+			withView(page(b.path, photos(2)), { entry_count: 2, media_count: 2, folder_view: null, stored_view: null }),
+		);
+		open();
+		await flush();
+		radio("auto").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+		expect(radio("list").getAttribute("aria-checked")).toBe("true");
+		expect(document.activeElement).toBe(radio("list"));
+		expect(isGrid()).toBe(false);
+		radio("list").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+		radio("auto").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+		expect(radio("grid").getAttribute("aria-checked")).toBe("true");
+		expect(isGrid()).toBe(true);
+	});
+
+	it("given a listing error with detail.stored_view when opened then the control shows the stored choice", async () => {
+		mockViews(() => ({
+			status: 503,
+			detail: { error: "unplugged", message: "", folder_view: "grid", stored_view: "list" },
+		}));
+		open();
+		await flush();
+		expect(document.getElementById("dp-state")?.hidden).toBe(false);
+		expect(radio("list").getAttribute("aria-checked")).toBe("true");
+		expect(document.getElementById("dp-view-scope")?.hidden).toBe(false);
+		expect(isGrid()).toBe(false);
+	});
+
+	it("given a layout when an open is loading then the previous layout stays", async () => {
+		let release: (() => void) | null = null;
+		mockViews((b) =>
+			withView(page(b.path, b.path === "" ? [["Trip", true], ...photos(3)] : photos(1)), {
+				entry_count: 4,
+				media_count: 3,
+				folder_view: "grid",
+				stored_view: null,
+			}),
+		);
+		open();
+		await flush();
+		expect(isGrid()).toBe(true);
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const inner = globalThis.fetch;
+		globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
+			await gate;
+			return (inner as typeof fetch)(url as string, init);
+		}) as typeof fetch;
+		(document.querySelector("#dp-list button.dp-name") as HTMLButtonElement).click();
+		expect(document.getElementById("dp-state")?.hidden).toBe(false);
+		expect(isGrid()).toBe(true);
+		(release as unknown as () => void)();
+		await flush();
 	});
 });

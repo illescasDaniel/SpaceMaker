@@ -9,6 +9,7 @@
 - **Revision — sorting:** wireframe revision (sortable **Name** / **Size** / **Modified** column headers with ▲/▼, toolbar **Sort** menu ≤ 520 px) approved 2026-10-19 (in chat); **spec revision approved** 2026-10-19 (in chat).
 - **Revision — photo previews:** wireframe revision (thumbnails in image rows, 👁 button, lightbox; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). Plan: [PLAN-media-preview.md](PLAN-media-preview.md) (Phase A; videos are Phase B).
 - **Revision — video posters (Phase B, posters only):** wireframe revision (video rows with poster + ▶ + duration badge, lightbox stepping through photos and videos, “Video previews” demo buttons; `wireframes/app.html`, `#view-device-picker`) **approved** 2026-10-20; **spec revision approved** 2026-10-20 (in chat). No in-app playback (Phase B2), no RAW (Phase C). Plan: [PLAN-media-preview.md](PLAN-media-preview.md).
+- **Revision — grid view:** wireframe revision (View control Auto · List · Grid, grid tiles, per-folder choice, folder-type table; `wireframes/app.html` `#view-device-picker`) **approved** 2026-10-21 (in chat); **spec revision approved** 2026-10-21 (in chat). Plan: [PLAN-grid-view.md](PLAN-grid-view.md).
 - **Callers:** [usb-file-transfer](../usb-file-transfer/SPEC.md) (**Add more**), [extract-media](../extract-media/SPEC.md) / [main-wizard](../main-wizard/SPEC.md) Step 1 for ADB and iPhone USB (**Add more**)
 - **Ports (planned):** outbound `DeviceRepositoryPort.list_directory(device_id, path) -> list[DeviceEntry]` (contract unchanged; adapters stay dumb); domain `DeviceEntry`, `DeviceDirectoryScrollPage` with an opaque keyset cursor; application-level `DeviceListingCache` (not a port) owned by the long-lived services object; photo previews add `DeviceRepositoryPort.read_head(device_id, path, max_bytes, timeout)`, a thumbnail-extraction port and a preview-cache port (names settled at the architecture gate); video posters add `DeviceRepositoryPort.read_range(device_id, path, offset, length, timeout)`, a video-poster port (ffmpeg) and an application-level short-lived stream-token registry (not a port)
 - **Supersedes:** adbfs mount path in usb-file-transfer (“Mount backends”), `adbfs` in [packaging](../packaging/SPEC.md), `docs/legal/THIRD_PARTY_TOOLS.md`
@@ -33,6 +34,10 @@ _Proposed — confirm or adjust at spec review._
 | **Video posters — failure handling** | Same as photos: a failure never affects the picker; the row keeps its 🎞 icon with **no badge** and no error text, stays tickable, and is retried only when it becomes visible again. No poster (undecodable, no video stream, ffmpeg timeout, unplugged) → 🎞 and no duration badge. A transfer/extract job → 409 `device_busy` **before** starting; if one starts mid-run the stream route answers 409, ffmpeg fails and the poster fails as `device_busy` (row stays a plain icon, nothing cached). Errors are never cached. The lightbox shows “Video unavailable” when the large frame fails and stays usable (navigation, **Selected**, Esc). |
 | **Video posters — performance & resource budget** | One video poster holds **1 of the same 4 per-device slots** as photos for its whole ffmpeg run; the stream route and ffmpeg's sub-requests take **no extra** slots (they are covered by the token). ffmpeg runs with `-protocol_whitelist http,tcp`, the only input URL `http://127.0.0.1:<port>/api/device/stream?token=…`, a **20 s** timeout, and is killed on timeout, client abort or picker close. A stream response carries ≤ **4 MiB**. ~4.5 MB (4K HEVC) is read per poster whatever the file size. Disk cache: the existing `device-thumbs/` LRU, ≤ **200 MB**, same key fields (device id, path, size, mtime) plus kind; a hit makes no device call and answers in ≤ 50 ms. Previews yield to transfers/extracts. |
 | **Video posters — trust boundary** | Untrusted: the stream `token`, the `Range` header, the video `path`/`size`/`mtime` on thumb/preview, and **every byte ffmpeg parses**. The stream route is **loopback-only** (`require_loopback` → 403 `desktop-only`; passcode gate first), **never on `LAN_ALLOWED_ROUTES`**, and is not a general phone-file reader: the use case mints a random **128-bit token** bound to (method, device_id, normalized path, size) only for the duration of one poster generation and **revokes it afterwards**; an unknown, expired or revoked token → 404, and the route can read nothing but the one file the token names. `path` is validated and normalized exactly as for `/api/device/list` before the token is minted; ADB passes it as one `shlex`-quoted argument. The stream route validates `Range` strictly (a single `bytes=a-b` or `a-`; anything else → 400/416) and never reads past the bound `size`. ffmpeg is the only process that sees the URL, runs with a protocol whitelist and a timeout, and its output is always re-encoded JPEG — original bytes are never served and never written to the library or the phone. [lan-access](../lan-access/SPEC.md)'s route table gains one row, `GET /api/device/stream` → **Desktop**. |
+| **Grid view — success criteria** | The picker can show a folder as **List** (today's rows) or **Grid** (square tiles). The layout is resolved in this order: **the user's choice for this folder → the folder type → auto-detection** (see **Grid view**). Opening `DCIM/Camera`, a `Screenshots` folder or anything under `Pictures` shows a Grid with no click; `Documents` and `Download` (and anything under them) show a List; an untyped folder is a Grid when it holds at least one photo/video and they are at least 60 % of its visible entries. Pressing **List** or **Grid** is remembered **for that folder only** and honoured on every later open, across app restarts and for every device; pressing **Auto** forgets it. Filter, sort and **Show hidden** never flip the layout. Switching the mode keeps every tick and the loaded rows. Works for ADB and AFC. |
+| **Grid view — failure handling** | A corrupt stored map, or one bad entry in it (unknown view value, bad or non-normalized key), is ignored **entry by entry** and never produces an error (the folder resolves as if nothing were stored). A failed write of the choice (disk error) keeps the chosen mode for the rest of the session and shows no error: the client remembers every choice made in this picker session per folder, and that session choice wins over a `stored_view` that is missing or stale; after an app restart the folder falls back to the resolution order. A listing that fails (unplugged, unauthorized, permission denied, timeout, generic error) shows the same state panels in **both** layouts, and the View control stays usable. No count, type or stored value can make the listing itself fail. |
+| **Grid view — performance & resource budget** | `entry_count` and `media_count` are computed over the **cached listing** (hidden rule applied, `query` ignored): no device call, within the existing ≤ 50 ms budget for a cached page of ~5 000 entries. The folder type is resolved from the normalized path alone (a table lookup, **no listing**). A mode switch **re-renders the already-loaded rows** in the other layout with no request, keeps the ticks and the scroll position at the first visible item where possible, and keeps in-flight thumbnail requests and already-loaded thumbnails where the DOM allows (a request whose row is rebuilt is not restarted needlessly). Grid tiles use the **same 320 px thumbnails and video posters**, the same **≤ 4 in flight** per device and the same `IntersectionObserver` lifecycle as rows; no new device read is introduced. The `device_picker_views` map holds **≤ 500** folders (LRU); a view write is one small preference write and no device call. |
+| **Grid view — trust boundary** | Untrusted input: the `view` and `path` of the new route and the stored map in the preferences file. `view` is a **closed enum** (`auto` \| `list` \| `grid`; anything else → 422). `path` is validated and normalized **exactly as for `/api/device/list`** (no `..`, no NUL, under user storage; 400 `invalid_path`) before it is used as a key; stored keys are **re-validated on read** and an invalid key or value is dropped. Folder names (from the phone) used for the folder-type match are only compared, never executed or interpolated, and every name is rendered with `textContent`. `PUT /api/device/view` is **loopback-only** (`require_loopback` → 403 `desktop-only`; the network-passcode gate answers first) and is **not** on `LAN_ALLOWED_ROUTES`; [lan-access](../lan-access/SPEC.md)'s route table gains one row, `PUT /api/device/view` → **Desktop**. The route makes no device call and writes only the preference file. |
 
 ## Triggers & routing
 
@@ -87,6 +92,33 @@ Internal route (loopback-only, used by the poster's own ffmpeg, never by the web
 
 The token is minted by the use case, not by any route: no HTTP route returns, lists or accepts the creation of a token.
 
+## Grid view — API
+
+**`POST /api/device/list` (additions).** The **first page** of a listing (request without `cursor`, including every filter / hidden / sort restart) additionally returns:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `entry_count` | int | Entries in the folder after the hidden rule (`show_hidden`), **ignoring `query`**: folders + files |
+| `media_count` | int | Of those, files whose extension is a photo or video type (the sets of **Photo previews** and **Video posters**, case-insensitive); folders never count |
+| `folder_view` | `"grid"` \| `"list"` \| `null` | The layout the **folder-type table** gives for `path` (`null` = no ancestor-or-self matches) |
+| `stored_view` | `"list"` \| `"grid"` \| `null` | The user's stored choice for exactly this `path`; `null` = Auto |
+
+- `entry_count` and `media_count` come from the cached listing and cost no device call; they are **omitted** from error responses. `folder_view` and `stored_view` need no listing and are present on page 1 **also when the listing fails**, so the View control can render in every state: a listing error (`DeviceBrowseError`, body `{"detail": {"error", "message"}}`) carries them inside `detail` (`detail.folder_view`, `detail.stored_view`); an invalid `path` (400 `invalid_path`) carries neither.
+- Pages after the first (a request with `cursor`) **omit all four fields**; the client keeps the values from page 1 of the current open.
+- The response shape otherwise does not change; clients that ignore the new fields behave as before.
+- The **media extension set** and the **folder-type table** live in the **domain** and are the single source for the server and (via these fields) the client; the TS extension list stays a placeholder hint only.
+
+**`PUT /api/device/view`** (new, loopback-only). Body `{ "path": string, "view": "auto" | "list" | "grid" }`.
+
+| Status | Meaning |
+|---|---|
+| 204 | Stored (`list` / `grid` sets or overwrites the entry for `path`; `auto` deletes it, and deleting a missing entry is also 204). Makes no device call and does not check that the folder exists |
+| 400 | `invalid_path` — path validation failed (same checks as `/api/device/list`) |
+| 403 | `desktop-only` — non-loopback client (the passcode gate answers first) |
+| 422 | `view` is not one of the three values, or the body is malformed |
+
+**Persistence.** User preferences key `device_picker_views`: a map from the normalized **device-relative path** (`""` is the storage root) to `"list"` | `"grid"`; **shared by every device and both methods**. At most **500** entries, **LRU**: a set (create or overwrite) makes the entry the most recent, reads never refresh it, and adding the 501st drops the least recently set entry. Reading re-validates each key and value and drops bad ones (a key is kept only if it is already normalized, i.e. `normalize_browse_path(key) == key`; `/sdcard/DCIM` or `a/../b` is dropped, not rewritten; a value other than `list` / `grid`, including `auto`, is dropped). Settings → **Clear preferences** empties it, like `device_picker_sort`. The map is written only by `PUT /api/device/view`; `POST /api/device/list` never writes it.
+
 ## Visual & UI rules (aligned with wireframe)
 
 - Header card: **Phone storage** (or **iPhone**) title + ⓘ; friendly device status line (never raw serials); optional media-only note when `mediaOnly`.
@@ -103,6 +135,8 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 - **Photo previews — lightbox:** `role="dialog"` `aria-modal="true"` labelled by the file name; shows the photo fitted to the window, name, size, modified date, “n / N” (n among the **image and video rows of the loaded pages**, in list order; announced via `aria-live="polite"`), **←** / **→** buttons and arrow keys (disabled at the ends, no wrap), **Esc** and **✕** to close, and a **Selected** checkbox that mirrors the row's tick in both directions (in `kind: "folders"` mode, where file checkboxes are disabled, it is disabled too). Loading state: the blurred, upscaled thumbnail with a spinner (static under reduced motion), crossfading to the large rendition. Error state: “Preview unavailable” (and, for files over 25 MB, “Full preview unavailable for files over 25 MB” above the upscaled thumbnail); the file stays selectable. Focus is trapped inside; closing returns focus to the opener (thumbnail or 👁 button). Below 520 px the lightbox is full-screen with the ←/→ buttons in a bottom bar. Opening or stepping the lightbox does not change the list scroll position or the ticks.
 - **Video posters — rows:** video rows (`mp4`, `mov`, `m4v`, `3gp`, `mkv`, `webm`) use the same rounded thumbnail button as photos (44 px, 36 px at ≤ 520 px) with the poster, a small ▶ glyph centred and a **duration badge** bottom-right: `m:ss` (`0:42`, `12:07`) and `h:mm:ss` from one hour (`1:02:15`). States: shimmer while loading (no ▶ or badge yet; static under `prefers-reduced-motion`); poster + ▶ + badge once loaded; the 🎞 icon alone, **no badge**, when there is no poster (failure, undecodable, unknown duration is shown as a poster with ▶ and no badge). The thumbnail button and **👁 Preview** carry `aria-label="Preview <name> (video, <duration>)"` (duration omitted when unknown). No error text in the row; the checkbox works in every state.
 - **Video posters — lightbox:** the lightbox steps through **photos and videos together** (“3 / 58” counts both; arrow-key and button behaviour as for photos). A video shows its large frame (the poster first, blurred and upscaled with a spinner, then the ≤ 1600 px frame), the caption “Video · 0:42 · 86.0 MB · <date>” (duration omitted when unknown), and the muted note “Playback isn’t available in the app yet. Transfer the video to watch it.” There is no play button and no player. Hint: “← → to browse · Esc to close”. Error: “Video unavailable — The phone was unplugged or didn’t respond. You can still select this file.” Selected, Esc, focus trap and the ≤ 520 px full-screen layout are unchanged.
+- **Grid view — toolbar:** the toolbar gets a **View** control: a three-button segmented control `role="radiogroup"` labelled **View** with `role="radio"` + `aria-checked` buttons **Auto · List · Grid** (one tab stop, arrow keys move and select, wrapping). Next to it: while **Auto** is selected, the note `#dp-view-auto-note` states what Auto resolved to (**Auto · Grid (photo folder)** / **Auto · List (documents folder)** when the folder type decided, **Auto · Grid** / **Auto · List** when detection decided); while **List** or **Grid** is selected (a stored choice), the hint `#dp-view-scope` reads **Only this folder** (it replaces the auto-note and tells the user the choice is not global; **Auto** forgets it). In grid, the Name / Size / Modified header is hidden and the toolbar **Sort** menu is shown at **every** width (it is still hidden above 520 px in List).
+- **Grid view — tiles:** see **Grid view** below. Photos, videos and the loaded/failed states reuse the **Photo previews** and **Video posters** rules (shimmer, 🖼 / 🎞 fallback with no error text, ▶ and duration badge); a tile never shows error text.
 
 ## Behaviour details
 
@@ -121,6 +155,10 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 - **Video posters — request lifecycle:** rows request posters exactly like photos (visible rows only, aborted on scroll-away / folder change / restart / picker close, ≤ 4 client requests in flight shared with photos). The use case generates a poster as: check the cache (hit → return, no device call) → reserve one device slot → mint a stream token → run ffmpeg against the stream URL → read duration from stderr → store JPEG + duration → revoke the token (in a `finally`, in every outcome) → release the slot. A client abort kills ffmpeg and revokes the token.
 - **Video posters — busy device:** `409 device_busy` leaves the row a plain icon (not failed) and it is requested again on its next visibility; a transfer/extract starting mid-run makes the stream route answer 409, the poster fails as `device_busy`, nothing is cached.
 - **Video posters — AFC (iPhone):** the same routes; `read_range` is a seek + bounded read on the ifuse mount. Same limits, timeouts, 4 MiB cap and cache.
+- **Grid view — preference:** the picker opens each folder in the layout from the resolution order (see **Grid view**); `stored_view` and `folder_view` arrive on page 1. Pressing **List** or **Grid** sets the layout at once and then sends `PUT /api/device/view` for the current folder (fire-and-forget; failure ignored, no error shown); pressing **Auto** sends `view: "auto"` and re-resolves from `folder_view` and the counts of the loaded page-1 response (no new list request). Navigating to another folder re-resolves; going back to a folder re-reads its stored choice from its own page 1.
+- **Grid view — once per open:** the layout is decided when page 1 of an **open** arrives (folder open, Up, breadcrumb, **Retry** of a failed open). Restarts caused by the filter, **Show hidden** or the sort carry fresh counts but **never** change the layout, and the stored choice is not re-read for them.
+- **Grid view — mode switch:** only re-renders the loaded rows (no list request, no new device call); ticks (keyed by path), the lightbox order, pagination state (cursor, sentinel, **Load more**, Retry row) and the filter are untouched. In-flight thumbnail requests are kept where the rebuilt item is the same entry; the rest are re-queued by the usual visibility rules.
+- **Grid view — loading state:** the full-panel loading state of an open keeps the layout in effect before the open (the tiles' skeleton in grid, the row skeleton in list); the server's `folder_view` / `stored_view` then apply once page 1 arrives.
 
 ## Sorting
 
@@ -132,6 +170,39 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 - **Default:** Name, A → Z (first run, after Settings → **Clear preferences**, or a corrupt stored value).
 - **Restart:** a sort change restarts at page 1 like the hidden toggle (list dims, no full-panel spinner, scrolled to top), served from the listing cache, keeping the filter, **Show hidden** and every tick; in-flight requests are superseded.
 - **Accessibility:** each header button’s accessible name states the column, its current order when active, and what activating it does (e.g. “Modified, sorted newest first. Sort oldest first.”); a visually hidden polite live region announces the new order (“Sorted newest first. Folders stay first.”). Header buttons and the menu are keyboard operable with visible focus.
+
+## Grid view
+
+### Resolution order
+
+The layout of a folder (`list` or `grid`) is the first that applies, evaluated for the folder being opened:
+
+1. **User choice, per folder:** `stored_view` for exactly this `path` (`list` or `grid`). Pressing **List** / **Grid** stores it; **Auto** deletes it. Other folders are unaffected (a choice for `DCIM/Camera` does not apply to `DCIM` or to `DCIM/Camera/Old`).
+2. **Folder type:** `folder_view`, from the domain table below.
+3. **Auto-detection:** **Grid** when `media_count ≥ 1` **and** `media_count ≥ 60 %` of `entry_count`; otherwise **List** (so an empty folder, or one holding only sub-folders, is a List).
+
+**Folder-type table** (names compared **case-insensitively**, whole path segments):
+
+| Layout | Names |
+|---|---|
+| **Grid** | `DCIM`, `Pictures`, `Movies`, `Screenshots`, `Camera`, `WhatsApp Images`, `WhatsApp Video`, `Telegram Images`, `Telegram Video` |
+| **List** | `Documents`, `Download`, `Android`, `Music`, `Podcasts`, `Recordings` |
+
+The match walks the path **from the folder itself up to the root** and takes the **nearest** segment that is in the table; its layout wins (`DCIM/Camera` → Grid, `Pictures/Instagram` → Grid, `Documents/Photos` → List, `Documents/DCIM` → Grid because `DCIM` is nearer, `DCIM` itself → Grid of folder tiles). The storage root (`""`) and paths with no matching segment give `null`, which falls through to auto-detection.
+
+**Auto-note:** while Auto is selected the control shows `Auto · Grid (photo folder)` or `Auto · List (documents folder)` when the folder type decided, and `Auto · Grid` or `Auto · List` when detection decided.
+
+**Sort, filter and hidden never flip it:** see **Behaviour details**. Counts ignore `query`, so a filter that matches nothing cannot turn a photo folder into a List.
+
+### Tiles
+
+- **Layout:** the same `<ul>` and one `<li>` per entry as in List, laid out as a grid of square tiles with `repeat(auto-fill, minmax(140px, 1fr))`; at ≤ 520 px the minimum is **104 px** (two or three columns). Pagination (sentinel, “Loading more…”, **Load more** footer, inline **Retry** row) and the state panels are unchanged; the footer, “Loading more…” and Retry rows **span the full grid width**.
+- **Image/video tile:** the 320 px thumbnail (or video poster with ▶ and duration badge) fills the square (`object-fit: cover`); a **checkbox** overlay at the top left (always visible, large hit area); a **👁** preview button at the top right; the name on **one truncated line** below the square (full name in the tile's `title`). A selected tile has an accent ring.
+- **Folder tile:** 📁 in the square and the name; clicking it opens the folder. It has the same checkbox overlay (disabled for `kind: "files"`).
+- **Other file tile:** 📄 in the square, no 👁, no preview request.
+- **`kind: "folders"`:** file tiles' checkboxes are disabled, and clicking such a tile does nothing. **`mediaOnly`:** non-media tiles are dimmed. Hidden entries (with **Show hidden**) are dimmed.
+- **Interactions:** a click on a file tile **toggles its selection** (ignored while its checkbox is disabled); clicks on the checkbox, on 👁 and on a folder tile keep their own meaning (checkbox toggles; 👁 opens the lightbox; a folder tile opens the folder, selecting only via its checkbox). **👁** and **Enter** on a focused photo/video tile open the lightbox; **Space** toggles the selection. The lightbox steps through the **same photo + video order** as in List, and its **Selected** checkbox mirrors the tile's tick.
+- **Accessibility:** the grid is a list of tiles, with no `role="grid"` keyboard model. In grid the thumbnail is part of the tile (its click selects), so it is not a separate preview button; the **👁** button keeps `aria-label="Preview <name>"` (`Preview <name> (video, <duration>)` for videos). The tile body is one focus stop whose accessible name is the file name (plus “video, <duration>” where known); the checkbox and 👁 are their own stops with visible focus. The View control is keyboard operable. A visually hidden polite live region (the one that announces sort changes) says **“Grid view”** or **“List view”** when the effective layout changes (not on a re-render that keeps the layout, nor on an open that happens to resolve differently from the previous folder).
 
 ## Removal (same change set, after the picker works)
 
@@ -383,9 +454,10 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 
 ### Scenario: Path validation
 
-- **Given** a list request with `path` containing `..`, a NUL byte, or an absolute path outside user storage
+- **Given** a list request with `path` containing `..` or a NUL byte
 - **When** the route handles it
 - **Then** the route returns 400 and no `adb` process is started
+- **And** an absolute `path` is never read as a host or device-root path: a leading `/` and Android user-storage prefixes are stripped and the rest is treated as relative to phone storage (amended 2026-10-21 in chat to match the code)
 
 ### Scenario: Desktop-only
 
@@ -787,10 +859,220 @@ The token is minted by the use case, not by any route: no HTTP route returns, li
 - **When** posters are generated for several videos
 - **Then** JPEGs live only under the app cache directory, temp data is removed, and nothing is written into the library or onto the phone
 
+### Scenario: Camera opens as a grid by folder type
+
+- **Given** nothing is stored for `DCIM/Camera` and the View control is on **Auto**
+- **When** the user opens `DCIM/Camera`
+- **Then** page 1 reports `folder_view: "grid"`, the folder shows as square tiles with no click, and the note reads “Auto · Grid (photo folder)”
+- **And** the Name / Size / Modified header is hidden and the **Sort** menu is shown
+
+### Scenario: Screenshots with two PNGs is a grid
+
+- **Given** `DCIM/Screenshots` holds `a.png` and `b.png` and nothing else
+- **When** the user opens it
+- **Then** it shows as a grid (folder type, and also `media_count` 2 = 100 %)
+
+### Scenario: Subfolder of Pictures is a grid
+
+- **Given** `Pictures/Instagram` holds three `.txt` files and nothing is stored for it
+- **When** the user opens it on Auto
+- **Then** it shows as a grid, because the nearest typed ancestor is `Pictures`
+
+### Scenario: Folder type beats detection
+
+- **Given** `Documents/Trip` holds 50 photos and no other file
+- **When** the user opens it
+- **Then** page 1 reports `folder_view: "list"` and it shows as a list, although `media_count` is 100 %
+
+### Scenario: Nearest typed ancestor wins
+
+- **Given** nothing is stored for `Documents/DCIM`
+- **When** the user opens it on Auto
+- **Then** it shows as a grid, because `DCIM` is nearer than `Documents`
+
+### Scenario: Untyped folder of only media is a grid by detection
+
+- **Given** `Backup2024` has no typed ancestor and holds 4 photos and nothing else
+- **When** the user opens it on Auto
+- **Then** `folder_view` is `null`, it shows as a grid, and the note reads “Auto · Grid”
+
+### Scenario: Untyped mixed folder is a list
+
+- **Given** `Misc` holds 3 photos and 7 other files (30 % media)
+- **When** the user opens it on Auto
+- **Then** it shows as a list and the note reads “Auto · List”
+
+### Scenario: A single photo among few entries
+
+- **Given** `Misc2` holds one photo and one PDF (50 % media) — and, separately, `Misc3` holds one photo and no other entry (100 %); neither has a typed ancestor
+- **When** the user opens each on Auto
+- **Then** `Misc2` shows as a list and `Misc3` as a grid (the minimum is one photo/video and 60 %)
+
+### Scenario: Folder of only sub-folders is a list
+
+- **Given** an untyped folder holds only sub-folders
+- **When** the user opens it on Auto
+- **Then** `media_count` is 0 and it shows as a list
+
+### Scenario: Counts ignore the filter and follow the hidden rule
+
+- **Given** an untyped folder holds 10 photos and 10 PDFs, plus 20 hidden photos
+- **When** it is listed
+- **Then** `entry_count` is 20, `media_count` is 10 (hidden entries are excluded) and it shows as a list
+- **When** the user ticks **Show hidden**, then types `.pdf` in the filter
+- **Then** the requests carry `entry_count` 40 / `media_count` 30 and then the same counts again (the filter is ignored), and the layout does not change
+
+### Scenario: Filter, sort and hidden do not flip the layout
+
+- **Given** an untyped folder opened as a grid by detection
+- **When** the user filters by a name that matches only a PDF, changes the sort, and toggles **Show hidden**
+- **Then** it stays a grid after each restart and the note is unchanged
+- **And** no layout change is announced
+
+### Scenario: Choice is remembered per folder across reopening and restart
+
+- **Given** `DCIM/Camera` opens as a grid by type
+- **When** the user presses **List**
+- **Then** the rows show at once without a list request, `PUT /api/device/view` is sent with `{ path: "DCIM/Camera", view: "list" }`, the hint reads **Only this folder** and the live region says “List view”
+- **When** the user goes up and opens `DCIM/Camera` again, and again after restarting the app
+- **Then** page 1 carries `stored_view: "list"` and it opens as a list with **List** selected and no auto-note
+
+### Scenario: Auto forgets the choice
+
+- **Given** `DCIM/Camera` has a stored `list` choice
+- **When** the user presses **Auto**
+- **Then** `PUT /api/device/view` is sent with `view: "auto"` (answered 204), the entry is removed, the folder re-resolves to a grid by type with no list request, and the note reads “Auto · Grid (photo folder)”
+- **And** deleting an entry that does not exist is also 204
+
+### Scenario: Other folders are unaffected
+
+- **Given** `DCIM/Camera` has a stored `list` choice
+- **When** the user opens `DCIM/Screenshots`, `DCIM` and `DCIM/Camera/Old`
+- **Then** each is resolved on its own (not from the `Camera` choice) and `stored_view` is `null` for them
+
+### Scenario: The stored map is capped at 500 folders
+
+- **Given** 500 folders have a stored choice
+- **When** a choice is stored for a 501st folder
+- **Then** the least recently set entry is dropped and the map still holds 500
+- **And** setting an existing folder again makes it the most recent, so it is not the next one dropped
+
+### Scenario: Corrupt stored map falls back to Auto
+
+- **Given** the stored `device_picker_views` is not a map, or holds `"DCIM/Camera": "table"`, or a key containing `..`
+- **When** the picker opens `DCIM/Camera`
+- **Then** the bad value or entry is ignored, valid entries still apply, `stored_view` is `null`, the folder resolves as Auto, and no error is shown
+
+### Scenario: Failed write keeps the session mode
+
+- **Given** the preference file cannot be written
+- **When** the user presses **Grid** in `Documents`
+- **Then** the folder shows as a grid, no error is shown, and the picker keeps working
+- **When** the user leaves and reopens the folder in the same session
+- **Then** the client still opens it as a grid
+- **When** the app is restarted and the folder is opened
+- **Then** it resolves as a List by folder type
+
+### Scenario: Invalid view value
+
+- **Given** a `PUT /api/device/view` with `view: "tiles"`, a missing `view`, or a malformed body
+- **When** the route handles it
+- **Then** it returns 422 and nothing is stored
+
+### Scenario: View path validation
+
+- **Given** a `PUT /api/device/view` whose `path` contains `..` or a NUL byte
+- **When** the route handles it
+- **Then** it returns 400 `invalid_path`, nothing is stored and no `adb` process is started
+- **And** an absolute `path` (e.g. `/etc/passwd`) is treated as relative to phone storage, like `/api/device/list`: it is stored under the key `etc/passwd` (204), still with no `adb` process
+
+### Scenario: View route is desktop-only
+
+- **Given** a `PUT /api/device/view` from a non-loopback (LAN) client
+- **When** the route handles it
+- **Then** it returns 403 `desktop-only`, and nothing is stored and no `adb` process is started
+- **Given** a network passcode is set and a LAN client has no login
+- **Then** it receives 401 `passcode-required` first
+- **And** the route is not on `LAN_ALLOWED_ROUTES`, and the [lan-access](../lan-access/SPEC.md) route table lists it as **Desktop**
+
+### Scenario: Later pages omit the grid fields
+
+- **Given** a folder of 250 items is open
+- **When** the second page is requested with a `cursor`
+- **Then** the response carries no `entry_count`, `media_count`, `folder_view` or `stored_view`, and the layout is unchanged
+
+### Scenario: Switching mode keeps ticks and rows
+
+- **Given** `DCIM/Camera` is open as a grid, two pages are loaded and 5 tiles are ticked
+- **When** the user presses **List**, then **Grid**
+- **Then** no list request and no device call are made
+- **And** the loaded rows are shown in each layout, the 5 ticks and the footer count are unchanged, the scroll stays at the first visible item, and “List view” then “Grid view” are announced
+
+### Scenario: Tile click selects, 👁 opens the lightbox
+
+- **Given** a photo tile in a grid
+- **When** the user clicks the tile (not the checkbox or 👁)
+- **Then** it becomes selected with the accent ring and the footer count increases; clicking again deselects it
+- **When** the user clicks **👁**, or focuses the tile and presses Enter
+- **Then** the lightbox opens on that photo and the selection does not change
+- **When** the tile has focus and the user presses Space
+- **Then** its selection toggles
+
+### Scenario: Lightbox in grid steps the same order
+
+- **Given** a grid holding two photos, a folder tile, a PDF tile and a video
+- **When** the lightbox is open on the first photo and the user presses → repeatedly
+- **Then** it visits photo, photo, video in list order, skipping the folder and the PDF, counting photos and videos together, and **Selected** mirrors each tile's tick
+
+### Scenario: Folder tile opens the folder
+
+- **Given** a folder tile in a grid
+- **When** the user clicks the tile
+- **Then** that folder opens and the selection is unchanged
+- **When** the user ticks the tile's checkbox instead
+- **Then** the folder is selected without opening
+
+### Scenario: Pagination works in grid
+
+- **Given** `DCIM/Camera` (3,412 files) is open as a grid
+- **When** the user scrolls to the bottom
+- **Then** a “Loading more…” row spanning the full grid width appears and 100 more tiles are appended from the cache with no device call and existing tiles are not re-rendered
+- **When** a next-page fetch fails
+- **Then** the loaded tiles and ticks stay and a full-width “Couldn’t load more items.” row with **Retry** ends the grid
+- **And** the **Load more** footer, activated by keyboard, appends the next 100 tiles
+
+### Scenario: Narrow grid
+
+- **Given** the picker is ≤ 520 px wide with a grid open
+- **Then** tiles are at least 104 px (two or three columns), the **Sort** menu is shown, the View control is usable, and there is no horizontal page scroll
+- **When** the window is wider than 520 px
+- **Then** the **Sort** menu is still shown in grid (in a list it is hidden above 520 px)
+
+### Scenario: Folders-only mode in grid
+
+- **Given** the picker was opened with `kind: "folders"` and a grid is shown
+- **When** a folder holds photos
+- **Then** the photo tiles' checkboxes are disabled, clicking a photo tile selects nothing, 👁 still opens the lightbox with **Selected** disabled, and folder tiles can be ticked and opened
+- **Given** `mediaOnly`
+- **Then** non-media tiles are dimmed
+
+### Scenario: Errors look the same in both layouts
+
+- **Given** a grid is selected
+- **When** the listing fails (unplugged, unauthorized, permission denied)
+- **Then** the same state panel as in a list is shown, the View control stays usable, and ticks are kept
+
+### Scenario: Clear preferences empties the stored views
+
+- **Given** `DCIM/Camera` has a stored `list` choice
+- **When** the user uses Settings → **Clear preferences**
+- **Then** `device_picker_views` is empty, the client also forgets this session's choices, and the folder opens as a grid by type on the next open
+
 ## Out of scope
 
 - Browsing the phone’s app-private storage, root-only paths, SD-card/secondary volumes beyond what `/sdcard` exposes (v1: user storage root only).
-- In-app video **playback** (Phase B2, see [PLAN-media-preview.md](PLAN-media-preview.md)); RAW/DNG previews (Phase C); audio-file previews; motion photos; scrub/hover previews; choosing the poster frame; video previews over LAN; a grid view; zoom/pan in the lightbox; rotate/edit; previews over Wi‑Fi/LAN.
+- In-app video **playback** (Phase B2, see [PLAN-media-preview.md](PLAN-media-preview.md)); RAW/DNG previews (Phase C); audio-file previews; motion photos; scrub/hover previews; choosing the poster frame; video previews over LAN; zoom/pan in the lightbox; rotate/edit; previews over Wi‑Fi/LAN.
+- Grid view: a tile-size control or pinch zoom; Shift range selection; 2-D arrow-key navigation between tiles (no `role="grid"` model); a grid in the library Gallery (a different feature); a per-**device** view memory (the choice is per folder, shared by every device); a global default view; remembering the choice for a folder's sub-folders; a per-folder sort.
 - Search across directories; drag-and-drop.
 - Sorting by type/extension, natural/numeric name order (`IMG_2` before `IMG_10`), mixing folders among files, and a per-folder remembered sort.
 - Recursive size/count of ticked folders before start.

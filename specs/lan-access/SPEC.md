@@ -75,6 +75,7 @@
 | GET | `/api/device/thumb` | **Desktop** | Phone photo thumbnail | Loopback-only |
 | GET | `/api/device/preview` | **Desktop** | Phone photo lightbox rendition | Loopback-only |
 | GET | `/api/device/stream` | **Desktop** | Internal ranged phone-file reader for video posters (token-bound) | Loopback-only |
+| PUT | `/api/device/view` | **Desktop** | Per-folder phone picker layout (List / Grid / Auto) | Loopback-only |
 | GET | `/api/devices` | **Desktop** |  | Loopback-only |
 | GET | `/api/library/counts` | **Desktop** |  | Loopback-only |
 | POST | `/api/extract/start` | **Desktop** |  | Loopback-only |

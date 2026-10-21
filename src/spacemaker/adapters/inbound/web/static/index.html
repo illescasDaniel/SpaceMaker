@@ -402,7 +402,7 @@
 			Browse the phone and tick what to add. Nothing is copied yet — picks go back to the previous screen as removable sources.
 		</p>
 
-		<article class="dp-card" aria-labelledby="dp-title">
+		<article class="dp-card" id="dp-card" data-view="list" aria-labelledby="dp-title">
 			<div class="dp-device-row">
 				<h2 class="step-title" id="dp-title" style="margin: 0;">Phone storage</h2>
 				<button type="button" class="info-btn" id="btn-dp-info" title="How the phone browser works" aria-expanded="false" aria-controls="dp-info-panel">i</button>
@@ -426,6 +426,16 @@
 				<button type="button" class="btn btn-secondary" id="btn-dp-select-folder">Select this folder</button>
 				<input class="field" type="search" id="dp-filter" placeholder="Filter this folder by name" aria-label="Filter this folder by name" />
 				<label class="dp-toggle"><input type="checkbox" id="dp-hidden-toggle" /> Show hidden</label>
+				<div class="dp-view">
+					<span id="dp-view-label">View</span>
+					<div class="dp-seg" id="dp-view" role="radiogroup" aria-label="View">
+						<button type="button" role="radio" aria-checked="true" data-dp-view="auto" tabindex="0">Auto</button>
+						<button type="button" role="radio" aria-checked="false" data-dp-view="list" tabindex="-1">List</button>
+						<button type="button" role="radio" aria-checked="false" data-dp-view="grid" tabindex="-1">Grid</button>
+					</div>
+					<span class="dp-view-note" id="dp-view-auto-note">Auto · List</span>
+					<span class="dp-view-note" id="dp-view-scope" hidden>Only this folder</span>
+				</div>
 				<label class="dp-sort-select">Sort
 					<select class="field" id="dp-sort-select" aria-label="Sort this folder">
 						<option value="name:asc">Name, A → Z</option>

@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from spacemaker.adapters.inbound.web.client_access import require_loopback
-from spacemaker.adapters.inbound.web.models import DeviceListBody
+from spacemaker.adapters.inbound.web.models import DeviceListBody, DeviceViewBody
 from spacemaker.bootstrap.services import AppServices
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.device_browse import (
@@ -29,6 +29,7 @@ from spacemaker.domain.device_preview import (
 	DevicePreviewRequest,
 )
 from spacemaker.domain.device_stream import DeviceStreamError, DeviceStreamErrorKind
+from spacemaker.domain.device_view import DeviceViewHints, DeviceViewSetting
 
 
 _STATUS_BY_KIND: dict[DeviceBrowseErrorKind, int] = {
@@ -101,6 +102,13 @@ def _invalid_path() -> HTTPException:
 	return HTTPException(status_code=400, detail=DevicePreviewErrorKind.INVALID_PATH.value)
 
 
+def _hints_json(hints: DeviceViewHints) -> dict[str, object]:
+	return {
+		"folder_view": hints.folder_view.value if hints.folder_view else None,
+		"stored_view": hints.stored_view.value if hints.stored_view else None,
+	}
+
+
 def _preview_method(raw: str, device_id: str) -> ConnectionMethod:
 	"""Same method/device checks as ``/api/device/list`` (any failure is ``invalid_path`` for the preview routes)."""
 	try:
@@ -148,8 +156,11 @@ def build_device_router(services: AppServices) -> APIRouter:
 			)
 		except DeviceBrowseError as exc:
 			status = _STATUS_BY_KIND[exc.kind]
-			raise HTTPException(status_code=status, detail={"error": exc.kind.value, "message": exc.detail}) from exc
-		return {
+			error: dict[str, object] = {"error": exc.kind.value, "message": exc.detail}
+			if exc.kind not in {DeviceBrowseErrorKind.INVALID_PATH, DeviceBrowseErrorKind.INVALID_CURSOR}:
+				error.update(_hints_json(services.device_folder_views().hints(body.path)))
+			raise HTTPException(status_code=status, detail=error) from exc
+		result: dict[str, object] = {
 			"path": page.path,
 			"entries": [{"name": e.name, "is_dir": e.is_dir, "size": e.size, "mtime": e.mtime} for e in page.entries],
 			"next_cursor": page.next_cursor,
@@ -158,6 +169,23 @@ def build_device_router(services: AppServices) -> APIRouter:
 			"sort": page.sort.key.value,
 			"order": page.sort.order.value,
 		}
+		if body.cursor is None:
+			result["entry_count"] = page.entry_count
+			result["media_count"] = page.media_count
+			result.update(_hints_json(services.device_folder_views().hints(body.path)))
+		return result
+
+	@router.put("/api/device/view", status_code=204)
+	def device_view(request: Request, body: DeviceViewBody) -> Response:
+		"""Remember (list / grid) or forget (auto) the picker layout of one phone folder; no device call."""
+		require_loopback(request)
+		try:
+			services.device_folder_views().choose(body.path, DeviceViewSetting(body.view))
+		except DeviceBrowseError as exc:
+			raise HTTPException(
+				status_code=_STATUS_BY_KIND[exc.kind], detail={"error": exc.kind.value, "message": exc.detail}
+			) from exc
+		return Response(status_code=204)
 
 	async def serve_preview(
 		request: Request, kind: DevicePreviewKind, method: str, device_id: str, path: str, size: int, mtime: int

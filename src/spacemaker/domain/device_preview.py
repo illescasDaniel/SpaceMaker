@@ -6,6 +6,7 @@ from enum import StrEnum
 
 from spacemaker.domain.connection import ConnectionMethod
 from spacemaker.domain.device_browse import DeviceBrowseError, DeviceBrowseErrorKind
+from spacemaker.domain.device_media import PREVIEWABLE_IMAGE_EXTENSIONS, PREVIEWABLE_VIDEO_EXTENSIONS
 
 
 PREVIEW_HEAD_BYTES = 65_536
@@ -25,12 +26,6 @@ PREVIEW_SLOT_WAIT_S = 20.0
 """Longest a preview request waits for one of the per-device read slots before answering ``TIMEOUT``."""
 STREAM_READ_TIMEOUT_S = 10.0
 """Budget of one ``read_range`` device read (per range request)."""
-
-PREVIEWABLE_IMAGE_EXTENSIONS: frozenset[str] = frozenset({"jpg", "jpeg", "png", "webp", "gif", "heic", "heif"})
-"""Lower-case, without the dot."""
-
-PREVIEWABLE_VIDEO_EXTENSIONS: frozenset[str] = frozenset({"mp4", "mov", "m4v", "3gp", "mkv", "webm"})
-"""Lower-case, without the dot."""
 
 
 class DevicePreviewMedia(StrEnum):

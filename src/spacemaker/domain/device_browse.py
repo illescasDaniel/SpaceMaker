@@ -4,12 +4,13 @@ import base64
 import binascii
 import bisect
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import cmp_to_key
 from typing import Any, Protocol, cast
 
+from spacemaker.domain.device_media import is_media_name
 from spacemaker.domain.transfer_folders import strip_android_user_storage_prefix
 
 
@@ -97,6 +98,10 @@ class DeviceDirectoryScrollPage:
 	next_cursor: str | None
 	sort: DeviceBrowseSort = DEFAULT_BROWSE_SORT
 	"""The effective order of ``entries`` (echoed to the client)."""
+	entry_count: int = 0
+	"""Grid view: entries after the hidden rule, ignoring ``query`` (folders + files)."""
+	media_count: int = 0
+	"""Grid view: of those, files with a previewable photo/video extension."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,6 +232,30 @@ def decode_sorted_cursor(text: str, sort: DeviceBrowseSort) -> DeviceEntry:
 	return DeviceEntry(name, is_dir, cast(int, size), cast(int, mtime))
 
 
+@dataclass(frozen=True, slots=True)
+class DeviceFolderCounts:
+	"""Page-1 counts over the cached listing: hidden rule applied, filter ``query`` ignored.
+
+	``entry_count`` = folders + files; ``media_count`` = files whose extension is a previewable photo or video.
+	"""
+
+	entry_count: int
+	media_count: int
+
+
+def folder_counts(entries: Iterable[DeviceEntry], *, show_hidden: bool) -> DeviceFolderCounts:
+	"""Count ``entries`` for auto-detection; dot-entries count only when ``show_hidden``. Folders are never media."""
+	entry_total = 0
+	media_total = 0
+	for entry in entries:
+		if entry.is_hidden and not show_hidden:
+			continue
+		entry_total += 1
+		if not entry.is_dir and is_media_name(entry.name):
+			media_total += 1
+	return DeviceFolderCounts(entry_count=entry_total, media_count=media_total)
+
+
 def scroll_page(path: str, entries: Sequence[DeviceEntry], request: DeviceBrowseQuery) -> DeviceDirectoryScrollPage:
 	"""Sort ``entries``, drop hidden ones unless ``show_hidden``, keep case-insensitive substring matches of
 	``request.query``, then return up to ``request.limit`` entries strictly after ``request.cursor``.
@@ -239,6 +268,7 @@ def scroll_page(path: str, entries: Sequence[DeviceEntry], request: DeviceBrowse
 	"""
 	sort = request.sort or DEFAULT_BROWSE_SORT
 	key = entry_order_key(sort)
+	counts = folder_counts(entries, show_hidden=request.show_hidden)
 	after = decode_sorted_cursor(request.cursor, sort) if request.cursor is not None else None
 	needle = request.query.casefold()
 	visible = [
@@ -257,6 +287,8 @@ def scroll_page(path: str, entries: Sequence[DeviceEntry], request: DeviceBrowse
 		total_unfiltered=len(entries),
 		next_cursor=encode_sorted_cursor(window[-1], sort) if has_more and window else None,
 		sort=sort,
+		entry_count=counts.entry_count,
+		media_count=counts.media_count,
 	)
 
 
@@ -272,11 +304,13 @@ __all__ = [
 	"DeviceBrowseSortKey",
 	"DeviceDirectoryScrollPage",
 	"DeviceEntry",
+	"DeviceFolderCounts",
 	"OrderKey",
 	"SortOrder",
 	"decode_sorted_cursor",
 	"encode_sorted_cursor",
 	"entry_order_key",
+	"folder_counts",
 	"normalize_browse_path",
 	"parse_device_browse_sort",
 	"scroll_page",

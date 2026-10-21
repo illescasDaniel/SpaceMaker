@@ -7,6 +7,14 @@ import {
 	syncLightboxSelection,
 } from "./device-lightbox.ts";
 import {
+	applyOpenError,
+	applyOpenPage,
+	bindViewControl,
+	isGridActive,
+	resetView,
+	syncThumbLabel,
+} from "./device-picker-grid.ts";
+import {
 	createThumbLoader,
 	formatMediaDuration,
 	isImageName,
@@ -94,6 +102,7 @@ interface DeviceSort {
 }
 
 const PAGE_SIZE = 100;
+const SKELETON_TILES = 8;
 const FILTER_DEBOUNCE_MS = 200;
 
 const SORT_NATURAL_ORDER: Record<DeviceSortKey, DeviceSortOrder> = { name: "asc", mtime: "desc", size: "desc" };
@@ -196,9 +205,11 @@ function showState(kind: DevicePickerStateKind): void {
 	session.thumbs.reset();
 	session.images = [];
 	stateEl.textContent = "";
+	stateEl.classList.remove("is-grid-loading");
 	const title = document.createElement("strong");
 	const body = document.createElement("span");
 	let action: { label: string; act: string } | null = null;
+	let skeletonGrid: HTMLElement | null = null;
 	switch (kind) {
 		case "loading": {
 			const spinner = document.createElement("div");
@@ -207,6 +218,18 @@ function showState(kind: DevicePickerStateKind): void {
 			stateEl.appendChild(spinner);
 			title.textContent = "Reading folder…";
 			body.textContent = "Asking the phone for this folder’s contents.";
+			if (isGridActive()) {
+				// The layout in effect before the open decides the shape: placeholder tiles while a grid is showing.
+				stateEl.classList.add("is-grid-loading");
+				skeletonGrid = document.createElement("div");
+				skeletonGrid.className = "dp-skel-grid";
+				skeletonGrid.setAttribute("aria-hidden", "true");
+				for (let i = 0; i < SKELETON_TILES; i += 1) {
+					const tile = document.createElement("span");
+					tile.className = "dp-skel-tile";
+					skeletonGrid.appendChild(tile);
+				}
+			}
 			break;
 		}
 		case "empty":
@@ -251,6 +274,9 @@ function showState(kind: DevicePickerStateKind): void {
 	}
 	stateEl.appendChild(title);
 	stateEl.appendChild(body);
+	if (skeletonGrid) {
+		stateEl.appendChild(skeletonGrid);
+	}
 	if (action) {
 		stateEl.appendChild(document.createElement("br"));
 		const btn = document.createElement("button");
@@ -338,6 +364,7 @@ function makeRow(entry: DeviceEntryRow): HTMLLIElement {
 	const { kind, mediaOnly } = active.options;
 	const path = joinPath(active.cwd, entry.name);
 	const li = document.createElement("li");
+	li.title = entry.name;
 	li.className =
 		"dp-row" +
 		(entry.name.startsWith(".") ? " is-hidden-file" : "") +
@@ -413,7 +440,41 @@ function makeRow(entry: DeviceEntryRow): HTMLLIElement {
 	if (thumb && eye) {
 		wireImageRow(active, li, box, entry, path, thumb, eye);
 	}
+	wireTileClick(li, box, entry.is_dir, path);
 	return li;
+}
+
+/** Grid only: a click on the tile body toggles the tick (folder tiles open the folder). The checkbox, the 👁 button
+ * and the folder name button keep their own meaning. In List the row ignores clicks as before. */
+function wireTileClick(li: HTMLLIElement, box: HTMLInputElement, isDir: boolean, path: string): void {
+	li.addEventListener("click", (ev: MouseEvent) => {
+		if (!isGridActive() || ev.defaultPrevented) {
+			return;
+		}
+		const target = ev.target instanceof Element ? ev.target : null;
+		if (!target || target === box || target.closest(".dp-preview-btn")) {
+			return;
+		}
+		if (isDir) {
+			if (!target.closest("button.dp-name")) {
+				void navigate(path);
+			}
+			return;
+		}
+		// Enter / Space on the focused thumbnail arrive as clicks with no pointer; their keys are handled separately.
+		if (ev.detail === 0 && target.closest(".dp-thumb")) {
+			return;
+		}
+		toggleBox(box);
+	});
+}
+
+function toggleBox(box: HTMLInputElement): void {
+	if (box.disabled) {
+		return;
+	}
+	box.checked = !box.checked;
+	box.dispatchEvent(new Event("change"));
 }
 
 function makeThumb(name: string, video: boolean): HTMLButtonElement {
@@ -460,7 +521,9 @@ function wireImageRow(
 		const text = duration === null ? "" : formatMediaDuration(duration);
 		const suffix = !video ? "" : text ? " (video, " + text + ")" : " (video)";
 		eye.setAttribute("aria-label", "Preview " + entry.name + suffix);
+		syncThumbLabel(thumb);
 	});
+	syncThumbLabel(thumb);
 	active.images.push({
 		path,
 		name: entry.name,
@@ -477,12 +540,35 @@ function wireImageRow(
 			}
 		},
 	});
-	for (const opener of [thumb, eye]) {
-		opener.addEventListener("click", (ev: MouseEvent) => {
+	eye.addEventListener("click", (ev: MouseEvent) => {
+		ev.stopPropagation();
+		openLightbox(path, eye);
+	});
+	// List: the thumbnail opens the preview. Grid: it is the tile body, so a click bubbles up and toggles the tick;
+	// Enter opens the preview and Space toggles.
+	thumb.addEventListener("click", (ev: MouseEvent) => {
+		if (!isGridActive()) {
 			ev.stopPropagation();
-			openLightbox(path, opener);
-		});
-	}
+			openLightbox(path, thumb);
+		}
+	});
+	thumb.addEventListener("keydown", (ev: KeyboardEvent) => {
+		if (!isGridActive() || ev.target !== thumb) {
+			return;
+		}
+		if (ev.key === "Enter") {
+			ev.preventDefault();
+			openLightbox(path, thumb);
+		} else if (ev.key === " ") {
+			ev.preventDefault();
+			toggleBox(box);
+		}
+	});
+	thumb.addEventListener("keyup", (ev: KeyboardEvent) => {
+		if (isGridActive() && ev.key === " ") {
+			ev.preventDefault();
+		}
+	});
 	li.dataset.path = path;
 }
 
@@ -713,8 +799,9 @@ function renderFirstPage(page: DeviceListPage): void {
 	updateFooter();
 }
 
-/** Restart at page 1 (open folder, filter, hidden toggle). `blank` swaps the list for the loading panel. */
-async function startListing(blank: boolean, refresh: boolean): Promise<void> {
+/** Restart at page 1. `blank` swaps the list for the loading panel; `open` marks a folder open (navigation, Up,
+ * crumb, initial, Retry), the only restart that decides the layout: filter, sort and hidden restarts never do. */
+async function startListing(blank: boolean, refresh: boolean, open = false): Promise<void> {
 	if (!session) {
 		return;
 	}
@@ -740,6 +827,9 @@ async function startListing(blank: boolean, refresh: boolean): Promise<void> {
 			return;
 		}
 		list?.classList.remove("is-refreshing");
+		if (open) {
+			applyOpenPage(page, session.cwd);
+		}
 		renderFirstPage(page);
 	} catch (err) {
 		if (!session || session.requestId !== mine) {
@@ -747,6 +837,9 @@ async function startListing(blank: boolean, refresh: boolean): Promise<void> {
 		}
 		list?.classList.remove("is-refreshing");
 		renderTrail();
+		if (open && err instanceof ApiError) {
+			applyOpenError(err.detail, session.cwd);
+		}
 		showState(stateKindForError(listError(err).error));
 	}
 }
@@ -811,7 +904,7 @@ async function navigate(path: string, refresh = false): Promise<void> {
 	if (filter) {
 		filter.value = "";
 	}
-	await startListing(true, refresh);
+	await startListing(true, refresh, true);
 }
 
 function finish(commit: boolean): void {
@@ -854,6 +947,7 @@ function openDevicePicker(options: DevicePickerOptions): void {
 		images: [],
 	};
 	renderSort();
+	resetView();
 	const origin = el<HTMLElement>("dp-bc-origin");
 	if (origin) {
 		origin.textContent = options.originLabel;
@@ -894,6 +988,7 @@ function openDevicePicker(options: DevicePickerOptions): void {
 }
 
 function bindDevicePicker(): void {
+	bindViewControl(() => session?.cwd ?? null);
 	onClick("dp-bc-origin", () => {
 		finish(false);
 	});
