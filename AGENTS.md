@@ -16,16 +16,16 @@ Despite the small current footprint, **always act as if this project will grow l
 
 | Phase | Deliverable | Gate |
 |-------|-------------|------|
-| **0 — Design (wireframe)** | `wireframes/<screen>.html` (self-contained HTML/CSS) | **Stop.** Ask for UX/design approval. |
-| **1 — Spec** | `specs/<feature>/SPEC.md` (agreed **Design decisions** — success criteria, failure handling, perf/resource budget, trust boundary — plus BDD, out of scope, aligned with wireframe) | **Stop.** Ask for spec approval. |
+| **0 — Design** | UI track: `wireframes/<screen>.html` (self-contained HTML/CSS). System track (endpoints, data, jobs, services): `design/<feature>/DESIGN.md` with Mermaid diagrams, checked with `design_preview.py --check`. Fullstack: both | **Stop.** Ask for UX/design approval (one gate for both tracks). |
+| **1 — Spec** | `specs/<feature>/SPEC.md` (agreed **Design decisions** — success criteria, failure handling, perf/resource budget, trust boundary, compatibility & rollout — plus BDD with a scenario per design `F<n>` failure branch, out of scope, aligned with wireframe and design) | **Stop.** Ask for spec approval. |
 | **2 — Architecture** | Domain types and ports in `src/spacemaker/domain/`, `ports/` | **Stop.** Ask for approval before tests/adapters. |
 | **3 — Tests** | Unit tests from BDD (`tests/unit/`); implementations may be stubs | Run tests; fix as needed. |
-| **4 — Implementation** | Use cases, adapters, FastAPI/Web UI, desktop | Until tests pass. Must match approved wireframe unless spec is re-approved. |
+| **4 — Implementation** | Use cases, adapters, FastAPI/Web UI, desktop | Until tests pass. Must match approved wireframe and `DESIGN.md` unless spec is re-approved. |
 | **5 — Grade** | Read-only `code-grader` subagent scores the branch against the spec | Automatic (no approval); fix FAILs, max 2 rounds, show scorecard. |
 
 **One gate per explicit approval** — do not batch Phase 0→4 in one run, even if todos list all phases. After the wireframe, end the turn and wait. If Phase 4 reveals a spec flaw, rewrite the spec (Phase 1), get re-approval, then continue — don't patch around a bad spec.
 
-Production source requiring prior approvals: `src/spacemaker/` (all layers) and `src/spacemaker/adapters/inbound/web/static/` (production HTML/JS/CSS). Allowed before spec approval: `wireframes/`, `specs/`, and `docs/`/`memory/` edits supporting the gate.
+Production source requiring prior approvals: `src/spacemaker/` (all layers) and `src/spacemaker/adapters/inbound/web/static/` (production HTML/JS/CSS). Allowed before spec approval: `wireframes/`, `design/`, `specs/`, and `docs/`/`memory/` edits supporting the gate.
 
 Full step-by-step workflow: `.cursor/skills/sdd-feature/SKILL.md` (mirrored at `.claude/skills/`).
 
@@ -67,6 +67,7 @@ MCP tools are often deferred: fetch their schema (ToolSearch `select:`) before t
 |---|---|
 | Feature behavior (BDD) | `specs/<feature>/SPEC.md` |
 | UX layout | `wireframes/<screen>.html` |
+| System design (flows, data model, contracts) | `design/<feature>/DESIGN.md` |
 | Conversion policy, library folders, desktop shell | `docs/playbooks/SpaceMaker-adaptations.md` |
 | System design, entry points, routing, persistence | `docs/ARCHITECTURE.md` |
 | SDD philosophy, hexagonal ports/adapters, test conventions | `docs/playbooks/{spec-driven-development,hexagonal-architecture,fast-tests}.md` |
@@ -90,8 +91,8 @@ Both tools read this file natively. Always-on guidance stays here; anything that
 
 Project workflows: `.cursor/skills/{sdd-feature,agent-memory,fast-tests}/`, mirrored at `.claude/skills/` via a symlink. User-invoked only: `/save-changes`, `/save-pr-changes`, `/apply-worktree`, `/delete-worktree`, `/new-worktree`.
 
-Subagents: `code-grader` (Phase 5) lives as a hand-maintained pair, `.cursor/agents/code-grader.md` and `.claude/agents/code-grader.md` (host-specific frontmatter, identical body).
+Subagents: `code-grader` (Phase 5) lives as a hand-maintained pair, `.cursor/agents/code-grader.md` and `.claude/agents/code-grader.md` (host-specific frontmatter, identical body). The orchestration agents from [agent-guild](https://github.com/illescasDaniel/claude-agents) (`architect`, `coder`, `coder-python`, `utility`) are Claude-only files in `.claude/agents/` (Cursor reads that folder too); routing and briefs are in `.claude/development-workflow.md`, and Python code goes to `coder-python`.
 
 ## Source of truth
 
-`specs/` holds feature specifications. `wireframes/` holds UX layout truth before specs. `memory/` holds per-branch agent state. External trackers track work; the repo tracks truth.
+`specs/` holds feature specifications. `wireframes/` holds UX layout truth and `design/` the system design (flows, data, contracts) before specs. `memory/` holds per-branch agent state. External trackers track work; the repo tracks truth.

@@ -19,7 +19,8 @@ You are an independent reviewer. You did **not** write this code. Grade the bran
 1. Run the mechanical pre-checks and treat their `FAIL` lines as findings:
    `uv run python scripts/quality/grade_prechecks.py --spec <spec> --base <base>`
 2. Read the spec fully (Metadata, Design decisions, Acceptance criteria, Out of scope), then `git diff <base>...HEAD` plus uncommitted changes (`git status`, `git diff`).
-3. Read the wireframe named in Metadata if the diff touches production UI.
+3. Read what Metadata links: the wireframe if the diff touches production UI, and the system design
+   (`design/<feature>/DESIGN.md`) if it touches endpoints, stored data, jobs or service wiring.
 4. Use `codenav` (`symbol_info`, `outline`, `callers`, `implementations`) and `webnav` (`symbol_info`, `callers`, `implementations`, `css_var`, `selector`) to verify behavior rather than guessing; use grep only for free text.
 5. Score each criterion below. Every score needs `path:line` evidence; no evidence means you cannot score it above PARTIAL.
 
@@ -27,11 +28,11 @@ You are an independent reviewer. You did **not** write this code. Grade the bran
 
 Score each **PASS**, **PARTIAL**, or **FAIL**.
 
-1. **Spec conformance** — every `### Scenario:` has (a) an implementation path and (b) at least one test that would fail if that behavior broke. List each scenario with its test and code location; unmapped scenarios are FAIL.
-2. **Design decisions honored** — success criteria, failure handling, performance/resource budget, trust boundary. For each: cite where the code implements it and which scenario tests it. Untrusted input reaching the filesystem, network, or a subprocess without validation at an inbound adapter is FAIL.
+1. **Spec conformance** — every `### Scenario:` has (a) an implementation path and (b) at least one test that would fail if that behavior broke. List each scenario with its test and code location; unmapped scenarios are FAIL. Every failure branch `F<n>` in the design's diagrams must map to a scenario and a test the same way.
+2. **Design decisions honored** — success criteria, failure handling, performance/resource budget, trust boundary, compatibility & rollout. For each: cite where the code implements it and which scenario tests it. Untrusted input reaching the filesystem, network, or a subprocess without validation at an inbound adapter is FAIL; so is a breaking change to an API, stored data or event that the spec says stays compatible.
 3. **Hexagonal layering** — placement per the `hexagonal-python` rule: domain/ports/application never import frameworks or adapters; use cases depend on ports; wiring lives in `bootstrap/`.
 4. **Test quality** — naming `test_given_…_when_…_then_…` with `# given/# when/# then`, targets use cases and domain (not FastAPI routes), fast (no real sleeps, network, or subprocess), fakes over heavy mocking, assertions on behavior not implementation details (see the `fast-tests` skill). A test that cannot fail is FAIL.
-5. **UI fidelity** (skip with `N/A` if no UI in the diff) — production UI matches the approved wireframe and the spec's Visual & UI rules.
+5. **Design fidelity** (`N/A` if the spec links neither a wireframe nor a system design) — production UI matches the approved wireframe and the spec's Visual & UI rules; the system matches the approved `DESIGN.md` and the spec's Interfaces & contracts and Data & migration sections: tables, fields and constraints against the data model, endpoints, status and error codes against the contracts, dependencies against the components diagram, and allowed transitions against the lifecycle. Cite both sides of any mismatch, e.g. "data model says `status` is one of four values; the migration adds free text".
 6. **Scope discipline** — nothing implemented from **Out of scope**; no unrelated refactors; no dead code, debug leftovers, or TODOs; spec Metadata records the approvals.
 7. **Conventions & maintainability** — tabs for indentation, typed code, names and comment density match surrounding code, `memory/` updated per the agent-memory skill.
 

@@ -39,6 +39,10 @@ FORBIDDEN_CORE_IMPORTS = (
 	"spacemaker.desktop",
 )
 DESIGN_DECISION_KEYS = ("success criteria", "failure handling", "performance", "trust boundary")
+# Added later: a missing one is only a warning, so specs written before it keep passing.
+OPTIONAL_DECISION_KEYS = ("compatibility",)
+FAILURE_ID_RE = re.compile(r"\bF\d+\b")
+MERMAID_BLOCK_RE = re.compile(r"^```mermaid\s*$(.*?)^```", re.MULTILINE | re.DOTALL)
 TEST_NAME_RE = re.compile(r"^test_given_.+_when_.+_then_.+")
 
 
@@ -176,22 +180,45 @@ def _section(text: str, heading: str) -> str | None:
 	return match.group(1) if match else None
 
 
-def _design_decision_problems(section: str) -> list[str]:
-	"""Each decision must appear and carry real content; a bare ``N/A`` needs a reason."""
+def _design_decision_problems(section: str) -> tuple[list[str], list[str]]:
+	"""Problems with the decisions, and optional decisions that are missing.
+
+	Each decision present must carry real content; a bare ``N/A`` needs a reason.
+	"""
 	lines = section.lower().splitlines()
-	starts = {key: next((i for i, line in enumerate(lines) if key in line), None) for key in DESIGN_DECISION_KEYS}
+	keys = DESIGN_DECISION_KEYS + OPTIONAL_DECISION_KEYS
+	starts = {key: next((i for i, line in enumerate(lines) if key in line), None) for key in keys}
 	ordered = sorted(i for i in starts.values() if i is not None)
-	problems = []
+	problems, missing_optional = [], []
 	for key, start in starts.items():
 		if start is None:
-			problems.append(f"'{key}' missing")
+			(missing_optional if key in OPTIONAL_DECISION_KEYS else problems).append(f"'{key}' missing")
 			continue
 		end = next((i for i in ordered if i > start), len(lines))
 		chunk = " ".join(lines[start:end])
 		content = re.sub(r"[^a-z0-9]+", "", chunk.split(key, 1)[1])
 		if len(content) < 15 or ("n/a" in chunk and len(content.replace("na", "", 1)) < 12):
 			problems.append(f"'{key}' empty or bare N/A")
-	return problems
+	return problems, missing_optional
+
+
+def _check_failure_paths(repo: Path, rel: Path, designs: list[str], scenario_blocks: list[str], report: Report) -> None:
+	"""Every ``F<n>`` in a design's Mermaid diagrams needs a scenario that names it."""
+	# The last scenario block runs to the end of the file: stop it at the next ## section.
+	scenarios = [re.split(r"^##\s", block, maxsplit=1, flags=re.MULTILINE)[0] for block in scenario_blocks]
+	covered = {fid for block in scenarios for fid in FAILURE_ID_RE.findall(block)}
+	for design in designs:
+		diagrams = "\n".join(MERMAID_BLOCK_RE.findall((repo / design).read_text(encoding="utf-8")))
+		ids = sorted(set(FAILURE_ID_RE.findall(diagrams)), key=lambda fid: int(fid[1:]))
+		if not ids:
+			if re.search(r"^\s*(alt|break)\b", diagrams, re.MULTILINE):
+				report.warn(f"{design}: diagram branches have no F1, F2, … labels, so failure paths cannot be traced")
+			continue
+		missing = [fid for fid in ids if fid not in covered]
+		if missing:
+			report.fail(f"{rel}: failure path(s) {', '.join(missing)} in {design} have no scenario")
+		else:
+			report.ok(f"{rel}: failure path(s) {', '.join(ids)} in {design} each have a scenario")
 
 
 def check_spec(repo: Path, spec: Path, report: Report) -> None:
@@ -199,30 +226,37 @@ def check_spec(repo: Path, spec: Path, report: Report) -> None:
 	rel = spec.relative_to(repo) if spec.is_absolute() else spec
 	text = (repo / rel).read_text(encoding="utf-8")
 
+	designs: list[str] = []
 	metadata = _section(text, "Metadata")
 	if metadata is None:
 		report.fail(f"{rel}: missing ## Metadata")
 	else:
 		wireframes = re.findall(r"wireframes/[\w./#-]+\.html", metadata)
-		missing = [w for w in wireframes if not (repo / w).is_file()]
-		if not wireframes:
-			report.warn(f"{rel}: Metadata links no wireframes/*.html")
-		elif missing:
-			report.fail(f"{rel}: linked wireframe(s) not found: {', '.join(missing)}")
-		else:
-			report.ok(f"{rel}: linked wireframe(s) exist")
+		designs = list(dict.fromkeys(re.findall(r"design/[\w./-]+?\.md", metadata)))
+		if not wireframes and not designs:
+			report.warn(f"{rel}: Metadata links no wireframes/*.html or design/*/DESIGN.md")
+		for kind, linked in (("wireframe", wireframes), ("design", designs)):
+			missing = [w for w in linked if not (repo / w.split("#")[0]).is_file()]
+			if missing:
+				report.fail(f"{rel}: linked {kind}(s) not found: {', '.join(missing)}")
+			elif linked:
+				report.ok(f"{rel}: linked {kind}(s) exist")
+		designs = [d for d in designs if (repo / d).is_file()]
 
 	decisions = _section(text, "Design decisions")
 	if decisions is None:
 		report.fail(
-			f"{rel}: missing ## Design decisions (success criteria, failure handling, performance, trust boundary)"
+			f"{rel}: missing ## Design decisions (success criteria, failure handling, performance, trust boundary,"
+			" compatibility & rollout)"
 		)
 	else:
-		problems = _design_decision_problems(decisions)
+		problems, missing_optional = _design_decision_problems(decisions)
 		if problems:
 			report.fail(f"{rel}: Design decisions incomplete: {'; '.join(problems)}")
 		else:
-			report.ok(f"{rel}: all four design decisions answered")
+			report.ok(f"{rel}: required design decisions answered")
+		if missing_optional:
+			report.warn(f"{rel}: Design decisions lack compatibility & rollout (answer it or mark N/A with a reason)")
 
 	if _section(text, "Out of scope") is None:
 		report.warn(f"{rel}: missing ## Out of scope")
@@ -232,7 +266,8 @@ def check_spec(repo: Path, spec: Path, report: Report) -> None:
 		report.fail(f"{rel}: no '### Scenario:' headings found")
 		return
 	incomplete = []
-	for block in re.split(r"^###\s+Scenario:", text, flags=re.MULTILINE)[1:]:
+	scenario_blocks = re.split(r"^###\s+Scenario:", text, flags=re.MULTILINE)[1:]
+	for block in scenario_blocks:
 		title = block.splitlines()[0].strip()
 		if not all(re.search(rf"\*\*{kw}\*\*", block) for kw in ("Given", "When", "Then")):
 			incomplete.append(title)
@@ -241,6 +276,7 @@ def check_spec(repo: Path, spec: Path, report: Report) -> None:
 		report.lines.extend(f"        {t}" for t in incomplete)
 	else:
 		report.ok(f"{rel}: {len(scenarios)} scenario(s), each with Given/When/Then")
+	_check_failure_paths(repo, rel, designs, scenario_blocks, report)
 
 
 def run(repo: Path, specs: list[Path], base: str) -> Report:

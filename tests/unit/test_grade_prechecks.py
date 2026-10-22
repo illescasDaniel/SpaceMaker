@@ -172,7 +172,7 @@ def test_given_empty_or_bare_na_decision_when_checking_then_it_is_reported(row):
 	)
 
 	# when
-	problems = gp._design_decision_problems(section)
+	problems, _ = gp._design_decision_problems(section)
 
 	# then
 	assert problems == ["'failure handling' empty or bare N/A"]
@@ -216,3 +216,65 @@ def test_given_test_edited_but_function_untouched_when_checking_then_it_is_ignor
 
 	# then
 	assert report.fails == 0
+
+
+DESIGN_WITH_FAILURES = """# Design
+
+```mermaid
+sequenceDiagram
+	A->>B: request
+	break F1: quota exceeded
+		B-->>A: 429
+	end
+	break F2: backend down
+		B-->>A: 503
+	end
+```
+"""
+
+
+def test_given_spec_without_compatibility_decision_when_checking_then_it_only_warns(tmp_path):
+	# given
+	_write(tmp_path, "wireframes/app.html", "<html></html>")
+	spec = _write(tmp_path, "specs/f/SPEC.md", GOOD_SPEC)
+	report = gp.Report()
+
+	# when
+	gp.check_spec(tmp_path, spec, report)
+
+	# then
+	assert report.fails == 0, report.lines
+	assert any(line.startswith("WARN") and "compatibility" in line for line in report.lines)
+
+
+def test_given_missing_design_file_when_checking_spec_then_it_fails(tmp_path):
+	# given
+	_write(tmp_path, "wireframes/app.html", "<html></html>")
+	text = GOOD_SPEC.replace("- **Wireframe:**", "- **Design:** [DESIGN.md](../../design/f/DESIGN.md)\n- **Wireframe:**")
+	spec = _write(tmp_path, "specs/f/SPEC.md", text)
+	report = gp.Report()
+
+	# when
+	gp.check_spec(tmp_path, spec, report)
+
+	# then
+	assert any("design(s) not found" in line for line in report.lines)
+
+
+@pytest.mark.parametrize(("titles", "failed"), [(("(F1)", "(F2)"), False), (("(F1)",), True)])
+def test_given_design_failure_branches_when_checking_spec_then_each_needs_a_scenario(tmp_path, titles, failed):
+	# given
+	_write(tmp_path, "wireframes/app.html", "<html></html>")
+	_write(tmp_path, "design/f/DESIGN.md", DESIGN_WITH_FAILURES)
+	extra = "".join(
+		f"\n### Scenario: failure {title}\n\n- **Given** a\n- **When** b\n- **Then** c\n" for title in titles
+	)
+	text = GOOD_SPEC.replace("- **Wireframe:**", "- **Design:** [DESIGN.md](../../design/f/DESIGN.md)\n- **Wireframe:**")
+	spec = _write(tmp_path, "specs/f/SPEC.md", text.replace("## Out of scope", extra + "\n## Out of scope"))
+	report = gp.Report()
+
+	# when
+	gp.check_spec(tmp_path, spec, report)
+
+	# then
+	assert (report.fails > 0) is failed, report.lines

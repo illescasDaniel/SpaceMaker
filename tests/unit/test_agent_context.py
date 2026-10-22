@@ -161,14 +161,16 @@ def _agent_pairs() -> list[tuple[Path, Path]]:
 	return [(path, CLAUDE_AGENTS_DIR / path.name) for path in sorted(CURSOR_AGENTS_DIR.glob("*.md"))]
 
 
-def test_given_agent_dirs_when_listing_then_every_agent_exists_for_both_hosts():
+def test_given_agent_dirs_when_listing_then_every_cursor_agent_has_a_claude_counterpart():
 	# given
+	# Claude-only agents (architect, coder, ... from agent-guild) are allowed: Cursor also reads
+	# `.claude/agents/`, so they work there too. Only the hand-maintained Cursor agents need a twin.
 	cursor_names = {path.name for path in CURSOR_AGENTS_DIR.glob("*.md")}
 	claude_names = {path.name for path in CLAUDE_AGENTS_DIR.glob("*.md")}
 
 	# when / then
 	assert cursor_names, "expected at least one Cursor agent to exist"
-	assert cursor_names == claude_names, f"agent mismatch: cursor={cursor_names} claude={claude_names}"
+	assert cursor_names <= claude_names, f"missing Claude Code counterpart for: {cursor_names - claude_names}"
 
 
 def test_given_an_agent_pair_when_comparing_then_body_name_and_description_match():

@@ -658,7 +658,7 @@ correctly on any clone). To recreate manually on Windows, use
 
 ## Subagents — `code-grader` (SDD Phase 5)
 
-`code-grader` is an independent, read-only reviewer that scores finished work against its approved `SPEC.md` (spec conformance with a scenario→test→code map, the four design decisions, hexagonal layering, test quality, UI fidelity, scope discipline, conventions) and returns a PASS / NEEDS WORK scorecard with `path:line` evidence. `sdd-feature` spawns it after Phase 4 is green; the implementer fixes findings (max 2 rounds) and shows the scorecard to the user.
+`code-grader` is an independent, read-only reviewer that scores finished work against its approved `SPEC.md` (spec conformance with a scenario→test→code map, the five design decisions, hexagonal layering, test quality, design fidelity (wireframe and `DESIGN.md`), scope discipline, conventions) and returns a PASS / NEEDS WORK scorecard with `path:line` evidence. `sdd-feature` spawns it after Phase 4 is green; the implementer fixes findings (max 2 rounds) and shows the scorecard to the user.
 
 It is a hand-maintained pair like the rules, with **identical bodies and host-specific frontmatter**:
 
@@ -669,7 +669,9 @@ It is a hand-maintained pair like the rules, with **identical bodies and host-sp
 
 `tests/unit/test_agent_context.py` enforces matching bodies/name/description and the read-only settings. Edit both copies together.
 
-The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-prechecks -- --spec specs/<f>/SPEC.md`): hexagonal import guard (hard-fails only for files touched on the branch; legacy violations warn), naming of test functions added on the branch, and SPEC structure (wireframe link resolves, four design decisions answered, every scenario has Given/When/Then). Scenario→test **name matching was tried and dropped**: test names are freeform, and it flagged ~60% of the gallery spec's scenarios as uncovered. The grader maps them by reading instead.
+The [agent-guild](https://github.com/illescasDaniel/claude-agents) agents (`architect`, `coder`, `coder-python`, `utility`) exist only in `.claude/agents/`. Cursor also loads project subagents from `.claude/agents/` (`.cursor/agents/` wins on a name clash), so no twin is needed; the pair test only requires every Cursor agent to have a Claude counterpart. Cursor ignores Claude-only frontmatter (`tools`, `disallowedTools`, `effort`), so `architect` is not read-only there.
+
+The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-prechecks -- --spec specs/<f>/SPEC.md`): hexagonal import guard (hard-fails only for files touched on the branch; legacy violations warn), naming of test functions added on the branch, and SPEC structure (wireframe and design links resolve, the four required design decisions answered, compatibility & rollout warns when missing, every scenario has Given/When/Then, every `F<n>` failure branch of a linked `DESIGN.md` has a scenario). Scenario→test **name matching was tried and dropped**: test names are freeform, and it flagged ~60% of the gallery spec's scenarios as uncovered. The grader maps them by reading instead.
 
 ## Browser-pane gotchas
 

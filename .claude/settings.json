@@ -22,5 +22,7 @@
         ]
       }
     ]
-  }
+  },
+  "autoMemoryEnabled": false,
+  "model": "sonnet"
 }
