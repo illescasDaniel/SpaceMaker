@@ -185,3 +185,51 @@ The durable Graphify/Windows gotchas from this thread (PyPI package name,
 `--no-viz` segfault, case-insensitive `docs/` filename collision,
 `mklink /D` vs `New-Item`) are reference material, not session state — see
 `docs/agent-tooling.md` "Windows / tooling gotchas" instead of this file.
+
+
+## 2026-10-22 — Context before agent-guild 1.3.0 reinstall
+
+_Last updated: 2026-10-20 (phone picker video posters: Phase 4 done, Phase 5 grader round 2)_
+
+## Branch
+
+`main`. Phone-picker scroll pagination merged from `worktree-paginated-adb-listing` (`specs/device-file-picker/PLAN-scroll-pagination.md`; SDD phases 0–5 done, grader PASS). Not yet tried against a real phone.
+
+webnav `npx --yes webnav-ts-mcp@^0.2.0`; codenav `codenav-mcp>=0.2.0,<0.3`; jevmem `>=0.4.0,<0.5`. Secret gate on `smart-commit-guard` 0.2.0.
+
+## Current focus
+
+Phone picker **RAW previews** (Phase C of `specs/device-file-picker/PLAN-media-preview.md`, started 2026-10-21): C0 spike done (results in the plan: IFD0 is the JPEG preview on Pixel and iPhone; IFD0 can sit at EOF; Pixel previews unrotated, iPhone has own EXIF; Snapseed `.dng` = renamed JPEG; Lightroom proxies = JXL, no preview). Wireframe revision approved 2026-10-21. Spec revision approved 2026-10-21. Phase 2 architecture drafted (stubs): `domain/dng_preview.py` (`sniff_container`, `pick_dng_preview`, `locate_dng_preview(head, file_size, read_at)`, limits), `domain/device_media.py` (`RAW_IMAGE_EXTENSIONS`, `is_raw_name`), `PreviewImagingPort.render_embedded_jpeg` (+ NotImplemented stub in `SubprocessPreviewImaging`). Architecture approved 2026-10-21. Phases 3–4 done (Sonnet agents: backend parser + `_generate_raw` + `render_embedded_jpeg`; web RAW badge + lightbox `data-kind="raw"`). Real-phone parser check found tail-IFD0 Pixel files failing (BitsPerSample out of line ~1.77 MB away) → spec amended 2026-10-21 (checked only when held), fixed, all 9 Pixel/LR originals + 2 iPhone ProRAW upright. Grader round 1 NEEDS WORK → fixed (RAW note leaked into video lightbox via `.dp-lb-vnote` specificity, scenario format, tests). Grader round 2 PASS. Real-app check (browser pane, Pixel 10a) found `read_range` returning dd's 80-byte summary after every range (`adb exec-out` merges stderr) → fixed with `dd … status=none` (also benefits video posters; friction entry). After the fix: Pixel DNG tiles + RAW badge, lightbox 960×1280 upright with note, note hidden on photo/video, iPhone `IMG_3809`/`IMG_4336` upright (1200×1600), Snapseed `.dng` via the photo path. Gate green (1455 py, 230 vitest). Not checked in the app: Lightroom proxies (under `Android/data`, parser-checked only), AFC on a real iPhone. Uncommitted on `main`; commit when asked.
+
+Phone picker **grid view** (View: Auto · List · Grid; `specs/device-file-picker/PLAN-grid-view.md`): wireframe, spec, architecture approved 2026-10-21; Phases 3–4 done by Sonnet subagents (backend: `domain/device_view.py`, `domain/device_media.py`, counts in `scroll_page`, `JsonUserPreferences` `device_picker_views` (sort_keys dropped so LRU order survives), `DeviceFolderViews`, `PUT /api/device/view`, lazy `clear_user_preferences_use_case()`; web: `web/src/device-view.ts`, `device-picker-grid.ts` (session choices map), grid CSS in `shell-layout.css`). Gate green. Grader round 1 NEEDS WORK → fixed; round 2 PASS. Spec wording on absolute paths (re-rooted, not 400) confirmed 2026-10-21. Committed on `main`; not tried against a real phone.
+
+Unified **Add (files or folders)** on Send files / Transfer files (desktop) and **Choose files or folder** on the phone pages (receive/upload/transfer): wireframe, specs, implementation done and gate green (2026-10-20); chooser menu (Files…/Folder…) because OS dialogs and browser inputs cannot pick both. Committed on `main`; chooser extracted to `web/src/pick-chooser.ts` (tested). v1.2.2 Release run 39454611400 failed only because the macOS arm64 runner never started (cancelled, no steps); re-cut the tag.
+
+Unified **Add more (files or folders)** button (v1.2.2): implemented and committed on `main`, tested on a real phone, tagged and pushed as `v1.2.2` (release workflow). USB photo backup now starts with no folders selected and the empty-selection-means-everything bug is fixed. See `memory/progress.md`.
+
+Phone picker **video posters** (Phase B of `specs/device-file-picker/PLAN-media-preview.md`; `SPEC.md` "Video posters" revision, approved 2026-10-20): Phases 0–4 done, Phase 5 grader PASS (round 2; round 1 findings fixed), gate green (1195 py, 165 vitest), checked against the real Pixel. Uncommitted on `main` (new: `domain/device_stream.py`, `application/{device_stream_tokens,read_device_stream}.py`, `ports/outbound/video_poster.py`, `adapters/outbound/media/ffmpeg_video_poster.py`, loopback `GET /api/device/stream`). Next: commit; Phase B2 (playback, needs a codec answer for Qt WebEngine) and Phase C (RAW previews) are later revisions.
+
+Phone picker **photo previews** (Phase A): committed `84a05f7` + `2ef79bd`.
+
+Phone picker **sorting** (Name / Size / Modified, asc/desc; folders always first; remembered; sort restarts page 1 server-side, keyset cursor must carry the sort): **Phase 0 wireframe drafted** in `wireframes/app.html` `#view-device-picker` (sortable header buttons + `#dp-sort-select` below 520 px). Wireframe approved 2026-10-19. Spec revision approved 2026-10-19. **Phase 2 drafted** (gate green): `domain/device_browse.py` `DeviceBrowseSortKey` / `SortOrder` / `DeviceBrowseSort` / `DEFAULT_BROWSE_SORT`, `DeviceBrowseQuery.sort`, `DeviceDirectoryScrollPage.sort`; stubs `parse_device_browse_sort`, `entry_order_key`, `encode_sorted_cursor` / `decode_sorted_cursor`; `UserPreferencesPort.get/set_device_picker_sort` (+ `JsonUserPreferences` NotImplementedError stubs so ty stays green); `ListDeviceDirectory(..., preferences=)`. Phase 2 approved; `entry_order_key` now returns `Callable[[DeviceEntry], OrderKey]` (comparable Protocol) so `sorted` type-checks. **Phases 3–5 done** (Sonnet subagents for tests and implementation): domain `entry_order_key` (cmp_to_key total order) and `v2.` cursor, v1 helpers removed; `ListDeviceDirectory` resolves request → stored → default sort and saves explicit changes after success; `JsonUserPreferences` `device_picker_sort`; `DeviceListBody` `sort`/`order` Literals + together-or-neither validator; route echoes `sort`/`order`; web `setSort`/`renderSort` in `device-picker.ts`, markup in `static/index.html`, CSS in `shell-layout.css` (global `.sr-only` replaces `legend.sr-only`). Gate green (865 py, 124 vitest). Grader PASS; its small findings were fixed (process notes removed from docstrings, duplicate CSS removed, memory updated); no timing test was added for the 50 ms budget (~10–14 ms measured by hand). Uncommitted on `main`. Next: try it on a real phone (including the ≤520 px Sort menu), then commit. Image previews are a separate later revision (needs a real-phone spike).
+
+Auto-retry of empty ADB/AFC device lists (3 s, max 5 retries; specs `usb-file-transfer` + `extract-media` "Automatic re-detection", approved): Phases 0-4 done. `web/src/device-retry.ts` (+ `isActive` guard) wired into `usb.ts` / `jobs.ts`, 10 vitest tests, gate green, grader round 1 fixed. Not tried with a real phone; uncommitted.
+
+Branch `claude/device-file-picker-48a91d`: phone picker (desktop-only, grader PASS), USB transfer destination selector (`usb_transfer_destination`, persisted in preferences JSON), and LAN access policy (`web/lan_policy.py` default-deny allow-list middleware, registered inside the passcode guard so LAN gets 401 before 403; shell keyed on TCP peer, not Host; `GET /` for LAN = notice page with Open gallery). Gate green. Next: Phase 5 grader on lan-access, then report to parent session. Known edge: same-machine browser via its own LAN IP sees the notice page (use `localhost`).
+
+Previous:
+
+Nothing in flight. Latest: Components Copy buttons now use `execCommand("copy")` first (`web/src/dom.ts`), fixing the desktop-shell crash; no version bump. url-field (1.1.2) and gallery batch are committed.
+
+## Just changed
+
+- jevmem MCP entries have no env block: key and DB path live in `~/.jevmem/config.jsonc` (`uvx jevmem config init --api-key ...`), outside the repo. Notes default to `project:spacemaker`; `scope="global"` for personal preferences. Verified over MCP with public 0.4.0 on Claude Code and on Cursor (no-scope write lands in `project:spacemaker`, global write, recall of both; no env needed).
+
+- jevmem 0.4.0 verified on Linux (2026-10-08): created `~/.jevmem/config.jsonc` from the old `~/.jevmem/.env` key and set `"db": "~/.jevmem/spacemaker.db"` (0.4.0 defaults to an empty `memory.db`); CLI, both hooks and the MCP (79 nodes, recall works) pass after a restart. `memory/README.md` Setup paragraph updated.
+
+- smart-commit-guard 0.3.0 published (opt-in `autostart` of `ollaya serve`, doctor warns on shared hooks committed without the exec bit); hooks, CI and docs pinned `>=0.3,<0.4`; `.githooks/commit-msg` mode fixed to 755 (was 644, so Linux ignored it); autostart enabled in this machine's user config and verified with the public build.
+
+## Next steps
+
+- Optional cleanup: jevmem notes 7 and 8 (Cursor test notes, one project and one global) are still in `~/.jevmem/spacemaker.db`; remove with `memory_forget` (the auto-mode classifier denied it for the agent).
+- `.claude/settings.json` jevmem hooks now run `uvx --from "jevmem>=0.4.0,<0.5" jevmem hook ...` with no env prefix (DB from `config.jsonc`, scope derived from the repo name); verified both hooks return recalled notes.

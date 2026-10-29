@@ -2,8 +2,14 @@
 
 Open items only. Finished work: `memory/archive.md`.
 
+## Agent tooling
+
+- [x] **Agent-guild 1.3.0 reinstall** (2026-10-22) — Claude/Cursor/Codex native agents, shared AGENTS.md rules, import-only CLAUDE.md, shared customized skills, aligned Codex MCP config; 10 context tests green, TOMLs/MCP parity verified. Restart tools to load. Uncommitted.
+- [ ] **Agent-guild upstream installation findings** — CLAUDE-only sections skipped during multi-tool migration, Codex skill discovery path/customization and MCP-settings reuse, existing invalid Claude language-coder description YAML; see `memory/friction/2026-10-22-agent-guild-*.md`. SpaceMaker workarounds complete; fixes also implemented in the local agent-guild checkout (53 tests + built-wheel smoke pass), uncommitted/unreleased. Close after publication; no upstream issue created.
+
 ## SpaceMaker app
 
+- [ ] **Download all button** (2026-10-29) — one zip of every row on phone Send (`/share`), phone Transfer (`/transfer`) and desktop Transfer; shown from 2 rows up; stored zip, desktop saves to Documents/SpaceMaker. SDD phases 0-4 done (specs/download-all, design/download-all), gate green (1526 py, 235 vitest); grader round 1 NEEDS WORK fixed (share.html link style/ended state), round 2 pending. Uncommitted; needs a real-phone check of share.html/transfer.html. Pre-existing: `npm run check` Biome `useLiteralKeys` errors in device-view/device-picker-grid; audit flags pillow CVEs.
 - [ ] **Phone picker grid view** (2026-10-21) — View control Auto · List · Grid; resolution user choice per folder → folder type (DCIM, Pictures, … grid; Documents, Download, … list) → detection (≥ 1 media and ≥ 60 %). SDD phases 0–4 done, gate green (221 vitest); grader round 1 fixed, round 2 PASS. Committed on `main`; needs a real-phone check (tile look, Space on a thumbnail, scroll anchor, narrow width).
 - [x] **Unified Add button on Send/Transfer files + phone pages** (2026-10-20) — one accent "Add (files or folders)" button with a Files…/Folder… chooser menu (OS dialogs and browser inputs cannot pick both); phone pages: "Choose files or folder" chooser (iOS stays single "Choose"). Specs send-files/transfer-files/easy-mode updated, `bindAddMenus` in `web/src/lan.ts`, vitest `add-menu.test.ts`, gate green. Phone chooser in tested `web/src/pick-chooser.ts`.
 - [x] **Unified "Add more (files or folders)" button** (2026-10-20) — replaces Add files…/Add folder… in USB file transfer and USB photo backup Step 1; picker `kind: "both"` (all checkboxes enabled, Select this folder visible, title "Pick files or folders"). Wireframe, specs and architecture approved in chat; gate green (1196 py, 166 vitest); version 1.2.2. Tried on a real phone (2026-10-20); published as v1.2.2. Also fixed: USB photo backup with only extras selected used to transfer every preset folder (`parse_source_folders([])` returned all); no folders are pre-selected now.

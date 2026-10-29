@@ -2,6 +2,25 @@
 
 This repository uses **Spec-Driven Development (SDD)** and **Hexagonal Architecture**. Follow the Phase Gate Protocol for every feature or architectural change.
 
+## Agents and delegation
+
+You are the orchestrator: delegate to the `architect`, `coder`, `code-grader` and `utility` subagents in
+`.claude/agents/`, `.cursor/agents/` or `.codex/agents/` for the current tool, and own every approval gate and memory write.
+
+Read `.claude/development-workflow.md` for routing, briefs and the memory protocol.
+
+## Python code goes to `coder-python`
+
+Any task that adds, changes, renames, moves or deletes `.py`/`.pyi` code goes to `coder-python`, not the generic
+`coder`: it uses the project's `codenav` MCP for type-checked navigation and refactoring. Keep `coder` for everything
+else, and split a task that spans languages.
+
+## TypeScript code goes to `coder-typescript`
+
+Any task that adds, changes, renames, moves or deletes JavaScript/TypeScript/HTML/CSS (`.ts`, `.tsx`, `.js`, `.jsx`,
+`.html`, `.css`) code goes to `coder-typescript`, not the generic `coder`: it uses the project's `webnav` MCP for
+type-checked navigation and refactoring. Keep `coder` for everything else, and split a task that spans languages.
+
 ## Scale mindset
 
 Despite the small current footprint, **always act as if this project will grow large.** Follow layer boundaries, ports, specs, wireframes, and tests even when a change feels trivial; prefer conventions and clear abstractions over one-off fixes that would not survive a bigger codebase.
@@ -26,6 +45,8 @@ Despite the small current footprint, **always act as if this project will grow l
 **One gate per explicit approval** — do not batch Phase 0→4 in one run, even if todos list all phases. After the wireframe, end the turn and wait. If Phase 4 reveals a spec flaw, rewrite the spec (Phase 1), get re-approval, then continue — don't patch around a bad spec.
 
 Production source requiring prior approvals: `src/spacemaker/` (all layers) and `src/spacemaker/adapters/inbound/web/static/` (production HTML/JS/CSS). Allowed before spec approval: `wireframes/`, `design/`, `specs/`, and `docs/`/`memory/` edits supporting the gate.
+
+For changes under `src/spacemaker/`, read `.claude/rules/hexagonal-python.md` before editing (Codex must load it explicitly).
 
 Full step-by-step workflow: `.cursor/skills/sdd-feature/SKILL.md` (mirrored at `.claude/skills/`).
 
@@ -83,15 +104,15 @@ In a linked worktree (any `git worktree list` entry after the first), `.venv`/`n
 
 Requires [uv](https://docs.astral.sh/uv/). Python: **ruff**, **ty**, **pytest** via `uv run task checks` ([scripts/quality/checks.py](scripts/quality/checks.py), mirrored by [checks.sh](scripts/quality/checks.sh)). Web JS/HTML/TS: **Biome** + `tsc` via `npm ci && npm run check` (also run by the quality gate). The gate ends with a dependency audit (`pip-audit` on the locked deps + `npm audit --audit-level=high`; needs network, skip offline with `--skip-audit`); Dependabot (`.github/dependabot.yml`) opens weekly update PRs.
 
-## Rules — Cursor vs Claude Code
+## Rules — Claude Code, Cursor and Codex
 
-Both tools read this file natively. Always-on guidance stays here; anything that should load only for a specific area (e.g. hexagonal layout) is a **path-scoped rule**, hand-maintained as an equivalent pair: `.cursor/rules/<name>.mdc` and `.claude/rules/<name>.md`. The two directories are checked for drift by `tests/unit/test_agent_context.py`. Maintenance details (formats, why not symlinks): `docs/agent-tooling.md`.
+Cursor and Codex read this file natively; Claude Code imports it through `CLAUDE.md`. Always-on guidance stays here; anything that should load only for a specific area (e.g. hexagonal layout) is a **path-scoped rule**, hand-maintained as an equivalent pair: `.cursor/rules/<name>.mdc` and `.claude/rules/<name>.md`. The two directories are checked for drift by `tests/unit/test_agent_context.py`. Maintenance details (formats, why not symlinks): `docs/agent-tooling.md`.
 
 ## Skills
 
 Project workflows: `.cursor/skills/{sdd-feature,agent-memory,fast-tests}/`, mirrored at `.claude/skills/` via a symlink. User-invoked only: `/save-changes`, `/save-pr-changes`, `/apply-worktree`, `/delete-worktree`, `/new-worktree`.
 
-Subagents: `code-grader` (Phase 5) lives as a hand-maintained pair, `.cursor/agents/code-grader.md` and `.claude/agents/code-grader.md` (host-specific frontmatter, identical body). The orchestration agents from [agent-guild](https://github.com/illescasDaniel/claude-agents) (`architect`, `coder`, `coder-python`, `utility`) are Claude-only files in `.claude/agents/` (Cursor reads that folder too); routing and briefs are in `.claude/development-workflow.md`, and Python code goes to `coder-python`.
+Subagents from [agent-guild](https://github.com/illescasDaniel/agent-guild) 1.3.0 live in `.claude/agents/`, `.cursor/agents/` and `.codex/agents/` (native formats). Preserve the SpaceMaker `code-grader` body on all three tools; Claude/Cursor metadata is checked by `tests/unit/test_agent_context.py`. Codex skills share `.cursor/skills/` through `.agents/skills`; `.codex/skills` is a compatibility link. Read `.claude/development-workflow.md` for routing and briefs.
 
 ## Source of truth
 

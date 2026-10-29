@@ -2,6 +2,12 @@
 
 Append-only log (newest first). Never rewrite history.
 
+## 2026-10-22 — Agent-guild 1.3.0: shared project rules and skills across three tools
+
+- **Context:** Reinstall requested after agent-guild added AGENTS.md and Codex support; the previous install kept delegation rules only in CLAUDE.md and SpaceMaker already customized skills and its grader.
+- **Decision:** Keep AGENTS.md as the rules source, CLAUDE.md as an import-only shim, native agents per tool, and one skill source in `.cursor/skills` exposed through `.claude/skills`, `.codex/skills` and the supported `.agents/skills` discovery path. Preserve project customizations without `--force`; use existing agent-memory rather than installing a redundant memory-bank. Align Codex MCP args/env with `.mcp.json` and explicitly load the hexagonal rule from AGENTS.md for Codex.
+- **Rationale:** All tools receive the same project policies and customized skills; Claude still needs the import shim. Shared symlinks avoid generic Codex copies drifting from approved SpaceMaker workflows. Official skill path: https://learn.chatgpt.com/docs/build-skills.
+
 ## 2026-10-21 — Phone RAW (DNG) previews: embedded JPEG located by a pure-Python IFD parser over range reads
 
 - **Context:** Phase C of `specs/device-file-picker/PLAN-media-preview.md`. C0 spike on a Pixel 10a: Pixel and iPhone ProRAW DNGs hold exactly one displayable JPEG, in IFD0 (Pixel 1280×960 with no EXIF, stored unrotated; iPhone full size with its own EXIF Orientation). 5 of 9 Pixel originals keep IFD0 ~6 KB before EOF, with its out-of-line values ~1.77 MB away. Snapseed `.dng` files are plain JPEGs; Lightroom proxies are JPEG XL tiles.

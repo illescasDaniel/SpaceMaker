@@ -622,7 +622,7 @@ SpaceMaker uses only its CLI, through `uvx`, pinned to `>=0.2,<0.3` (uvx caches,
 
 ## Rules — Cursor vs Claude Code
 
-Both tools read `AGENTS.md` as project instructions. Path-scoped rules
+Cursor and Codex read `AGENTS.md` as project instructions; Claude Code imports it via the one-line `CLAUDE.md` shim. Codex must explicitly read `.claude/rules/hexagonal-python.md` before changes under `src/spacemaker/`. Path-scoped rules
 (guidance that should load only when a matching file is in play, not on
 every turn) live as a hand-maintained pair per rule, kept in two parallel
 directories:
@@ -669,7 +669,9 @@ It is a hand-maintained pair like the rules, with **identical bodies and host-sp
 
 `tests/unit/test_agent_context.py` enforces matching bodies/name/description and the read-only settings. Edit both copies together.
 
-The [agent-guild](https://github.com/illescasDaniel/claude-agents) agents (`architect`, `coder`, `coder-python`, `utility`) exist only in `.claude/agents/`. Cursor also loads project subagents from `.claude/agents/` (`.cursor/agents/` wins on a name clash), so no twin is needed; the pair test only requires every Cursor agent to have a Claude counterpart. Cursor ignores Claude-only frontmatter (`tools`, `disallowedTools`, `effort`), so `architect` is not read-only there.
+[agent-guild](https://github.com/illescasDaniel/agent-guild) 1.3.0 installs native agents in `.claude/agents/`, `.cursor/agents/` and `.codex/agents/` (TOML). Shared delegation and language-routing rules live in `AGENTS.md`, with the workflow in `.claude/development-workflow.md`. Cursor copies use their native read-only metadata; Codex read-only agents carry an explicit instruction because the installer has no equivalent switch. The Codex grader retains the SpaceMaker grader body.
+
+Reinstall with `uvx --from agent-guild==1.3.0 agent-guild . --tools claude,cursor,codex --with coder-python --with coder-typescript --without memory-bank`. Do not use `--force`: the grader and skills are customized. SpaceMaker keeps its existing `agent-memory` skill. Codex discovers the same project skills through `.agents/skills -> ../.cursor/skills`, with `.codex/skills` as a compatibility link; both preserve the existing project overrides. Keep navigation-server arguments and environment settings in `.codex/config.toml` aligned with `.mcp.json` when updating them. Restart the coding tool after changes.
 
 The mechanical half is `scripts/quality/grade_prechecks.py` (`uv run task grade-prechecks -- --spec specs/<f>/SPEC.md`): hexagonal import guard (hard-fails only for files touched on the branch; legacy violations warn), naming of test functions added on the branch, and SPEC structure (wireframe and design links resolve, the four required design decisions answered, compatibility & rollout warns when missing, every scenario has Given/When/Then, every `F<n>` failure branch of a linked `DESIGN.md` has a scenario). Scenario→test **name matching was tried and dropped**: test names are freeform, and it flagged ~60% of the gallery spec's scenarios as uncovered. The grader maps them by reading instead.
 

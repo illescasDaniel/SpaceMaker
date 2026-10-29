@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download all — system design</title>
+<style>
+	:root {
+		--bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --code: #f6f8fa;
+		--note-bg: #fff8c5; --note-line: #d4a72c; --err-bg: #ffebe9; --err-line: #cf222e;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --code: #151b23;
+			--note-bg: #2e2a1a; --note-line: #9e6a03; --err-bg: #2d1416; --err-line: #f85149;
+		}
+	}
+	body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+	main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+	.note { border: 1px solid var(--note-line); background: var(--note-bg); border-radius: 6px; padding: 8px 12px; }
+	.legend span { display: inline-block; margin-right: 12px; }
+	.legend i { display: inline-block; width: 12px; height: 12px; border: 1px solid; border-radius: 2px;
+		vertical-align: -1px; margin-right: 4px; }
+	h1, h2 { border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+	a { color: inherit; }
+	code { background: var(--code); border-radius: 4px; padding: 1px 4px; font-size: 0.9em; }
+	pre { background: var(--code); border-radius: 6px; padding: 12px; overflow-x: auto; }
+	pre code { background: none; padding: 0; }
+	pre.mermaid { background: none; text-align: center; }
+	pre.mermaid-error { background: var(--err-bg); border: 1px solid var(--err-line); white-space: pre-wrap; }
+	table { border-collapse: collapse; display: block; overflow-x: auto; }
+	th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+</style>
+</head>
+<body>
+<main>
+	<p class="note"><strong>Review only.</strong> Generated from <code>DESIGN.md</code>, which is the source of
+	truth. Components:
+	<span class="legend"><span><i style="background:#dcfce7;border-color:#15803d"></i>added</span><span><i
+	style="background:#fef9c3;border-color:#a16207"></i>changed</span><span><i
+	style="background:#fee2e2;border-color:#b91c1c;border-style:dashed"></i>removed</span></span></p>
+	<article id="doc"></article>
+</main>
+<script>const SOURCE = "# Download all \u2014 system design\n\n- **Wireframes:** [phone-share.html](../../wireframes/phone-share.html), [phone-transfer.html](../../wireframes/phone-transfer.html), [app.html](../../wireframes/app.html) (Transfer files screen)\n- **Spec:** `specs/download-all/SPEC.md`, written after this design is approved\n- **Design approved:** pending\n\n## Summary\n\nEvery page that lists a few downloadable files gets one **Download all** button that delivers the whole list as a single `.zip`: the phone *Send files* page (`/share`), the phone *Transfer files* page (`/transfer`) and the desktop *Transfer files* screen. The Gallery is out of scope (it has its own batch download). The zip is built on demand from the current session contents, streamed from a temp file and deleted afterwards, exactly like today's folder zips.\n\n## Main flow\n\n```mermaid\nsequenceDiagram\n    autonumber\n    actor U as User (phone or desktop)\n    participant UI as Page JS\n    participant API as lan routes\n    participant S as AppServices\n    participant FS as Disk (staged or shared files)\n\n    UI->>UI: show button only when rows >= 2\n    U->>UI: tap Download all\n    alt phone pages\n        UI->>API: GET /api/share/download-all?t=TOKEN (or /api/transfer/download-all)\n    else desktop Transfer screen\n        UI->>API: POST /api/transfer/save-all\n    end\n    API->>S: resolve_*_download_all(token)\n    alt F1: token invalid or session ended\n        API-->>UI: 403 session ended\n    else F2: nothing downloadable\n        API-->>UI: 404 nothing to download\n    else ok\n        S->>FS: stream every item into temp zip\n        alt F3: item vanished while zipping\n            S->>S: skip the item, keep zipping\n        end\n        alt F4: zip write fails (disk full, I/O)\n            S-->>API: error, temp zip removed\n            API-->>UI: 500 could not build zip\n        else zip built\n            API-->>UI: phone: 200 application/zip attachment, then temp file deleted\n            API-->>UI: desktop: 200 saved_path, saved_path_display\n        end\n    end\n    UI-->>U: phone: browser download. Desktop: \"Saved to ...\" tip. Failure: existing alert or error text\n```\n\n## Components\n\n```mermaid\nflowchart LR\n    classDef added fill:#dcfce7,stroke:#15803d,color:#14532d\n    classDef changed fill:#fef9c3,stroke:#a16207,color:#713f12\n\n    ShareHtml[share.html]:::changed --> LanRoutes[routes/lan.py]:::changed\n    TransferHtml[transfer.html]:::changed --> LanRoutes\n    LanTs[web/src/lan.ts + index.html]:::changed --> LanRoutes\n    LanRoutes --> Sessions[lan_sessions.py services]:::changed\n    Sessions --> Archive[write_download_all_zip]:::added\n    Sessions --> SaveDocs[SaveTransferToDocuments]\n    Archive --> Disk[(staged / shared files)]\n```\n\nNo new port: the zip writer is a pure application function beside `write_folder_zip` in `file_share_manifest.py`; the desktop save reuses the existing documents-save path.\n\n## Data model\n\nNone. No new persisted state; the zip is a temp file removed after the response (phone) or moved into `Documents/SpaceMaker` (desktop).\n\n**Migration**\n\n- **Backward compatible:** yes, purely additive endpoints and UI.\n- **Order:** backend routes first, then pages.\n- **Backfill:** none.\n- **Rollback:** remove the button and routes; no data to clean.\n\n## Contracts\n\n```http\nGET /api/share/download-all?t=\u003ctoken>\nGET /api/transfer/download-all?t=\u003ctoken>\n```\n\n```http\nHTTP/1.1 200 OK\nContent-Type: application/zip\nContent-Disposition: attachment; filename=\"SpaceMaker-share.zip\"\n```\n\n```http\nPOST /api/transfer/save-all        (desktop, loopback only, like /api/transfer/save)\n\nHTTP/1.1 200 OK\n{\"saved_path\": \"/home/u/Documents/SpaceMaker/SpaceMaker-transfer.zip\", \"saved_name\": \"SpaceMaker-transfer.zip\", \"saved_path_display\": \"~/Documents/SpaceMaker/SpaceMaker-transfer.zip\"}\n```\n\n| Status | When | Client does |\n|--------|------|-------------|\n| 403 | token invalid or session ended (F1) | phone: the page's existing \"ended\" panel. Desktop: alert |\n| 404 | session has no downloadable items (F2) | alert \"Nothing to download\" |\n| 500 | zip could not be written (F4) | alert \"Could not build the zip\" |\n\n- **Entry naming inside the zip:** the row's display name; folder rows keep their folder as a directory (contents under `\u003cfolder>/\u2026`); transfer folder items (already a staged `.zip`) are stored as that `.zip`; duplicate names get ` (2)`, ` (3)`, \u2026 so nothing is overwritten.\n- **Zip filename:** `SpaceMaker-share.zip` (Send files) and `SpaceMaker-transfer.zip` (Transfer files); desktop save uses the existing no-overwrite naming.\n- **Versioning:** additive, no existing endpoint changes.\n- **Idempotency:** GET is safe to repeat; desktop POST creates a new non-overwriting file each time, like single Download.\n\n## Contract seam\n\n| Wireframe state | Call | Response |\n|-----------------|------|----------|\n| Phone Send: list with 2+ rows, \"Download all (.zip)\" | `GET /api/share/download-all` | 200 zip |\n| Phone Send: one row, no button | none | n/a (hidden by row count) |\n| Phone Transfer: \"Download all (.zip)\" | `GET /api/transfer/download-all` | 200 zip |\n| Desktop Transfer: \"Download all\" then \"Saved to \u2026\" tip | `POST /api/transfer/save-all` | 200 `saved_path\u2026` |\n| Link expired / session ended panels | same GETs | 403 |\n\n## Open questions\n\n1. **Threshold.** Show the button from **2 items** up (proposed). Alternative: always show it, even for one file.\n2. **Compression.** Proposed **stored (no compression)**: fast, low CPU on the PC, and sessions are mostly photos/video/PDF. Alternative: deflate like today's folder zips.\n3. **Size limit.** Proposed none beyond free disk in temp (same as folder zips today); the zip is streamed from disk, never held in memory. Alternative: cap and show an error.\n4. **Desktop destination.** Proposed: same as single Download (`Documents/SpaceMaker`, with the existing tip). Alternative: a Save-as dialog.\n5. **Other pages.** I found only these three with a downloadable file list (USB, Receive and Gallery have none or are excluded). Tell me if there is another page you had in mind.\n";</script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>
+(async function () {
+	const doc = document.getElementById("doc");
+	if (typeof marked === "undefined" || typeof mermaid === "undefined") {
+		doc.innerHTML = '<p class="note">Could not load the renderers (offline?). Showing the raw Markdown.</p>';
+		const pre = document.createElement("pre");
+		pre.textContent = SOURCE;
+		doc.appendChild(pre);
+		return;
+	}
+	const renderer = new marked.Renderer();
+	const plainCode = renderer.code.bind(renderer);
+	renderer.code = function (code, lang) {
+		const token = typeof code === "object" ? code : { text: code, lang: lang };
+		if ((token.lang || "").trim() !== "mermaid") return plainCode.apply(null, arguments);
+		const pre = document.createElement("pre");
+		pre.className = "mermaid";
+		pre.textContent = token.text;
+		return pre.outerHTML;
+	};
+	doc.innerHTML = marked.parse(SOURCE, { renderer: renderer });
+
+	const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+	mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "default" });
+	const valid = [];
+	for (const pre of doc.querySelectorAll("pre.mermaid")) {
+		try {
+			await mermaid.parse(pre.textContent);
+			valid.push(pre);
+		} catch (error) {
+			pre.className = "mermaid-error";
+			pre.textContent = "Mermaid syntax error:\n" + (error && error.message ? error.message : error)
+				+ "\n\n" + pre.textContent;
+		}
+	}
+	if (valid.length) await mermaid.run({ nodes: valid });
+	document.body.dataset.rendered = String(valid.length);
+})();
+</script>
+</body>
+</html>

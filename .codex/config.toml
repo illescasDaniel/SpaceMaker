@@ -1,0 +1,17 @@
+[mcp_servers.codenav]
+command = "uvx"
+args = ["--from", "codenav-mcp>=0.2.0,<0.3", "codenav-mcp"]
+[mcp_servers.codenav.env]
+CODENAV_MCP_SOURCE_ROOT = "src"
+CODENAV_MCP_EXTRA_SOURCE_ROOTS = "tests"
+
+[mcp_servers.webnav]
+command = "npx"
+args = ["--yes", "webnav-ts-mcp@^0.2.0"]
+[mcp_servers.webnav.env]
+WEBNAV_MCP_ROOTS = "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes"
+WEBNAV_MCP_EXCLUDE = "src/spacemaker/adapters/inbound/web/static/js"
+
+[mcp_servers.jevmem]
+command = "uvx"
+args = ["--from", "jevmem>=0.4.0,<0.5", "jevmem-mcp"]
