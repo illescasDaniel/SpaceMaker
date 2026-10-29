@@ -31,6 +31,7 @@ from spacemaker.application.transfer_session import (
 from spacemaker.bootstrap.paths import display_user_path
 from spacemaker.domain.app_module import AppModule, LanSessionKind
 from spacemaker.domain.connection import ConnectionMethod
+from spacemaker.domain.download_all import DownloadAllItem, DownloadAllKind
 from spacemaker.domain.extract_control import ExtractJobControl
 from spacemaker.domain.jobs import JobPhase
 from spacemaker.domain.library import JobProgress, TransferMode
@@ -234,6 +235,53 @@ class LanSessionMixin:
 			"saved_name": saved.saved_name,
 			"saved_path_display": display_user_path(saved.saved_path),
 		}
+
+	def transfer_download_all(self: AppServices, token: str) -> Path:
+		"""Zip every transfer item into a temp file; the caller deletes it. Raises PermissionError when ended."""
+		if not self.transfer_token_valid(token):
+			raise PermissionError("transfer session ended")
+		return self._build_transfer_zip()
+
+	def save_transfer_all_to_documents(self: AppServices) -> dict[str, str]:
+		"""Desktop Download all: save the transfer zip into Documents/SpaceMaker (loopback)."""
+		with self._wifi_token_lock:
+			token = self._transfer_session_token
+			active = self._lan_session_kind is LanSessionKind.TRANSFER_FILES and bool(token)
+		if not active:
+			raise PermissionError("transfer session ended")
+		zip_path = self._build_transfer_zip()
+		try:
+			Path(self._documents_receive_root).mkdir(parents=True, exist_ok=True)
+			saved = self.save_transfer_to_documents.save(
+				staged_path=str(zip_path),
+				display_name=DownloadAllKind.TRANSFER.zip_filename,
+				documents_root=self._documents_receive_root,
+			)
+		finally:
+			zip_path.unlink(missing_ok=True)
+		return {
+			"saved_path": saved.saved_path,
+			"saved_name": saved.saved_name,
+			"saved_path_display": display_user_path(saved.saved_path),
+		}
+
+	def _build_transfer_zip(self: AppServices) -> Path:
+		with self._transfer_lock:
+			items = [
+				DownloadAllItem(item.display_name, item.staged_path, is_folder=False) for item in self._transfer_items
+			]
+		return self._build_download_all_zip(DownloadAllKind.TRANSFER, items)
+
+	def _build_download_all_zip(self: AppServices, kind: DownloadAllKind, items: list[DownloadAllItem]) -> Path:
+		fd, name = tempfile.mkstemp(prefix=f"spacemaker-{kind.value}-all-", suffix=".zip")
+		os.close(fd)
+		destination = Path(name)
+		try:
+			self.download_all.build(kind, items, str(destination))
+		except BaseException:
+			destination.unlink(missing_ok=True)
+			raise
+		return destination
 
 	def _next_transfer_file_id(self: AppServices) -> str:
 		return f"t{uuid.uuid4().hex[:12]}"
@@ -517,6 +565,16 @@ class LanSessionMixin:
 					download_filename=f"{safe_name}.zip",
 				)
 		return None
+
+	def share_download_all(self: AppServices, token: str) -> Path:
+		"""Zip every shared entry into a temp file; the caller deletes it. Raises PermissionError when ended."""
+		if not self.share_token_valid(token):
+			raise PermissionError("share session ended")
+		items = [
+			DownloadAllItem(entry.display_name, entry.absolute_path, is_folder=entry.kind == "folder_zip")
+			for entry in self._share_entries
+		]
+		return self._build_download_all_zip(DownloadAllKind.SHARE, items)
 
 	def materialize_share_folder_zip(self: AppServices, folder_root: Path) -> Path:
 		import tempfile

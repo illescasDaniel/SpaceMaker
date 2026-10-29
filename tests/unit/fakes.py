@@ -478,11 +478,16 @@ class FakeDiskSpace:
 @dataclass
 class FakeArchiveWriter:
 	written: list[tuple[str, list[ArchiveEntry]]] = field(default_factory=list)
+	error: OSError | None = None
 
-	def write_stored_zip(self, destination: str, entries) -> None:
-		self.written.append((destination, list(entries)))
+	def write_stored_zip(self, destination: str, entries, *, skip_missing: bool = False) -> int:
+		if self.error is not None:
+			raise self.error
+		kept = [entry for entry in entries if not skip_missing or Path(entry.source_path).exists()]
+		self.written.append((destination, kept))
 		Path(destination).parent.mkdir(parents=True, exist_ok=True)
 		Path(destination).write_bytes(b"zip")
+		return len(kept)
 
 
 @dataclass

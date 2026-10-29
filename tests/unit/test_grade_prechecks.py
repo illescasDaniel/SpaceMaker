@@ -250,7 +250,9 @@ def test_given_spec_without_compatibility_decision_when_checking_then_it_only_wa
 def test_given_missing_design_file_when_checking_spec_then_it_fails(tmp_path):
 	# given
 	_write(tmp_path, "wireframes/app.html", "<html></html>")
-	text = GOOD_SPEC.replace("- **Wireframe:**", "- **Design:** [DESIGN.md](../../design/f/DESIGN.md)\n- **Wireframe:**")
+	text = GOOD_SPEC.replace(
+		"- **Wireframe:**", "- **Design:** [DESIGN.md](../../design/f/DESIGN.md)\n- **Wireframe:**"
+	)
 	spec = _write(tmp_path, "specs/f/SPEC.md", text)
 	report = gp.Report()
 
@@ -269,7 +271,9 @@ def test_given_design_failure_branches_when_checking_spec_then_each_needs_a_scen
 	extra = "".join(
 		f"\n### Scenario: failure {title}\n\n- **Given** a\n- **When** b\n- **Then** c\n" for title in titles
 	)
-	text = GOOD_SPEC.replace("- **Wireframe:**", "- **Design:** [DESIGN.md](../../design/f/DESIGN.md)\n- **Wireframe:**")
+	text = GOOD_SPEC.replace(
+		"- **Wireframe:**", "- **Design:** [DESIGN.md](../../design/f/DESIGN.md)\n- **Wireframe:**"
+	)
 	spec = _write(tmp_path, "specs/f/SPEC.md", text.replace("## Out of scope", extra + "\n## Out of scope"))
 	report = gp.Report()
 

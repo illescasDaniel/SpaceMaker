@@ -35,7 +35,7 @@ LAN_ALLOWED_ROUTES: tuple[LanRoute, ...] = (
 	_route("GET", r"/api/gallery/(export|batch/convert)/[^/]+(/file)?"),
 	_route("GET", r"/api/(upload|receive|share|transfer)/session"),
 	_route("POST", r"/api/(upload|receive|transfer)"),
-	_route("GET", r"/api/(share|transfer)/download"),
+	_route("GET", r"/api/(share|transfer)/download(-all)?"),
 	_route("POST", r"/api/unlock"),
 )
 

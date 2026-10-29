@@ -3670,7 +3670,14 @@
 				<span class="wf-note-badge">Agent note</span>
 				Reuses <code>.btn-add-more</code>; new product classes <code>.add-menu-wrap</code> / <code>.add-menu</code>. Menu: closes on outside click, Escape, or item pick; arrow keys move focus; <code>aria-expanded</code> mirrors state. Both items reuse the existing <code>choose_files</code> / <code>choose_share_folder</code> bridge calls and the current empty-folder alert.
 			</aside>
-			<p class="label" style="margin: 0 0 0.5rem;">Session files</p>
+			<div class="transfer-list-head" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin:0 0 0.5rem;">
+				<p class="label" style="margin: 0;">Session files</p>
+				<button type="button" class="btn btn-secondary" id="btn-transfer-download-all">Download all</button>
+			</div>
+			<aside class="wf-note" data-for="reviewer">
+				<span class="wf-note-badge">Reviewer note</span>
+				“Download all” is visible only with 2 or more items. Desktop: saves <code>SpaceMaker-transfer.zip</code> into Documents/SpaceMaker (same place and same “Saved to …” tip as a single Download). Hidden with 0–1 items; a failed zip shows the existing alert.
+			</aside>
 			<ul class="transfer-item-list" aria-label="Shared session files">
 				<li class="transfer-item">
 					<span class="transfer-item-meta">

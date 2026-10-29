@@ -594,7 +594,10 @@
 					</ul>
 				</div>
 			</div>
-			<p class="label" style="margin: 0 0 0.5rem;">Session files</p>
+			<div class="transfer-list-head" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin:0 0 0.5rem;">
+				<p class="label" style="margin: 0;">Session files</p>
+				<button type="button" class="btn btn-secondary" id="btn-transfer-download-all" hidden>Download all</button>
+			</div>
 			<ul class="transfer-item-list" id="transfer-item-list" aria-label="Shared session files"></ul>
 			<p class="status-line" id="transfer-item-status" style="margin-top: 0.75rem;">0 items in session</p>
 			<p class="tip" id="transfer-save-tip" role="status" hidden>

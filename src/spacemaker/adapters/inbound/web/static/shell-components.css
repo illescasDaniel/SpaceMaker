@@ -435,6 +435,11 @@
 			gap: 0.5rem;
 		}
 
+		/* Not wrapped in .qr-section (Transfer files): keep the gap above the lead text. */
+		.easy-screen > .qr-with-info {
+			margin-bottom: 1rem;
+		}
+
 		.qr-with-info > .info-btn {
 			flex-shrink: 0;
 			margin-top: 0.35rem;

@@ -126,6 +126,9 @@
 			</div>
 			<div class="card card-list" id="list-card">
 				<p class="section-label" style="padding: 0.75rem 1rem 0;">Session files</p>
+				<div style="padding: 0 1rem;">
+					<a class="btn btn-primary hidden" id="btn-download-all" href="/api/transfer/download-all" download style="text-align: center; text-decoration: none; margin-top: 0; margin-bottom: 0.5rem;">Download all (.zip)</a>
+				</div>
 				<div id="panel-list"></div>
 			</div>
 		</div>
@@ -143,6 +146,23 @@
 			return "/api/transfer/download?t=" + encodeURIComponent(token) + "&file_id=" + encodeURIComponent(fileId);
 		}
 
+		function downloadAllUrl() {
+			return "/api/transfer/download-all?t=" + encodeURIComponent(token);
+		}
+
+		function updateDownloadAll(count) {
+			var link = document.getElementById("btn-download-all");
+			if (!link) {
+				return;
+			}
+			if (count >= 2) {
+				link.href = downloadAllUrl();
+				link.classList.remove("hidden");
+			} else {
+				link.classList.add("hidden");
+			}
+		}
+
 		function originLabel(file) {
 			if (file.origin === "pc") {
 				return "from PC";
@@ -157,6 +177,7 @@
 				return;
 			}
 			list.innerHTML = "";
+			updateDownloadAll(files.length);
 			if (countEl) {
 				countEl.hidden = false;
 				countEl.textContent =
@@ -192,6 +213,7 @@
 		}
 
 		function showEnded() {
+			updateDownloadAll(0);
 			document.getElementById("panel-ended").classList.remove("hidden");
 			document.getElementById("panel-main").classList.add("hidden");
 		}

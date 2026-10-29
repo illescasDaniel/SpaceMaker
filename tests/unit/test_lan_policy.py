@@ -26,6 +26,8 @@ from spacemaker.adapters.inbound.web.lan_policy import is_lan_allowed
 		("POST", "/api/upload"),
 		("POST", "/api/receive"),
 		("GET", "/api/share/download"),
+		("GET", "/api/share/download-all"),
+		("GET", "/api/transfer/download-all"),
 		("POST", "/api/unlock"),
 	],
 )
@@ -51,6 +53,7 @@ def test_given_lan_endpoint_when_checked_then_allowed(method: str, path: str) ->
 		("GET", "/api/network-passcode"),
 		("POST", "/api/usb-transfer/open-folder"),
 		("POST", "/api/share/selection"),
+		("POST", "/api/transfer/save-all"),
 		("GET", "/docs"),
 		("GET", "/openapi.json"),
 		("POST", "/gallery"),

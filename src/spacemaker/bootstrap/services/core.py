@@ -37,6 +37,7 @@ from spacemaker.application.delete_gallery_item import DeleteGalleryItem
 from spacemaker.application.device_folder_views import DeviceFolderViews
 from spacemaker.application.device_listing_cache import DeviceListingCache
 from spacemaker.application.device_stream_tokens import DeviceStreamTokens
+from spacemaker.application.download_all import DownloadAll
 from spacemaker.application.error_recovery import ErrorRecovery
 from spacemaker.application.export_friendly_media import ExportFriendlyMedia
 from spacemaker.application.export_friendly_media_batch import ExportFriendlyMediaBatch
@@ -151,6 +152,7 @@ class AppServices(SnapshotMixin, LanSessionMixin, JobsMixin, UsbBrowseMixin):
 			ShutilDiskSpace(),
 			StoredZipArchiveWriter(),
 		)
+		self.download_all = DownloadAll(StoredZipArchiveWriter())
 		self.thumbnails = SubprocessThumbnailGenerator(self.runner)
 		self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spacemaker-job")
 		# Friendly exports get their own worker so a long extract + convert can't starve a download.

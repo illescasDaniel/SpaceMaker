@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -14,6 +15,7 @@ from spacemaker.adapters.inbound.web.qr_svg import qr_svg_response
 from spacemaker.application.file_share_manifest import EmptyShareSelectionError
 from spacemaker.application.transfer_session import EmptyTransferFolderError
 from spacemaker.bootstrap.services import AppServices
+from spacemaker.domain.download_all import DownloadAllBuildError, DownloadAllKind, NothingToDownloadError
 from spacemaker.domain.transfer_session import TransferOrigin
 from spacemaker.domain.upload_paths import is_safe_upload_relative_path
 
@@ -52,6 +54,44 @@ def build_lan_router(services: AppServices) -> APIRouter:
 			raise HTTPException(status_code=403, detail=str(exc)) from exc
 		except FileNotFoundError as exc:
 			raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+	@router.post("/api/transfer/save-all")
+	def transfer_save_all(request: Request) -> dict[str, str]:
+		require_loopback(request)
+		try:
+			return services.save_transfer_all_to_documents()
+		except PermissionError as exc:
+			raise HTTPException(status_code=403, detail=str(exc)) from exc
+		except NothingToDownloadError as exc:
+			raise HTTPException(status_code=404, detail="nothing to download") from exc
+		except (DownloadAllBuildError, OSError) as exc:
+			raise HTTPException(status_code=500, detail="could not build zip") from exc
+
+	def _download_all_response(
+		background: BackgroundTasks, kind: DownloadAllKind, build: Callable[[str], Path], token: str
+	) -> FileResponse:
+		try:
+			zip_path = build(token)
+		except PermissionError as exc:
+			raise HTTPException(status_code=403, detail="session ended") from exc
+		except NothingToDownloadError as exc:
+			raise HTTPException(status_code=404, detail="nothing to download") from exc
+		except DownloadAllBuildError as exc:
+			raise HTTPException(status_code=500, detail="could not build zip") from exc
+		background.add_task(zip_path.unlink, missing_ok=True)
+		return FileResponse(
+			zip_path,
+			media_type="application/zip",
+			headers={"Content-Disposition": _attachment_named(kind.zip_filename)},
+		)
+
+	@router.get("/api/share/download-all")
+	def share_download_all(background: BackgroundTasks, t: str = "") -> FileResponse:
+		return _download_all_response(background, DownloadAllKind.SHARE, services.share_download_all, t)
+
+	@router.get("/api/transfer/download-all")
+	def transfer_download_all(background: BackgroundTasks, t: str = "") -> FileResponse:
+		return _download_all_response(background, DownloadAllKind.TRANSFER, services.transfer_download_all, t)
 
 	@router.get("/api/receive/qr.svg")
 	def receive_qr(request: Request, t: str = "") -> Response:

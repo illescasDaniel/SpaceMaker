@@ -115,6 +115,27 @@ function saveTransferItemToDocuments(fileId) {
 			window.alert(errorMessage(err, "Could not save to Documents/SpaceMaker."));
 		});
 }
+function shouldShowDownloadAll(count) {
+	return count >= 2;
+}
+function saveAllTransferItemsToDocuments() {
+	const button = document.getElementById("btn-transfer-download-all");
+	if (button instanceof HTMLButtonElement) {
+		button.disabled = true;
+	}
+	return apiSend("POST", "/api/transfer/save-all")
+		.then((result) => {
+			showTransferSaveTip(result.saved_path_display || result.saved_path || "");
+		})
+		.catch((err) => {
+			window.alert(errorMessage(err, "Could not build the zip."));
+		})
+		.finally(() => {
+			if (button instanceof HTMLButtonElement) {
+				button.disabled = false;
+			}
+		});
+}
 function updateTransferUi(next) {
 	const session = next.transfer_files_session;
 	const uploadQr = document.getElementById("transfer-qr");
@@ -174,6 +195,10 @@ function updateTransferUi(next) {
 			li.appendChild(btn);
 			list.appendChild(li);
 		});
+	}
+	const downloadAll = document.getElementById("btn-transfer-download-all");
+	if (downloadAll) {
+		downloadAll.hidden = !shouldShowDownloadAll(items.length);
 	}
 	if (status) {
 		status.textContent = items.length === 1 ? "1 item in session" : items.length + " items in session";
@@ -318,6 +343,9 @@ function bindLanDesktop() {
 				throw err;
 			});
 	}
+	onClick("btn-transfer-download-all", () => {
+		saveAllTransferItemsToDocuments();
+	});
 	onClick("btn-transfer-add-files", () => {
 		if (!window.pywebview?.api?.choose_files) {
 			showFormBanner("Use the desktop app to pick files.");
@@ -364,7 +392,9 @@ function bindLanDesktop() {
 export {
 	bindLanDesktop,
 	hideTransferSaveTip,
+	saveAllTransferItemsToDocuments,
 	saveTransferItemToDocuments,
+	shouldShowDownloadAll,
 	showTransferSaveTip,
 	updateReceiveUi,
 	updateSendUi,
