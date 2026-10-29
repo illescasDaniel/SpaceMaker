@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 APP_AUTHOR = "Daniel Illescas Romero"
 APP_CONTACT_EMAIL = "contact@daniel-ir.eu"
-_FALLBACK_VERSION = "1.2.2"
+_FALLBACK_VERSION = "1.4.0"
 
 
 def app_version() -> str:
