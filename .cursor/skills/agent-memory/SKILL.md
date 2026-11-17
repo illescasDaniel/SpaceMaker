@@ -1,6 +1,6 @@
 ---
 name: agent-memory
-description: Update SpaceMaker memory bank and session hand-off. Use at session start, milestones, and before ending work with progress.
+description: "LEGACY (superseded by memory-1 on 2026-11-17) - use only when the user asks to read or update the old memory bank (activeContext.md, progress.md, decisions.md). Was: Update SpaceMaker memory bank and session hand-off. Use at session start, milestones, and before ending work with progress."
 ---
 
 # Agent Memory Skill

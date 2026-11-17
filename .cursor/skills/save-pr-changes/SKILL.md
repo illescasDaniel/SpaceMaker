@@ -21,7 +21,7 @@ Land the current branch’s PR on `main`: sync with latest `main`, keep checks g
    - Confirm current branch is not `main`/`master`. If it is, stop and ask.
    - `git fetch origin main` (or `master` if that is the default base).
    - Merge `origin/main` into the current branch (`git merge origin/main`). Prefer merge over rebase unless the branch already uses rebase-only history and the user asked.
-   - **On conflict: resolve automatically.** Keep both sides’ intentional changes when they compose. For `memory/activeContext.md` / `memory/progress.md`, rewrite coherently (not a conflict dump). Append to `memory/decisions.md` (never delete prior entries). After resolving, `git add` and finish the merge commit.
+   - Resolve memory-1 conflicts in `memory/NOW.md`, `MEMORY.md` and notes by preserving both sides and verifying current state; keep legacy memory files unchanged.
    - Only abort and ask if a conflict is truly ambiguous after inspection.
 
 2. **Resolve conflicts if any**

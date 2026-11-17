@@ -11,7 +11,3 @@ args = ["--yes", "webnav-ts-mcp@^0.2.0"]
 [mcp_servers.webnav.env]
 WEBNAV_MCP_ROOTS = "web=web/src,static=src/spacemaker/adapters/inbound/web/static,wireframes=wireframes"
 WEBNAV_MCP_EXCLUDE = "src/spacemaker/adapters/inbound/web/static/js"
-
-[mcp_servers.jevmem]
-command = "uvx"
-args = ["--from", "jevmem>=0.4.0,<0.5", "jevmem-mcp"]

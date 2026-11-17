@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Export report · SDD example</title>
+<style>
+/* Tokens. Light by default; dark follows the system. Colour never carries meaning alone: every colour has a text label. */
+:root{color-scheme:light;--ink:#172b3a;--muted:#405766;--line:#b8c8ce;--accent:#126451;--paper:#fff;--wash:#edf4f3;--page:#f4f7f8;--link:#075a80;--focus:#a34b00;
+--c-teal:#14b8a6;--c-vio:#8b5cf6;--c-pink:#ec4899;--c-amb:#f59e0b;--c-grn:#22c55e;--c-blue:#3b82f6;--c-fail:#f43f5e}
+@media screen and (prefers-color-scheme:dark){:root{color-scheme:dark;--ink:#e4edf1;--muted:#a7bbc5;--line:#34505c;--accent:#4fe0b6;--paper:#16232b;--wash:#1b2d36;--page:#0d171c;--link:#84cff5;--focus:#ffb36b}}
+*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);font:1rem/1.6 system-ui,sans-serif}
+a{color:var(--link)}a:focus-visible,button:focus-visible,select:focus-visible,summary:focus-visible,.scroll:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+header,main,footer{max-width:68rem;margin:auto;padding:1.5rem}header{padding-top:2.5rem}
+h1{font-size:clamp(1.9rem,6vw,3rem);line-height:1.1;margin:.5rem 0 1rem;background:linear-gradient(90deg,color-mix(in srgb,var(--c-teal) 55%,var(--ink)),var(--c-vio) 55%,var(--c-pink));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
+h2{line-height:1.25;color:color-mix(in srgb,var(--sc,var(--c-teal)) 60%,var(--ink))}p,li{max-width:75ch}code{overflow-wrap:anywhere}
+.badge{display:inline-block;border:1px solid var(--c-teal);background:color-mix(in srgb,var(--c-teal) 18%,transparent);color:color-mix(in srgb,var(--c-teal) 35%,var(--ink));border-radius:2rem;padding:.2rem .7rem;font-size:.9rem;font-weight:650}
+.note{border-left:4px solid var(--c-teal);padding:.7rem 1rem;background:color-mix(in srgb,var(--c-teal) 10%,transparent)}
+section{background:var(--paper);border:1px solid var(--line);border-left:5px solid var(--sc,var(--c-teal));border-radius:.75rem;padding:clamp(1rem,3vw,2rem);margin-bottom:1.2rem;scroll-margin-top:1rem}
+.gate{border-left-color:var(--c-amb)}.src,.hdr{font-size:.85rem;opacity:.8;margin:.3rem 0}
+.rep{margin:2rem 0 1rem;padding-bottom:.3rem;border-bottom:3px solid var(--c-teal)}
+nav.sub{display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 1rem}nav.sub a{text-decoration:none;font-weight:600;padding:.15rem .6rem;border-radius:2rem;background:color-mix(in srgb,var(--c-blue) 14%,transparent)}
+/* Tabs: without JavaScript every panel stays visible. */
+.tabs{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:1.5rem}
+.tabs button{font:inherit;font-weight:700;cursor:pointer;padding:.5rem 1rem;border-radius:.6rem .6rem 0 0;border:2px solid var(--line);border-bottom:0;background:color-mix(in srgb,var(--c-blue) 8%,var(--paper));color:var(--ink)}
+.tabs button[aria-selected=true]{background:var(--paper);border-color:var(--c-teal);box-shadow:inset 0 4px 0 var(--c-teal)}
+.st{font-size:.72rem;font-weight:650;padding:.05rem .5rem;border-radius:2rem;margin-left:.3rem;border:1.5px solid var(--cc)}
+.st.ok{--cc:var(--c-grn);background:color-mix(in srgb,var(--c-grn) 16%,transparent)}.st.wait{--cc:var(--c-amb);background:color-mix(in srgb,var(--c-amb) 18%,transparent)}.st.todo{--cc:var(--c-vio);border-style:dashed}
+/* Chips: text label plus colour and line style. */
+.chip{display:inline-block;font-size:.8rem;font-weight:650;padding:.05rem .6rem;border-radius:2rem;border:1.5px solid var(--cc);background:color-mix(in srgb,var(--cc) 16%,transparent);margin:0 .4rem .3rem 0}
+.chip.chg{--cc:var(--c-amb)}.chip.ex{--cc:var(--c-blue)}.chip.new{--cc:var(--c-grn)}.chip.def{--cc:var(--c-vio);border-style:dashed}.chip.fail{--cc:var(--c-fail);border-style:dashed}
+.scroll{overflow:auto}table{border-collapse:collapse;width:100%;text-align:left;font-size:.95rem}th,td{padding:.6rem;border-bottom:1px solid var(--line);vertical-align:top;min-width:6rem}
+thead th{border-bottom:2px solid color-mix(in srgb,var(--sc,var(--c-teal)) 60%,transparent)}caption{text-align:left;font-weight:650;padding:.5rem 0}
+details{border-top:1px solid var(--line);padding:.6rem 0}summary{cursor:pointer;font-weight:650}pre{overflow:auto;white-space:pre-wrap;background:color-mix(in srgb,var(--c-teal) 6%,var(--paper));padding:1rem;border-radius:.4rem}
+.gwt{border-left:4px solid var(--c-vio);padding-left:.8rem;margin:.4rem 0;border-top:0}
+label{display:block;font-weight:650}select{font:inherit;padding:.5rem;max-width:100%;margin:.5rem 0}.sim{border:1px solid var(--c-vio);background:color-mix(in srgb,var(--c-vio) 8%,transparent);padding:.8rem 1rem;border-radius:.4rem}.simnote{font-size:.85rem;opacity:.8}
+.hero{border:1px solid var(--line,#8884);border-radius:.6rem;padding:.6rem .8rem;margin:.6rem 0}.hero figcaption,.hero .cap{font-weight:650;font-size:.85em;margin:0 0 .3rem}
+/* Diagrams */
+.dg{display:block;width:100%;color:var(--ink);max-width:none}.dg .t{font-size:11px;fill:currentColor}.dg .h{font-size:12px;font-weight:650;fill:currentColor}.dg .tag{font-size:10px;font-weight:700;fill:currentColor}.dg .f{font-size:11px;font-weight:700;fill:color-mix(in srgb,var(--c-fail) 70%,var(--ink))}
+.dg .hd{fill:color-mix(in srgb,var(--c-teal) 22%,var(--paper));stroke:var(--c-teal);stroke-width:2}.dg .fr{fill:color-mix(in srgb,var(--c-fail) 7%,transparent);stroke:var(--c-fail);stroke-width:1.5;stroke-dasharray:6 3}
+.dg .n{fill:var(--paper);stroke:currentColor;stroke-width:1.5}.dg .n.ex{fill:color-mix(in srgb,var(--c-blue) 14%,var(--paper));stroke:var(--c-blue)}.dg .n.chg{fill:color-mix(in srgb,var(--c-amb) 20%,var(--paper));stroke:var(--c-amb);stroke-width:3.5}
+.dg .n.new{fill:color-mix(in srgb,var(--c-grn) 16%,var(--paper));stroke:var(--c-grn);stroke-width:2}.dg .n.def{fill:color-mix(in srgb,var(--c-vio) 12%,var(--paper));stroke:var(--c-vio);stroke-width:2;stroke-dasharray:5 3}
+@media(max-width:38rem){header,main,footer{padding:1rem}}
+@media print{body{background:#fff;color:#000;font-size:10pt}.tabs,nav.sub{display:none}.tabpanel[hidden]{display:block!important}section{break-inside:avoid}details>*{display:block!important}details::details-content{content-visibility:visible;display:block}h1{color:#000;background:none}}
+@media (max-width:600px){table.cards,table.cards tbody,table.cards tr,table.cards td,table.cards th{display:block;min-width:0}table.cards caption{display:block}table.cards thead{position:absolute;clip:rect(0 0 0 0);width:1px;height:1px;overflow:hidden}table.cards tr{border:1px solid var(--line,#8884);border-radius:6px;margin:6px 0;padding:4px 8px}table.cards td,table.cards th{border-bottom:0;padding:.15rem 0;overflow-wrap:anywhere}table.cards td::before{content:attr(data-label) ": ";font-weight:650}table.cards th[scope=row]{font-size:1.05em}}
+@media (max-width:600px){.dg{min-width:34rem}}
+</style>
+<!-- Compact copy of the look for inline chat rendering. Inert in the page (media "not all"); scripts/inline_view.py enables it. Uses the host theme variables when present. -->
+<style data-inline media="not all">
+:root{--teal:#14b8a6;--vio:#8b5cf6;--amb:#f59e0b;--grn:#22c55e;--blue:#3b82f6;--fail:#f43f5e;--c-teal:var(--teal);--c-vio:var(--vio);--c-pink:#ec4899;--c-amb:var(--amb);--c-grn:var(--grn);--c-blue:var(--blue);--c-fail:var(--fail)}
+html,body{background:transparent;color:var(--foreground,inherit);font:14px/1.5 var(--font-sans,system-ui);margin:0}*{box-sizing:border-box}code,pre{font-family:var(--font-mono,monospace);font-size:12px}
+pre{white-space:pre-wrap;background:var(--code-background,transparent);border:1px solid var(--border,#8884);border-radius:6px;padding:8px}
+section{border:1px solid var(--border,#8884);border-left:5px solid var(--sc,var(--c-teal));border-radius:8px;padding:6px 14px;margin:8px 0;background:var(--card,transparent)}
+h2{font-size:15px;margin:6px 0;color:color-mix(in srgb,var(--sc,var(--c-teal)) 65%,var(--foreground,currentColor))}h3{font-size:13px;margin:8px 0 4px}
+.chip{display:inline-block;font-size:11px;font-weight:650;padding:0 8px;border-radius:99px;border:1.5px solid var(--cc);background:color-mix(in srgb,var(--cc) 15%,transparent);margin:0 4px 3px 0}
+.chg{--cc:var(--amb)}.ex{--cc:var(--blue)}.new{--cc:var(--grn)}.def{--cc:var(--vio);border-style:dashed}.fail{--cc:var(--fail);border-style:dashed}
+table{border-collapse:collapse;width:100%;font-size:12.5px}td,th{padding:4px 6px;border-bottom:1px solid var(--border,#8884);text-align:left;vertical-align:top}caption{text-align:left;font-weight:650}
+.gate{border-left-color:var(--amb)}.src,.hdr{font-size:12px;opacity:.8;margin:3px 0}.badge{display:inline-block;border:1px solid var(--teal);border-radius:99px;padding:0 8px;font-size:12px;font-weight:650}
+.hero{border:1px solid var(--border,#8884);border-radius:6px;padding:6px 10px;margin:6px 0}.hero .cap{font-weight:650;font-size:12px;margin:0 0 4px}.scroll{overflow:auto}details{margin:3px 0}summary{cursor:pointer;font-weight:650}.gwt{border-left:3px solid var(--vio);padding-left:8px}.big>summary{font-size:14px;padding:6px 0}
+.note{border-left:4px solid var(--teal);padding:4px 10px;background:color-mix(in srgb,var(--teal) 10%,transparent)}.simnote{font-size:12px;opacity:.75}
+.dg{display:block;color:var(--foreground,inherit);max-width:100%}.dg .t{font-size:11px;fill:currentColor}.dg .h{font-size:12px;font-weight:650;fill:currentColor}.dg .tag{font-size:10px;font-weight:700;fill:currentColor}.dg .f{font-size:11px;font-weight:700;fill:var(--fail)}
+.dg .hd{fill:color-mix(in srgb,var(--teal) 22%,transparent);stroke:var(--teal);stroke-width:2}.dg .fr{fill:color-mix(in srgb,var(--fail) 7%,transparent);stroke:var(--fail);stroke-width:1.5;stroke-dasharray:6 3}
+.dg .n{fill:var(--card,transparent);stroke:currentColor;stroke-width:1.5}.dg .n.ex{fill:color-mix(in srgb,var(--blue) 14%,transparent);stroke:var(--blue)}.dg .n.chg{fill:color-mix(in srgb,var(--amb) 20%,transparent);stroke:var(--amb);stroke-width:3}
+.dg .n.new{fill:color-mix(in srgb,var(--grn) 16%,transparent);stroke:var(--grn);stroke-width:2}.dg .n.def{fill:color-mix(in srgb,var(--vio) 12%,transparent);stroke:var(--vio);stroke-width:2;stroke-dasharray:5 3}
+@media (max-width:600px){table.cards,table.cards tbody,table.cards tr,table.cards td,table.cards th{display:block;min-width:0}table.cards caption{display:block}table.cards thead{position:absolute;clip:rect(0 0 0 0);width:1px;height:1px;overflow:hidden}table.cards tr{border:1px solid var(--line,#8884);border-radius:6px;margin:6px 0;padding:4px 8px}table.cards td,table.cards th{border-bottom:0;padding:.15rem 0;overflow-wrap:anywhere}table.cards td::before{content:attr(data-label) ": ";font-weight:650}table.cards th[scope=row]{font-size:1.05em}}
+@media (max-width:600px){.dg{min-width:34rem}}
+</style>
+</head>
+<body>
+<header>
+<span class="badge">Example template · replace everything · design awaiting approval</span>
+<h1>Export a report</h1>
+<p>Help an account owner download a CSV of their current report, while keeping access checks and recovery easy to understand.</p>
+<p class="note"><strong>Review only.</strong> One file, one tab per phase. Every interaction is a <strong>Simulation</strong>; no export is created. Approval happens in chat, never on this page.</p>
+<div class="tabs" role="tablist" aria-label="Phases">
+<button role="tab" id="t-design" aria-controls="p-design" aria-selected="true" data-p="design">Design <span class="st wait">awaiting approval</span></button>
+<button role="tab" id="t-spec" aria-controls="p-spec" aria-selected="false" tabindex="-1" data-p="spec">Spec <span class="st todo">not started</span></button>
+<button role="tab" id="t-arch" aria-controls="p-arch" aria-selected="false" tabindex="-1" data-p="arch">Architecture <span class="st todo">not started</span></button>
+<button role="tab" id="t-build" aria-controls="p-build" aria-selected="false" tabindex="-1" data-p="build">Build <span class="st todo">not started</span></button>
+<button role="tab" id="t-verify" aria-controls="p-verify" aria-selected="false" tabindex="-1" data-p="verify">Verify <span class="st todo">not started</span></button>
+<button role="tab" id="t-appr" aria-controls="p-appr" aria-selected="false" tabindex="-1" data-p="appr">Approvals <span class="st wait">0 of 3 gates</span></button>
+</div>
+</header>
+<main>
+
+<!-- ============ DESIGN ============ -->
+<div role="tabpanel" id="p-design" aria-labelledby="t-design" class="tabpanel">
+<nav class="sub skip-inline" aria-label="Design sections"><a href="#d-glance">At a glance</a><a href="#d-flow">Flow</a><a href="#d-paths">Explore paths</a><a href="#d-fail">Failures</a><a href="#d-dec">Decisions</a><a href="#d-scope">Scope</a></nav>
+<section id="d-glance" aria-labelledby="d-glance-t" style="--sc:var(--c-teal)"><h2 id="d-glance-t">At a glance</h2>
+<p><span class="chip new">added: CSV export endpoint</span><span class="chip ex">existing: report storage</span><span class="chip fail">F1 access denied</span><span class="chip fail">F2 report too large</span></p>
+<div class="hero"><p class="cap">Main path (compact)</p><div class="scroll" tabindex="0" role="region" aria-label="Scrollable diagram"><svg class="dg" viewBox="0 0 520 70" role="img" aria-labelledby="hg-t hg-d"><title id="hg-t">Export in brief</title><desc id="hg-d">The owner requests an export; the endpoint checks access and either returns the CSV or an error.</desc><defs><marker id="arh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs><rect class="n ex" x="10" y="12" width="130" height="44" rx="8"/><text class="h" x="20" y="38">Owner</text><rect class="n new" x="195" y="12" width="150" height="44" rx="8"/><text class="h" x="205" y="32">Export endpoint</text><text class="tag" x="205" y="48">NEW</text><rect class="n ex" x="400" y="12" width="110" height="44" rx="8"/><text class="h" x="410" y="38">Storage</text><g stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#arh)"><path d="M140 34H195"/><path d="M345 34H400"/></g></svg></div>
+<p>Text equivalent: the owner calls the new export endpoint, which reads report storage.</p></div>
+<ul>
+<li><strong>Outcome:</strong> an authorized owner downloads their report as CSV; report data never changes.</li>
+<li><strong>Failure paths:</strong> F1 returns 403 before any row is read; F2 returns 422 <code>report_too_large</code>. Neither returns data.</li>
+<li><strong>Decisions to settle:</strong> row cap and time budget (measured, not guessed); CSV formula handling for untrusted cells; rollout and rollback.</li>
+<li><strong>Out of scope:</strong> scheduled exports, email delivery, background jobs.</li>
+</ul>
+<details class="questions" open><summary>Open questions (1)</summary><ol><li><strong>Q1.</strong> Is 50,000 rows an acceptable first cap? <em>Recommend: measure first.</em></li></ol></details>
+<p class="note gate"><strong>Next gate:</strong> reply “design approved”, or describe the changes you want. A page control cannot approve this design.</p>
+<p class="skip-inline"><a href="#d-flow">Detailed report ↓</a></p></section>
+<h2 class="rep">Detailed report</h2>
+
+<section id="d-flow" aria-labelledby="d-flow-t" style="--sc:var(--c-blue)"><h2 id="d-flow-t">Where does validation happen?</h2>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable diagram"><svg class="dg" viewBox="0 0 720 250" role="img" aria-labelledby="sq-t sq-d"><title id="sq-t">Export request sequence</title><desc id="sq-d">The owner requests an export. The endpoint checks access; on failure F1 it returns 403 and reads nothing. Otherwise it reads rows from existing report storage and streams a CSV.</desc>
+<defs><marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>
+<g stroke="currentColor" stroke-opacity=".35" stroke-dasharray="4 4"><path d="M110 40V240"/><path d="M360 40V240"/><path d="M610 40V240"/></g>
+<rect class="hd" x="30" y="8" width="160" height="32" rx="16"/><text class="h" x="110" y="29" text-anchor="middle">Account owner</text>
+<rect class="hd" x="280" y="8" width="160" height="32" rx="16"/><text class="h" x="360" y="29" text-anchor="middle">Export endpoint · added</text>
+<rect class="hd" x="530" y="8" width="160" height="32" rx="16"/><text class="h" x="610" y="29" text-anchor="middle">Report storage · existing</text>
+<g stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ar1)"><path d="M110 70H360"/><path d="M360 160H610"/><path d="M610 190H360"/><path d="M360 220H110"/></g>
+<text class="t" x="235" y="64" text-anchor="middle">1 request CSV</text><text class="t" x="485" y="154" text-anchor="middle">3 read rows</text><text class="t" x="485" y="184" text-anchor="middle">4 rows</text><text class="t" x="235" y="214" text-anchor="middle">5 stream CSV</text>
+<rect class="fr" x="40" y="84" width="650" height="50" rx="6"/><text class="f" x="52" y="100">F1 · access denied</text>
+<path d="M360 122H110" stroke="currentColor" stroke-width="1.6" stroke-dasharray="5 3" fill="none" marker-end="url(#ar1)"/><text class="t" x="235" y="116" text-anchor="middle">2 403, no rows read</text></svg></div>
+<p>Text equivalent: the endpoint checks access (step 2) before reading storage. Access failure exits as <strong>F1</strong>; an oversized report exits as <strong>F2</strong> (not drawn; see the failures table). Neither path returns report data.</p>
+</section>
+
+<section id="d-paths" aria-labelledby="d-paths-t" style="--sc:var(--c-vio)"><h2 id="d-paths-t">Explore an outcome</h2>
+<div hidden id="controls"><label for="path">Simulation path</label><select id="path"><option value="success">Success · permitted report</option><option value="denied">F1 · access denied</option><option value="large">F2 · report too large</option></select>
+<p class="sim" id="outcome" role="status" aria-live="polite" aria-atomic="true"></p></div>
+<noscript><p>The selector needs JavaScript; every outcome is listed below without it.</p></noscript>
+<details open><summary>Success · permitted report</summary><p>An authorized owner with a report within the limit receives a CSV download. Report data does not change.</p></details>
+<details open><summary>F1 · access denied</summary><p>Response <code>403</code> before any row is read. Copy: “You do not have access to export this report.” No download.</p></details>
+<details open><summary>F2 · report too large</summary><p>Response <code>422</code> with <code>report_too_large</code>. Copy: “This report is too large to export. Narrow the date range and try again.” No partial file.</p></details>
+<p class="simnote">Simulation: no backend is called. For UI features add realistic copy, every state (empty, loading, error, success) and a narrow layout here; for CLIs add transcripts and exit codes.</p>
+</section>
+
+<section id="d-fail" aria-labelledby="d-fail-t" style="--sc:var(--c-fail)"><h2 id="d-fail-t">Failure inventory</h2>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable failure table"><table class="cards"><caption>Stable failure IDs; never renumber</caption><thead><tr><th scope="col">ID</th><th scope="col">Trigger</th><th scope="col">Visible result</th><th scope="col">State after</th><th scope="col">Recovery</th></tr></thead><tbody>
+<tr><th scope="row">F1</th><td data-label="Trigger">Owner lacks access</td><td data-label="Visible result">403, copy above</td><td data-label="State after">Nothing read or changed</td><td data-label="Recovery">Restore access, retry</td></tr>
+<tr><th scope="row">F2</th><td data-label="Trigger">Report over the row cap</td><td data-label="Visible result">422 <code>report_too_large</code></td><td data-label="State after">Nothing read or changed</td><td data-label="Recovery">Narrow the date range</td></tr>
+</tbody></table></div></section>
+
+<section id="d-dec" aria-labelledby="d-dec-t" style="--sc:var(--c-amb)"><h2 id="d-dec-t">Proposed decisions</h2>
+<p>Proposals only; nothing is approved until you say so in chat. State a reason for any area that does not apply (“N/A — reason”).</p>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable decisions table"><table><caption>Five decision areas</caption><thead><tr><th scope="col">Area</th><th scope="col">Proposal</th><th scope="col">Needs review</th></tr></thead><tbody>
+<tr><th scope="row">Success criteria</th><td>Authorized owners get all permitted rows, no mutations.</td><td>Confirm CSV columns and ordering.</td></tr>
+<tr><th scope="row">Failure handling and recovery</th><td>F1 and F2 return no data or partial download.</td><td>Decide how a mid-stream disconnect is communicated.</td></tr>
+<tr><th scope="row">Performance and resource budget</th><td>Check a row limit before export.</td><td>Set a measured cap and time/memory budget; I have not invented one.</td></tr>
+<tr><th scope="row">Trust boundary and validation</th><td>Validate report ID and authorization before reading rows.</td><td>Agree CSV formula handling for untrusted cells.</td></tr>
+<tr><th scope="row">Compatibility and rollout</th><td>Add an endpoint; storage unchanged.</td><td>Confirm clients and rollback.</td></tr>
+</tbody></table></div></section>
+
+<section id="d-scope" aria-labelledby="d-scope-t" style="--sc:var(--c-teal)"><h2 id="d-scope-t">Scope and open questions</h2>
+<p><strong>In scope:</strong> one report export and bounded failures. <strong>Out of scope:</strong> scheduled exports, email delivery, background jobs.</p>
+<ol><li><strong>Q1.</strong> Is 50,000 rows an acceptable first cap? <em>Recommend: measure first.</em></li></ol>
+<p>If an answer adds a failure path, add its stable ID and walkthrough before asking for approval.</p></section>
+<section id="d-checks" aria-labelledby="d-checks-t" style="--sc:var(--c-blue)"><h2 id="d-checks-t">Checks run on this page</h2><p class="tpl">Mechanical checks (<code>inline_view.py --check</code>, link and diagram checks), browser checks that did run, and limitations: what was not checked and why. Chat never carries content that is not here.</p></section>
+</div>
+
+<!-- ============ SPEC ============ -->
+<div role="tabpanel" id="p-spec" aria-labelledby="t-spec" class="tabpanel">
+<section id="s-glance" aria-labelledby="s-glance-t" style="--sc:var(--c-teal)"><h2 id="s-glance-t">At a glance</h2>
+<p class="note skip-inline"><strong>This tab is the spec</strong> and the single source of truth: summary, then the detailed report with every Given/When/Then. Add a separate Markdown spec only if the project requires one, and then link it as authoritative.</p>
+<ul>
+<li><strong>What changes / contracts:</strong> endpoint, response codes, copy (list the contracts by ID, C1…).</li>
+<li><strong>Failures covered:</strong> <span class="chip fail">F1</span> S2 <span class="chip fail">F2</span> S3; success S1.</li>
+<li><strong>Verification:</strong> how each scenario will be checked, at which layer.</li>
+<li><strong>Decisions to approve:</strong> the five areas with observable thresholds; proposed values become approved only with explicit approval.</li>
+</ul>
+<p class="note gate"><strong>Next gate:</strong> reply “spec approved”, or describe the changes you want. No production source before then.</p></section>
+<h2 class="rep">Detailed report</h2>
+<section id="s-contracts" aria-labelledby="s-contracts-t" style="--sc:var(--c-teal)"><h2 id="s-contracts-t">Contracts and decisions</h2>
+<p class="tpl">Inputs, outputs, state transitions, error codes, validation and side effects; idempotency, retries, cancellation and persistence where relevant; for fullstack work, the UI state each response causes; migration order and rollback when stored data changes. List the five decisions with observable thresholds, or “N/A — reason”.</p></section>
+<section id="s-scen" aria-labelledby="s-scen-t" style="--sc:var(--c-vio)"><h2 id="s-scen-t">Acceptance scenarios</h2>
+<details class="gwt" id="s1"><summary><strong>S1</strong> · Successful export</summary><p><strong>Given</strong> an authorized owner and a report within the cap,<br><strong>When</strong> they request an export,<br><strong>Then</strong> they receive a CSV of all permitted rows and the report is unchanged.</p></details>
+<details class="gwt" id="s2"><summary><strong>S2</strong> · Access denied (F1)</summary><p><strong>Given</strong> an owner without access,<br><strong>When</strong> they request an export,<br><strong>Then</strong> the response is 403 with the specified copy, no row is read, and no download starts.</p></details>
+<details class="gwt" id="s3"><summary><strong>S3</strong> · Report too large (F2)</summary><p><strong>Given</strong> a report over the cap,<br><strong>When</strong> the owner requests an export,<br><strong>Then</strong> the response is 422 <code>report_too_large</code> and no partial file is returned.</p></details>
+</section>
+<section id="s-trace" aria-labelledby="s-trace-t" style="--sc:var(--c-amb)"><h2 id="s-trace-t">Traceability</h2>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable traceability table"><table><caption>Design path to scenario to verification</caption><thead><tr><th scope="col">Design path or UI state</th><th scope="col">Scenario</th><th scope="col">Planned verification</th><th scope="col">Actual test and code</th></tr></thead><tbody>
+<tr><th scope="row">Success</th><td>S1</td><td>API test against a real temporary instance</td><td><span class="chip def">pending</span></td></tr>
+<tr><th scope="row">F1</th><td>S2</td><td>API test, unauthorized caller</td><td><span class="chip def">pending</span></td></tr>
+<tr><th scope="row">F2</th><td>S3</td><td>API test with an over-cap fixture</td><td><span class="chip def">pending</span></td></tr>
+</tbody></table></div>
+<p>Keep this table current as tests and code appear. Mark rows whose verification is manual as manual, never “done”, until someone actually did it.</p></section>
+<section id="s-checks" aria-labelledby="s-checks-t" style="--sc:var(--c-blue)"><h2 id="s-checks-t">Checks run on this page</h2><p class="tpl">Mechanical checks (<code>inline_view.py --check</code>, link and diagram checks), browser checks that did run, and limitations: what was not checked and why. Chat never carries content that is not here.</p></section>
+</div>
+
+<!-- ============ ARCHITECTURE ============ -->
+<div role="tabpanel" id="p-arch" aria-labelledby="t-arch" class="tabpanel">
+<section id="a-glance" aria-labelledby="a-glance-t" style="--sc:var(--c-pink)"><h2 id="a-glance-t">At a glance</h2>
+<ul>
+<li><strong>Assessment:</strong> which interfaces, types and ports are new, and which existing boundaries are reused. If no new interface is needed, say so and why; do not invent types.</li>
+<li><strong>Test approach and order:</strong> tests first, then implementation, in small chunks.</li>
+<li><strong>Differs from design:</strong> list every difference, or “nothing”.</li>
+</ul>
+<p class="note gate"><strong>Next gate:</strong> reply “architecture approved”, or describe the changes you want. After the build, QA and an independent grader run automatically (up to 3 subagent runs per approved revision); reply <code>no QA</code> or <code>no grade</code> to skip either.</p></section>
+<h2 class="rep">Detailed report</h2>
+<section id="a-deps" aria-labelledby="a-deps-t" style="--sc:var(--c-blue)"><h2 id="a-deps-t">Dependencies and ownership</h2>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable diagram"><svg class="dg" viewBox="0 0 720 140" role="img" aria-labelledby="dp-t dp-d"><title id="dp-t">Dependencies</title><desc id="dp-d">The new export endpoint depends on the existing access check and report storage. A new test file checks the endpoint.</desc>
+<defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>
+<rect class="n new" x="30" y="20" width="200" height="62" rx="8"/><text class="h" x="40" y="39">ExportEndpoint</text><text class="t" x="40" y="55">streams CSV</text><text class="tag" x="40" y="72">NEW</text>
+<rect class="n ex" x="260" y="20" width="200" height="62" rx="8"/><text class="h" x="270" y="39">AccessCheck</text><text class="t" x="270" y="55">authorization</text><text class="tag" x="270" y="72">EXISTING</text>
+<rect class="n ex" x="490" y="20" width="200" height="62" rx="8"/><text class="h" x="500" y="39">ReportStorage</text><text class="t" x="500" y="55">owns report rows</text><text class="tag" x="500" y="72">EXISTING</text>
+<g stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ar2)"><path d="M230 51H260"/><path d="M130 82V104H590V82"/></g>
+<g transform="translate(14 130)"><rect class="n new" x="0" y="-10" width="12" height="12" rx="3"/><text class="t" x="18" y="0">new</text><rect class="n chg" x="70" y="-10" width="12" height="12" rx="3"/><text class="t" x="88" y="0">changed</text><rect class="n ex" x="160" y="-10" width="12" height="12" rx="3"/><text class="t" x="178" y="0">existing, unchanged</text><rect class="n def" x="320" y="-10" width="12" height="12" rx="3"/><text class="t" x="338" y="0">deferred or outside the repo</text></g></svg></div>
+<p>Text equivalent: ExportEndpoint (new) calls AccessCheck and ReportStorage (both existing, unchanged).</p></section>
+<section id="a-plan" aria-labelledby="a-plan-t" style="--sc:var(--c-grn)"><h2 id="a-plan-t">Interfaces and phased plan</h2>
+<p class="tpl">Show actual interface or signature diffs, ownership, trust boundaries, migration order and rollback, and every new file the plan implies (entry points such as <code>__main__</code>, config, fixtures). List phases with the evidence each produces.</p></section>
+<section id="a-checks" aria-labelledby="a-checks-t" style="--sc:var(--c-blue)"><h2 id="a-checks-t">Checks run on this page</h2><p class="tpl">Mechanical checks (<code>inline_view.py --check</code>, link and diagram checks), browser checks that did run, and limitations: what was not checked and why. Chat never carries content that is not here.</p></section>
+</div>
+
+<!-- ============ BUILD ============ -->
+<div role="tabpanel" id="p-build" aria-labelledby="t-build" class="tabpanel">
+<section id="b-glance" aria-labelledby="b-glance-t" style="--sc:var(--c-grn)"><h2 id="b-glance-t">At a glance</h2>
+<ul>
+<li class="tpl"><strong>Tests first:</strong> what failed before the implementation, and that the failures were behavioural, not setup or import errors.</li>
+<li><strong>After:</strong> the project quality gate, with the exact command and result.</li>
+<li><strong>Not verified:</strong> anything not run, with the reason.</li></ul>
+<p class="note gate"><strong>Next:</strong> QA and the independent grader run automatically on this build (or the opt-out recorded in Approvals).</p></section>
+<h2 class="rep">Detailed report</h2>
+<section id="b-detail" aria-labelledby="b-detail-t" style="--sc:var(--c-blue)"><h2 id="b-detail-t">Evidence</h2><p class="tpl">Changed files, test-to-scenario map with path:line, command output summaries, and any approved-contract differences found (those return to the gate that owns them).</p></section>
+</div>
+
+<!-- ============ VERIFY ============ -->
+<div role="tabpanel" id="p-verify" aria-labelledby="t-verify" class="tabpanel">
+<section id="v-glance" aria-labelledby="v-glance-t" style="--sc:var(--c-vio)"><h2 id="v-glance-t">Verification report</h2>
+<p><span class="chip def">round 1 of at most 2</span></p>
+<ul>
+<li class="tpl"><strong>Verdict (grader, verbatim):</strong> PASS or NEEDS WORK, and why in one sentence.</li>
+<li class="tpl"><strong>QA result (tester, verbatim):</strong> one line, or “n/a: no runtime behaviour”, or “skipped: reason”.</li>
+</ul>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable scorecard"><table class="cards"><caption>Scorecard</caption><thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">Evidence</th></tr></thead><tbody>
+<tr class="tpl"><th scope="row">Build quality gate</th><td data-label="Result">pass | fail</td><td data-label="Evidence">exact command, counts</td></tr>
+<tr class="tpl"><th scope="row">QA scenarios</th><td data-label="Result">matches N · differs N · not run N</td><td data-label="Evidence">sandbox, run ID</td></tr>
+<tr class="tpl"><th scope="row">Grade criterion 1…7</th><td data-label="Result">PASS | PARTIAL | FAIL</td><td data-label="Evidence">path:line</td></tr>
+</tbody></table></div>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable findings table"><table class="cards"><caption>Findings (Q# from QA, G# from the grader)</caption><thead><tr><th scope="col">ID</th><th scope="col">Label</th><th scope="col">Severity</th><th scope="col">Status</th></tr></thead><tbody>
+<tr class="tpl"><th scope="row">Q1 / G1</th><td data-label="Label">implementation | requirement</td><td data-label="Severity">high | medium | low</td><td data-label="Status">fixed | declined (reason) | open</td></tr>
+</tbody></table></div>
+<ul>
+<li class="tpl"><strong>Fixed after grading, not re-graded:</strong> each change, re-checked with the quality gate only; or “none”.</li>
+<li class="tpl"><strong>Not verified:</strong> what no one actually ran or checked.</li>
+<li class="tpl"><strong>Budget used:</strong> spawns, fix rounds, model of each agent; delegation unavailable is stated here.</li></ul>
+<p class="note gate"><strong>Handoff:</strong> nothing is committed or published. Reply with what you want next (for example “commit”), or describe the changes you want.</p></section>
+<h2 class="rep">Detailed report</h2>
+<section id="v-qa" aria-labelledby="v-qa-t" style="--sc:var(--c-amb)"><h2 id="v-qa-t">QA scenario runs</h2>
+<p class="note skip-inline">A QA tester <em>runs</em> the built feature in an isolated environment and reports what happened. With no runtime behaviour (docs or guidance only), the QA row is n/a with the reason, or a behaviour check labelled an observation.</p>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable QA table"><table class="cards"><caption>Each scenario run for real</caption><thead><tr><th scope="col">Scenario</th><th scope="col">Steps</th><th scope="col">Expected</th><th scope="col">Observed</th><th scope="col">Result</th><th scope="col">Evidence</th></tr></thead><tbody><tr class="tpl"><th scope="row">S2</th><td data-label="Steps">Call the endpoint as an unauthorized user</td><td data-label="Expected">403, no rows read</td><td data-label="Observed">(fill in)</td><td data-label="Result">matches | differs | not run | extra</td><td data-label="Evidence">(log or screenshot path)</td></tr></tbody></table></div></section>
+<section id="v-grade" aria-labelledby="v-grade-t" style="--sc:var(--c-blue)"><h2 id="v-grade-t">Criteria, scenario map and findings</h2><p class="tpl">Grader criteria table with scores and evidence, the scenario map, and each finding with its resolution, pasted from the grader’s report.</p></section>
+<section id="v-checks" aria-labelledby="v-checks-t" style="--sc:var(--c-blue)"><h2 id="v-checks-t">Checks run on this page</h2><p class="tpl">Mechanical checks (<code>inline_view.py --check</code>, link and diagram checks), browser checks that did run, and limitations: what was not checked and why. Chat never carries content that is not here.</p></section>
+</div>
+
+<!-- ============ APPROVALS ============ -->
+<div role="tabpanel" id="p-appr" aria-labelledby="t-appr" class="tabpanel">
+<section id="appr" aria-labelledby="appr-t" style="--sc:var(--c-grn)"><h2 id="appr-t">Approvals</h2>
+<p class="note">Record only approvals actually received in chat, with the date, the tab content approved (hash or short description) and the user’s words. A page control never approves a gate. Later edits to status labels or traceability are not re-approvals; a change to behaviour, scope or contracts reopens the gate that owns it. Hashes identify what was approved, not what the page shows today.</p>
+<div class="scroll" tabindex="0" role="region" aria-label="Scrollable approvals table"><table><caption>Gate approvals</caption><thead><tr><th scope="col">Gate</th><th scope="col">Date</th><th scope="col">Approved artifact</th><th scope="col">Approval in chat</th></tr></thead><tbody>
+<tr><th scope="row">Design</th><td>pending</td><td></td><td></td></tr><tr><th scope="row">Spec</th><td>pending</td><td></td><td></td></tr><tr><th scope="row">Architecture</th><td>pending</td><td></td><td></td></tr><tr><th scope="row">Automatic verification</th><td>pending</td><td>QA and grade run after the build unless the user replied <code>no QA</code> or <code>no grade</code></td><td></td></tr>
+</tbody></table></div></section>
+</div>
+</main>
+<footer>Single-file SDD review · no network dependencies · no live backend</footer>
+<script>
+'use strict';
+const tabs=Array.from(document.querySelectorAll('[role=tab]'));
+const panels=Array.from(document.querySelectorAll('.tabpanel'));
+function act(p,focus,keep){tabs.forEach(t=>{const on=t.dataset.p===p;t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;document.getElementById('p-'+t.dataset.p).hidden=!on;if(on&&focus)t.focus();});if(!keep){try{history.replaceState(null,'','#p-'+p)}catch(_){}}}
+tabs.forEach((t,i)=>{t.addEventListener('click',()=>act(t.dataset.p));t.addEventListener('keydown',ev=>{const k={ArrowRight:1,ArrowLeft:-1}[ev.key];if(ev.key==='Home'){ev.preventDefault();act(tabs[0].dataset.p,1)}else if(ev.key==='End'){ev.preventDefault();act(tabs[tabs.length-1].dataset.p,1)}else if(k){ev.preventDefault();act(tabs[(i+k+tabs.length)%tabs.length].dataset.p,1)}});});
+function fromHash(){const id=location.hash.slice(1);const el=id&&document.getElementById(id);const pan=el&&el.closest('.tabpanel');act(pan?pan.id.slice(2):(tabs.find(t=>t.getAttribute('aria-selected')==='true')||tabs[0]).dataset.p,false,!!pan);if(el&&pan){for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details'))d.open=true;el.scrollIntoView();}}
+fromHash();window.addEventListener('hashchange',fromHash);
+</script>
+<!-- Sample simulation for the example path selector. Replace it with the feature's own, or delete this block with the selector section; inline_view --check fails if it is left in an approved or done Design tab. -->
+<script data-sample>
+'use strict';
+const S={success:'Success: the owner receives a CSV download; the report stays unchanged.',denied:'F1: return 403 before reading rows. No data is returned. Restored access is required to retry.',large:'F2: return 422 report_too_large. No partial file. Narrow the date range before retrying.'};
+const sel=document.getElementById('path'),out=document.getElementById('outcome');
+const ctl=document.getElementById('controls');if(ctl&&sel&&out){ctl.hidden=false;sel.addEventListener('change',()=>{out.textContent=S[sel.value];});out.textContent=S[sel.value];}
+</script>
+<script>
+'use strict';
+const details=Array.from(document.querySelectorAll('details'));let prior=[];
+window.addEventListener('beforeprint',()=>{panels.forEach(p=>{p.hidden=false;});prior=details.map(d=>d.open);details.forEach(d=>{d.open=true;});});
+window.addEventListener('afterprint',()=>{details.forEach((d,i)=>{d.open=prior[i]??true;});const s=tabs.find(t=>t.getAttribute('aria-selected')==='true');if(s)act(s.dataset.p);});
+</script>
+</body>
+</html>

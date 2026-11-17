@@ -1,6 +1,6 @@
 ---
 name: jev-memory
-description: Use jevmem long-term memory (memory_write / memory_recall MCP tools) and Jev guardrails (jev-mcp). Use when a decision, bug fix, convention, gotcha or user preference should be remembered, when the user refers to past work ("like last time", "what did we decide"), or before relying on stored notes. Also covers when to screen untrusted content and gate completion claims.
+description: "LEGACY (superseded by memory-1 on 2026-11-17; the jevmem MCP server is no longer configured) - use only when the user asks about the old jevmem notes. Was: Use jevmem long-term memory (memory_write / memory_recall MCP tools) and Jev guardrails (jev-mcp). Use when a decision, bug fix, convention, gotcha or user preference should be remembered, when the user refers to past work (\"like last time\", \"what did we decide\"), or before relying on stored notes. Also covers when to screen untrusted content and gate completion claims."
 ---
 
 # jev-memory

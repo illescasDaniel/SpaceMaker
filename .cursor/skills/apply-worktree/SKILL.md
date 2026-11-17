@@ -37,7 +37,7 @@ Commit any pending work on this worktree branch first, then merge that branch in
    - **On conflict: resolve automatically.** Do not stop for the user to fix conflicts.
      - Inspect each conflicted file; keep **both** sides’ intentional changes whenever they compose (feature work from the worktree **plus** newer parent-branch fixes).
      - Prefer the worktree’s version only for files that are purely the feature under apply; prefer parent for unrelated parent-only fixes when a hunk cannot compose.
-     - For `memory/activeContext.md` / `memory/progress.md`, rewrite to reflect the applied feature on the parent branch (not a raw conflict dump). Append to `memory/decisions.md` (never delete prior entries).
+     - Resolve memory-1 conflicts in `memory/NOW.md`, `MEMORY.md` and notes by preserving both sides and verifying current state; keep legacy memory files unchanged.
      - After resolving, `git add` the conflicted paths and continue the merge (`git commit` if merge is in progress and needs a merge commit).
      - Only abort the merge and ask the user if a conflict is truly ambiguous after inspection (e.g. contradictory edits to the same logic with no safe composition).
 

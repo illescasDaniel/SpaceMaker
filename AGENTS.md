@@ -4,21 +4,20 @@ This repository uses **Spec-Driven Development (SDD)** and **Hexagonal Architect
 
 ## Agents and delegation
 
-You are the orchestrator: delegate to the `architect`, `coder`, `code-grader` and `utility` subagents in
-`.claude/agents/`, `.cursor/agents/` or `.codex/agents/` for the current tool, and own every approval gate and memory write.
+You are the orchestrator: delegate to the `architect`, `coder`, `coder-small`, `code-reviewer`, `code-grader` and `utility`
+subagents in `.claude/agents/`, `.cursor/agents/` or `.codex/agents/` for the current tool, and own every approval gate and
+memory write. Read `.agents/development-workflow.md` for routing and briefs, and `.agents/delegation-tiers.md` for tiers.
 
-Read `.claude/development-workflow.md` for routing, briefs and the memory protocol.
+## Python code goes to `coder-python` or `coder-python-small`
 
-## Python code goes to `coder-python`
-
-Any task that adds, changes, renames, moves or deletes `.py`/`.pyi` code goes to `coder-python`, not the generic
+Any task that adds, changes, renames, moves or deletes `.py`/`.pyi` code goes to `coder-python` or `coder-python-small`, not the generic
 `coder`: it uses the project's `codenav` MCP for type-checked navigation and refactoring. Keep `coder` for everything
 else, and split a task that spans languages.
 
-## TypeScript code goes to `coder-typescript`
+## TypeScript code goes to `coder-typescript` or `coder-typescript-small`
 
 Any task that adds, changes, renames, moves or deletes JavaScript/TypeScript/HTML/CSS (`.ts`, `.tsx`, `.js`, `.jsx`,
-`.html`, `.css`) code goes to `coder-typescript`, not the generic `coder`: it uses the project's `webnav` MCP for
+`.html`, `.css`) code goes to `coder-typescript` or `coder-typescript-small`, not the generic `coder`: it uses the project's `webnav` MCP for
 type-checked navigation and refactoring. Keep `coder` for everything else, and split a task that spans languages.
 
 ## Scale mindset
@@ -29,40 +28,37 @@ Despite the small current footprint, **always act as if this project will grow l
 
 - Use **tabs** for indentation in Python and all project source files — not spaces.
 - Hexagonal layering is mandatory: see `src/spacemaker/{domain,ports,application}` vs `adapters/` below, and the path-scoped rule (`.cursor/rules/hexagonal-python.mdc` / `.claude/rules/hexagonal-python.md`) for the full import guard and naming conventions.
-- Never skip a Phase Gate. "Implement the plan" / "complete all todos" / an attached plan file / plan-mode approval is **not** design or spec approval — approval must be explicit, in chat.
+- Never skip a Phase Gate. "Implement the plan" / "complete all todos" / an attached plan file / plan-mode approval / a page checkbox is **not** design, spec or architecture approval — approval must be explicit, in chat.
 
-## Phase Gate Protocol
+## Phase Gate Protocol (Spec-Driven Development)
 
-| Phase | Deliverable | Gate |
-|-------|-------------|------|
-| **0 — Design** | UI track: `wireframes/<screen>.html` (self-contained HTML/CSS). System track (endpoints, data, jobs, services): `design/<feature>/DESIGN.md` with Mermaid diagrams, checked with `design_preview.py --check`. Fullstack: both | **Stop.** Ask for UX/design approval (one gate for both tracks). |
-| **1 — Spec** | `specs/<feature>/SPEC.md` (agreed **Design decisions** — success criteria, failure handling, perf/resource budget, trust boundary, compatibility & rollout — plus BDD with a scenario per design `F<n>` failure branch, out of scope, aligned with wireframe and design) | **Stop.** Ask for spec approval. |
-| **2 — Architecture** | Domain types and ports in `src/spacemaker/domain/`, `ports/` | **Stop.** Ask for approval before tests/adapters. |
-| **3 — Tests** | Unit tests from BDD (`tests/unit/`); implementations may be stubs | Run tests; fix as needed. |
-| **4 — Implementation** | Use cases, adapters, FastAPI/Web UI, desktop | Until tests pass. Must match approved wireframe and `DESIGN.md` unless spec is re-approved. |
-| **5 — Grade** | Read-only `code-grader` subagent scores the branch against the spec | Automatic (no approval); fix FAILs, max 2 rounds, show scorecard. |
+Use the `sdd-html-feature` skill for every feature or architectural change: one page `sdd/<feature>.html` holds the
+Design, Spec, Architecture, Build, Verify and Approvals tabs. Stop for **separate design, spec and architecture approvals
+in chat** and resume at the first unapproved gate; after the build, QA and the `code-grader` run automatically unless the
+user opts out at the architecture gate. Details: `.agents/loadout-guidance.md` and the skill.
 
-**One gate per explicit approval** — do not batch Phase 0→4 in one run, even if todos list all phases. After the wireframe, end the turn and wait. If Phase 4 reveals a spec flaw, rewrite the spec (Phase 1), get re-approval, then continue — don't patch around a bad spec.
+- SpaceMaker specifics: the Design tab covers the UI (self-contained HTML/CSS) and the system design (flows, `F<n>`
+  failure branches, data, contracts); the Spec tab keeps the five design decisions (success criteria, failure handling,
+  perf/resource budget, trust boundary, compatibility & rollout) and a scenario per `F<n>`; the Architecture gate is the
+  domain types and ports in `src/spacemaker/domain/` and `ports/`; tests follow the `fast-tests` skill.
+- **One gate per explicit approval**: do not batch gates, even if todos list them all. Production source requiring prior
+  approvals: `src/spacemaker/` (all layers) and `src/spacemaker/adapters/inbound/web/static/` (production HTML/JS/CSS);
+  allowed before spec approval: `sdd/`, legacy `specs/`, `wireframes/`, `design/`, and `docs/`/`memory/` edits supporting the gate. For changes under `src/spacemaker/`, read `.claude/rules/hexagonal-python.md` first (Codex must load it explicitly).
+- Legacy features: those specified before 2026-11-17 keep `specs/<feature>/SPEC.md`, `wireframes/` and
+  `design/<feature>/DESIGN.md` as their historical record (old workflow: the `sdd-feature` skill). Finish an in-flight
+  legacy feature in that format; start new features as pages. Never delete or rewrite those files to migrate them.
 
-Production source requiring prior approvals: `src/spacemaker/` (all layers) and `src/spacemaker/adapters/inbound/web/static/` (production HTML/JS/CSS). Allowed before spec approval: `wireframes/`, `design/`, `specs/`, and `docs/`/`memory/` edits supporting the gate.
+## Project memory (memory-1)
 
-For changes under `src/spacemaker/`, read `.claude/rules/hexagonal-python.md` before editing (Codex must load it explicitly).
+Use the `memory-1` skill: at session start read `memory/NOW.md` (check it against git) and `memory/MEMORY.md`; save
+decisions, reversals, preferences and incidents as one-fact notes in `memory/notes/`. Full protocol and end-of-session
+steps: `.agents/loadout-guidance.md`. Keep the `memory/friction/` practice for tooling errors and workarounds. The old
+bank (`activeContext.md`, `progress.md`, `decisions.md`, `archive.md`), `.agemem/` and the jevmem notes are history, not
+migrated yet: read them only when `NOW.md` or the task points there, and do not delete them without the user's yes.
 
-Full step-by-step workflow: `.cursor/skills/sdd-feature/SKILL.md` (mirrored at `.claude/skills/`).
+## Project docs (docs-1)
 
-## Memory bank
-
-Per-branch project state lives in `memory/` (git-tracked, so it follows the branch). At session start, read `memory/activeContext.md` then `memory/progress.md`. Update on these triggers only:
-
-- `memory/progress.md` — a task is completed, or a new task/bug is discovered.
-- `memory/activeContext.md` — focus changes, a blocker is hit, or you're concluding work (log touched files, state, next step).
-- `memory/decisions.md` — a significant technical/structural/dependency decision is made: append with context + decision + rationale (newest first, **never** rewrite history).
-
-- `memory/friction/` — **an agent hits an error, a wrong/misleading/slow MCP result, a lying doc, or needs a workaround**: add one small `YYYY-MM-DD-slug.md` entry right then (template in `memory/friction/README.md`), then keep working. This is the backlog for improving the MCPs, docs and tooling.
-
-**What goes where** (memory bank vs jevmem vs this file): **current state** (focus, in-progress work, blockers, next steps) goes in `memory/activeContext.md` / `progress.md` and never in jevmem, where it would go stale silently; **dated facts that stay true** (decisions with reasons, bug causes, gotchas, preferences) go in jevmem via `memory_write` — a significant decision also gets its `decisions.md` entry (append-only, so the overlap never goes stale); **rules** go in this file, not in jevmem (they are always in context). See `.cursor/skills/jev-memory/SKILL.md`.
-
-Keep `activeContext.md` short — move finished threads to `memory/archive.md` rather than letting it accumulate. Never add worktree cleanup/deletion tasks to tracked memory (per-developer local hygiene, causes merge noise). Commit memory updates at milestones; don't leave the tree permanently dirty. Full protocol, branch-init steps, and merge guidance: `.cursor/skills/agent-memory/SKILL.md`. The generic version of this memory bank is published as [memory-bank](https://github.com/illescasDaniel/memory-bank) (`npx skills add illescasDaniel/memory-bank`).
+`docs/` is not on docs-1 yet (no `docs/INDEX.md`; `docs/index.md` is the MkDocs home page): ask the user before setting it up. Details: `.agents/loadout-guidance.md`.
 
 ## Orient before editing
 
@@ -86,15 +82,13 @@ MCP tools are often deferred: fetch their schema (ToolSearch `select:`) before t
 
 | Question | Source |
 |---|---|
-| Feature behavior (BDD) | `specs/<feature>/SPEC.md` |
-| UX layout | `wireframes/<screen>.html` |
-| System design (flows, data model, contracts) | `design/<feature>/DESIGN.md` |
+| Feature design, spec, architecture and approvals | `sdd/<feature>.html` (legacy: `specs/<feature>/SPEC.md`, `wireframes/<screen>.html`, `design/<feature>/DESIGN.md`) |
 | Conversion policy, library folders, desktop shell | `docs/playbooks/SpaceMaker-adaptations.md` |
 | System design, entry points, routing, persistence | `docs/ARCHITECTURE.md` |
 | SDD philosophy, hexagonal ports/adapters, test conventions | `docs/playbooks/{spec-driven-development,hexagonal-architecture,fast-tests}.md` |
 | Packaging (portable builds, bundled CLIs, legal) | `specs/packaging/SPEC.md`, `docs/legal/` |
 
-**Priority when docs conflict:** `specs/<feature>/SPEC.md` → `docs/playbooks/SpaceMaker-adaptations.md` → `.claude/rules/` (and `.cursor/rules/`) → playbooks → generic examples in playbooks.
+**Priority when docs conflict:** the feature's page (or legacy `SPEC.md`) → `docs/playbooks/SpaceMaker-adaptations.md` → `.claude/rules/` (and `.cursor/rules/`) → playbooks → generic examples in playbooks.
 
 ## Worktree dependencies
 
@@ -110,10 +104,24 @@ Cursor and Codex read this file natively; Claude Code imports it through `CLAUDE
 
 ## Skills
 
-Project workflows: `.cursor/skills/{sdd-feature,agent-memory,fast-tests}/`, mirrored at `.claude/skills/` via a symlink. User-invoked only: `/save-changes`, `/save-pr-changes`, `/apply-worktree`, `/delete-worktree`, `/new-worktree`.
+Project workflows: `.cursor/skills/{sdd-html-feature,memory-1,docs-1,worktree,fast-tests}/`, mirrored at `.claude/skills/` via a symlink; `sdd-feature`, `agent-memory` and `jev-memory` are kept for legacy features and history only. User-invoked only: `/save-changes`, `/save-pr-changes`, `/apply-worktree`, `/delete-worktree`, `/new-worktree`.
 
-Subagents from [agent-guild](https://github.com/illescasDaniel/agent-guild) 1.3.0 live in `.claude/agents/`, `.cursor/agents/` and `.codex/agents/` (native formats). Preserve the SpaceMaker `code-grader` body on all three tools; Claude/Cursor metadata is checked by `tests/unit/test_agent_context.py`. Codex skills share `.cursor/skills/` through `.agents/skills`; `.codex/skills` is a compatibility link. Read `.claude/development-workflow.md` for routing and briefs.
+Subagents from agentic-loadout 0.8.0 (originally [agent-guild](https://github.com/illescasDaniel/agent-guild)) live in `.claude/agents/`, `.cursor/agents/` and `.codex/agents/` (native formats). Preserve the SpaceMaker `code-grader` body on all three tools; Claude/Cursor metadata is checked by `tests/unit/test_agent_context.py`. Codex skills share `.cursor/skills/` through `.agents/skills`; `.codex/skills` is a compatibility link.
 
 ## Source of truth
 
-`specs/` holds feature specifications. `wireframes/` holds UX layout truth and `design/` the system design (flows, data, contracts) before specs. `memory/` holds per-branch agent state. External trackers track work; the repo tracks truth.
+`sdd/` holds feature pages (design, spec, architecture, approvals); `specs/`, `wireframes/` and `design/` hold the legacy features' records. `memory/` holds per-branch agent memory. External trackers track work; the repo tracks truth.
+
+## Agentic-loadout workflow
+
+Read `.agents/loadout-guidance.md` for the managed Entire, memory, docs, SDD and worktree guidance (agentic-loadout 0.8.0);
+the project-specific rules above take precedence.
+
+## Isolated worktrees
+
+Use `/new-worktree` when the user asks or agrees (ask once if the checkout has changes you did not make). Setup
+for a new worktree: "Worktree dependencies" above; details in `.agents/loadout-guidance.md`.
+
+## Entire session history
+
+Entire is enabled; follow `.agents/loadout-guidance.md` for checkpoint use and session export.

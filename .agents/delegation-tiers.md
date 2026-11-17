@@ -1,0 +1,11 @@
+# Delegating to small coders
+
+When the developer has not chosen a tier, select a standard or small coder based on the task's clarity, complexity and risk. A bounded task with a clear brief, acceptance criteria and verifiable outcomes can go to a small coder, including an SDD implementation step. Prefer a standard coder for ambiguous or high-risk work. Use the matching language specialist for code covered by a language coder.
+
+Honor the developer's explicit tier choice throughout the task, including SDD implementation and suitable parallel blocks, without asking again for each block. If a block needs a different approach, explain why instead of silently disregarding their choice. If the developer mentions usage limits or asks for multiple parallel subagents, suggest small coders when appropriate and briefly explain the tradeoff. Do not interrupt to suggest a tier when they have already chosen one or clearly asked you to proceed. Remember their preference during the session. Do not infer model quotas or silently switch models.
+
+Give each coder the goal, files, scope, behavior, acceptance criteria, checks, integration base and dependencies. Split independent blocks, coordinate overlapping files and use isolated worktrees when appropriate under the project's worktree rules. Coders must report uncertainties and not make consequential design decisions on their own.
+
+Independently review every small-coder implementation using `code-reviewer`, whether the developer or the orchestrator chose the small coder. Provide the original brief, relevant specifications, actual diff and base, verification results and known gaps; do not suggest a verdict. Send findings back to the coder and re-review material changes. The orchestrator owns integration, unresolved findings and verification. If a reviewer cannot be launched, disclose that; never claim independent review occurred. Escalate repeated failures or unresolved design questions. This review complements any existing final SDD grade.
+
+Model defaults depend on the client and account. Cursor may inherit or fall back to another model; verify the actual model in the client. Edit the generated agent file to change a model; reruns preserve differing files unless forced.

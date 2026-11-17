@@ -1,6 +1,6 @@
 ---
 name: sdd-feature
-description: Run Spec-Driven Development for SpaceMaker features with explicit human approval gates (design, spec, architecture, then tests and implementation, then an independent grade). Use when adding or changing a user-facing flow, an endpoint, a data model, a background job or a service, writing a wireframe, system design or SPEC.md, or implementing from acceptance criteria.
+description: "LEGACY (superseded by sdd-html-feature on 2026-11-17) - use only when the user asks for it, or to finish or consult a feature specified under specs/<feature>/SPEC.md. Was: Run Spec-Driven Development with explicit human approval gates (design, spec, architecture, then tests and implementation, then an independent grade). Use when adding or changing a feature in a frontend, backend or fullstack project (a screen or flow, an API endpoint, a data model, a background job, an event or a service), writing a wireframe, system design or SPEC.md, or implementing from acceptance criteria."
 ---
 
 # SDD feature workflow
@@ -19,10 +19,9 @@ Read `AGENTS.md` / `CLAUDE.md` first. The project may override any of these defa
 | System designs | `design/<feature>/DESIGN.md` |
 | Diagrams | Mermaid code blocks inside the Markdown |
 | Specs | `specs/<feature>/SPEC.md` |
-| Domain types and interfaces (Phase 2) | `src/spacemaker/domain/` + `ports/` (hexagonal; see the `hexagonal-python` rule) |
-| Quality gate (lint, types, tests) | `uv run task checks` |
-| Test naming | `test_given_…_when_…_then_…` with `# given` / `# when` / `# then` comments (see the `fast-tests` skill) |
-| Spec checker | `uv run task grade-prechecks -- --spec specs/<feature>/SPEC.md` (also runs the layering and test-naming checks); `scripts/spec_check.py` is the generic equivalent |
+| Domain types and interfaces (Phase 2) | the project's core layer, e.g. `domain/` + `ports/` in a hexagonal layout |
+| Quality gate (lint, types, tests) | the project's documented check command |
+| Test naming | `test_given_…_when_…_then_…` with `# given` / `# when` / `# then` comments (or the project's equivalent) |
 
 Use the project's paths and commands wherever this document names a default.
 
@@ -176,15 +175,8 @@ Runs automatically once Phase 4 is green. It only reads code, so it is **not** a
 
 ## SpaceMaker specifics
 
-- **Specs** follow `docs/playbooks/spec-driven-development.md`; conversion behaviour must cite
-  `docs/playbooks/SpaceMaker-adaptations.md`.
-- **Production source** needing prior approvals: `src/spacemaker/` (all layers) and
-  `src/spacemaker/adapters/inbound/web/static/`. Allowed before spec approval: `wireframes/`, `design/`, `specs/`,
-  `docs/` and `memory/` edits that support the gate.
-- **Trust boundary** examples: device paths, upload filenames, LAN clients on `/share` and `/transfer`, subprocess
-  arguments; validate at inbound adapters or the application layer, never assume in the domain.
-- **Failure handling** examples: retry / skip / quarantine (`error/`, `invalid/`), partial state and resume.
-- **Performance & resource budget**: disk, CPU, GPU, memory, size limits, network cost (for example CLI downloads).
-- **Design checks** use `design_preview.py --check` from this skill's `scripts/` (needs Node and network); the
-  skill also lives at `.claude/skills/sdd-feature` (a symlink to `.cursor/skills`).
-- **Update `memory/`** at milestones (see the `agent-memory` skill).
+- Specs follow `docs/playbooks/spec-driven-development.md`; conversion behaviour cites `docs/playbooks/SpaceMaker-adaptations.md`.
+- Production source needing prior approvals: `src/spacemaker/` and its production static UI. Before spec approval, `wireframes/`, `design/`, `specs/`, `docs/` and `memory/` edits may support the gate.
+- Apply the hexagonal Python rule to domain and ports. Run `uv run task checks` for the quality gate and `uv run task grade-prechecks -- --spec specs/<feature>/SPEC.md` for spec, layering and test-naming checks.
+- Consider untrusted device paths, upload filenames, LAN clients and subprocess arguments; validate at inbound adapters or the application layer. Specify retry, skip, quarantine, partial state and resource budgets where applicable.
+- Update project memory at milestones using the memory-1 workflow in AGENTS.md.

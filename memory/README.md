@@ -1,5 +1,7 @@
 # Memory bank
 
+> **Legacy (2026-11-17):** project memory now follows the `memory-1` skill (`NOW.md`, `LATER.md`, `MEMORY.md`, `notes/`). This README describes the older bank layout and jevmem, kept as history until the old files are migrated; `friction/` stays in use.
+
 Per-branch project state used as an AI agent memory bank. The folder is **tracked in git**: each worktree or checkout carries its branch's version, so context follows the branch instead of staying trapped on one machine or worktree.
 
 ## Files
