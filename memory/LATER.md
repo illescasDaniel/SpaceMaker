@@ -8,7 +8,7 @@
 ## Agent tooling
 - 2026-10-22 (User) Close the three `memory/friction/2026-10-22-agent-guild-*` entries once their upstream fixes are published.
 ## App
-- 2026-09-23 (User) Decide whether to finish the Easy mode import-issues work (wireframe approved, spec draft, open-folder API partly done).
+- 2026-09-23 (User) Decide whether to add buttons to open folders for failed or unsupported image imports in Easy mode; the counts already display, but the approved folder actions are absent.
 ## Suggestions
 - 2026-11-17 Consider a real send2trash integration test when touching trash operations (legacy progress item).
 - 2026-11-17 Add sha256 pins to `packaging/tool-catalog.json` before the next release: downloads are unverified ([note](notes/pre-1-0-deliberately-left-open.md)).

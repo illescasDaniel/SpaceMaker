@@ -33,7 +33,7 @@ next with the user's next step first). Full protocol: the `memory-1` skill.
 - Only the main agent writes memory. Subagents read it and report memory candidates; they never edit `memory/`.
   Update `memory/NOW.md` before handing a commit to a subagent.
 - Commit memory changes with the work they describe, or in a `memory:` commit.
-- The 2026-11-17 migration converted useful legacy decisions and notes to memory-1. Keep the original memory files, `.agemem/` and jevmem stores as historical evidence; ask the user separately before removing anything.
+- The 2026-11-17 migration converted useful legacy decisions and notes to memory-1. The old project files were moved to trash with the user’s approval; the shared jevmem database remains intact.
 
 ## Project docs (docs-1)
 

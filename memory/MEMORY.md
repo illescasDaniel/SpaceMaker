@@ -1,7 +1,7 @@
 # Memory
 
 Code at HEAD wins for current behaviour; notes win for why and history; newest current note wins; open `source` sessions for detail.
-Migrated on 2026-11-17 from the legacy memory bank (`decisions.md`, `progress.md`, `friction/`) and the jevmem/agemem notes; those files stay as history.
+Migrated on 2026-11-17 from the legacy memory bank (`decisions.md`, `progress.md`, `friction/`) and the jevmem/agemem notes; the old project files were moved to trash; the active friction log remains.
 
 ## Topics
 - [Agent workflow and memory](topics/agent-workflow.md) 21 notes: How agents work in this repo: SDD gates, subagents, rules and skills, and where memory lives.
@@ -16,7 +16,7 @@ Migrated on 2026-11-17 from the legacy memory bank (`decisions.md`, `progress.md
 
 ## Newest notes
 - [SDD moves to one HTML page per feature](notes/sdd-html-feature-pages.md) 2026-11-17: new features use one sdd/<feature>.html page per feature; legacy specs/, wireframes/, design/ kept untouched
-- [Memory moved to memory-1; memory bank, jevmem and agemem retired](notes/memory-1-replaces-memory-bank-jevmem.md) 2026-11-17: memory-1 replaced the memory bank, jevmem and agemem; old files kept as history until the user approves removal
+- [Memory moved to memory-1; memory bank, jevmem and agemem retired](notes/memory-1-replaces-memory-bank-jevmem.md) 2026-11-17: memory-1 replaced the memory bank, jevmem and agemem; old project files moved to trash; shared jevmem database retained
 - [Agentic-loadout 0.8.0 replaces agent-guild](notes/agentic-loadout-0-8.md) 2026-11-17: agentic-loadout 0.8.0 (formerly agent-guild): orchestrator + small/large coder tiers, Entire session history
 - [Phone RAW (DNG) previews: embedded JPEG located by a pure-Python IFD parser over range reads](notes/phone-raw-dng-preview-ifd-parser.md) 2026-10-21: stdlib IFD parser over range reads finds the DNG's embedded JPEG; ~0.2 s instead of 8-27 MB pulls
 - [Phone picker grid view: per-folder choice, server-side folder types and counts](notes/phone-picker-grid-view-resolution.md) 2026-10-21: per-folder choice, then folder-type table, then auto-detect (>=1 media, >=60%); counts server-side

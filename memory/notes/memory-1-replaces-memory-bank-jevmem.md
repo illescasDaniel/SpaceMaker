@@ -1,6 +1,6 @@
 ---
 name: memory-1-replaces-memory-bank-jevmem
-description: memory-1 replaced the memory bank, jevmem and agemem; old files kept as history until the user approves removal
+description: memory-1 replaced the memory bank, jevmem and agemem; old project files moved to trash
 type: decision
 date: 2026-11-17
 status: current
@@ -16,6 +16,6 @@ History: the per-branch memory bank (`activeContext.md`, `progress.md`, `decisio
 The migration into notes was done on 2026-11-17 at the user's explicit request: each `decisions.md` entry became a note with its original date and text; jevmem/agemem facts that were not already in `decisions.md` became notes; facts that only restate `AGENTS.md` rules were not copied. `memory/friction/` stays in use as the tooling-friction log (AGENTS.md).
 
 **Why:** not recorded beyond the commit ("Update project agent workflow to loadout 0.8").
-**How to apply:** keep `activeContext.md`, `progress.md`, `decisions.md`, `archive.md`, `README.md`, `.agemem/` and the `project:spacemaker` notes in the shared jevmem database until the user says they can be removed; never delete the shared database as a whole; do not write new entries to them.
+**How to apply:** the old project memory-bank files and `.agemem/` were moved to trash with user approval. The shared jevmem database, including its `project:spacemaker` scope, remains intact because it also contains other projects; do not write new entries to it.
 
 Also replaces: [memory-three-way-split](memory-three-way-split.md).

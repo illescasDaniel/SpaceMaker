@@ -117,7 +117,7 @@ def write(docs):
 
 
 def glob_re(pattern):
-    pattern = pattern.strip().lstrip("./")
+    pattern = pattern.strip().removeprefix("./")
     if pattern.endswith("/"):
         pattern += "**"
     out, i = "", 0
@@ -223,7 +223,7 @@ def covers(docs, paths):
     rels = []
     for raw in paths:
         p = Path(raw).resolve()
-        rels.append(p.relative_to(root).as_posix() if p.is_relative_to(root) else raw.lstrip("./"))
+        rels.append(p.relative_to(root).as_posix() if p.is_relative_to(root) else raw.removeprefix("./"))
     for p, m in load(docs):
         if not m:
             continue

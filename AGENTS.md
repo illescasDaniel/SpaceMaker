@@ -54,7 +54,7 @@ Use the `memory-1` skill: at session start read `memory/NOW.md` (check it agains
 decisions, reversals, preferences and incidents as one-fact notes in `memory/notes/`. Full protocol and end-of-session
 steps: `.agents/loadout-guidance.md`. Keep the `memory/friction/` practice for tooling errors and workarounds. The old
 bank (`activeContext.md`, `progress.md`, `decisions.md`, `archive.md`), `.agemem/` and the jevmem notes were migrated
-into `memory/notes/` and `memory/topics/` on 2026-11-17 and are kept as history: do not delete them without the user's yes.
+into `memory/notes/` and `memory/topics/` on 2026-11-17. The old project files were moved to trash; the shared jevmem database remains intact.
 
 ## Project docs (docs-1)
 
