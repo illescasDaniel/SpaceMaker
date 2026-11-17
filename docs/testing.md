@@ -1,3 +1,17 @@
+---
+id: DOC-003
+title: "Testing standards"
+summary: "Browsable summary of the test layout, given/when/then naming, mocking rules, integration tests, speed rules and the quality gate; the fast-tests playbook wins if they disagree"
+type: reference
+status: current
+updated: 2026-10-02
+verified:
+covers: [tests/**]
+related: [DOC-007]
+supersedes:
+superseded_by:
+---
+
 # Testing Standards
 
 Full playbook: [docs/playbooks/fast-tests.md](playbooks/fast-tests.md) and

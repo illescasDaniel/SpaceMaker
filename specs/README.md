@@ -1,3 +1,19 @@
+---
+id: DOC-012
+title: "Feature specifications"
+summary: "Table of every specs/<feature>/SPEC.md with its scope; specs are the source of truth for behaviour"
+type: reference
+status: deprecated
+updated: 2026-10-19
+verified:
+covers: [specs/**]
+related: [DOC-009, DOC-013]
+supersedes:
+superseded_by:
+---
+
+> **Legacy workflow:** This document describes features using the older Markdown-spec process. New features use `sdd-html-feature` and `sdd/<feature>.html`; see `AGENTS.md`.
+
 # Feature specifications
 
 Source of truth for behavior. Wireframes: [wireframes/app.html](../wireframes/app.html).

@@ -53,12 +53,13 @@ user opts out at the architecture gate. Details: `.agents/loadout-guidance.md` a
 Use the `memory-1` skill: at session start read `memory/NOW.md` (check it against git) and `memory/MEMORY.md`; save
 decisions, reversals, preferences and incidents as one-fact notes in `memory/notes/`. Full protocol and end-of-session
 steps: `.agents/loadout-guidance.md`. Keep the `memory/friction/` practice for tooling errors and workarounds. The old
-bank (`activeContext.md`, `progress.md`, `decisions.md`, `archive.md`), `.agemem/` and the jevmem notes are history, not
-migrated yet: read them only when `NOW.md` or the task points there, and do not delete them without the user's yes.
+bank (`activeContext.md`, `progress.md`, `decisions.md`, `archive.md`), `.agemem/` and the jevmem notes were migrated
+into `memory/notes/` and `memory/topics/` on 2026-11-17 and are kept as history: do not delete them without the user's yes.
 
 ## Project docs (docs-1)
 
-`docs/` is not on docs-1 yet (no `docs/INDEX.md`; `docs/index.md` is the MkDocs home page): ask the user before setting it up. Details: `.agents/loadout-guidance.md`.
+Start at `docs-index/INDEX.md` (one line per doc; IDs `DOC-n`). It lives outside `docs/` because `docs/index.md` is the
+MkDocs home page: run `docs_index.py --docs docs-index write|check`. Details: `.agents/loadout-guidance.md`.
 
 ## Orient before editing
 

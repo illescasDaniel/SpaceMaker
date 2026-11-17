@@ -1,3 +1,17 @@
+---
+id: DOC-001
+title: "SpaceMaker agent knowledge base (MkDocs home)"
+summary: "Home page of the MkDocs site: what the docs cover, how they relate to the codenav/webnav MCP servers, and links to each section"
+type: reference
+status: current
+updated: 2026-09-28
+verified:
+covers: [mkdocs.yml]
+related: [DOC-002, DOC-004]
+supersedes:
+superseded_by:
+---
+
 # SpaceMaker — Agent Knowledge Base
 
 This site is the semantic knowledge base for AI agents and contributors working on

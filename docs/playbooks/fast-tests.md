@@ -1,3 +1,17 @@
+---
+id: DOC-007
+title: "Fast tests playbook"
+summary: "Source of truth for test layout, naming, speed rules and the quality gate (srxy-inspired)"
+type: reference
+status: current
+updated: 2026-09-22
+verified:
+covers: [tests/**]
+related: [DOC-003]
+supersedes:
+superseded_by:
+---
+
 # Fast tests (srxy-inspired)
 
 ## Layout

@@ -1,3 +1,17 @@
+---
+id: DOC-017
+title: "CLI tools (managed download folder)"
+summary: "Order in which third-party binaries are resolved: managed folder, pinned download, then system PATH (after Continue, or SPACEMAKER_DEV=1)"
+type: reference
+status: current
+updated: 2026-10-19
+verified:
+covers: [src/spacemaker/bootstrap/**, packaging/tool-catalog.json]
+related: [DOC-014]
+supersedes:
+superseded_by:
+---
+
 # CLI tools (managed download folder)
 
 SpaceMaker resolves third-party binaries in this order:

@@ -1,3 +1,17 @@
+---
+id: DOC-006
+title: "SpaceMaker adaptations"
+summary: "How SpaceMaker differs from the generic playbooks: package layout, wireframe gate, library root folders, conversion policy, gallery export formats, desktop shell, device extract, testing"
+type: explanation
+status: current
+updated: 2026-10-20
+verified:
+covers: [src/spacemaker/**]
+related: [DOC-002, DOC-009]
+supersedes:
+superseded_by:
+---
+
 # SpaceMaker adaptations
 
 How this repo differs from generic hexagonal/SDD playbooks.

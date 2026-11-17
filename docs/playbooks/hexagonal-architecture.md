@@ -1,3 +1,17 @@
+---
+id: DOC-008
+title: "Hexagonal architecture playbook"
+summary: "Ports-and-adapters principles, how they map to Python packages in SpaceMaker, golden rules and dependency injection"
+type: explanation
+status: current
+updated: 2026-09-29
+verified:
+covers: [src/spacemaker/**]
+related: [DOC-002]
+supersedes:
+superseded_by:
+---
+
 # Hexagonal architecture (SpaceMaker)
 
 ## Principles

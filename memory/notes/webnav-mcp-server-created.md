@@ -1,0 +1,19 @@
+---
+name: webnav-mcp-server-created
+description: webnav MCP for JS/HTML/CSS with a shared LSP client; eager-open fixes cold search
+type: decision
+date: 2026-09-25
+status: current
+supersedes:
+superseded_by:
+source:
+---
+
+New `webnav` MCP server (JS/HTML/CSS nav); shared `_shared/lsp_client.py`; fixed cold `search_symbol` returning no matches.
+
+- **Context:** A prior, uncommitted change (found already sitting in the working tree, never logged in `memory/`) added a second MCP server, `webnav`, mirroring `codenav`'s shape but for the project's web static assets (`src/spacemaker/adapters/inbound/web/static/`, `wireframes/`) — multiplexing three Node-based language servers by file extension: `typescript-language-server` for `.js`/`.mjs`/`.cjs`, `vscode-html-language-server`/`vscode-css-language-server` (from `vscode-langservers-extracted`) for `.html`/`.css`. It factored the previously codenav-only `LspClient` out to `mcp-servers/_shared/lsp_client.py` so both servers share one implementation, and added `jsconfig.json` (`allowJs`, `checkJs: false`, `include` globs for the two JS roots) so `typescript-language-server` has a project to resolve. `docs/agent-tooling.md` was already updated for this; `AGENTS.md`'s "Orient before editing" section already names `webnav` alongside `codenav`. Asked to review this work and verify it actually functions.
+- **Investigation:** `hover`/`definition`/`references`/`diagnostics` all worked correctly out of the box against real files in all three languages. `search_symbol`, however, returned **zero matches** for an exact, real symbol name (`isDesktopShell` in `app.js`) on the first call of a session, then started working once some other tool had opened that file. Root cause: `typescript-language-server`'s `workspace/symbol` (navto) only searches files that have been sent through `textDocument/didOpen` in that session — `jsconfig.json`'s `include` list doesn't make tsserver eagerly index everything at startup. `search_symbol` in `webnav_mcp/server.py` called `workspace_symbol(query)` directly, never opening anything itself, so a cold `search_symbol` call — which the tool's own docstring frames as the intended first step ("find a symbol's file/position first, then pass that position to definition/references/hover") — was exactly the case that failed silently.
+- **Decision:** `_get_ts_client()` (`mcp-servers/webnav_mcp/server.py`) now eager-opens the whole JS project once, right after the ts-server starts: `_js_include_globs()` reads `jsconfig.json`'s `include` list (rather than duplicating those roots as a separate hardcoded constant) and `ensure_open()`s every file each glob matches. This runs once per server-process lifetime (the client is cached in a module-level global), not per `search_symbol` call.
+- **Rationale:** Fixing this inside `search_symbol` itself (open-on-search) was considered and rejected — it would re-glob and re-check every JS file's mtime/size on every single call instead of once at warm-up, for no benefit since the ts-client is long-lived. Reading the glob from `jsconfig.json` instead of hardcoding the same two roots a second time keeps a single source of truth; if the JS project's included paths ever change, only `jsconfig.json` needs editing. Verified live, twice, by killing the running `webnav` process and confirming a new PID spawned before each test (so the client was genuinely cold): first with a hardcoded-roots version of the fix (`search_symbol("isDesktopShell")` succeeded as the very first call), then again after switching to reading `jsconfig.json` (`search_symbol("isDesktopShell")` and `search_symbol("bootstrapDesktopShell")` both succeeded cold; `diagnostics` still clean). Not yet committed — see `memory/activeContext.md`.
+
+Migrated 2026-11-17 from `memory/decisions.md`, entry "2026-09-25 — New `webnav` MCP server (JS/HTML/CSS nav); shared `_shared/lsp_client.py`; fixed cold `search_symbol` returning no matches".

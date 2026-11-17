@@ -1,3 +1,17 @@
+---
+id: DOC-015
+title: "Linux AppImage (pruned AppDir)"
+summary: "The AppImage build scripts: relocatable CPython plus venv, Qt prune that keeps Qt WebEngine (prune_pyqt6.sh), offscreen smoke test, pinned appimagetool, zstd squashfs"
+type: reference
+status: current
+updated: 2026-09-23
+verified:
+covers: [packaging/linux-appimage/**]
+related: [DOC-014]
+supersedes:
+superseded_by:
+---
+
 # Linux AppImage (pruned AppDir)
 
 Adapted from the [srxy](https://github.com/) offline AppImage flow: relocatable managed CPython + venv, **Qt prune**, offscreen smoke, pinned `appimagetool`, squashfs **zstd -19**.

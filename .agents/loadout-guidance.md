@@ -33,20 +33,11 @@ next with the user's next step first). Full protocol: the `memory-1` skill.
 - Only the main agent writes memory. Subagents read it and report memory candidates; they never edit `memory/`.
   Update `memory/NOW.md` before handing a commit to a subagent.
 - Commit memory changes with the work they describe, or in a `memory:` commit.
-- Legacy memory (`memory/activeContext.md`, `progress.md`, `decisions.md`, `archive.md`, `.agemem/` and any jevmem store) remains historical evidence. Read relevant material when needed, including at session start while migration is incomplete; `NOW.md` is the current status.
-- Export and verify all saved agemem and jevmem notes before deciding what to migrate. Preserve original stores and `archive.md`; never delete them as part of migration. Convert verified current state and useful decisions into memory-1 notes with their dates and reasons. Ask the user separately before any later removal.
+- The 2026-11-17 migration converted useful legacy decisions and notes to memory-1. Keep the original memory files, `.agemem/` and jevmem stores as historical evidence; ask the user separately before removing anything.
 
 ## Project docs (docs-1)
 
-Project docs are in `docs/`; start at `docs/INDEX.md` (generated, one line per doc). Cite docs by ID (`DOC-012`). Code
-at HEAD wins over a doc. Before changing code, find the docs that cover it
-(`python3 .claude/skills/docs-1/scripts/docs_index.py covers <file>`) and update them in the same change, then run
-`docs_index.py write` and `check`. Full protocol: the `docs-1` skill.
-
-- If `docs/INDEX.md` does not exist yet, ask the user before setting docs-1 up; do not create it on your own. The skill
-  adds frontmatter to the existing docs and generates the index.
-- Docs say how the system works now; memory (if the project has it) keeps why it is that way, what changed, preferences
-  and status. Do not copy one into the other.
+Start at `docs-index/INDEX.md`; it lives outside `docs/` to avoid a case-insensitive collision with the MkDocs `index.md`. Code wins over docs; cite stable document IDs. Find affected docs with `python3 .claude/skills/docs-1/scripts/docs_index.py --docs docs-index covers <file>`, update them, then run the same script with `--docs docs-index write` and `--docs docs-index check`. Only set `verified` after checking the content against code. User-facing legal pages and historical specs are intentionally not indexed with frontmatter.
 
 ## Phase Gate Protocol (Spec-Driven Development)
 

@@ -1,3 +1,17 @@
+---
+id: DOC-004
+title: "Agent tooling reference"
+summary: "codenav and webnav MCP servers (config for Cursor vs Claude Code, package repos, PyPI publishing), Cursor/Claude rule pairs, smart-commit-guard secret gate, and tooling gotchas"
+type: reference
+status: current
+updated: 2026-11-17
+verified:
+covers: [.mcp.json, .cursor/**, .claude/**, .github/workflows/secret-scan.yml]
+related: [DOC-011]
+supersedes:
+superseded_by:
+---
+
 # Agent tooling reference
 
 Reference material for the AI-agent-facing tooling in this repo: the

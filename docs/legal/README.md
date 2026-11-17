@@ -1,3 +1,17 @@
+---
+id: DOC-010
+title: "Legal and transparency"
+summary: "Index of the user-facing legal documents (privacy policy, disclaimer, third-party tools) and the local-first/LAN summary"
+type: reference
+status: current
+updated: 2026-09-30
+verified:
+covers: [docs/legal/**]
+related: []
+supersedes:
+superseded_by:
+---
+
 # Legal & transparency
 
 SpaceMaker is **local-first**: media stays on your machine unless you use optional **LAN** features (gallery QR, Photo backup upload, Receive files, Send files) on your network.

@@ -1,3 +1,17 @@
+---
+id: DOC-011
+title: "MCP evaluation of codenav and webnav (2026-09-29)"
+summary: "Dated report: how useful the codenav and webnav MCP servers are for agentic coding, the 7 baseline bugs and their fixes, latency, scores 7.5 and 7 rising to 8.5"
+type: explanation
+status: current
+updated: 2026-09-30
+verified:
+covers: []
+related: [DOC-004]
+supersedes:
+superseded_by:
+---
+
 # MCP evaluation — `codenav` & `webnav` (2026-09-29, re-evaluated after fixes)
 
 **Question:** how useful are these MCPs for AI agentic coding?

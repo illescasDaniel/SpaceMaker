@@ -1,3 +1,19 @@
+---
+id: DOC-009
+title: "Spec-Driven Development playbook"
+summary: "SDD philosophy, where SPEC.md lives, its anatomy and design decisions, phase gates, tests and team workflow"
+type: how-to
+status: deprecated
+updated: 2026-10-22
+verified:
+covers: [specs/**]
+related: [DOC-012]
+supersedes:
+superseded_by:
+---
+
+> **Legacy workflow:** This document describes features using the older Markdown-spec process. New features use `sdd-html-feature` and `sdd/<feature>.html`; see `AGENTS.md`.
+
 # Spec-Driven Development (SpaceMaker)
 
 Adapted from the GamesLibrary SDD playbook for Python + web UI.

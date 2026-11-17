@@ -1,0 +1,18 @@
+---
+name: new-worktree-skill
+description: /new-worktree forks from the current branch, then copies or regenerates .venv and node_modules
+type: decision
+date: 2026-09-28
+status: current
+supersedes:
+superseded_by:
+source:
+---
+
+`/new-worktree` skill: create worktree+branch then copy/regenerate `.venv`+`node_modules`.
+
+- **Context:** srxy has `.cursor/skills/copy-venv-to-worktree-srxy/`, which copies an already-existing worktree's `.venv` from the primary checkout (robocopy/rsync) and rewrites the absolute paths baked into shebangs/editable `.pth`/`direct_url.json` (`uv sync` alone doesn't fix these post-copy, https://github.com/astral-sh/uv/issues/18196), so no packages re-download. srxy has no "create worktree" skill because Cursor's background-agent feature creates those. SpaceMaker is driven from two tools with different worktree mechanics — Claude Code's native `EnterWorktree` tool creates `.claude/worktrees/<name>` (confirmed by the existing `gallery-thumb-fix` worktree), Cursor has no such tool and stays on manual `git worktree add` under `~/.cursor/worktrees/` — and is dual-stack: the quality gate also needs `node_modules` (`scripts/quality/web.sh` hard-fails without `node_modules/@biomejs/biome`), and has a `uv` workspace (`spacemaker` + 3 `mcp-servers/*` members) with several editable `.pth` files to rewrite, not one.
+- **Decision:** New skill `.cursor/skills/new-worktree/` (mirrored to `.claude/skills/` via the existing symlink) does both steps. It always forks the new branch from the **currently checked-out branch** (plain `git worktree add -b <branch> <path>` with no start-point, so git defaults to `HEAD`) rather than delegating to `EnterWorktree`'s own `name`-based creation, whose default `baseRef: fresh` branches from `origin/<default-branch>` instead — a mutable per-session setting the skill must not depend on. In Claude Code it then calls `EnterWorktree({ path: ... })` ("enter an existing worktree" mode) purely for the session cwd-switch + `ExitWorktree` lifecycle bookkeeping. `scripts/copy-venv.sh` mirrors `.venv` (robocopy/rsync) + `rewrite_venv_paths.py` (adapted near-verbatim from srxy — already fully generic, no package name hardcoded) + offline `uv sync --group dev`, and mirrors `node_modules` the same way but with no rewrite step (registry-only devDependencies, no absolute paths in the npm `.bin/*.cmd` shims); both fall back to regenerating (`uv sync --group dev` / `npm ci`) when the primary checkout has nothing to copy. Also fixed `apply-worktree`/`delete-worktree`, which only recognized `~/.cursor/worktrees/` (copied verbatim from srxy's Cursor-only skills) — `delete-worktree`'s abort check would have rejected any `.claude/worktrees/` target — to recognize both worktree conventions and to prefer `ExitWorktree`/ `EnterWorktree({action:"keep"})` over Cursor's `move_agent_to_root` when the session got there via `EnterWorktree`.
+- **Rationale:** A worktree the user is about to keep working on should branch from what they're currently on, not silently rebase the starting point to `main`; `EnterWorktree`'s `fresh` default would do exactly that unless overridden globally, which is a worse failure mode than the skill just setting up its own `git worktree add`. Copying rather than re-installing `.venv`/`node_modules` avoids re-downloading multi-package `uv`/npm dependency trees per worktree; falling back to regeneration keeps the skill usable even from a primary checkout that was never synced.
+
+Migrated 2026-11-17 from `memory/decisions.md`, entry "2026-09-28 — `/new-worktree` skill: create worktree+branch then copy/regenerate `.venv`+`node_modules`".

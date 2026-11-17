@@ -1,3 +1,19 @@
+---
+id: DOC-013
+title: "Wireframes"
+summary: "What the self-contained HTML wireframes are for, how to mark notes that must never ship, and how they gate specs"
+type: how-to
+status: deprecated
+updated: 2026-10-19
+verified:
+covers: [wireframes/**]
+related: [DOC-012]
+supersedes:
+superseded_by:
+---
+
+> **Legacy workflow:** This document describes features using the older Markdown-spec process. New features use `sdd-html-feature` and `sdd/<feature>.html`; see `AGENTS.md`.
+
 # Wireframes
 
 Self-contained HTML mocks for UX review **before** writing `specs/` or application code.

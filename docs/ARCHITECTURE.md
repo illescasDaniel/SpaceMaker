@@ -1,3 +1,17 @@
+---
+id: DOC-002
+title: "Architecture"
+summary: "Hexagonal layout of src/spacemaker (domain, ports, application, adapters), runtime flow, entry-point call chain, routing, filesystem plus derived SQLite index, logging, developer setup"
+type: explanation
+status: current
+updated: 2026-10-21
+verified:
+covers: [src/spacemaker/**]
+related: [DOC-008, DOC-006]
+supersedes:
+superseded_by:
+---
+
 # Architecture
 
 SpaceMaker is organized as a **hexagonal (ports & adapters)** Python package:

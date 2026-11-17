@@ -1,3 +1,17 @@
+---
+id: DOC-005
+title: "Playbooks"
+summary: "Table of the engineering playbooks (SpaceMaker adaptations, SDD, hexagonal architecture, fast tests) and which to read first"
+type: reference
+status: current
+updated: 2026-09-23
+verified:
+covers: []
+related: [DOC-006, DOC-009]
+supersedes:
+superseded_by:
+---
+
 # Playbooks
 
 Vendored and project-specific engineering playbooks for SpaceMaker.
