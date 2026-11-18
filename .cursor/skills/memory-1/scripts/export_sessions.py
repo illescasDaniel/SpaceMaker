@@ -38,7 +38,7 @@ SKIP_PREFIXES = (
 
 # Credential-shaped strings. Conservative: a false positive costs a few characters of context.
 R = "[REDACTED]"
-SECRET_PATTERNS = [  # (pattern, replacement)
+SECRET_PATTERN_TEXT = [  # (pattern, replacement)
     (r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", R),
     (r"\b(?:sk|pk|rk)-(?:ant-|proj-|live-|test-)?[A-Za-z0-9_\-]{16,}", R),
     (r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}", R),
@@ -50,7 +50,7 @@ SECRET_PATTERNS = [  # (pattern, replacement)
      r"(?!\[REDACTED)[^\s\"'`,;]{8,}", r"\1" + R),
     (r"(?i)\b([a-z][a-z0-9+.\-]*://[^\s:/@]+:)[^\s@/]{4,}@", r"\1" + R + "@"),             # user:pass@host
 ]
-SECRET_PATTERNS = [(re.compile(p, re.S), r) for p, r in SECRET_PATTERNS]
+SECRET_PATTERNS = [(re.compile(p, re.S), r) for p, r in SECRET_PATTERN_TEXT]
 
 
 def redact(text):
@@ -307,19 +307,22 @@ class EntireBlobs:
     def __init__(self, project):
         self.proc = subprocess.Popen(["git", "-C", str(project), "cat-file", "--batch"], stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        stdin, stdout = self.proc.stdin, self.proc.stdout
+        assert stdin is not None and stdout is not None  # Both streams were opened with PIPE.
+        self.stdin, self.stdout = stdin, stdout
 
     def read(self, sha):
-        self.proc.stdin.write(sha.encode() + b"\n")
-        self.proc.stdin.flush()
-        header = self.proc.stdout.readline().split()
+        self.stdin.write(sha.encode() + b"\n")
+        self.stdin.flush()
+        header = self.stdout.readline().split()
         if len(header) < 3 or header[1] != b"blob":
             return None
-        data = self.proc.stdout.read(int(header[2]))
-        self.proc.stdout.read(1)  # the newline git adds after each object
+        data = self.stdout.read(int(header[2]))
+        self.stdout.read(1)  # the newline git adds after each object
         return data
 
     def close(self):
-        self.proc.stdin.close()
+        self.stdin.close()
         self.proc.wait()
 
 

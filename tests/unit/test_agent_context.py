@@ -35,7 +35,8 @@ STALE_REFERENCE_SUBSTRINGS = (
 )
 CONTEXT_FILES_TO_SCAN = (
 	AGENTS_MD,
-	REPO_ROOT / "memory" / "README.md",
+	REPO_ROOT / "memory" / "NOW.md",
+	REPO_ROOT / "memory" / "MEMORY.md",
 	*CURSOR_RULES_DIR.glob("*.mdc"),
 	*CLAUDE_RULES_DIR.glob("*.md"),
 	*(REPO_ROOT / "docs").glob("*.md"),
