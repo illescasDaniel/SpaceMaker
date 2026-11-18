@@ -12,12 +12,12 @@
 		"test:web": "vitest run --config web/vitest.config.mts"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.15",
+		"@biomejs/biome": "^2.6.6",
 		"@fortawesome/fontawesome-free": "^7.3.1",
-		"@types/node": "^26.6.5",
-		"jsdom": "^30.1.3",
+		"@types/node": "^26.6.6",
+		"jsdom": "^31.0.0",
 		"typescript": "^7.0.2",
-		"vitest": "^5.0.5",
+		"vitest": "^5.1.0",
 		"vscode-langservers-extracted": "^4.10.0"
 	}
 }
