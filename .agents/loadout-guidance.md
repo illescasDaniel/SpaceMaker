@@ -4,6 +4,12 @@ Full text of the agentic-loadout 0.8.0 rule sections for SpaceMaker. `AGENTS.md`
 each under the same heading (so a loadout re-run leaves them alone and `AGENTS.md` stays within its 130-line budget);
 read this file for the details. The SpaceMaker rules in `AGENTS.md` take precedence.
 
+SpaceMaker carries local type-check fixes in `memory-1/scripts/export_sessions.py` and
+`sdd-html-feature/scripts/inline_view.py` under `.cursor/skills/`. The memory skill manifest records the patched
+exporter's checksum so the installer can replace it on refresh. The renderer's entry in `skills-lock.json` still
+identifies its upstream source. After refreshing either skill, run `uv run ty check` and reapply any fixes that the
+installed release still needs. When reapplying the exporter fix, refresh its manifest checksum.
+
 ## Entire session history
 
 When investigating the history of a change, use Entire checkpoints when relevant and available. Read

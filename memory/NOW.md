@@ -2,6 +2,7 @@
 Updated: 2026-11-17 (migration session; no session export)
 
 ## Doing
+- macOS test fixes on feature/macOS: type checking and tests pass; npm audit remains blocked by the unpatched picomatch advisory GHSA-fc5q-39xc-vjpf.
 - Migrated project memory and documentation; old project memory files moved to trash with user approval.
 
 ## Done recently

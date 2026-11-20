@@ -20,6 +20,7 @@ import re
 import sys
 from html import unescape
 from html.parser import HTMLParser
+from io import TextIOWrapper
 
 HTML_LIMIT = 12000  # bytes; above this the detailed report is left out of the html copy (glance only); if even that is over, use --format md
 TABS = ("design", "spec", "arch", "build", "verify", "appr", "qa", "grade")
@@ -174,18 +175,18 @@ class Md(HTMLParser):
                 self.table.append(self.row)
             self.row = None
         elif tag == "table" and self.table is not None:
-            self._flush_table()
+            self._flush_table(self.table)
 
     def handle_data(self, data):
         if self.skip:
             return
-        if self.cap_open:
+        if self.cap_open and self.caption is not None:
             self.caption.append(data)
             return
         self._emit(data if self.cell is not None or self.in_gate else re.sub(r"\s+", " ", data))
 
-    def _flush_table(self):
-        rows = [r for r in self.table if r]
+    def _flush_table(self, table):
+        rows = [r for r in table if r]
         if self.caption:
             self.out.append("\n\n**%s**" % " ".join("".join(self.caption).split()))
         if rows:
@@ -231,7 +232,9 @@ def srcset_urls(value: str):
         if url.endswith(","):
             url = url.rstrip(",")
         else:
-            pos = SRCSET_DESCRIPTOR.match(value, pos).end()
+            descriptor = SRCSET_DESCRIPTOR.match(value, pos)
+            assert descriptor is not None  # The pattern also matches an empty descriptor.
+            pos = descriptor.end()
         yield url
 
 
@@ -332,7 +335,8 @@ def check(page: str, html: str, legacy: bool) -> int:
 
 def main() -> int:
     argv = sys.argv[1:]
-    sys.stdout.reconfigure(encoding="utf-8")
+    if isinstance(sys.stdout, TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
     fmt = "html"
     if "--format" in argv:
         i = argv.index("--format")
@@ -369,8 +373,11 @@ def main() -> int:
 
     badge = badge_of(html)
     if fmt == "html":
+        assert style is not None
+        style_text = style.group(1)
+
         def render(with_detail: bool) -> str:
-            out = "<style>%s</style>\n" % style.group(1)
+            out = "<style>%s</style>\n" % style_text
             for n, (i, (glance, detail)) in enumerate(splits):
                 head = '<span class="badge">%s</span> ' % badge if n == 0 and badge else ""
                 out += '<p class="hdr">%s<span class="chip def">%s tab: %s</span></p>\n%s\n' % (head, i, status_of(html, i), glance)
